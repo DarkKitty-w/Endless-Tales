@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast"; // Import useToast
 
 const TOTAL_STAT_POINTS = 15; // Total points available for distribution
 const MIN_STAT_VALUE = 1; // Minimum value for any stat
+const MAX_STAT_VALUE = 10; // Define a maximum value for a single stat
 
 // --- Zod Schema for Validation ---
 const baseCharacterSchema = z.object({
@@ -87,62 +88,77 @@ export function CharacterCreation() {
 
   // --- Stat Allocation Logic ---
  const handleStatChange = useCallback((statName: keyof CharacterStats, value: number) => {
+    // Ensure value is within bounds
+    const clampedValue = Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, value));
+
     setStats(prevStats => {
-        const tentativeStats = { ...prevStats, [statName]: value };
+        const tentativeStats = { ...prevStats, [statName]: clampedValue };
         const currentTotal = tentativeStats.strength + tentativeStats.stamina + tentativeStats.agility;
 
         if (currentTotal <= TOTAL_STAT_POINTS) {
             setRemainingPoints(TOTAL_STAT_POINTS - currentTotal);
             return tentativeStats;
         } else {
-            // If exceeding total, don't update the state (keeps the slider visually stuck)
-            // Optionally, provide feedback via toast or inline message
+            // If exceeding total, show feedback but DON'T update the state for this specific change
              toast({
                title: "Stat Limit Reached",
                description: `Cannot exceed ${TOTAL_STAT_POINTS} total stat points.`,
                variant: "destructive",
              });
-            return prevStats; // Return previous stats
+            // We return prevStats to prevent the invalid state update
+            // The slider visually might still show the attempted value, but the internal state remains valid.
+            // Re-calculating remaining points based on prevStats to keep UI consistent with actual state.
+            setRemainingPoints(TOTAL_STAT_POINTS - (prevStats.strength + prevStats.stamina + prevStats.agility));
+            return prevStats;
         }
     });
 }, [toast]); // Add toast dependency
 
 
-  const randomizeStats = useCallback(() => {
-    let pointsToDistribute = TOTAL_STAT_POINTS;
-    let str = MIN_STAT_VALUE;
-    let stam = MIN_STAT_VALUE;
-    let agi = MIN_STAT_VALUE;
-    pointsToDistribute -= (MIN_STAT_VALUE * 3); // Subtract minimums
+// Corrected randomizeStats function
+const randomizeStats = useCallback(() => {
+    let pointsLeft = TOTAL_STAT_POINTS;
+    let newStats: CharacterStats = {
+        strength: 0,
+        stamina: 0,
+        agility: 0,
+    };
+    const statKeys: (keyof CharacterStats)[] = ['strength', 'stamina', 'agility'];
 
-    // Distribute remaining points randomly
-    const randStr = Math.floor(Math.random() * (pointsToDistribute + 1));
-    str += randStr;
-    pointsToDistribute -= randStr;
+    // Assign minimum points to each stat first
+    statKeys.forEach(key => {
+        newStats[key] = MIN_STAT_VALUE;
+        pointsLeft -= MIN_STAT_VALUE;
+    });
 
-    const randStam = Math.floor(Math.random() * (pointsToDistribute + 1));
-    stam += randStam;
-    pointsToDistribute -= randStam;
+    // Distribute remaining points randomly, ensuring no stat exceeds MAX_STAT_VALUE
+    while (pointsLeft > 0) {
+        // Filter keys that haven't reached the max value
+        const availableKeys = statKeys.filter(key => newStats[key] < MAX_STAT_VALUE);
 
-    agi += pointsToDistribute; // Assign the rest to agility
+        // If all stats are maxed out but points remain (shouldn't happen with 15 points, 3 stats, max 10), break to avoid infinite loop
+        if (availableKeys.length === 0) break;
 
-    // Shuffle assignments for more variability
-    const finalStats = [str, stam, agi];
-    for (let i = finalStats.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [finalStats[i], finalStats[j]] = [finalStats[j], finalStats[i]]; // Swap
+        // Pick a random available stat key
+        const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
+
+        // Increment the chosen stat and decrement pointsLeft
+        newStats[randomKey]++;
+        pointsLeft--;
     }
 
-    const newStats: CharacterStats = {
-        strength: finalStats[0],
-        stamina: finalStats[1],
-        agility: finalStats[2],
-    };
+    // Final check to ensure total is exactly TOTAL_STAT_POINTS (edge cases, though unlikely with this logic)
+    const finalTotal = newStats.strength + newStats.stamina + newStats.agility;
+    if (finalTotal !== TOTAL_STAT_POINTS) {
+        console.error("Stat randomization resulted in an incorrect total:", finalTotal, newStats);
+        // As a fallback, reset to default 5/5/5 if something went wrong
+        newStats = { strength: 5, stamina: 5, agility: 5 };
+    }
 
     setStats(newStats);
-    setRemainingPoints(0); // Should always be 0 after full distribution
-     toast({ title: "Stats Randomized", description: `Distributed ${TOTAL_STAT_POINTS} points.` });
-  }, [toast]);
+    setRemainingPoints(0); // Should always be 0 after correct distribution
+    toast({ title: "Stats Randomized", description: `Distributed ${TOTAL_STAT_POINTS} points.` });
+}, [toast]);
 
 
   // --- Randomize All ---
@@ -221,10 +237,17 @@ export function CharacterCreation() {
     setError(null); // Clear previous errors
 
     // Ensure total stat points are used
-     if (remainingPoints > 0) {
+     if (remainingPoints !== 0) {
         setError(`You must allocate all ${TOTAL_STAT_POINTS} stat points. ${remainingPoints} remaining.`);
         toast({ title: "Stat Allocation Incomplete", description: `Allocate the remaining ${remainingPoints} points.`, variant: "destructive"});
         return; // Prevent submission
+     }
+     // Verify individual stats are within bounds (although slider should handle this)
+     if (stats.strength < MIN_STAT_VALUE || stats.stamina < MIN_STAT_VALUE || stats.agility < MIN_STAT_VALUE ||
+         stats.strength > MAX_STAT_VALUE || stats.stamina > MAX_STAT_VALUE || stats.agility > MAX_STAT_VALUE) {
+         setError(`Stats must be between ${MIN_STAT_VALUE} and ${MAX_STAT_VALUE}.`);
+         toast({ title: "Invalid Stat Value", description: `Ensure all stats are between ${MIN_STAT_VALUE} and ${MAX_STAT_VALUE}.`, variant: "destructive"});
+         return;
      }
 
 
@@ -280,6 +303,18 @@ export function CharacterCreation() {
   // useEffect(() => {
   //   reset();
   // }, [reset]);
+
+  // Update slider max values dynamically based on remaining points
+   const getMaxSliderValue = useCallback((statName: keyof CharacterStats) => {
+     const otherStatsTotal = Object.entries(stats)
+       .filter(([key]) => key !== statName)
+       .reduce((sum, [, value]) => sum + (value || MIN_STAT_VALUE), 0);
+     // Calculate max allowed for this slider: total points - other stats' current values + this stat's current value - min required for others
+     const maxAllowed = TOTAL_STAT_POINTS - otherStatsTotal;
+     // Ensure max is at least MIN_STAT_VALUE and not more than MAX_STAT_VALUE
+     return Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, maxAllowed));
+   }, [stats]);
+
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
@@ -416,7 +451,7 @@ export function CharacterCreation() {
                                             </Button>
                                         </TooltipTrigger>
                                         <TooltipContent>
-                                            <p>Randomly distribute the {TOTAL_STAT_POINTS} points (min {MIN_STAT_VALUE} each).</p>
+                                            <p>Randomly distribute the {TOTAL_STAT_POINTS} points (min {MIN_STAT_VALUE}, max {MAX_STAT_VALUE} each).</p>
                                         </TooltipContent>
                                     </Tooltip>
                                 </TooltipProvider>
@@ -434,12 +469,7 @@ export function CharacterCreation() {
                                     <Slider
                                         id={statName}
                                         min={MIN_STAT_VALUE}
-                                        // Calculate max dynamically based on other stats to respect TOTAL_STAT_POINTS
-                                         max={TOTAL_STAT_POINTS - Object.entries(stats)
-                                             .filter(([key]) => key !== statName)
-                                             .reduce((sum, [, value]) => sum + (value || MIN_STAT_VALUE), 0)
-                                             + (stats[statName] || MIN_STAT_VALUE) - MIN_STAT_VALUE
-                                         }
+                                        max={MAX_STAT_VALUE} // Use the fixed MAX_STAT_VALUE for the slider's upper bound
                                         step={1}
                                         value={[stats[statName]]}
                                         onValueChange={(value) => handleStatChange(statName, value[0])}
@@ -447,7 +477,7 @@ export function CharacterCreation() {
                                         className="w-full"
                                         disabled={isGenerating} // Disable while AI is working
                                     />
-                                     <p className="text-xs text-muted-foreground text-center">Min: {MIN_STAT_VALUE}</p>
+                                     <p className="text-xs text-muted-foreground text-center">Min: {MIN_STAT_VALUE} / Max: {MAX_STAT_VALUE}</p>
                                 </div>
                             ))}
                         </div>

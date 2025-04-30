@@ -11,6 +11,7 @@ import { CharacterDisplay } from "@/components/game/CharacterDisplay";
 import { WorldMapDisplay } from "@/components/game/WorldMapDisplay";
 import { narrateAdventure } from "@/ai/flows/narrate-adventure";
 import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
+import { assessActionDifficulty, type DifficultyLevel } from "@/ai/flows/assess-action-difficulty"; // Import assessment flow and type
 import type { NarrateAdventureOutput } from "@/ai/flows/narrate-adventure"; // Import type
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save } from "lucide-react"; // Added Save icon
@@ -28,6 +29,23 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+// Helper function to map difficulty dice string to roller function
+const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null => {
+  switch (diceType) {
+    case 'd6':
+    case 'd10': // Use standard d10 roller for Easy/Normal for now
+      return rollDice; // Assuming rollDice is d10
+    case 'd20': // Add d20 if needed, or map to d10/d100
+      return rollDice; // Map d20 to d10 for now
+    case 'd100':
+      return rollDifficultDice;
+    case 'None':
+    default:
+      return null;
+  }
+};
+
+
 export function Gameplay() {
   const { state, dispatch } = useGame();
   const { toast } = useToast();
@@ -37,9 +55,10 @@ export function Gameplay() {
   const [isEnding, setIsEnding] = useState(false); // State for ending/summarizing
   const [isSaving, setIsSaving] = useState(false); // State for saving
   const [error, setError] = useState<string | null>(null);
+  const [isAssessingDifficulty, setIsAssessingDifficulty] = useState(false); // State for difficulty assessment
   const [isRollingDice, setIsRollingDice] = useState(false);
   const [diceResult, setDiceResult] = useState<number | null>(null);
-  const [diceType, setDiceType] = useState<number>(6); // Track which die was rolled (default d6)
+  const [diceType, setDiceType] = useState<string>("None"); // Track which die was rolled (string like "d10", "d100", "None")
   const scrollAreaViewportRef = useRef<HTMLDivElement>(null); // Ref for the ScrollArea viewport
   const scrollEndRef = useRef<HTMLDivElement>(null); // Ref for an element at the bottom
 
@@ -51,60 +70,127 @@ export function Gameplay() {
 
   // --- Handle Player Action Submission ---
   const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
-    if (!character || (isLoading && !isInitialAction) || isEnding || isSaving) {
-       console.log("Action blocked: No character, already loading/saving/ending.");
+     if (!character || isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice) {
+       console.log("Action blocked: No character or already busy.");
+       toast({ description: "Please wait for the current action to complete.", variant: "default", duration: 1500 });
        return;
      }
 
     console.log(`Handling action: "${action}"`);
-    setIsLoading(true);
+    setIsLoading(true); // Set loading true for the whole process
     setError(null);
     setDiceResult(null);
-    setDiceType(6); // Reset dice type
+    setDiceType("None"); // Reset dice type
 
     let actionWithDice = action;
+    let assessedDifficulty: DifficultyLevel = "Normal"; // Default difficulty
+    let difficultyReasoning = "";
+    let requiresRoll = false;
+    let rollFunction: (() => Promise<number>) | null = null;
+
+
+    // --- 1. Assess Difficulty (unless passive/initial) ---
     const actionLower = action.trim().toLowerCase();
-    const requiresRoll = !isInitialAction && !["look", "look around", "check inventory", "examine self", "status", "wait", "rest"].includes(actionLower); // Roll unless it's a passive action
+    const isPassiveAction = ["look", "look around", "check inventory", "examine self", "status", "wait", "rest"].includes(actionLower);
 
-    if (requiresRoll) {
-        setIsRollingDice(true);
+    if (!isInitialAction && !isPassiveAction) {
+        setIsAssessingDifficulty(true);
         toast({ title: "Assessing Challenge...", description: "Determining difficulty...", duration: 1500 });
-        await new Promise(resolve => setTimeout(resolve, 600)); // Pause for effect
+        await new Promise(resolve => setTimeout(resolve, 400)); // Short pause for effect
 
-        // --- Difficulty Estimation (Simple Heuristic) ---
-        // This is a placeholder. A better approach might involve keywords or AI assessment.
-        const isDifficultAction = actionLower.includes("attack") || actionLower.includes("cast") || actionLower.includes("persuade") || actionLower.includes("climb") || actionLower.includes("sneak") || actionLower.includes("disable") || actionLower.includes("convince");
-        const isVeryDifficultAction = actionLower.includes("impossible") || actionLower.includes("powerful") || actionLower.includes("complex spell") || actionLower.includes("convince the king"); // Example triggers for d100
-        const rollFunction = isVeryDifficultAction ? rollDifficultDice : rollDice; // Use d100 for very hard, d10 otherwise
-        const currentDiceType = isVeryDifficultAction ? 100 : 10; // Store which die is used
-        setDiceType(currentDiceType);
+        try {
+             const assessmentInput = {
+                playerAction: action,
+                characterCapabilities: `Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, AGI ${character.stats.agility}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}.`,
+                currentSituation: currentNarration?.narration || "At the beginning of the scene.", // Use last narration as situation
+                gameStateSummary: currentGameStateString,
+             };
+            console.log("Sending to assessActionDifficulty:", JSON.stringify(assessmentInput, null, 2));
+            const assessmentResult = await assessActionDifficulty(assessmentInput);
+            console.log("Received from assessActionDifficulty:", assessmentResult);
 
-        toast({ title: `Rolling d${currentDiceType}...`, description: "Testing fate...", duration: 1500 });
+            assessedDifficulty = assessmentResult.difficulty;
+            difficultyReasoning = assessmentResult.reasoning;
+            setDiceType(assessmentResult.suggestedDice); // Store the suggested dice string
+            rollFunction = getDiceRollFunction(assessmentResult.suggestedDice); // Get the actual function
+
+            requiresRoll = assessedDifficulty !== "Trivial" && assessedDifficulty !== "Impossible" && rollFunction !== null;
+
+             toast({
+                title: `Difficulty: ${assessedDifficulty}`,
+                description: difficultyReasoning.substring(0, 100), // Show snippet of reasoning
+                duration: 2500
+             });
+             await new Promise(resolve => setTimeout(resolve, 600)); // Pause after assessment
+
+            // If impossible, stop here and inform player
+            if (assessedDifficulty === "Impossible") {
+                setError(`Action seems impossible: ${difficultyReasoning} Try something else.`);
+                toast({ title: "Action Impossible", description: difficultyReasoning, variant: "destructive", duration: 4000 });
+                setIsLoading(false);
+                setIsAssessingDifficulty(false);
+                setPlayerInput(""); // Clear input
+                scrollToBottom();
+                return; // Stop processing the action
+            }
+
+        } catch (assessError: any) {
+            console.error("Difficulty assessment failed:", assessError);
+            setError("Failed to assess difficulty. Assuming 'Normal'.");
+            toast({ title: "Assessment Error", description: "Assuming normal difficulty.", variant: "destructive" });
+            assessedDifficulty = "Normal";
+            setDiceType("d10"); // Default dice on error
+            rollFunction = rollDice;
+            requiresRoll = true; // Assume roll is needed if assessment failed
+        } finally {
+            setIsAssessingDifficulty(false);
+        }
+    } else {
+        // Passive or initial action, no assessment needed
+        requiresRoll = false;
+        assessedDifficulty = "Trivial";
+        difficultyReasoning = "Passive or initial action.";
+        setDiceType("None");
+    }
+
+
+    // --- 2. Roll Dice (if required) ---
+    if (requiresRoll && rollFunction) {
+        setIsRollingDice(true);
+        toast({ title: `Rolling ${diceType}...`, description: "Testing fate...", duration: 1500 });
         await new Promise(resolve => setTimeout(resolve, 600)); // Pause for effect
 
         try {
-            const roll = await rollFunction(); // Call the appropriate roll function
+            const roll = await rollFunction(); // Call the determined roll function
             setDiceResult(roll);
-            actionWithDice += ` (Dice Roll Result: ${roll}/${currentDiceType})`; // Append roll and type
-            console.log(`Dice rolled d${currentDiceType}: ${roll}`);
-            // Adjust toast based on roll and die type (simple example)
-            const successThreshold = Math.ceil(currentDiceType * 0.6); // e.g., 6 for d10, 60 for d100
-            const failThreshold = Math.floor(currentDiceType * 0.3); // e.g., 3 for d10, 30 for d100
+            actionWithDice += ` (Difficulty: ${assessedDifficulty}, Dice Roll Result: ${roll}/${diceType.substring(1)})`; // Append roll and type
+            console.log(`Dice rolled ${diceType}: ${roll}`);
+
+            // Basic outcome toast (can be refined)
+            const numericDiceType = parseInt(diceType.substring(1), 10);
+            const successThreshold = Math.ceil(numericDiceType * 0.6);
+            const failThreshold = Math.floor(numericDiceType * 0.3);
             let outcomeDesc = "Average outcome.";
             if (roll >= successThreshold) outcomeDesc = "Success!";
             if (roll <= failThreshold) outcomeDesc = "Challenging...";
 
-            toast({ title: `Rolled ${roll} on d${currentDiceType}!`, description: outcomeDesc, duration: 2000 });
-            await new Promise(resolve => setTimeout(resolve, 800)); // Pause to show toast longer
+            toast({ title: `Rolled ${roll} on ${diceType}!`, description: outcomeDesc, duration: 2000 });
+            await new Promise(resolve => setTimeout(resolve, 800)); // Pause
+
         } catch (diceError) {
             console.error("Dice roll failed:", diceError);
             setError("The dice seem unresponsive... Proceeding based on skill.");
             toast({ title: "Dice Error", description: "Could not roll dice.", variant: "destructive" });
+            actionWithDice += ` (Difficulty: ${assessedDifficulty}, Dice Roll: Failed)`; // Indicate dice failure
         } finally {
             setIsRollingDice(false);
         }
+    } else if (!isPassiveAction && assessedDifficulty !== "Impossible") {
+         // Add difficulty context even if no roll needed (e.g., Trivial)
+         actionWithDice += ` (Difficulty: ${assessedDifficulty}, No Roll Required)`;
     }
 
+    // --- 3. Narrate Action Outcome ---
     const inputForAI = {
       character: {
         name: character.name,
@@ -115,7 +201,7 @@ export function Gameplay() {
         stats: character.stats,
         aiGeneratedDescription: character.aiGeneratedDescription,
       },
-      playerChoice: actionWithDice, // Send action possibly with dice result
+      playerChoice: actionWithDice, // Send action possibly with dice result and difficulty context
       gameState: currentGameStateString,
       previousNarration: storyLog.length > 0 ? storyLog[storyLog.length - 1].narration : undefined,
     };
@@ -128,7 +214,6 @@ export function Gameplay() {
       setError(null); // Clear error on success
 
        // --- Check for End Game Condition ---
-        // AI should explicitly put "Game Over" or similar in the gameState or narration
        const lowerNarration = result.narration?.toLowerCase() || "";
        const lowerGameState = result.updatedGameState?.toLowerCase() || "";
        const isGameOver = lowerGameState.includes("game over") || lowerNarration.includes("your adventure ends") || lowerNarration.includes("you have died") || lowerNarration.includes("you achieved victory");
@@ -139,10 +224,8 @@ export function Gameplay() {
                 await handleEndAdventure(result);
             } else if (lowerNarration.includes("you have died")) {
                 toast({title: "Defeat!", description: "You were overcome, but perhaps fate offers another chance (Respawn not implemented).", variant: "destructive", duration: 5000});
-                 // TODO: Implement respawn logic if needed. For now, end the game.
                  await handleEndAdventure(result);
             } else {
-                 // Victory or other ending
                  toast({title: "Adventure Concluded!", description: "Your tale reaches its current conclusion.", duration: 5000});
                  await handleEndAdventure(result);
             }
@@ -154,17 +237,16 @@ export function Gameplay() {
       setError(`${errorMessage} Perhaps try a different approach?`);
       toast({ title: "Story Error", description: errorMessage.substring(0, 100), variant: "destructive"});
     } finally {
-      setIsLoading(false);
-      if (!isInitialAction) setPlayerInput(""); // Clear input field unless it was the initial action
-      // Scroll after state update and DOM render
-      requestAnimationFrame(scrollToBottom);
+      setIsLoading(false); // Set loading false only after everything is done
+      if (!isInitialAction) setPlayerInput(""); // Clear input field
+      requestAnimationFrame(scrollToBottom); // Scroll after state update
     }
-  }, [character, isLoading, isEnding, isSaving, currentGameStateString, storyLog, adventureSettings, dispatch, toast, scrollToBottom]); // Added isSaving
+  }, [character, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, currentGameStateString, currentNarration, storyLog, adventureSettings, dispatch, toast, scrollToBottom]); // Added new states to dependency array
 
 
   // --- End Adventure ---
   const handleEndAdventure = useCallback(async (finalNarration?: NarrateAdventureOutput) => {
-     if (isLoading || isEnding || isSaving) return;
+     if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice) return;
      setIsEnding(true); // Use dedicated ending state
      setError(null);
      toast({ title: "Ending Adventure", description: "Summarizing your tale..." });
@@ -200,16 +282,15 @@ export function Gameplay() {
      }
 
      // Dispatch END_ADVENTURE which will change status and save summary/final log
-     // The reducer now handles the auto-saving logic.
      dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationContext ?? undefined } });
      // No need to set isLoading/isEnding false here, as the component will transition
 
-   }, [isLoading, isEnding, isSaving, storyLog, currentNarration, dispatch, toast]); // Added isSaving
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, storyLog, currentNarration, dispatch, toast]);
 
 
    // --- Handle Save Game ---
    const handleSaveGame = useCallback(async () => {
-        if (isLoading || isEnding || isSaving || !currentAdventureId) return;
+        if (isLoading || isEnding || isSaving || !currentAdventureId || isAssessingDifficulty || isRollingDice) return;
         setIsSaving(true);
         toast({ title: "Saving Progress..." });
         await new Promise(resolve => setTimeout(resolve, 500)); // Simulate save time
@@ -223,39 +304,36 @@ export function Gameplay() {
         } finally {
             setIsSaving(false);
         }
-   }, [dispatch, toast, isLoading, isEnding, isSaving, currentAdventureId, character]);
+   }, [dispatch, toast, isLoading, isEnding, isSaving, currentAdventureId, character, isAssessingDifficulty, isRollingDice]);
 
 
   // --- Initial Narration Trigger ---
   useEffect(() => {
-    // Only trigger initial narration if it's NOT a loaded game
-    if (state.status === "Gameplay" && character && storyLog.length === 0 && !isLoading && !isEnding && !isSaving && !state.savedAdventures.some(s => s.id === state.currentAdventureId)) {
+    if (state.status === "Gameplay" && character && storyLog.length === 0 && !isLoading && !isEnding && !isSaving && !isAssessingDifficulty && !isRollingDice && !state.savedAdventures.some(s => s.id === state.currentAdventureId)) {
         console.log("Gameplay: Triggering initial narration for new game.");
         handlePlayerAction("Begin the adventure by looking around.", true);
-    } else if (state.status === "Gameplay" && character && storyLog.length > 0 && !isLoading && !isEnding && !isSaving && state.savedAdventures.some(s => s.id === state.currentAdventureId)) {
+    } else if (state.status === "Gameplay" && character && storyLog.length > 0 && !isLoading && !isEnding && !isSaving && !isAssessingDifficulty && !isRollingDice && state.savedAdventures.some(s => s.id === state.currentAdventureId)) {
          console.log("Gameplay: Resumed loaded game.");
-         // Maybe show a "Game Loaded" toast?
          toast({ title: "Game Loaded", description: `Resuming adventure for ${character.name}.`, duration: 3000 });
-         // Ensure view scrolls to the bottom of the existing log
          requestAnimationFrame(scrollToBottom);
     }
-  }, [state.status, character, storyLog.length, isLoading, isEnding, isSaving, handlePlayerAction, state.savedAdventures, state.currentAdventureId, toast, scrollToBottom]);
+  }, [state.status, character, storyLog.length, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, handlePlayerAction, state.savedAdventures, state.currentAdventureId, toast, scrollToBottom]);
 
 
-   // Scroll to bottom when new narration/log entries arrive or loading starts/ends
+   // Scroll to bottom when new narration/log entries arrive or loading/assessment/rolling starts/ends
    useEffect(() => {
        scrollToBottom();
-   }, [storyLog, isLoading, isEnding, isSaving, diceResult, error, scrollToBottom]); // Added isSaving
+   }, [storyLog, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, diceResult, error, scrollToBottom]);
 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedInput = playerInput.trim();
-    if (trimmedInput && !isLoading && !isRollingDice && !isEnding && !isSaving) {
+    if (trimmedInput && !isLoading && !isAssessingDifficulty && !isRollingDice && !isEnding && !isSaving) {
        handlePlayerAction(trimmedInput);
     } else if (!trimmedInput) {
         toast({ description: "Please enter an action.", variant: "destructive"});
-    } else if (isLoading || isRollingDice || isEnding || isSaving) {
+    } else if (isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving) {
         toast({ description: "Please wait for the current action to complete.", variant: "default", duration: 2000 });
     }
   };
@@ -263,15 +341,15 @@ export function Gameplay() {
 
    // --- Go Back (Abandon Adventure) ---
    const handleGoBack = useCallback(() => {
-       if (isLoading || isEnding || isSaving) return;
+       if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice) return;
        toast({ title: "Returning to Main Menu...", description: "Abandoning current adventure." });
        dispatch({ type: "RESET_GAME" });
-   }, [isLoading, isEnding, isSaving, dispatch, toast]); // Added isSaving
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, dispatch, toast]);
 
 
    // --- Suggest Action ---
    const handleSuggestAction = useCallback(() => {
-       if (isLoading || isEnding || isSaving) return;
+       if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice) return;
         const suggestions = [
             "Look around", "Examine surroundings", "Check inventory", "Check status",
             "Move north", "Move east", "Move south", "Move west",
@@ -286,7 +364,7 @@ export function Gameplay() {
         const suggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
         setPlayerInput(suggestion);
         toast({ title: "Suggestion", description: `Try: "${suggestion}"`, duration: 3000 });
-   }, [isLoading, isEnding, isSaving, toast]); // Added isSaving
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, toast]);
 
    if (!character) {
        return (
@@ -318,28 +396,29 @@ export function Gameplay() {
             </div>
         );
     }
+    // Combined Loading State (Assessment, Rolling, Narrating)
     if (isLoading) {
+      let loadingText = "The story unfolds...";
+      let LoadingIcon = Loader2;
+      if (isAssessingDifficulty) {
+        loadingText = "Assessing difficulty...";
+      } else if (isRollingDice) {
+        loadingText = `Rolling ${diceType}...`;
+        LoadingIcon = Dices; // Use Dices icon for rolling
+      }
+
       return (
         <div className="flex items-center justify-center py-4 text-muted-foreground animate-pulse">
-          {isRollingDice ? (
-            <>
-              <Dices className="h-5 w-5 mr-2 animate-spin duration-500" />
-              <span>Rolling d{diceType}...</span>
-            </>
-          ) : (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin mr-2" />
-              <span>The story unfolds...</span>
-            </>
-          )}
+           <LoadingIcon className={`h-5 w-5 mr-2 ${isRollingDice ? 'animate-spin duration-500' : 'animate-spin'}`} />
+           <span>{loadingText}</span>
         </div>
       );
     }
-    if (diceResult !== null) {
-      // Use key to force re-render and restart animation
+    // Display Dice Result Separately after loading finishes
+    if (diceResult !== null && diceType !== "None") {
       return (
         <div key={`dice-${Date.now()}`} className="flex items-center justify-center py-2 text-accent font-semibold italic animate-fade-in-out">
-          <Dices className="h-5 w-5 mr-2" /> Rolled {diceResult} on d{diceType}!
+          <Dices className="h-5 w-5 mr-2" /> Rolled {diceResult} on {diceType}!
         </div>
       );
     }
@@ -352,7 +431,7 @@ export function Gameplay() {
         </Alert>
       );
     }
-     if (storyLog.length === 0 && !isLoading && !isEnding && !isSaving) { // Show initial prompt only if log is empty and not busy
+     if (storyLog.length === 0 && !isLoading && !isEnding && !isSaving && !isAssessingDifficulty && !isRollingDice) { // Show initial prompt only if log is empty and not busy
          return <p className="text-center text-muted-foreground italic py-4">Initializing your adventure...</p>;
      }
     return null; // Render nothing if none of the above conditions met
@@ -367,13 +446,13 @@ export function Gameplay() {
              <WorldMapDisplay />
              {/* Actions at the bottom */}
              <div className="mt-auto space-y-2 pt-4">
-                 <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving}>
+                 <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice}>
                       {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" /> }
                       {isSaving ? "Saving..." : "Save Game"}
                  </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving}>
+                    <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice}>
                       <ArrowLeft className="mr-2 h-4 w-4" /> Abandon Adventure
                     </Button>
                   </AlertDialogTrigger>
@@ -391,7 +470,7 @@ export function Gameplay() {
                   </AlertDialogContent>
                 </AlertDialog>
 
-                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving}>
+                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice}>
                      {isEnding ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BookCopy className="mr-2 h-4 w-4" /> }
                      {isEnding ? "Summarizing..." : "End & Summarize"}
                  </Button>
@@ -435,7 +514,7 @@ export function Gameplay() {
                     variant="ghost"
                     size="icon"
                     onClick={handleSuggestAction}
-                    disabled={isLoading || isRollingDice || isEnding || isSaving}
+                    disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving}
                     aria-label="Suggest an action"
                     className="text-muted-foreground hover:text-accent flex-shrink-0"
                     title="Suggest Action"
@@ -447,14 +526,14 @@ export function Gameplay() {
                   value={playerInput}
                   onChange={(e) => setPlayerInput(e.target.value)}
                   placeholder="What do you do next?"
-                  disabled={isLoading || isRollingDice || isEnding || isSaving}
+                  disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving}
                   className="flex-grow text-base h-11 min-w-0" // Allow input to grow but have a min width
                   aria-label="Player action input"
                   autoComplete="off"
                 />
                 <Button
                     type="submit"
-                    disabled={isLoading || isRollingDice || isEnding || isSaving || !playerInput.trim()}
+                    disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || !playerInput.trim()}
                     className="bg-accent hover:bg-accent/90 text-accent-foreground h-11 px-5 flex-shrink-0"
                     aria-label="Submit action"
                 >
@@ -464,13 +543,13 @@ export function Gameplay() {
 
              {/* Buttons for smaller screens (Mobile View) */}
               <div className="md:hidden flex flex-col gap-2 mt-4 border-t pt-4">
-                   <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving}>
+                   <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice}>
                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" /> }
                         {isSaving ? "Saving..." : "Save Game"}
                    </Button>
                   <AlertDialog>
                      <AlertDialogTrigger asChild>
-                         <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving}>
+                         <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice}>
                              <ArrowLeft className="mr-2 h-4 w-4" /> Abandon
                          </Button>
                      </AlertDialogTrigger>
@@ -487,7 +566,7 @@ export function Gameplay() {
                          </AlertDialogFooter>
                      </AlertDialogContent>
                  </AlertDialog>
-                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving}>
+                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice}>
                     {isEnding ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BookCopy className="mr-2 h-4 w-4" /> }
                     {isEnding ? "Summarizing..." : "End Adventure"}
                  </Button>
