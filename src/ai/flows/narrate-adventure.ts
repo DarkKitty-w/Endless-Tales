@@ -80,10 +80,10 @@ Generate the next part of the story based on ALL the information above.
     *   **Block Impossible Actions:** Prevent players from performing actions that are fundamentally impossible or vastly outside their current capabilities (e.g., "destroy the universe", "teleport to another dimension", "become king instantly", "control time").
     *   **Narrate Failure Reason:** If an action is blocked, narrate *why* it fails within the story's logic. Explain the character's limitations (e.g., "You lack the physical strength to...", "Your knowledge of magic doesn't extend to...", "That concept is beyond your current understanding.", "Becoming king requires political power you haven't earned.").
     *   **Skill-based Progression:** Extremely powerful actions (like significant magic, ruling, dimension hopping) should ONLY be possible *after* the character achieves specific, major milestones clearly indicated in the gameState (e.g., "Milestone: Mastered Arcane Fundamentals", "Milestone: Gained Nobility Title", "Milestone: Found the Dimensional Key"). Do not allow these actions otherwise.
-3.  **Incorporate Dice Rolls (d6):**
-    *   **Interpret Roll Contextually:** If the Player's Action includes "(Dice Roll Result: N)", interpret the outcome based on the *inherent difficulty* of the action attempted.
-    *   **Difficulty Matters:** A low roll (1-2) on a *difficult* task is a clear failure, perhaps with complications. A high roll (5-6) on an *easy* task might grant a bonus or extra success. A mid-roll (3-4) on a *normal* task could be partial success or success with a minor cost. A roll of 6 on a difficult task might be just barely succeeding.
-    *   **Narrate Accordingly:** Use the dice roll combined with the action's context and difficulty to add unpredictability and determine the degree of success or failure. If no dice roll is mentioned, determine the outcome based solely on context and character abilities/gameState.
+3.  **Incorporate Dice Rolls (d6, d10, d20, d100):**
+    *   **Interpret Roll Contextually:** If the Player's Action includes "(Difficulty: [Level], Dice Roll Result: N/[Max])", interpret the outcome based on the assessed *difficulty* ([Level]) and the roll result (N) versus the max possible (Max).
+    *   **Difficulty Matters:** A low roll (e.g., 1-3 on d10, 1-20 on d100) on a *Hard* or *Very Hard* task is a clear failure, perhaps with complications. A high roll (e.g., 8-10 on d10, 80-100 on d100) on an *Easy* task might grant a bonus or extra success. A mid-range roll on a *Normal* task could be partial success or success with a minor cost. A high roll on a *Difficult* task might be just barely succeeding.
+    *   **Narrate Accordingly:** Use the dice roll combined with the action's context and difficulty to add unpredictability and determine the degree of success or failure. If no dice roll is mentioned (e.g., for Trivial actions), determine the outcome based solely on context and character abilities/gameState.
 4.  **Consequences:** Actions have consequences. Decisions can alter the story, affect relationships with NPCs (implied or explicit), change the character's status, or modify the game world (inventory, location, time). Reflect these consequences in the narration and the updated game state.
 5.  **Update Game State:** Modify the 'gameState' string concisely to reflect changes resulting from the player's action and the narration (e.g., new location, item acquired/lost, NPC mood change, time passed, quest progress updated, milestone achieved, status changed like 'Injured'). Ensure it remains a readable string format.
 6.  **Tone:** Maintain a consistent tone suitable for a fantasy text adventure. Be descriptive and engaging.
@@ -106,17 +106,35 @@ const narrateAdventureFlow = ai.defineFlow<
   async (input) => {
      // --- AI Call ---
      console.log("Sending to narrateAdventurePrompt:", JSON.stringify(input, null, 2)); // Log the input being sent
-     const {output} = await narrateAdventurePrompt(input);
+     let output: NarrateAdventureOutput | undefined;
+     let errorOccurred = false;
+     let errorMessage = "AI Error: Narration generation failed"; // Default error message
+
+     try {
+         const result = await narrateAdventurePrompt(input); // Renamed to avoid shadowing
+         output = result.output;
+     } catch (err: any) {
+         console.error("AI narration error caught:", err);
+         errorOccurred = true;
+         // Refine error message based on common issues
+         if (err.message && err.message.includes('503') && err.message.includes('Service Unavailable')) {
+            errorMessage = "AI Error: The story generation service is currently unavailable. Please try again shortly.";
+         } else if (err.message) {
+             errorMessage = `AI Error: ${err.message.substring(0, 100)}`; // Generic error
+         }
+     }
+
 
      // --- Validation & Fallback ---
      const narration = output?.narration?.trim();
      const updatedGameState = output?.updatedGameState?.trim();
 
-     if (!narration || !updatedGameState) {
-        console.error("AI narration output missing or invalid:", output);
+     // Check if an error occurred OR if the output is invalid
+     if (errorOccurred || !narration || !updatedGameState) {
+        console.error("AI narration output missing, invalid, or error occurred:", output, errorOccurred);
         // Provide a safe fallback if AI fails
         return {
-            narration: "The threads of fate seem momentarily tangled. You pause, considering your next move as the world holds its breath. (AI Error: Narration generation failed)",
+            narration: `The threads of fate seem momentarily tangled. You pause, considering your next move as the world holds its breath. (${errorMessage})`, // Use the refined error message
             updatedGameState: input.gameState, // Return original game state on error
         };
      }
