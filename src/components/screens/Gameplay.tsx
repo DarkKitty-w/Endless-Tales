@@ -2,13 +2,14 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useGame } from "@/context/GameContext";
+import { useGame, type InventoryItem } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
 import { CharacterDisplay } from "@/components/game/CharacterDisplay";
 import { WorldMapDisplay } from "@/components/game/WorldMapDisplay";
+import { InventoryDisplay } from "@/components/game/InventoryDisplay"; // Import InventoryDisplay
 import { narrateAdventure } from "@/ai/flows/narrate-adventure";
 import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
 import { assessActionDifficulty, type DifficultyLevel } from "@/ai/flows/assess-action-difficulty"; // Import assessment flow and type
@@ -45,11 +46,24 @@ const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null =
   }
 };
 
+// Placeholder function to generate image URIs (replace with actual AI call later)
+// Keep this local for now, might move to a service later
+async function generatePlaceholderImageUri(itemName: string): Promise<string> {
+    let hash = 0;
+    for (let i = 0; i < itemName.length; i++) {
+        hash = itemName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const width = 200 + (Math.abs(hash) % 101); // width between 200-300
+    const height = 200 + (Math.abs(hash >> 16) % 101); // height between 200-300
+    // Add timestamp to ensure unique image on retry/reload if needed
+    return `https://picsum.photos/${width}/${height}?random=${encodeURIComponent(itemName)}&t=${Date.now()}`;
+}
+
 
 export function Gameplay() {
   const { state, dispatch } = useGame();
   const { toast } = useToast();
-  const { character, currentNarration, currentGameStateString, storyLog, adventureSettings, currentAdventureId } = state; // Added currentAdventureId
+  const { character, currentNarration, currentGameStateString, storyLog, adventureSettings, inventory, currentAdventureId } = state; // Added inventory, currentAdventureId
   const [playerInput, setPlayerInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isEnding, setIsEnding] = useState(false); // State for ending/summarizing
@@ -61,16 +75,66 @@ export function Gameplay() {
   const [diceType, setDiceType] = useState<string>("None"); // Track which die was rolled (string like "d10", "d100", "None")
   const scrollAreaViewportRef = useRef<HTMLDivElement>(null); // Ref for the ScrollArea viewport
   const scrollEndRef = useRef<HTMLDivElement>(null); // Ref for an element at the bottom
+  const [isGeneratingInventoryImages, setIsGeneratingInventoryImages] = useState(false);
 
   // Function to scroll to bottom
   const scrollToBottom = useCallback(() => {
      scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, []);
 
+   // --- Handle Inventory Image Generation ---
+   const generateInventoryImages = useCallback(async (itemNames: string[]) => {
+       if (!itemNames || itemNames.length === 0 || isGeneratingInventoryImages) {
+           return;
+       }
+
+        // Find items that are in the list but don't have an image URI yet
+       const itemsToGenerate = inventory.filter(item => itemNames.includes(item.name) && !item.imageDataUri);
+
+       if (itemsToGenerate.length === 0) {
+           console.log("All listed inventory items already have images (or list is empty).");
+           return;
+       }
+
+       setIsGeneratingInventoryImages(true);
+       console.log("Generating images for inventory items:", itemsToGenerate.map(i => i.name));
+       toast({ title: "Loading Item Images...", description: `Fetching visuals for ${itemsToGenerate.length} item(s).`, duration: 2000 });
+
+       try {
+           const generationPromises = itemsToGenerate.map(async (item) => {
+               const imageDataUri = await generatePlaceholderImageUri(item.name);
+               return { ...item, imageDataUri }; // Return item with new image URI
+           });
+
+           const generatedItems = await Promise.all(generationPromises);
+
+           // Update the state by merging generated items with existing ones
+           dispatch({
+               type: "UPDATE_CHARACTER", // Use a generic update for simplicity, or add specific inventory action
+               payload: {
+                    // Merge existing inventory with newly generated images
+                   inventory: inventory.map(existingItem => {
+                       const generated = generatedItems.find(g => g.name === existingItem.name);
+                       return generated ? generated : existingItem;
+                   })
+               } as any // Cast as any to bypass strict type check if needed for inventory update
+           });
+
+           console.log("Finished generating inventory images.");
+          // toast({ title: "Item Images Loaded", duration: 1500 });
+
+       } catch (error) {
+           console.error("Error generating inventory images:", error);
+           toast({ title: "Image Loading Error", description: "Could not load some item images.", variant: "destructive" });
+       } finally {
+           setIsGeneratingInventoryImages(false);
+       }
+   }, [inventory, dispatch, toast, isGeneratingInventoryImages]); // Add dependencies
+
 
   // --- Handle Player Action Submission ---
   const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
-     if (!character || isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice) {
+     if (!character || isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages) {
        console.log("Action blocked: No character or already busy.");
        toast({ description: "Please wait for the current action to complete.", variant: "default", duration: 1500 });
        return;
@@ -101,7 +165,8 @@ export function Gameplay() {
         try {
              const assessmentInput = {
                 playerAction: action,
-                characterCapabilities: `Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, AGI ${character.stats.agility}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}.`,
+                 // Include inventory in capabilities string
+                characterCapabilities: `Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, AGI ${character.stats.agility}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}. Inventory: ${inventory.map(i => i.name).join(', ') || 'Empty'}`,
                 currentSituation: currentNarration?.narration || "At the beginning of the scene.", // Use last narration as situation
                 gameStateSummary: currentGameStateString,
              };
@@ -191,7 +256,7 @@ export function Gameplay() {
     }
 
     // --- 3. Narrate Action Outcome ---
-    const inputForAI = {
+    const inputForAI: NarrateAdventureInput = { // Ensure type correctness
       character: {
         name: character.name,
         description: character.description,
@@ -202,16 +267,21 @@ export function Gameplay() {
         aiGeneratedDescription: character.aiGeneratedDescription,
       },
       playerChoice: actionWithDice, // Send action possibly with dice result and difficulty context
-      gameState: currentGameStateString,
+      gameState: currentGameStateString, // Send the most up-to-date game state string
       previousNarration: storyLog.length > 0 ? storyLog[storyLog.length - 1].narration : undefined,
     };
 
     try {
       console.log("Sending to narrateAdventure flow:", JSON.stringify(inputForAI, null, 2));
-      const result = await narrateAdventure(inputForAI);
+      const result: NarrateAdventureOutput = await narrateAdventure(inputForAI);
       console.log("Received from narrateAdventure flow:", result);
-      dispatch({ type: "UPDATE_NARRATION", payload: result });
+      dispatch({ type: "UPDATE_NARRATION", payload: result }); // Dispatch full result including optional inventory
       setError(null); // Clear error on success
+
+      // Trigger inventory image generation if inventory changed
+      if (result.updatedInventory) {
+         await generateInventoryImages(result.updatedInventory);
+      }
 
        // --- Check for End Game Condition ---
        const lowerNarration = result.narration?.toLowerCase() || "";
@@ -241,12 +311,12 @@ export function Gameplay() {
       if (!isInitialAction) setPlayerInput(""); // Clear input field
       requestAnimationFrame(scrollToBottom); // Scroll after state update
     }
-  }, [character, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, currentGameStateString, currentNarration, storyLog, adventureSettings, dispatch, toast, scrollToBottom]); // Added new states to dependency array
+  }, [character, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, currentGameStateString, currentNarration, storyLog, adventureSettings, dispatch, toast, scrollToBottom, generateInventoryImages]); // Added inventory and image generation state/function
 
 
   // --- End Adventure ---
   const handleEndAdventure = useCallback(async (finalNarration?: NarrateAdventureOutput) => {
-     if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice) return;
+     if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages) return;
      setIsEnding(true); // Use dedicated ending state
      setError(null);
      toast({ title: "Ending Adventure", description: "Summarizing your tale..." });
@@ -256,9 +326,12 @@ export function Gameplay() {
      let summary = "Your adventure has concluded.";
      const hasLog = storyLog.length > 0 || finalNarrationContext;
      if (hasLog) {
+          // Ensure finalNarrationContext matches StoryLogEntry structure if used directly
+          const finalLogEntryMaybe: StoryLogEntry | null = finalNarrationContext ? { ...finalNarrationContext, timestamp: Date.now() } : null;
+
           const fullStoryLog = [...storyLog];
-          if (finalNarrationContext && (!storyLog.length || storyLog[storyLog.length - 1].narration !== finalNarrationContext.narration)) {
-             fullStoryLog.push({ ...finalNarrationContext, timestamp: Date.now() });
+          if (finalLogEntryMaybe && (!storyLog.length || storyLog[storyLog.length - 1].narration !== finalLogEntryMaybe.narration)) {
+             fullStoryLog.push(finalLogEntryMaybe);
           }
          const fullStory = fullStoryLog.map((log, index) => `[Turn ${index + 1}]\n${log.narration}`).join("\n\n---\n\n");
 
@@ -282,15 +355,15 @@ export function Gameplay() {
      }
 
      // Dispatch END_ADVENTURE which will change status and save summary/final log
-     dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationContext ?? undefined } });
+      dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationContext ?? undefined } });
      // No need to set isLoading/isEnding false here, as the component will transition
 
-   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, storyLog, currentNarration, dispatch, toast]);
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, storyLog, currentNarration, dispatch, toast]);
 
 
    // --- Handle Save Game ---
    const handleSaveGame = useCallback(async () => {
-        if (isLoading || isEnding || isSaving || !currentAdventureId || isAssessingDifficulty || isRollingDice) return;
+        if (isLoading || isEnding || isSaving || !currentAdventureId || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages) return;
         setIsSaving(true);
         toast({ title: "Saving Progress..." });
         await new Promise(resolve => setTimeout(resolve, 500)); // Simulate save time
@@ -304,20 +377,30 @@ export function Gameplay() {
         } finally {
             setIsSaving(false);
         }
-   }, [dispatch, toast, isLoading, isEnding, isSaving, currentAdventureId, character, isAssessingDifficulty, isRollingDice]);
+   }, [dispatch, toast, isLoading, isEnding, isSaving, currentAdventureId, character, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages]);
 
 
-  // --- Initial Narration Trigger ---
+  // --- Initial Narration & Image Generation Trigger ---
   useEffect(() => {
-    if (state.status === "Gameplay" && character && storyLog.length === 0 && !isLoading && !isEnding && !isSaving && !isAssessingDifficulty && !isRollingDice && !state.savedAdventures.some(s => s.id === state.currentAdventureId)) {
-        console.log("Gameplay: Triggering initial narration for new game.");
-        handlePlayerAction("Begin the adventure by looking around.", true);
-    } else if (state.status === "Gameplay" && character && storyLog.length > 0 && !isLoading && !isEnding && !isSaving && !isAssessingDifficulty && !isRollingDice && state.savedAdventures.some(s => s.id === state.currentAdventureId)) {
-         console.log("Gameplay: Resumed loaded game.");
-         toast({ title: "Game Loaded", description: `Resuming adventure for ${character.name}.`, duration: 3000 });
-         requestAnimationFrame(scrollToBottom);
-    }
-  }, [state.status, character, storyLog.length, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, handlePlayerAction, state.savedAdventures, state.currentAdventureId, toast, scrollToBottom]);
+     const isNewGame = state.status === "Gameplay" && character && storyLog.length === 0 && !isLoading && !isEnding && !isSaving && !isAssessingDifficulty && !isRollingDice && !isGeneratingInventoryImages && !state.savedAdventures.some(s => s.id === state.currentAdventureId);
+     const isLoadedGame = state.status === "Gameplay" && character && storyLog.length > 0 && !isLoading && !isEnding && !isSaving && !isAssessingDifficulty && !isRollingDice && !isGeneratingInventoryImages && state.savedAdventures.some(s => s.id === state.currentAdventureId);
+
+     if (isNewGame) {
+         console.log("Gameplay: Triggering initial narration for new game.");
+         handlePlayerAction("Begin the adventure by looking around.", true);
+         // Trigger initial inventory image generation AFTER the initial narration potentially adds items
+         // This check might be better placed after handlePlayerAction completes for the initial action
+          if (inventory.length > 0) {
+             generateInventoryImages(inventory.map(i => i.name));
+         }
+     } else if (isLoadedGame) {
+          console.log("Gameplay: Resumed loaded game.");
+          toast({ title: "Game Loaded", description: `Resuming adventure for ${character.name}.`, duration: 3000 });
+          // Generate images for any items missing them on load
+          generateInventoryImages(inventory.map(i => i.name));
+          requestAnimationFrame(scrollToBottom);
+     }
+  }, [state.status, character, storyLog.length, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, handlePlayerAction, state.savedAdventures, state.currentAdventureId, toast, scrollToBottom, generateInventoryImages]);
 
 
    // Scroll to bottom when new narration/log entries arrive or loading/assessment/rolling starts/ends
@@ -329,11 +412,11 @@ export function Gameplay() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedInput = playerInput.trim();
-    if (trimmedInput && !isLoading && !isAssessingDifficulty && !isRollingDice && !isEnding && !isSaving) {
+    if (trimmedInput && !isLoading && !isAssessingDifficulty && !isRollingDice && !isEnding && !isSaving && !isGeneratingInventoryImages) {
        handlePlayerAction(trimmedInput);
     } else if (!trimmedInput) {
         toast({ description: "Please enter an action.", variant: "destructive"});
-    } else if (isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving) {
+    } else if (isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || isGeneratingInventoryImages) {
         toast({ description: "Please wait for the current action to complete.", variant: "default", duration: 2000 });
     }
   };
@@ -341,20 +424,20 @@ export function Gameplay() {
 
    // --- Go Back (Abandon Adventure) ---
    const handleGoBack = useCallback(() => {
-       if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice) return;
+       if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages) return;
        toast({ title: "Returning to Main Menu...", description: "Abandoning current adventure." });
        dispatch({ type: "RESET_GAME" });
-   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, dispatch, toast]);
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, dispatch, toast]);
 
 
    // --- Suggest Action ---
    const handleSuggestAction = useCallback(() => {
-       if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice) return;
+       if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages) return;
         const suggestions = [
             "Look around", "Examine surroundings", "Check inventory", "Check status",
             "Move north", "Move east", "Move south", "Move west",
             "Talk to [NPC Name]", "Ask about [Topic]",
-            "Examine [Object]", "Pick up [Item]", "Use [Item]",
+            "Examine [Object]", "Pick up [Item]", "Use [Item]", "Drop [Item]",
             "Open [Door/Chest]", "Search the area",
             "Rest here", "Wait for a while",
             "Attack [Target]", "Defend yourself", "Flee",
@@ -364,7 +447,7 @@ export function Gameplay() {
         const suggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
         setPlayerInput(suggestion);
         toast({ title: "Suggestion", description: `Try: "${suggestion}"`, duration: 3000 });
-   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, toast]);
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, toast]);
 
    if (!character) {
        return (
@@ -380,6 +463,14 @@ export function Gameplay() {
 
    // Helper function to render dynamic content at the end of the scroll area
    const renderDynamicContent = () => {
+     if (isGeneratingInventoryImages && !isLoading) { // Show only if not already showing main loading
+        return (
+            <div className="flex items-center justify-center py-4 text-muted-foreground animate-pulse">
+                <Loader2 className="h-5 w-5 mr-2 animate-spin"/>
+                <span>Loading item images...</span>
+            </div>
+        );
+     }
     if (isSaving) {
         return (
             <div className="flex items-center justify-center py-4 text-muted-foreground animate-pulse">
@@ -431,7 +522,7 @@ export function Gameplay() {
         </Alert>
       );
     }
-     if (storyLog.length === 0 && !isLoading && !isEnding && !isSaving && !isAssessingDifficulty && !isRollingDice) { // Show initial prompt only if log is empty and not busy
+     if (storyLog.length === 0 && !isLoading && !isEnding && !isSaving && !isAssessingDifficulty && !isRollingDice && !isGeneratingInventoryImages) { // Show initial prompt only if log is empty and not busy
          return <p className="text-center text-muted-foreground italic py-4">Initializing your adventure...</p>;
      }
     return null; // Render nothing if none of the above conditions met
@@ -440,19 +531,20 @@ export function Gameplay() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen max-h-screen overflow-hidden bg-gradient-to-br from-background to-muted/30">
-        {/* Left Panel (Character & Map) - Fixed width, scrollable content */}
+        {/* Left Panel (Character, Map, Inventory) - Fixed width, scrollable content */}
         <div className="hidden md:flex flex-col w-80 lg:w-96 p-4 border-r border-foreground/10 overflow-y-auto bg-card/50 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
              <CharacterDisplay />
              <WorldMapDisplay />
+             <InventoryDisplay /> {/* Add Inventory Display */}
              {/* Actions at the bottom */}
-             <div className="mt-auto space-y-2 pt-4">
-                 <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice}>
+             <div className="mt-auto space-y-2 pt-4 sticky bottom-0 bg-card/50 pb-4"> {/* Make actions sticky */}
+                 <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages}>
                       {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" /> }
                       {isSaving ? "Saving..." : "Save Game"}
                  </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice}>
+                    <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages}>
                       <ArrowLeft className="mr-2 h-4 w-4" /> Abandon Adventure
                     </Button>
                   </AlertDialogTrigger>
@@ -470,7 +562,7 @@ export function Gameplay() {
                   </AlertDialogContent>
                 </AlertDialog>
 
-                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice}>
+                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages}>
                      {isEnding ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BookCopy className="mr-2 h-4 w-4" /> }
                      {isEnding ? "Summarizing..." : "End & Summarize"}
                  </Button>
@@ -514,7 +606,7 @@ export function Gameplay() {
                     variant="ghost"
                     size="icon"
                     onClick={handleSuggestAction}
-                    disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving}
+                    disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || isGeneratingInventoryImages}
                     aria-label="Suggest an action"
                     className="text-muted-foreground hover:text-accent flex-shrink-0"
                     title="Suggest Action"
@@ -526,30 +618,32 @@ export function Gameplay() {
                   value={playerInput}
                   onChange={(e) => setPlayerInput(e.target.value)}
                   placeholder="What do you do next?"
-                  disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving}
+                  disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || isGeneratingInventoryImages}
                   className="flex-grow text-base h-11 min-w-0" // Allow input to grow but have a min width
                   aria-label="Player action input"
                   autoComplete="off"
                 />
                 <Button
                     type="submit"
-                    disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || !playerInput.trim()}
+                    disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || isGeneratingInventoryImages || !playerInput.trim()}
                     className="bg-accent hover:bg-accent/90 text-accent-foreground h-11 px-5 flex-shrink-0"
                     aria-label="Submit action"
                 >
-                   {isLoading ? <Loader2 className="h-5 w-5 animate-spin"/> : <Send className="h-5 w-5" />}
+                   {(isLoading || isGeneratingInventoryImages) ? <Loader2 className="h-5 w-5 animate-spin"/> : <Send className="h-5 w-5" />}
                 </Button>
              </form>
 
              {/* Buttons for smaller screens (Mobile View) */}
               <div className="md:hidden flex flex-col gap-2 mt-4 border-t pt-4">
-                   <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice}>
+                   {/* Add Inventory for Mobile */}
+                   <InventoryDisplay />
+                   <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages}>
                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" /> }
                         {isSaving ? "Saving..." : "Save Game"}
                    </Button>
                   <AlertDialog>
                      <AlertDialogTrigger asChild>
-                         <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice}>
+                         <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages}>
                              <ArrowLeft className="mr-2 h-4 w-4" /> Abandon
                          </Button>
                      </AlertDialogTrigger>
@@ -566,7 +660,7 @@ export function Gameplay() {
                          </AlertDialogFooter>
                      </AlertDialogContent>
                  </AlertDialog>
-                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice}>
+                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages}>
                     {isEnding ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BookCopy className="mr-2 h-4 w-4" /> }
                     {isEnding ? "Summarizing..." : "End Adventure"}
                  </Button>

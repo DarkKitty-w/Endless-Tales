@@ -18,7 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { FolderClock, ArrowLeft, Trash2, Play, Info, BookOpenText } from "lucide-react";
+import { FolderClock, ArrowLeft, Trash2, Play, Info, BookOpenText, Package } from "lucide-react"; // Added Package icon
 import { formatDistanceToNow } from 'date-fns'; // For displaying relative time
 import { useToast } from "@/hooks/use-toast";
 
@@ -74,6 +74,12 @@ export function SavedAdventuresList() {
                       <p className="text-xs text-muted-foreground mt-1">
                          {adventure.adventureSettings.adventureType} ({adventure.adventureSettings.permanentDeath ? 'Permadeath' : 'Respawn'})
                       </p>
+                       {/* Display inventory count */}
+                        {adventure.inventory && (
+                            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                                <Package className="w-3 h-3"/> {adventure.inventory.length} item(s)
+                            </p>
+                        )}
                        {/* Display summary snippet if finished */}
                         {adventure.statusBeforeSave === 'AdventureSummary' && adventure.adventureSummary && (
                             <p className="text-xs text-muted-foreground italic mt-1 border-t pt-1 line-clamp-2">
