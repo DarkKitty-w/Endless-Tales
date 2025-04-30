@@ -39,7 +39,7 @@ const basicCreationSchema = baseCharacterSchema.extend({
   creationType: z.literal("basic"),
   traits: commaSeparatedMaxItems(5, "Max 5 traits allowed."),
   knowledge: commaSeparatedMaxItems(5, "Max 5 knowledge areas allowed."),
-  background: z.string().max(100, "Background too long (max 100).").optional(), // Apply max before optional
+  background: z.string().max(100, "Background too long (max 100).").optional(),
 });
 
 const textCreationSchema = baseCharacterSchema.extend({
