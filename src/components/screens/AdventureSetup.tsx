@@ -9,19 +9,37 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
 import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export function AdventureSetup() {
   const { state, dispatch } = useGame();
+  const { toast } = useToast();
   const [adventureType, setAdventureType] = useState<"Randomized" | "Custom" | null>(state.adventureSettings.adventureType);
   const [permanentDeath, setPermanentDeath] = useState<boolean>(state.adventureSettings.permanentDeath);
 
   const handleStartAdventure = () => {
     if (!adventureType) {
-        alert("Please select an adventure type.");
+        toast({
+            title: "Selection Required",
+            description: "Please select an adventure type.",
+            variant: "destructive",
+         });
         return;
+    }
+    if (adventureType === "Custom") {
+         toast({
+            title: "Not Implemented",
+            description: "Custom adventures are coming soon!",
+            variant: "destructive",
+         });
+         return;
     }
     dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: { adventureType, permanentDeath } });
     dispatch({ type: "START_GAMEPLAY" }); // This action will set the status to Gameplay
+    toast({
+        title: "Adventure Starting!",
+        description: `Get ready for a ${adventureType.toLowerCase()} journey.`,
+    });
   };
 
    const handleBack = () => {
@@ -30,67 +48,71 @@ export function AdventureSetup() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-      <CardboardCard className="w-full max-w-lg shadow-xl">
-        <CardHeader>
-          <CardTitle className="text-3xl font-bold text-center">Adventure Setup</CardTitle>
+      <CardboardCard className="w-full max-w-lg shadow-xl border-2 border-foreground/20">
+        <CardHeader className="border-b border-foreground/10 pb-4">
+          <CardTitle className="text-3xl font-bold text-center flex items-center justify-center gap-2">
+            <Settings className="w-7 h-7"/> Adventure Setup
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-8">
+        <CardContent className="space-y-8 pt-6">
           {/* Adventure Type Selection */}
           <div className="space-y-4">
-            <Label className="text-xl font-semibold flex items-center gap-2"><Settings className="w-5 h-5"/>Adventure Type</Label>
+            <Label className="text-xl font-semibold flex items-center gap-2"><Settings className="w-5 h-5"/>Select Adventure Type</Label>
             <RadioGroup
               value={adventureType ?? ""}
               onValueChange={(value) => setAdventureType(value as "Randomized" | "Custom")}
               className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+              aria-label="Adventure Type"
             >
-              <Label htmlFor="randomized" className="flex flex-col items-center justify-center p-4 border rounded-md cursor-pointer hover:bg-accent/10 [&:has([data-state=checked])]:bg-accent/20 [&:has([data-state=checked])]:border-accent">
-                 <RadioGroupItem value="Randomized" id="randomized" className="sr-only" />
+              <Label htmlFor="randomized" className="flex flex-col items-center justify-center p-4 border-2 rounded-md cursor-pointer hover:bg-accent/10 data-[state=checked]:bg-accent/20 data-[state=checked]:border-accent transition-colors">
+                 <RadioGroupItem value="Randomized" id="randomized" className="sr-only" aria-label="Randomized Adventure" />
                  <Dices className="w-8 h-8 mb-2 text-primary" />
                  <span className="font-medium">Randomized</span>
                  <p className="text-sm text-muted-foreground text-center mt-1">Generate a unique world, quests, and challenges.</p>
               </Label>
-               <Label htmlFor="custom" className="flex flex-col items-center justify-center p-4 border rounded-md cursor-pointer hover:bg-accent/10 [&:has([data-state=checked])]:bg-accent/20 [&:has([data-state=checked])]:border-accent">
-                 <RadioGroupItem value="Custom" id="custom" className="sr-only" />
+               <Label htmlFor="custom" className="flex flex-col items-center justify-center p-4 border-2 rounded-md cursor-pointer hover:bg-accent/10 data-[state=checked]:bg-accent/20 data-[state=checked]:border-accent transition-colors">
+                 <RadioGroupItem value="Custom" id="custom" className="sr-only" aria-label="Custom Adventure (Coming Soon)" />
                  <Swords className="w-8 h-8 mb-2 text-primary" />
                  <span className="font-medium">Custom</span>
                  <p className="text-sm text-muted-foreground text-center mt-1">Select world type, quests, difficulty (coming soon!).</p>
               </Label>
             </RadioGroup>
              {adventureType === "Custom" && (
-                <p className="text-sm text-center text-muted-foreground">Custom adventure parameters are not yet implemented.</p>
+                <p className="text-sm text-center text-muted-foreground italic pt-2">Custom adventure parameters are not yet implemented.</p>
             )}
           </div>
 
           {/* Permanent Death Option */}
-          <div className="space-y-4 border-t pt-6">
-            <Label className="text-xl font-semibold flex items-center gap-2"><Skull className="w-5 h-5"/>Challenge Mode</Label>
-            <div className="flex items-center justify-between space-x-2 p-4 border rounded-md">
+          <div className="space-y-4 border-t border-foreground/10 pt-6">
+            <Label className="text-xl font-semibold flex items-center gap-2"><Skull className="w-5 h-5"/>Choose Challenge Mode</Label>
+            <div className="flex items-center justify-between space-x-2 p-4 border-2 rounded-md bg-card/50">
               <div className="flex flex-col">
-                 <Label htmlFor="permanent-death" className="font-medium flex items-center gap-1">
+                 <Label htmlFor="permanent-death" className="font-medium flex items-center gap-1 cursor-pointer">
                     {permanentDeath ? <Skull className="w-4 h-4 text-destructive"/> : <Heart className="w-4 h-4 text-green-600"/>}
                     {permanentDeath ? "Permanent Death" : "Respawn Enabled"}
                  </Label>
-                 <p className="text-sm text-muted-foreground">
-                   {permanentDeath ? "Your adventure ends if you die." : "Respawn at a checkpoint before death."}
+                 <p className="text-sm text-muted-foreground pr-2">
+                   {permanentDeath ? "Your adventure ends permanently if you die." : "You can respawn at a checkpoint before death."}
                  </p>
               </div>
               <Switch
                 id="permanent-death"
                 checked={permanentDeath}
                 onCheckedChange={setPermanentDeath}
-                aria-label="Toggle permanent death"
+                aria-label={`Toggle ${permanentDeath ? 'Permanent Death off' : 'Permanent Death on'}`}
               />
             </div>
           </div>
         </CardContent>
-        <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t">
+        <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t border-foreground/10">
            <Button variant="outline" onClick={handleBack}>
              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Character
            </Button>
           <Button
             onClick={handleStartAdventure}
-            disabled={!adventureType || adventureType === 'Custom'} // Disable if custom is selected (until implemented)
+            disabled={!adventureType || adventureType === 'Custom'} // Disable if custom is selected (until implemented) or none selected
             className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
+            aria-label="Start Adventure"
            >
             <Play className="mr-2 h-4 w-4" /> Start Adventure
           </Button>

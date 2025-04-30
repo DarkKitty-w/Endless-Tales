@@ -7,6 +7,7 @@ import { CharacterCreation } from "@/components/screens/CharacterCreation";
 import { AdventureSetup } from "@/components/screens/AdventureSetup";
 import { Gameplay } from "@/components/screens/Gameplay";
 import { AdventureSummary } from "@/components/screens/AdventureSummary";
+import { Loader2 } from "lucide-react";
 
 export default function Home() {
   const { state } = useGame();
@@ -18,9 +19,10 @@ export default function Home() {
       case "CharacterCreation":
         return <CharacterCreation />;
       case "AdventureSetup":
-        return <AdventureSetup />;
+        return <AdventureSetup />; // Make sure this case exists and renders the component
       case "Gameplay":
-        return <Gameplay />;
+        // Add a check for character before rendering Gameplay
+        return state.character ? <Gameplay /> : <div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin mr-2"/> Loading...</div>;
       case "AdventureSummary":
         return <AdventureSummary />;
       default:
