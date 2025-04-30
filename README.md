@@ -2,8 +2,6 @@
 
 This is a NextJS starter in Firebase Studio.
 
-To get started, take a look at src/app/page.tsx.
-
 ## Endless Tales: An AI-Driven Text Adventure
 
 Welcome to Endless Tales, a text-based adventure game powered by AI where your choices shape the story.
@@ -38,3 +36,9 @@ Welcome to Endless Tales, a text-based adventure game powered by AI where your c
 5.  **Replayability**:
     *   The game’s **randomization** and **multiple branching paths** ensure that each playthrough feels fresh and unique.
     *   Players can restart with new characters, decisions, and challenges, exploring the world from different perspectives and uncovering new possibilities each time.
+
+### Visual Elements
+
+-   **Cardboard-Style Templates**: The game utilizes minimalist, **cardboard-style visual templates** to represent the character and the world. These simple visuals highlight important details while maintaining a focus on storytelling.
+-   **Character Display**: The character’s key stats, name, and essential details are displayed on-screen in a functional but minimalist template. The character’s growth and progress are reflected visually as they gain experience and new abilities.
+-   **World Map**: The world map is displayed as a basic, interactive layout where players can explore new locations, encounter random events, and track the progress of their quests. It’s a visual guide to help players navigate their journey.
