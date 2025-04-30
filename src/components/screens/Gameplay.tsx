@@ -11,6 +11,7 @@ import { CharacterDisplay } from "@/components/game/CharacterDisplay";
 import { WorldMapDisplay } from "@/components/game/WorldMapDisplay";
 import { narrateAdventure } from "@/ai/flows/narrate-adventure";
 import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
+import type { NarrateAdventureOutput } from "@/ai/flows/narrate-adventure"; // Import type
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles } from "lucide-react";
 import { rollDice } from "@/services/dice-roller"; // Import the dice roller
