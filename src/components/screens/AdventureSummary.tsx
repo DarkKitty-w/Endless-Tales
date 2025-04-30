@@ -1,7 +1,7 @@
 // src/components/screens/AdventureSummary.tsx
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { useGame } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -12,59 +12,54 @@ import { BookOpen, FileText, Home } from "lucide-react";
 export function AdventureSummary() {
   const { state, dispatch } = useGame();
   const { adventureSummary, storyLog, character } = state;
-  const [showDetailed, setShowDetailed] = useState(false);
 
   const handleMainMenu = () => {
     dispatch({ type: "RESET_GAME" }); // Reset game state fully
   };
 
-  const handleNewAdventureSameCharacter = () => {
-    // Keep character, reset other things and go to setup
-    if (!character) return;
-    dispatch({ type: "SET_GAME_STATUS", payload: "AdventureSetup" });
-    // Keep character, reset adventure settings, log, summary, narration
-    dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: { adventureType: null, permanentDeath: true }}); // Reset settings
-    dispatch({ type: 'UPDATE_NARRATION', payload: { narration: '', updatedGameState: '' } }); // Clear narration
-    dispatch({ type: 'END_ADVENTURE', payload: { summary: null } }); // Clear summary, reset status implicitly handled by SET_GAME_STATUS
-
-  };
+  // TODO: Implement saving/loading logic if required later
+  // const handleSaveStory = () => { ... }
+  // const handleViewSavedStories = () => { ... }
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-      <CardboardCard className="w-full max-w-2xl shadow-xl">
-        <CardHeader>
+      <CardboardCard className="w-full max-w-2xl shadow-xl border-2 border-foreground/20">
+        <CardHeader className="border-b border-foreground/10 pb-4">
           <CardTitle className="text-3xl font-bold text-center flex items-center justify-center gap-2">
              <BookOpen className="w-7 h-7"/> Adventure Ended
              {character && <span className="text-xl font-medium text-muted-foreground"> - {character.name}'s Tale</span>}
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-6 pt-6">
           {/* Summary Section */}
           <div className="space-y-2">
-            <h3 className="text-xl font-semibold flex items-center gap-2"><FileText className="w-5 h-5"/> Summary</h3>
-            <ScrollArea className="h-40 rounded-md border p-3 bg-muted/30">
-                 <p className="text-sm whitespace-pre-wrap">{adventureSummary || "No summary available."}</p>
+            <h3 className="text-xl font-semibold flex items-center gap-2"><FileText className="w-5 h-5"/> Summary of Your Journey</h3>
+            <ScrollArea className="h-40 rounded-md border p-3 bg-muted/30 border-foreground/10">
+                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{adventureSummary || "No summary was generated for this adventure."}</p>
              </ScrollArea>
           </div>
 
           {/* Detailed Story Log Accordion */}
-          <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="detailed-log">
-              <AccordionTrigger className="text-xl font-semibold">
+          <Accordion type="single" collapsible className="w-full border-t border-foreground/10 pt-6">
+            <AccordionItem value="detailed-log" className="border-b-0">
+              <AccordionTrigger className="text-xl font-semibold hover:no-underline">
                 <div className="flex items-center gap-2">
                     <BookOpen className="w-5 h-5"/> View Full Story Log
                 </div>
               </AccordionTrigger>
               <AccordionContent>
-                <ScrollArea className="h-64 rounded-md border p-3 bg-muted/30">
+                <ScrollArea className="h-64 rounded-md border p-3 bg-muted/30 border-foreground/10">
                   {storyLog.length > 0 ? (
                     storyLog.map((log, index) => (
                       <div key={index} className="mb-3 pb-3 border-b border-border/50 last:border-b-0">
-                        <p className="text-sm whitespace-pre-wrap">{log.narration}</p>
+                        <p className="text-sm font-semibold text-muted-foreground">Turn {index + 1}</p>
+                        <p className="text-sm whitespace-pre-wrap mt-1 leading-relaxed">{log.narration}</p>
+                        {/* Optional: Show game state changes for debugging */}
+                        {/* <p className="text-xs text-muted-foreground/70 mt-2 italic">State: {log.updatedGameState.split('\n').slice(0, 3).join(' | ')}...</p> */}
                       </div>
                     ))
                   ) : (
-                    <p className="text-sm text-muted-foreground italic">No story log recorded.</p>
+                    <p className="text-sm text-muted-foreground italic">No detailed story log was recorded for this adventure.</p>
                   )}
                 </ScrollArea>
               </AccordionContent>
@@ -72,12 +67,10 @@ export function AdventureSummary() {
           </Accordion>
 
         </CardContent>
-        <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t">
-           {/* Option to restart with same character - needs state management adjustment */}
-           {/* <Button variant="outline" onClick={handleNewAdventureSameCharacter} disabled={!character}>
-                Restart with {character?.name || 'Character'}
-           </Button> */}
-           <Button onClick={handleMainMenu} className="bg-accent hover:bg-accent/90 text-accent-foreground w-full">
+        <CardFooter className="flex flex-col sm:flex-row justify-center gap-4 pt-6 border-t border-foreground/10">
+           {/* TODO: Add "Save Story" button if functionality is added later */}
+           {/* <Button variant="secondary">Save Story</Button> */}
+           <Button onClick={handleMainMenu} className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto">
               <Home className="mr-2 h-4 w-4" /> Back to Main Menu
            </Button>
         </CardFooter>

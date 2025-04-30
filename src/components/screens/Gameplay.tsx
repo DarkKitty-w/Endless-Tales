@@ -33,6 +33,7 @@ export function Gameplay() {
   const { character, currentNarration, currentGameStateString, storyLog, adventureSettings } = state;
   const [playerInput, setPlayerInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isEnding, setIsEnding] = useState(false); // State for ending/summarizing
   const [error, setError] = useState<string | null>(null);
   const [isRollingDice, setIsRollingDice] = useState(false);
   const [diceResult, setDiceResult] = useState<number | null>(null);
@@ -41,21 +42,14 @@ export function Gameplay() {
 
   // Function to scroll to bottom
   const scrollToBottom = useCallback(() => {
-    // Use the ref attached to the bottom div
      scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-     // Fallback if the above doesn't work reliably in all cases
-    // setTimeout(() => { // Delay slightly to allow DOM update
-    //     if (scrollAreaViewportRef.current) {
-    //         scrollAreaViewportRef.current.scrollTop = scrollAreaViewportRef.current.scrollHeight;
-    //     }
-    // }, 50);
   }, []);
 
 
   // --- Handle Player Action Submission ---
   const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
-    if (!character || (isLoading && !isInitialAction)) {
-       console.log("Action blocked: No character or already loading.");
+    if (!character || (isLoading && !isInitialAction) || isEnding) {
+       console.log("Action blocked: No character, already loading, or ending.");
        return;
      }
 
@@ -65,10 +59,9 @@ export function Gameplay() {
     setDiceResult(null);
 
     let actionWithDice = action;
-    // Determine if a dice roll is appropriate for this action
     // Example: Avoid rolls for simple observation, roll for actions with uncertainty
     const actionLower = action.trim().toLowerCase();
-    const requiresRoll = !isInitialAction && !["look", "look around", "check inventory", "examine self"].includes(actionLower) && Math.random() < 0.6; // 60% chance for non-trivial actions
+    const requiresRoll = !isInitialAction && !["look", "look around", "check inventory", "examine self", "status"].includes(actionLower) && Math.random() < 0.6; // 60% chance for non-trivial actions
 
     if (requiresRoll) {
         setIsRollingDice(true);
@@ -123,46 +116,48 @@ export function Gameplay() {
       // Scroll after state update and DOM render
       requestAnimationFrame(scrollToBottom);
     }
-  }, [character, isLoading, currentGameStateString, dispatch, toast, scrollToBottom, storyLog]);
+  }, [character, isLoading, isEnding, currentGameStateString, dispatch, toast, scrollToBottom, storyLog]);
 
   // --- Initial Narration Trigger ---
   useEffect(() => {
-    if (state.status === "Gameplay" && character && storyLog.length === 0 && !isLoading) {
+    if (state.status === "Gameplay" && character && storyLog.length === 0 && !isLoading && !isEnding) {
         console.log("Gameplay: Triggering initial narration.");
         handlePlayerAction("Begin the adventure by looking around.", true);
     }
-  }, [state.status, character, storyLog.length, isLoading, handlePlayerAction]);
+  }, [state.status, character, storyLog.length, isLoading, isEnding, handlePlayerAction]);
 
 
    // Scroll to bottom when new narration/log entries arrive or loading starts/ends
    useEffect(() => {
        scrollToBottom();
-   }, [storyLog, isLoading, diceResult, error, scrollToBottom]); // Depend on anything that adds content
+   }, [storyLog, isLoading, isEnding, diceResult, error, scrollToBottom]); // Depend on anything that adds content
 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedInput = playerInput.trim();
-    if (trimmedInput && !isLoading && !isRollingDice) {
+    if (trimmedInput && !isLoading && !isRollingDice && !isEnding) {
        handlePlayerAction(trimmedInput);
     } else if (!trimmedInput) {
         toast({ description: "Please enter an action.", variant: "destructive"});
-    } else if (isLoading || isRollingDice) {
+    } else if (isLoading || isRollingDice || isEnding) {
         toast({ description: "Please wait for the current action to complete.", variant: "default", duration: 2000 });
     }
   };
 
   // --- End Adventure ---
-  const handleEndAdventure = async () => {
-     if (isLoading) return;
-     setIsLoading(true);
+  const handleEndAdventure = useCallback(async () => {
+     if (isLoading || isEnding) return;
+     setIsEnding(true); // Use dedicated ending state
      setError(null);
      toast({ title: "Ending Adventure", description: "Summarizing your tale..." });
 
-     const finalNarration = storyLog.length > 0 ? storyLog[storyLog.length - 1] : { narration: "The adventure concludes abruptly.", updatedGameState: currentGameStateString };
+     // Use the latest narration state for the final context if needed, or just rely on log
+     const finalNarrationContext = currentNarration ?? (storyLog.length > 0 ? storyLog[storyLog.length - 1] : null);
 
      let summary = "Your adventure has concluded.";
      if (storyLog.length > 0) {
+         // Combine all narrations into a single story string
          const fullStory = storyLog.map((log, index) => `[Turn ${index + 1}]\n${log.narration}`).join("\n\n---\n\n");
          try {
              console.log("Sending story for summarization:", fullStory.substring(0, 500) + "...");
@@ -176,20 +171,25 @@ export function Gameplay() {
              toast({ title: "Summary Error", description: "Failed to generate summary.", variant: "destructive" });
          }
      } else {
-         summary = "Your adventure ended before it could be logged.";
+         summary = "Your adventure ended before it could be properly logged.";
      }
 
-     dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration } });
-   };
+     // Dispatch END_ADVENTURE which will change status and save summary
+     dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationContext ?? undefined } });
+     // No need to set isLoading/isEnding false here, as the component will unmount/change
+
+   }, [isLoading, isEnding, storyLog, currentNarration, dispatch, toast]); // Added dependencies
 
    // --- Go Back (Abandon Adventure) ---
-   const handleGoBack = () => {
+   const handleGoBack = useCallback(() => {
+       if (isLoading || isEnding) return;
        toast({ title: "Returning to Main Menu...", description: "Abandoning current adventure." });
        dispatch({ type: "RESET_GAME" });
-   }
+   }, [isLoading, isEnding, dispatch, toast]); // Added dependencies
 
    // --- Suggest Action ---
-   const handleSuggestAction = () => {
+   const handleSuggestAction = useCallback(() => {
+       if (isLoading || isEnding) return;
         const suggestions = [
             "Look around", "Examine surroundings", "Check inventory", "Check status",
             "Move north", "Move east", "Move south", "Move west",
@@ -204,7 +204,7 @@ export function Gameplay() {
         const suggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
         setPlayerInput(suggestion);
         toast({ title: "Suggestion", description: `Try: "${suggestion}"`, duration: 3000 });
-   }
+   }, [isLoading, isEnding, toast]); // Added dependencies
 
    if (!character) {
        return (
@@ -220,6 +220,14 @@ export function Gameplay() {
 
    // Helper function to render dynamic content at the end of the scroll area
    const renderDynamicContent = () => {
+    if (isEnding) {
+        return (
+            <div className="flex items-center justify-center py-4 text-muted-foreground animate-pulse">
+                <BookCopy className="h-5 w-5 mr-2 animate-pulse" />
+                <span>Ending and summarizing...</span>
+            </div>
+        );
+    }
     if (isLoading) {
       return (
         <div className="flex items-center justify-center py-4 text-muted-foreground animate-pulse">
@@ -254,7 +262,7 @@ export function Gameplay() {
         </Alert>
       );
     }
-     if (storyLog.length === 0 && !isLoading) { // Show initial prompt only if log is empty
+     if (storyLog.length === 0 && !isLoading && !isEnding) { // Show initial prompt only if log is empty and not ending
          return <p className="text-center text-muted-foreground italic py-4">Initializing your adventure...</p>;
      }
     return null; // Render nothing if none of the above conditions met
@@ -271,7 +279,7 @@ export function Gameplay() {
              <div className="mt-auto space-y-2 pt-4">
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="outline" className="w-full" disabled={isLoading}>
+                    <Button variant="outline" className="w-full" disabled={isLoading || isEnding}>
                       <ArrowLeft className="mr-2 h-4 w-4" /> Abandon Adventure
                     </Button>
                   </AlertDialogTrigger>
@@ -289,8 +297,9 @@ export function Gameplay() {
                   </AlertDialogContent>
                 </AlertDialog>
 
-                 <Button variant="destructive" onClick={handleEndAdventure} className="w-full" disabled={isLoading}>
-                     <BookCopy className="mr-2 h-4 w-4" /> End & Summarize
+                 <Button variant="destructive" onClick={handleEndAdventure} className="w-full" disabled={isLoading || isEnding}>
+                     {isEnding ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BookCopy className="mr-2 h-4 w-4" /> }
+                     {isEnding ? "Summarizing..." : "End & Summarize"}
                  </Button>
              </div>
         </div>
@@ -309,6 +318,8 @@ export function Gameplay() {
                             {storyLog.map((log, index) => (
                                 <div key={index} className="pb-4 border-b border-foreground/10 last:border-b-0">
                                     <p className="text-base whitespace-pre-wrap leading-relaxed text-foreground">{log.narration}</p>
+                                    {/* Optional: Display game state changes for debugging */}
+                                    {/* <p className="text-xs text-muted-foreground mt-1">State: {log.updatedGameState}</p> */}
                                 </div>
                             ))}
 
@@ -330,7 +341,7 @@ export function Gameplay() {
                     variant="ghost"
                     size="icon"
                     onClick={handleSuggestAction}
-                    disabled={isLoading || isRollingDice}
+                    disabled={isLoading || isRollingDice || isEnding}
                     aria-label="Suggest an action"
                     className="text-muted-foreground hover:text-accent flex-shrink-0"
                     title="Suggest Action"
@@ -342,14 +353,14 @@ export function Gameplay() {
                   value={playerInput}
                   onChange={(e) => setPlayerInput(e.target.value)}
                   placeholder="What do you do next?"
-                  disabled={isLoading || isRollingDice}
+                  disabled={isLoading || isRollingDice || isEnding}
                   className="flex-grow text-base h-11 min-w-0" // Allow input to grow but have a min width
                   aria-label="Player action input"
                   autoComplete="off"
                 />
                 <Button
                     type="submit"
-                    disabled={isLoading || isRollingDice || !playerInput.trim()}
+                    disabled={isLoading || isRollingDice || isEnding || !playerInput.trim()}
                     className="bg-accent hover:bg-accent/90 text-accent-foreground h-11 px-5 flex-shrink-0"
                     aria-label="Submit action"
                 >
@@ -361,7 +372,7 @@ export function Gameplay() {
               <div className="md:hidden flex flex-col gap-2 mt-4 border-t pt-4">
                   <AlertDialog>
                      <AlertDialogTrigger asChild>
-                         <Button variant="outline" className="w-full" disabled={isLoading}>
+                         <Button variant="outline" className="w-full" disabled={isLoading || isEnding}>
                              <ArrowLeft className="mr-2 h-4 w-4" /> Abandon
                          </Button>
                      </AlertDialogTrigger>
@@ -378,8 +389,9 @@ export function Gameplay() {
                          </AlertDialogFooter>
                      </AlertDialogContent>
                  </AlertDialog>
-                 <Button variant="destructive" onClick={handleEndAdventure} className="w-full" disabled={isLoading}>
-                     <BookCopy className="mr-2 h-4 w-4" /> End Adventure
+                 <Button variant="destructive" onClick={handleEndAdventure} className="w-full" disabled={isLoading || isEnding}>
+                    {isEnding ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BookCopy className="mr-2 h-4 w-4" /> }
+                    {isEnding ? "Summarizing..." : "End Adventure"}
                  </Button>
              </div>
         </div>

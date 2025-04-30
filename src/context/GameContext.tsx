@@ -2,7 +2,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import React, { createContext, useContext, useReducer, Dispatch } from "react";
+import React, { createContext, useContext, useReducer, Dispatch, useEffect } from "react";
 import type { GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
 import type { NarrateAdventureOutput } from "@/ai/flows/narrate-adventure";
 
@@ -40,12 +40,18 @@ export interface AdventureSettings {
   difficulty?: string;
 }
 
+// Represents one turn/log entry in the story
+export interface StoryLogEntry extends NarrateAdventureOutput {
+  timestamp: number; // Track when the entry occurred
+}
+
+
 export interface GameState {
   status: GameStatus;
   character: Character | null;
   adventureSettings: AdventureSettings;
-  currentNarration: NarrateAdventureOutput | null; // The very latest narration received
-  storyLog: NarrateAdventureOutput[]; // Log of all narrations for summary/review
+  currentNarration: StoryLogEntry | null; // The very latest narration received (now with timestamp)
+  storyLog: StoryLogEntry[]; // Log of all narrations for summary/review (now with timestamps)
   adventureSummary: string | null;
   currentGameStateString: string; // Game state string for AI narration flow input
 }
@@ -139,28 +145,42 @@ function gameReducer(state: GameState, action: Action): GameState {
         currentGameStateString: initialGameState, // Set detailed initial state for AI
       };
     case "UPDATE_NARRATION":
+      const newLogEntry: StoryLogEntry = {
+          ...action.payload,
+          timestamp: Date.now(), // Add timestamp to the new entry
+       };
       // Append the new narration+state object to the log
-      const newLog = [...state.storyLog, action.payload];
+      const newLog = [...state.storyLog, newLogEntry];
       return {
         ...state,
-        currentNarration: action.payload, // Update the latest narration
+        currentNarration: newLogEntry, // Update the latest narration
         storyLog: newLog, // Update the full log
         currentGameStateString: action.payload.updatedGameState, // Update the game state string for the next turn
       };
      case "END_ADVENTURE":
-      // Optionally add the final narration to the log if provided
-      const finalLog = action.payload.finalNarration
-        ? [...state.storyLog, action.payload.finalNarration]
-        : state.storyLog;
+       // Optionally add the final narration to the log if provided and different from last entry
+       let finalLog = state.storyLog;
+       if (action.payload.finalNarration && (!state.currentNarration || action.payload.finalNarration.narration !== state.currentNarration.narration)) {
+          const finalEntry: StoryLogEntry = {
+            ...action.payload.finalNarration,
+            timestamp: Date.now(),
+          };
+          finalLog = [...state.storyLog, finalEntry];
+       }
       return {
         ...state,
-        status: "AdventureSummary",
-        adventureSummary: action.payload.summary,
-        storyLog: finalLog, // Save the full log for detailed view
+        status: "AdventureSummary", // Change game status
+        adventureSummary: action.payload.summary, // Save the generated summary
+        storyLog: finalLog, // Save the final log for detailed view
+        // Optionally reset currentNarration or leave it as the last state before summary
+        // currentNarration: null,
       };
     case "RESET_GAME":
       return { ...initialState }; // Reset to main menu, clear everything
     default:
+      // https://github.com/typescript-eslint/typescript-eslint/issues/6131
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars, no-case-declarations
+      const exhaustiveCheck: never = action; // Ensures all actions are handled
       return state;
   }
 }
@@ -193,6 +213,3 @@ export const useGame = () => {
   }
   return context;
 };
-
-// Effect hook for debugging (optional)
-import { useEffect } from "react";
