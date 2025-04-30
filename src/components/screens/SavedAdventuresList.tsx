@@ -1,0 +1,130 @@
+// src/components/screens/SavedAdventuresList.tsx
+"use client";
+
+import React from "react";
+import { useGame, type SavedAdventure } from "@/context/GameContext";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { FolderClock, ArrowLeft, Trash2, Play, Info, BookOpenText } from "lucide-react";
+import { formatDistanceToNow } from 'date-fns'; // For displaying relative time
+import { useToast } from "@/hooks/use-toast";
+
+export function SavedAdventuresList() {
+  const { state, dispatch } = useGame();
+  const { savedAdventures } = state;
+  const { toast } = useToast();
+
+  const handleLoad = (id: string) => {
+    dispatch({ type: "LOAD_ADVENTURE", payload: id });
+    // The reducer will set the status to Gameplay or AdventureSummary
+    toast({ title: "Loading Adventure...", description: "Resuming your journey." });
+  };
+
+  const handleDelete = (id: string, characterName: string) => {
+     dispatch({ type: "DELETE_ADVENTURE", payload: id });
+     toast({ title: "Adventure Deleted", description: `Removed the saved game for ${characterName}.`, variant: "destructive" });
+  };
+
+  const handleBack = () => {
+    dispatch({ type: "SET_GAME_STATUS", payload: "MainMenu" });
+  };
+
+  const sortedAdventures = [...savedAdventures].sort((a, b) => b.saveTimestamp - a.saveTimestamp); // Show newest first
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
+      <CardboardCard className="w-full max-w-2xl shadow-xl border-2 border-foreground/20">
+        <CardHeader className="border-b border-foreground/10 pb-4">
+          <CardTitle className="text-3xl font-bold text-center flex items-center justify-center gap-2">
+            <FolderClock className="w-7 h-7"/> Saved Adventures
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-6">
+          {sortedAdventures.length === 0 ? (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle>No Saved Games</AlertTitle>
+              <AlertDescription>
+                You haven't saved any adventures yet. Start a new game and save your progress!
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <ScrollArea className="h-[60vh] pr-3"> {/* Adjust height as needed */}
+              <div className="space-y-4">
+                {sortedAdventures.map((adventure) => (
+                  <CardboardCard key={adventure.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-card/60 border border-foreground/10">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-lg font-semibold truncate" title={adventure.characterName}>{adventure.characterName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {adventure.statusBeforeSave === 'AdventureSummary' ? 'Finished' : 'In Progress'} - Saved {formatDistanceToNow(new Date(adventure.saveTimestamp), { addSuffix: true })}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                         {adventure.adventureSettings.adventureType} ({adventure.adventureSettings.permanentDeath ? 'Permadeath' : 'Respawn'})
+                      </p>
+                       {/* Display summary snippet if finished */}
+                        {adventure.statusBeforeSave === 'AdventureSummary' && adventure.adventureSummary && (
+                            <p className="text-xs text-muted-foreground italic mt-1 border-t pt-1 line-clamp-2">
+                                Summary: {adventure.adventureSummary}
+                            </p>
+                        )}
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0 mt-2 sm:mt-0">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleLoad(adventure.id)}
+                        className="bg-accent hover:bg-accent/90 text-accent-foreground"
+                      >
+                        {adventure.statusBeforeSave === 'AdventureSummary' ? <BookOpenText className="mr-1 h-4 w-4"/> : <Play className="mr-1 h-4 w-4"/>}
+                        {adventure.statusBeforeSave === 'AdventureSummary' ? 'View' : 'Load'}
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="destructive" size="sm">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Saved Game?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete the saved adventure for "{adventure.characterName}"? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(adventure.id, adventure.characterName)} className="bg-destructive hover:bg-destructive/90">
+                                Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </CardboardCard>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </CardContent>
+        <CardFooter className="flex justify-start pt-6 border-t border-foreground/10">
+          <Button variant="outline" onClick={handleBack}>
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Main Menu
+          </Button>
+        </CardFooter>
+      </CardboardCard>
+    </div>
+  );
+}

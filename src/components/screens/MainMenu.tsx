@@ -4,7 +4,7 @@
 import { useGame } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
-import { Play } from "lucide-react"; // Removed BookOpen as the button is removed
+import { Play, FolderClock } from "lucide-react"; // Added FolderClock for saved games
 
 export function MainMenu() {
   const { dispatch } = useGame();
@@ -16,7 +16,10 @@ export function MainMenu() {
     dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
   };
 
-  // Removed handleViewStories as per requirement
+  const handleViewSaved = () => {
+    dispatch({ type: "SET_GAME_STATUS", payload: "ViewSavedAdventures" });
+  };
+
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
@@ -30,7 +33,10 @@ export function MainMenu() {
           <Button size="lg" onClick={handleNewGame} className="bg-accent hover:bg-accent/90 text-accent-foreground w-full">
             <Play className="mr-2 h-5 w-5" /> Start New Adventure
           </Button>
-           {/* Removed View Saved Stories button */}
+           {/* Add button to view saved adventures */}
+           <Button size="lg" onClick={handleViewSaved} variant="secondary" className="w-full">
+             <FolderClock className="mr-2 h-5 w-5" /> View Saved Adventures
+           </Button>
         </CardContent>
       </CardboardCard>
        <footer className="mt-8 text-sm text-muted-foreground text-center">
