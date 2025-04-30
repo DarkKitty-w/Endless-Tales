@@ -82,13 +82,21 @@ export default {
   				to: {
   					height: '0'
   				}
-  			}
+  			},
+            fadeInOut: { // Keyframes for dice roll display
+               '0%, 100%': { opacity: '0' },
+               '20%, 80%': { opacity: '1' }, // Stay visible longer
+            },
   		},
   		animation: {
   			'accordion-down': 'accordion-down 0.2s ease-out',
-  			'accordion-up': 'accordion-up 0.2s ease-out'
+  			'accordion-up': 'accordion-up 0.2s ease-out',
+            'fade-in-out': 'fadeInOut 1.5s ease-in-out forwards', // Animation class for dice
   		}
   	}
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+      require("tailwindcss-animate"),
+      require('tailwind-scrollbar')({ nocompatible: true }), // Add scrollbar plugin
+    ],
 } satisfies Config;
