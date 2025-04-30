@@ -15,18 +15,20 @@ export type GameStatus =
 
 // --- State Definition ---
 
+export interface CharacterStats {
+  strength: number;
+  stamina: number;
+  agility: number;
+}
+
 export interface Character {
   name: string;
-  description: string; // Can be user-input or AI-generated detailed description
-  traits: string[];
-  knowledge: string[];
-  background: string;
-  stats: {
-    strength: number;
-    stamina: number;
-    agility: number;
-  };
-  aiGeneratedDescription?: GenerateCharacterDescriptionOutput['detailedDescription'];
+  description: string; // User input description (basic combined or text-based)
+  traits: string[]; // Array of traits
+  knowledge: string[]; // Array of knowledge areas
+  background: string; // Single background string
+  stats: CharacterStats;
+  aiGeneratedDescription?: GenerateCharacterDescriptionOutput['detailedDescription']; // Optional detailed description from AI
 }
 
 export interface AdventureSettings {
@@ -54,7 +56,7 @@ const initialCharacterState: Character = {
   traits: [],
   knowledge: [],
   background: "",
-  stats: { strength: 5, stamina: 5, agility: 5 }, // Example starting stats
+  stats: { strength: 5, stamina: 5, agility: 5 }, // Default starting stats
 };
 
 const initialState: GameState = {
@@ -74,9 +76,9 @@ const initialState: GameState = {
 
 type Action =
   | { type: "SET_GAME_STATUS"; payload: GameStatus }
-  | { type: "CREATE_CHARACTER"; payload: Partial<Character> }
+  | { type: "CREATE_CHARACTER"; payload: Partial<Character> } // Accepts partial character data
   | { type: "UPDATE_CHARACTER"; payload: Partial<Character> }
-  | { type: "SET_AI_DESCRIPTION"; payload: string }
+  | { type: "SET_AI_DESCRIPTION"; payload: string } // Action specifically for AI description
   | { type: "SET_ADVENTURE_SETTINGS"; payload: Partial<AdventureSettings> }
   | { type: "START_GAMEPLAY" }
   | { type: "UPDATE_NARRATION"; payload: NarrateAdventureOutput }
@@ -90,9 +92,16 @@ function gameReducer(state: GameState, action: Action): GameState {
     case "SET_GAME_STATUS":
       return { ...state, status: action.payload };
     case "CREATE_CHARACTER":
+       // Merge partial payload with defaults for a complete character object
+      const newCharacter: Character = {
+        ...initialCharacterState,
+        ...action.payload,
+         // Ensure stats are always fully defined, even if partial payload doesn't include them
+         stats: action.payload.stats ? { ...initialCharacterState.stats, ...action.payload.stats } : initialCharacterState.stats,
+      };
       return {
         ...state,
-        character: { ...initialCharacterState, ...action.payload },
+        character: newCharacter,
         status: "AdventureSetup", // Move to next step after creation
       };
     case "UPDATE_CHARACTER":
@@ -101,7 +110,7 @@ function gameReducer(state: GameState, action: Action): GameState {
             ...state,
             character: { ...state.character, ...action.payload },
         };
-    case "SET_AI_DESCRIPTION":
+    case "SET_AI_DESCRIPTION": // Handle setting AI description
         if (!state.character) return state;
         return {
             ...state,
@@ -114,13 +123,15 @@ function gameReducer(state: GameState, action: Action): GameState {
       };
     case "START_GAMEPLAY":
       if (!state.character) return state; // Need character and settings
+       const charDescriptionForAI = state.character.aiGeneratedDescription || state.character.description;
       return {
         ...state,
         status: "Gameplay",
         storyLog: [],
         currentNarration: null,
         adventureSummary: null,
-        currentGameStateString: `Character: ${JSON.stringify(state.character, null, 2)}\nSettings: ${JSON.stringify(state.adventureSettings, null, 2)}\nInitial State: The adventure begins.`, // More detailed initial state
+        // Include more structured character info in initial state
+        currentGameStateString: `Character Name: ${state.character.name}\nTraits: ${state.character.traits.join(', ') || 'None'}\nKnowledge: ${state.character.knowledge.join(', ') || 'None'}\nBackground: ${state.character.background || 'None'}\nStats: STR ${state.character.stats.strength}, STA ${state.character.stats.stamina}, AGI ${state.character.stats.agility}\nDescription: ${charDescriptionForAI}\nSettings: ${JSON.stringify(state.adventureSettings, null, 2)}\nAdventure Begins: You find yourself at the start of a new journey...`,
       };
     case "UPDATE_NARRATION":
       const newLog = [...state.storyLog, action.payload];
@@ -144,6 +155,8 @@ function gameReducer(state: GameState, action: Action): GameState {
     case "RESET_GAME":
       return { ...initialState }; // Reset to main menu, clear everything
     default:
+      // Ensure exhaustive check if using TypeScript discriminated unions
+      // const _exhaustiveCheck: never = action;
       return state;
   }
 }
