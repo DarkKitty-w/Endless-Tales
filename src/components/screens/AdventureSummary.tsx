@@ -51,11 +51,11 @@ export function AdventureSummary() {
                 <ScrollArea className="h-64 rounded-md border p-3 bg-muted/30 border-foreground/10">
                   {storyLog.length > 0 ? (
                     storyLog.map((log, index) => (
-                      <div key={index} className="mb-3 pb-3 border-b border-border/50 last:border-b-0">
-                        <p className="text-sm font-semibold text-muted-foreground">Turn {index + 1}</p>
+                      <div key={log.timestamp ? `log-${log.timestamp}-${index}` : `log-fallback-${index}`} className="mb-3 pb-3 border-b border-border/50 last:border-b-0">
+                        <p className="text-sm font-semibold text-muted-foreground">Turn {index + 1} <span className="text-xs">({new Date(log.timestamp || Date.now()).toLocaleTimeString()})</span></p>
                         <p className="text-sm whitespace-pre-wrap mt-1 leading-relaxed">{log.narration}</p>
-                        {/* Optional: Show game state changes for debugging */}
-                        {/* <p className="text-xs text-muted-foreground/70 mt-2 italic">State: {log.updatedGameState.split('\n').slice(0, 3).join(' | ')}...</p> */}
+                         {/* Optional: Show game state changes for debugging */}
+                         {/* <pre className="text-xs text-muted-foreground/70 mt-2 italic overflow-auto bg-black/10 p-1 rounded">State:\n{log.updatedGameState}</pre> */}
                       </div>
                     ))
                   ) : (
@@ -68,8 +68,8 @@ export function AdventureSummary() {
 
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-center gap-4 pt-6 border-t border-foreground/10">
-           {/* TODO: Add "Save Story" button if functionality is added later */}
-           {/* <Button variant="secondary">Save Story</Button> */}
+           {/* Note: Persistent saving (across sessions) is not implemented yet. */}
+           {/* <Button variant="secondary" disabled>Save Story (Coming Soon)</Button> */}
            <Button onClick={handleMainMenu} className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto">
               <Home className="mr-2 h-4 w-4" /> Back to Main Menu
            </Button>

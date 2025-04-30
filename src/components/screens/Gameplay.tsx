@@ -105,6 +105,21 @@ export function Gameplay() {
       console.log("Received from narrateAdventure flow:", result);
       dispatch({ type: "UPDATE_NARRATION", payload: result });
       setError(null); // Clear error on success
+
+       // Check for end game condition (e.g., based on gameState string or narration content)
+       // This is a simple example, a real game would have more robust logic
+       if (result.updatedGameState?.toLowerCase().includes("game over") || result.narration?.toLowerCase().includes("your adventure ends")) {
+            if (adventureSettings.permanentDeath) {
+                toast({title: "Game Over!", description: "Your journey has reached its final end.", variant: "destructive", duration: 5000});
+                await handleEndAdventure(result); // Pass final narration for context
+            } else {
+                 toast({title: "Defeat!", description: "You were defeated, but your story can continue...", variant: "destructive", duration: 5000});
+                 // TODO: Implement respawn logic if permanentDeath is false
+                 // For now, we'll just end the game for simplicity
+                 await handleEndAdventure(result);
+            }
+       }
+
     } catch (err: any) {
       console.error("Narration error:", err);
       const errorMessage = err.message || "The story encountered an unexpected snag.";
@@ -116,7 +131,56 @@ export function Gameplay() {
       // Scroll after state update and DOM render
       requestAnimationFrame(scrollToBottom);
     }
-  }, [character, isLoading, isEnding, currentGameStateString, dispatch, toast, scrollToBottom, storyLog]);
+  }, [character, isLoading, isEnding, currentGameStateString, storyLog, adventureSettings, dispatch, toast, scrollToBottom]); // Removed handleEndAdventure from deps
+
+
+  // --- End Adventure ---
+  const handleEndAdventure = useCallback(async (finalNarration?: NarrateAdventureOutput) => {
+     if (isLoading || isEnding) return;
+     setIsEnding(true); // Use dedicated ending state
+     setError(null);
+     toast({ title: "Ending Adventure", description: "Summarizing your tale..." });
+
+     // Use the provided final narration if available, otherwise use context state
+     const finalNarrationContext = finalNarration ?? currentNarration ?? (storyLog.length > 0 ? storyLog[storyLog.length - 1] : null);
+
+     let summary = "Your adventure has concluded.";
+     // Check if there's anything to summarize
+     const hasLog = storyLog.length > 0 || finalNarrationContext;
+     if (hasLog) {
+         // Combine all narrations into a single story string for summarization
+          const fullStoryLog = [...storyLog];
+          // Add the final narration to the log if it exists and isn't already the last entry
+          if (finalNarrationContext && (!storyLog.length || storyLog[storyLog.length - 1].narration !== finalNarrationContext.narration)) {
+             fullStoryLog.push({ ...finalNarrationContext, timestamp: Date.now() });
+          }
+
+         const fullStory = fullStoryLog.map((log, index) => `[Turn ${index + 1}]\n${log.narration}`).join("\n\n---\n\n");
+
+         if(fullStory.trim().length > 0) {
+             try {
+                 console.log("Sending story for summarization:", fullStory.substring(0, 500) + "...");
+                 const summaryResult = await summarizeAdventure({ story: fullStory });
+                 summary = summaryResult.summary;
+                 console.log("Summary received:", summary);
+                 toast({ title: "Summary Generated", description: "View your adventure outcome." });
+             } catch (summaryError: any) {
+                 console.error("Summary generation failed:", summaryError);
+                 summary = `Could not generate a summary due to an error: ${summaryError.message || 'Unknown error'}. The adventure ended.`;
+                 toast({ title: "Summary Error", description: "Failed to generate summary.", variant: "destructive" });
+             }
+         } else {
+             summary = "The story was too brief to summarize, but your adventure has concluded.";
+         }
+     } else {
+         summary = "Your adventure ended before it could be properly logged.";
+     }
+
+     // Dispatch END_ADVENTURE which will change status and save summary/final log
+     dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationContext ?? undefined } });
+     // No need to set isLoading/isEnding false here, as the component will transition
+
+   }, [isLoading, isEnding, storyLog, currentNarration, dispatch, toast]); // Added dependencies
 
   // --- Initial Narration Trigger ---
   useEffect(() => {
@@ -145,40 +209,6 @@ export function Gameplay() {
     }
   };
 
-  // --- End Adventure ---
-  const handleEndAdventure = useCallback(async () => {
-     if (isLoading || isEnding) return;
-     setIsEnding(true); // Use dedicated ending state
-     setError(null);
-     toast({ title: "Ending Adventure", description: "Summarizing your tale..." });
-
-     // Use the latest narration state for the final context if needed, or just rely on log
-     const finalNarrationContext = currentNarration ?? (storyLog.length > 0 ? storyLog[storyLog.length - 1] : null);
-
-     let summary = "Your adventure has concluded.";
-     if (storyLog.length > 0) {
-         // Combine all narrations into a single story string
-         const fullStory = storyLog.map((log, index) => `[Turn ${index + 1}]\n${log.narration}`).join("\n\n---\n\n");
-         try {
-             console.log("Sending story for summarization:", fullStory.substring(0, 500) + "...");
-             const summaryResult = await summarizeAdventure({ story: fullStory });
-             summary = summaryResult.summary;
-             console.log("Summary received:", summary);
-             toast({ title: "Summary Generated", description: "View your adventure outcome." });
-         } catch (summaryError: any) {
-             console.error("Summary generation failed:", summaryError);
-             summary = `Could not generate a summary due to an error: ${summaryError.message || 'Unknown error'}. The adventure ended.`;
-             toast({ title: "Summary Error", description: "Failed to generate summary.", variant: "destructive" });
-         }
-     } else {
-         summary = "Your adventure ended before it could be properly logged.";
-     }
-
-     // Dispatch END_ADVENTURE which will change status and save summary
-     dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationContext ?? undefined } });
-     // No need to set isLoading/isEnding false here, as the component will unmount/change
-
-   }, [isLoading, isEnding, storyLog, currentNarration, dispatch, toast]); // Added dependencies
 
    // --- Go Back (Abandon Adventure) ---
    const handleGoBack = useCallback(() => {
@@ -297,7 +327,7 @@ export function Gameplay() {
                   </AlertDialogContent>
                 </AlertDialog>
 
-                 <Button variant="destructive" onClick={handleEndAdventure} className="w-full" disabled={isLoading || isEnding}>
+                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding}>
                      {isEnding ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BookCopy className="mr-2 h-4 w-4" /> }
                      {isEnding ? "Summarizing..." : "End & Summarize"}
                  </Button>
@@ -316,10 +346,10 @@ export function Gameplay() {
                         <div className="p-4 space-y-4"> {/* Add padding here instead of ScrollArea */}
                             {/* Render story log entries */}
                             {storyLog.map((log, index) => (
-                                <div key={index} className="pb-4 border-b border-foreground/10 last:border-b-0">
+                                <div key={log.timestamp ? `log-${log.timestamp}-${index}` : `log-fallback-${index}`} className="pb-4 border-b border-foreground/10 last:border-b-0">
                                     <p className="text-base whitespace-pre-wrap leading-relaxed text-foreground">{log.narration}</p>
-                                    {/* Optional: Display game state changes for debugging */}
-                                    {/* <p className="text-xs text-muted-foreground mt-1">State: {log.updatedGameState}</p> */}
+                                     {/* Optional: Display game state changes for debugging */}
+                                     {/* <pre className="text-xs text-muted-foreground/70 mt-1 overflow-auto bg-black/10 p-1 rounded">State:\n{log.updatedGameState}</pre> */}
                                 </div>
                             ))}
 
@@ -389,7 +419,7 @@ export function Gameplay() {
                          </AlertDialogFooter>
                      </AlertDialogContent>
                  </AlertDialog>
-                 <Button variant="destructive" onClick={handleEndAdventure} className="w-full" disabled={isLoading || isEnding}>
+                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding}>
                     {isEnding ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BookCopy className="mr-2 h-4 w-4" /> }
                     {isEnding ? "Summarizing..." : "End Adventure"}
                  </Button>

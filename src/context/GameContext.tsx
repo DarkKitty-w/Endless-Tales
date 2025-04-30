@@ -94,7 +94,7 @@ type Action =
 // --- Reducer ---
 
 function gameReducer(state: GameState, action: Action): GameState {
-  console.log(`Reducer Action: ${action.type}`, action); // Log actions for debugging
+  console.log(`Reducer Action: ${action.type}`, action.payload ? JSON.stringify(action.payload).substring(0, 200) : ''); // Log actions for debugging
   switch (action.type) {
     case "SET_GAME_STATUS":
       return { ...state, status: action.payload };
@@ -159,21 +159,25 @@ function gameReducer(state: GameState, action: Action): GameState {
       };
      case "END_ADVENTURE":
        // Optionally add the final narration to the log if provided and different from last entry
-       let finalLog = state.storyLog;
+       let finalLog = [...state.storyLog]; // Create a mutable copy
        if (action.payload.finalNarration && (!state.currentNarration || action.payload.finalNarration.narration !== state.currentNarration.narration)) {
           const finalEntry: StoryLogEntry = {
             ...action.payload.finalNarration,
             timestamp: Date.now(),
           };
-          finalLog = [...state.storyLog, finalEntry];
+          finalLog.push(finalEntry); // Append the final entry to the copied log
+          console.log("Added final narration entry to log.");
+       } else {
+         console.log("Final narration not added (either missing or same as last entry).")
        }
+
       return {
         ...state,
         status: "AdventureSummary", // Change game status
         adventureSummary: action.payload.summary, // Save the generated summary
         storyLog: finalLog, // Save the final log for detailed view
-        // Optionally reset currentNarration or leave it as the last state before summary
-        // currentNarration: null,
+        // Reset currentNarration to avoid showing it again on the summary screen implicitly
+        currentNarration: null,
       };
     case "RESET_GAME":
       return { ...initialState }; // Reset to main menu, clear everything
@@ -192,10 +196,10 @@ const GameContext = createContext<{ state: GameState; dispatch: Dispatch<Action>
 export const GameProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
 
-   // Log state changes for debugging
+   // Log state changes for debugging (reduce noise by logging only status changes)
    useEffect(() => {
-     console.log("Game State Changed:", state);
-   }, [state]);
+     console.log("Game Status Changed:", state.status);
+   }, [state.status]);
 
   return (
     <GameContext.Provider value={{ state, dispatch }}>
