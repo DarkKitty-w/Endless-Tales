@@ -37,6 +37,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay"; // Import SkillTreeDisplay
+import { Skeleton } from "../ui/skeleton";
 
 // Helper function to map difficulty dice string to roller function
 const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null => {
@@ -635,7 +636,12 @@ export function Gameplay() {
                  <div>
                       {/* Mobile Inventory Trigger */}
                      <Sheet>
-                         <SheetTrigger asChild><Button variant="ghost" size="icon"> <Backpack className="h-5 w-5" /> <span className="sr-only">Open Inventory</span> </Button></SheetTrigger>
+                         <SheetTrigger asChild>
+                             <Button variant="ghost" size="icon">
+                                <Backpack className="h-5 w-5" />
+                                <span className="sr-only">Open Inventory</span>
+                             </Button>
+                         </SheetTrigger>
                          <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
                              <SheetHeader className="p-4 border-b"> <SheetTitle>Inventory</SheetTitle> </SheetHeader>
                              <div className="flex-grow overflow-hidden"> <InventoryDisplay /> </div>
@@ -695,7 +701,11 @@ export function Gameplay() {
                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" /> } {isSaving ? "Saving..." : "Save Game"}
                    </Button>
                   <AlertDialog>
-                     <AlertDialogTrigger asChild> <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}> <ArrowLeft className="mr-2 h-4 w-4" /> Abandon </Button> </AlertDialogTrigger>
+                     <AlertDialogTrigger asChild>
+                        <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
+                           <ArrowLeft className="mr-2 h-4 w-4" /> Abandon
+                        </Button>
+                     </AlertDialogTrigger>
                      <AlertDialogContent> <AlertDialogHeader> <AlertDialogTitle>Are you sure?</AlertDialogTitle> <AlertDialogDescription> Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu. </AlertDialogDescription> </AlertDialogHeader> <AlertDialogFooter> <AlertDialogCancel>Cancel</AlertDialogCancel> <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction> </AlertDialogFooter> </AlertDialogContent>
                  </AlertDialog>
                  <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
@@ -724,3 +734,5 @@ export function Gameplay() {
     </div>
   );
 }
+
+    
