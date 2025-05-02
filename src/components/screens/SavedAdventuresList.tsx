@@ -63,72 +63,80 @@ export function SavedAdventuresList() {
           ) : (
             <ScrollArea className="h-[60vh] pr-3"> {/* Adjust height as needed */}
               <div className="space-y-4">
-                {sortedAdventures.map((adventure) => (
-                  <CardboardCard key={adventure.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-card/60 border border-foreground/10">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-lg font-semibold truncate" title={adventure.characterName}>{adventure.characterName}</p>
-                      {/* Display Class and Skill Stage */}
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                            <div className="flex items-center gap-1">
-                                <ShieldQuestion className="w-3 h-3"/> {adventure.character?.class || 'Unknown Class'}
-                            </div>
-                            <div className="flex items-center gap-0.5" title={`Skill Stage ${adventure.character?.skillTreeStage ?? 0}`}>
-                                <Star className="w-3 h-3"/> {adventure.character?.skillTreeStage ?? 0}/4
-                            </div>
-                      </div>
-                       <p className="text-sm text-muted-foreground">
-                        {adventure.statusBeforeSave === 'AdventureSummary' ? 'Finished' : 'In Progress'} - Saved {formatDistanceToNow(new Date(adventure.saveTimestamp), { addSuffix: true })}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                         {adventure.adventureSettings.adventureType} ({adventure.adventureSettings.permanentDeath ? 'Permadeath' : 'Respawn'})
-                      </p>
-                       {/* Display inventory count */}
-                        {adventure.inventory && (
-                            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                                <Package className="w-3 h-3"/> {adventure.inventory.length} item(s)
-                            </p>
-                        )}
-                       {/* Display summary snippet if finished */}
-                        {adventure.statusBeforeSave === 'AdventureSummary' && adventure.adventureSummary && (
-                            <p className="text-xs text-muted-foreground italic mt-1 border-t pt-1 line-clamp-2">
-                                Summary: {adventure.adventureSummary}
-                            </p>
-                        )}
-                    </div>
-                    <div className="flex gap-2 flex-shrink-0 mt-2 sm:mt-0">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => handleLoad(adventure.id)}
-                        className="bg-accent hover:bg-accent/90 text-accent-foreground"
-                      >
-                        {adventure.statusBeforeSave === 'AdventureSummary' ? <BookOpenText className="mr-1 h-4 w-4"/> : <Play className="mr-1 h-4 w-4"/>}
-                        {adventure.statusBeforeSave === 'AdventureSummary' ? 'View' : 'Load'}
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="destructive" size="sm">
-                            <Trash2 className="h-4 w-4" />
+                {sortedAdventures.map((adventure) => {
+                    // Find the current stage name from the saved skill tree
+                    const currentStage = adventure.character?.skillTreeStage ?? 0;
+                    const stageName = currentStage > 0 && adventure.character?.skillTree
+                        ? adventure.character.skillTree.stages.find(s => s.stage === currentStage)?.stageName ?? `Stage ${currentStage}`
+                        : "Stage 0";
+
+                    return (
+                      <CardboardCard key={adventure.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-card/60 border border-foreground/10">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-lg font-semibold truncate" title={adventure.characterName}>{adventure.characterName}</p>
+                          {/* Display Class and Skill Stage with Name */}
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                                <div className="flex items-center gap-1">
+                                    <ShieldQuestion className="w-3 h-3"/> {adventure.character?.class || 'Unknown Class'}
+                                </div>
+                                <div className="flex items-center gap-0.5" title={`Skill Stage ${currentStage}`}>
+                                    <Star className="w-3 h-3"/> {stageName} ({currentStage}/4)
+                                </div>
+                          </div>
+                           <p className="text-sm text-muted-foreground">
+                            Saved {formatDistanceToNow(new Date(adventure.saveTimestamp), { addSuffix: true })}
+                          </p>
+                           <p className="text-xs text-muted-foreground mt-1">
+                            {adventure.statusBeforeSave === 'AdventureSummary' ? 'Finished' : 'In Progress'} | {adventure.adventureSettings.adventureType} ({adventure.adventureSettings.permanentDeath ? 'Permadeath' : 'Respawn'})
+                          </p>
+                           {/* Display inventory count */}
+                            {adventure.inventory && (
+                                <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                                    <Package className="w-3 h-3"/> {adventure.inventory.length} item(s)
+                                </p>
+                            )}
+                           {/* Display summary snippet if finished */}
+                            {adventure.statusBeforeSave === 'AdventureSummary' && adventure.adventureSummary && (
+                                <p className="text-xs text-muted-foreground italic mt-1 border-t pt-1 line-clamp-2">
+                                    Summary: {adventure.adventureSummary}
+                                </p>
+                            )}
+                        </div>
+                        <div className="flex gap-2 flex-shrink-0 mt-2 sm:mt-0">
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => handleLoad(adventure.id)}
+                            className="bg-accent hover:bg-accent/90 text-accent-foreground"
+                          >
+                            {adventure.statusBeforeSave === 'AdventureSummary' ? <BookOpenText className="mr-1 h-4 w-4"/> : <Play className="mr-1 h-4 w-4"/>}
+                            {adventure.statusBeforeSave === 'AdventureSummary' ? 'View' : 'Load'}
                           </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Saved Game?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete the saved adventure for "{adventure.characterName}"? This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(adventure.id, adventure.characterName)} className="bg-destructive hover:bg-destructive/90">
-                                Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </CardboardCard>
-                ))}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete Saved Game?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Are you sure you want to delete the saved adventure for "{adventure.characterName}"? This action cannot be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(adventure.id, adventure.characterName)} className="bg-destructive hover:bg-destructive/90">
+                                    Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </CardboardCard>
+                    );
+                })}
               </div>
             </ScrollArea>
           )}

@@ -1,6 +1,7 @@
+// src/ai/flows/generate-skill-tree.ts
 'use server';
 /**
- * @fileOverview An AI agent that generates a 4-stage skill tree for a given character class.
+ * @fileOverview An AI agent that generates a 4-stage skill tree for a given character class, including stage names.
  *
  * - generateSkillTree - A function that generates the skill tree.
  * - GenerateSkillTreeInput - The input type for the generateSkillTree function.
@@ -19,6 +20,7 @@ const SkillSchema = z.object({
 
 const SkillTreeStageSchema = z.object({
     stage: z.number().min(1).max(4).describe("The progression stage (1-4)."),
+    stageName: z.string().describe("A thematic name for this stage (e.g., Apprentice, Adept, Master, Grandmaster)."), // Added stage name
     skills: z.array(SkillSchema).min(1).max(3).describe("A list of 1-3 skills unlocked at this stage."), // Define min/max skills per stage
 });
 
@@ -57,13 +59,14 @@ const generateSkillTreePrompt = ai.definePrompt({
 
 **Requirements:**
 1.  **Four Stages:** The skill tree MUST have exactly four distinct stages of progression (stage 1, 2, 3, 4).
-2.  **Skills per Stage:** Each stage MUST unlock between 1 and 3 thematically appropriate skills. More powerful or defining skills should appear in later stages.
-3.  **Skill Definition:** Each skill needs a clear 'name' and a concise 'description' explaining its effect or purpose within the game context (e.g., combat advantage, new ability, knowledge unlock, social influence).
-4.  **Class Theme:** The skills and stage progression should strongly reflect the identity and typical abilities associated with the '{{{characterClass}}}' class.
-    *   Example (Warrior): Stage 1 might have "Basic Parry", Stage 2 "Power Attack", Stage 3 "Shield Bash", Stage 4 "Battle Cry".
-    *   Example (Mage): Stage 1 "Mana Bolt", Stage 2 "Arcane Ward", Stage 3 "Fireball", Stage 4 "Summon Familiar".
-    *   Example (Rogue): Stage 1 "Sneak", Stage 2 "Lockpicking", Stage 3 "Backstab", Stage 4 "Shadow Cloak".
-5.  **Output Format:** Respond ONLY with the JSON object matching the SkillTree schema, containing the 'className' and the 'stages' array with 4 stages, each having 1-3 skills with 'name' and 'description'. Ensure the JSON is valid.
+2.  **Stage Names:** Each stage MUST have a thematic 'stageName' (e.g., Stage 1: "Initiate", Stage 2: "Adept", Stage 3: "Master", Stage 4: "Grandmaster" for a Mage; or Stage 1: "Squire", Stage 2: "Knight", Stage 3: "Champion", Stage 4: "Warlord" for a Warrior).
+3.  **Skills per Stage:** Each stage MUST unlock between 1 and 3 thematically appropriate skills. More powerful or defining skills should appear in later stages.
+4.  **Skill Definition:** Each skill needs a clear 'name' and a concise 'description' explaining its effect or purpose within the game context (e.g., combat advantage, new ability, knowledge unlock, social influence).
+5.  **Class Theme:** The stage names, skills, and stage progression should strongly reflect the identity and typical abilities associated with the '{{{characterClass}}}' class.
+    *   Example (Warrior): Stage 1 (Squire) might have "Basic Parry", Stage 2 (Knight) "Power Attack", Stage 3 (Champion) "Shield Bash", Stage 4 (Warlord) "Battle Cry".
+    *   Example (Mage): Stage 1 (Initiate) "Mana Bolt", Stage 2 (Adept) "Arcane Ward", Stage 3 (Master) "Fireball", Stage 4 (Grandmaster) "Summon Familiar".
+    *   Example (Rogue): Stage 1 (Apprentice) "Sneak", Stage 2 (Journeyman) "Lockpicking", Stage 3 (Assassin) "Backstab", Stage 4 (Shadow) "Shadow Cloak".
+6.  **Output Format:** Respond ONLY with the JSON object matching the SkillTree schema, containing the 'className' and the 'stages' array with 4 stages, each having 'stage', 'stageName', and 1-3 skills with 'name' and 'description'. Ensure the JSON is valid.
 
 **Generate the Skill Tree:**
 `,
@@ -97,6 +100,9 @@ const generateSkillTreeFlow = ai.defineFlow<
                  throw new Error("AI returned invalid skill tree structure (missing class, stages array, or incorrect stage count).");
              }
              for (const stage of output.stages) {
+                 if (!stage.stageName) { // Validate stage name presence
+                     throw new Error(`AI returned invalid structure for stage ${stage.stage} (missing stageName).`);
+                 }
                 if (!stage.skills || stage.skills.length < 1 || stage.skills.length > 3) {
                     throw new Error(`AI returned invalid skill count for stage ${stage.stage} (must be 1-3).`);
                 }

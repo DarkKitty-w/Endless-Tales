@@ -16,6 +16,12 @@ export function CharacterDisplay() {
     return null; // Don't display if no character exists
   }
 
+   // Find the current stage name
+   const currentStageName = character.skillTree && character.skillTreeStage > 0
+       ? character.skillTree.stages.find(s => s.stage === character.skillTreeStage)?.stageName ?? `Stage ${character.skillTreeStage}`
+       : "Stage 0"; // Display "Stage 0" if no tree or stage 0
+
+
   // Helper to render stars based on stage
   const renderStageStars = (stage: number) => {
     const stars = [];
@@ -85,13 +91,16 @@ export function CharacterDisplay() {
                  <div className="flex justify-center items-center gap-1">
                     {renderStageStars(character.skillTreeStage)}
                  </div>
-                 <p className="text-xs text-muted-foreground text-center mt-1">
-                     Stage {character.skillTreeStage} / 4 ({character.skillTree.className} Tree)
-                 </p>
+                  <p className="text-xs text-muted-foreground text-center mt-1 font-semibold">
+                      {currentStageName} ({character.skillTreeStage}/4)
+                  </p>
+                  <p className="text-xs text-muted-foreground text-center mt-0.5">
+                      {character.skillTree.className} Tree
+                  </p>
                  {/* Optionally list skills for the current stage */}
                  {character.skillTreeStage > 0 && character.skillTree.stages[character.skillTreeStage - 1]?.skills.length > 0 && (
                     <div className="mt-2 text-center">
-                        <p className="text-xs font-semibold">Stage {character.skillTreeStage} Skills:</p>
+                        <p className="text-xs font-semibold">Skills:</p>
                         <div className="flex flex-wrap justify-center gap-1 mt-1">
                          {character.skillTree.stages[character.skillTreeStage - 1].skills.map(skill => (
                             <Badge key={skill.name} variant="secondary" className="text-xs">{skill.name}</Badge>

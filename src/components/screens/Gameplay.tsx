@@ -352,8 +352,9 @@ export function Gameplay() {
 
       // Handle AI-driven progression AFTER updating narration/state
        if (result.progressedToStage && result.progressedToStage > character.skillTreeStage) {
+            const progressedStageName = character.skillTree?.stages.find(s => s.stage === result.progressedToStage)?.stageName || `Stage ${result.progressedToStage}`;
            dispatch({ type: "PROGRESS_SKILL_STAGE", payload: result.progressedToStage });
-           toast({ title: "Skill Stage Increased!", description: `You've reached Stage ${result.progressedToStage} of the ${character.class} path!`, duration: 4000 });
+           toast({ title: "Skill Stage Increased!", description: `You've reached ${progressedStageName} (Stage ${result.progressedToStage}) of the ${character.class} path!`, duration: 4000 });
        }
 
         // Handle suggested class change - set state to trigger confirmation dialog
@@ -536,6 +537,12 @@ export function Gameplay() {
        );
    }
 
+    // Determine current stage name for mobile sheet
+    const currentStageName = character.skillTree && character.skillTreeStage > 0
+        ? character.skillTree.stages.find(s => s.stage === character.skillTreeStage)?.stageName ?? `Stage ${character.skillTreeStage}`
+        : "Stage 0";
+
+
    // Helper function to render dynamic content at the end of the scroll area
    const renderDynamicContent = () => {
      const busy = isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree;
@@ -614,9 +621,7 @@ export function Gameplay() {
                  </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
-                      <ArrowLeft className="mr-2 h-4 w-4" /> Abandon Adventure
-                    </Button>
+                     <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}> <ArrowLeft className="mr-2 h-4 w-4" /> Abandon Adventure </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader> <AlertDialogTitle>Are you sure?</AlertDialogTitle> <AlertDialogDescription> Abandoning the adventure will end your current progress (any unsaved changes will be lost) and return you to the main menu. </AlertDialogDescription> </AlertDialogHeader>
@@ -639,7 +644,7 @@ export function Gameplay() {
                  <div>
                       {/* Mobile Inventory Trigger */}
                      <Sheet>
-                         <SheetTrigger asChild>
+                        <SheetTrigger asChild>
                             <Button variant="ghost" size="icon">
                                 <Backpack className="h-5 w-5" />
                                 <span className="sr-only">Open Inventory</span>
@@ -652,14 +657,17 @@ export function Gameplay() {
                      </Sheet>
                       {/* Mobile Skill Tree Trigger */}
                      <Sheet>
-                         <SheetTrigger asChild>
+                        <SheetTrigger asChild>
                             <Button variant="ghost" size="icon" disabled={isGeneratingSkillTree || !character.skillTree}>
                                 <Workflow className="h-5 w-5" />
                                 <span className="sr-only">Open Skill Tree</span>
                              </Button>
                          </SheetTrigger>
                          <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
-                             <SheetHeader className="p-4 border-b"> <SheetTitle>Skill Tree: {character.skillTree?.className || character.class}</SheetTitle> <SheetDescription> Current Stage: {character.skillTreeStage} / 4 </SheetDescription> </SheetHeader>
+                             <SheetHeader className="p-4 border-b">
+                                <SheetTitle>Skill Tree: {character.skillTree?.className || character.class}</SheetTitle>
+                                <SheetDescription>Current Stage: {currentStageName} ({character.skillTreeStage}/4)</SheetDescription>
+                             </SheetHeader>
                              <div className="flex-grow overflow-hidden">
                                  {character.skillTree ? <SkillTreeDisplay skillTree={character.skillTree} currentStage={character.skillTreeStage} /> : <p className="p-4 text-muted-foreground italic">No skill tree available.</p>}
                              </div>
@@ -710,16 +718,12 @@ export function Gameplay() {
                    </Button>
                   <AlertDialog>
                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
-                           <ArrowLeft className="mr-2 h-4 w-4" /> Abandon
-                        </Button>
+                        <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}> <ArrowLeft className="mr-2 h-4 w-4" /> Abandon </Button>
                      </AlertDialogTrigger>
                      <AlertDialogContent>
                          <AlertDialogHeader>
                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                             <AlertDialogDescription>
-                                Abandoning the adventure will end your current progress (any unsaved changes will be lost) and return you to the main menu.
-                             </AlertDialogDescription>
+                             <AlertDialogDescription> Abandoning the adventure will end your current progress (any unsaved changes will be lost) and return you to the main menu. </AlertDialogDescription>
                          </AlertDialogHeader>
                          <AlertDialogFooter>
                              <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -740,7 +744,7 @@ export function Gameplay() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Class Change Suggested!</AlertDialogTitle>
                         <AlertDialogDescription>
-                             Your actions suggest a path closer to the <span className="font-semibold">{pendingClassChange}</span> class. Would you like to embrace this change? Your current class progress (<span className="font-semibold">{character.class} - Stage {character.skillTreeStage}</span>) will be reset, and you'll start fresh on the {pendingClassChange} skill tree.
+                             Your actions suggest a path closer to the <span className="font-semibold">{pendingClassChange}</span> class. Would you like to embrace this change? Your current class progress (<span className="font-semibold">{character.class} - {currentStageName} ({character.skillTreeStage}/4)</span>) will be reset, and you'll start fresh on the {pendingClassChange} skill tree.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -753,4 +757,3 @@ export function Gameplay() {
     </div>
   );
 }
-

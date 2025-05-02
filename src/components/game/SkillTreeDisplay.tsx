@@ -61,7 +61,7 @@ export function SkillTreeDisplay({ skillTree, currentStage }: SkillTreeDisplayPr
                    <div className="flex items-center gap-2">
                      {isUnlocked ? <Unlock className="w-4 h-4 text-green-600" /> : <Lock className="w-4 h-4 text-muted-foreground" />}
                      <span className={`font-semibold ${isCurrent ? 'text-accent' : isUnlocked ? 'text-primary' : 'text-muted-foreground'}`}>
-                       Stage {stageData.stage}
+                        {stageData.stageName || `Stage ${stageData.stage}`} {/* Display stage name */}
                      </span>
                      {isCurrent && <Badge variant="default" className="text-xs ml-2">Current</Badge>}
                    </div>
