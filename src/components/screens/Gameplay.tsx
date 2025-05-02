@@ -635,7 +635,7 @@ export function Gameplay() {
                  <div>
                       {/* Mobile Inventory Trigger */}
                      <Sheet>
-                         <SheetTrigger asChild> <Button variant="ghost" size="icon"> <Backpack className="h-5 w-5" /> <span className="sr-only">Open Inventory</span> </Button> </SheetTrigger>
+                         <SheetTrigger asChild><Button variant="ghost" size="icon"> <Backpack className="h-5 w-5" /> <span className="sr-only">Open Inventory</span> </Button></SheetTrigger>
                          <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
                              <SheetHeader className="p-4 border-b"> <SheetTitle>Inventory</SheetTitle> </SheetHeader>
                              <div className="flex-grow overflow-hidden"> <InventoryDisplay /> </div>
