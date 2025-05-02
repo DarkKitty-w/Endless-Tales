@@ -81,7 +81,10 @@ export function Gameplay() {
 
   // Function to scroll to bottom
   const scrollToBottom = useCallback(() => {
-     scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+     // Add a small delay to allow the DOM to update before scrolling
+     setTimeout(() => {
+       scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+     }, 100);
   }, []);
 
    // --- Handle Inventory Image Generation ---
@@ -386,7 +389,7 @@ export function Gameplay() {
     } finally {
       setIsLoading(false);
       if (!isInitialAction) setPlayerInput("");
-      requestAnimationFrame(scrollToBottom);
+      scrollToBottom(); // Scroll after processing is complete
     }
   }, [
       character, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages,
@@ -572,8 +575,10 @@ export function Gameplay() {
    };
 
   return (
-    <div className="flex flex-col md:flex-row h-screen max-h-screen overflow-hidden bg-gradient-to-br from-background to-muted/30">
-        {/* Left Panel (Character & Actions) - Fixed width */}
+    // Adjusted root div: removed max-h-screen, added min-h-screen for mobile
+    <div className="flex flex-col md:flex-row min-h-screen overflow-hidden bg-gradient-to-br from-background to-muted/30">
+
+        {/* Left Panel (Character & Actions) - Fixed width on Desktop */}
         <div className="hidden md:flex flex-col w-80 lg:w-96 p-4 border-r border-foreground/10 overflow-y-auto bg-card/50 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
              <CharacterDisplay />
 
@@ -624,19 +629,21 @@ export function Gameplay() {
              </div>
         </div>
 
-        {/* Right Panel (Story & Input) */}
-        <div className="flex-1 flex flex-col p-4 overflow-hidden">
-            {/* Mobile Header */}
-            <div className="md:hidden flex justify-between items-center mb-2 pb-2 border-b border-foreground/10">
+        {/* Right Panel (Story & Input) - Takes remaining space */}
+        {/* Adjusted flex properties for mobile */}
+        <div className="flex-1 flex flex-col p-4 overflow-hidden h-screen md:h-auto">
+
+            {/* Mobile Header - Displays Character Name and Action Buttons */}
+            <div className="md:hidden flex justify-between items-center mb-2 pb-2 border-b border-foreground/10 flex-shrink-0">
                  <h2 className="text-lg font-semibold truncate">{character.name}</h2>
                  <div>
                       {/* Mobile Inventory Trigger */}
                      <Sheet>
                          <SheetTrigger asChild>
-                             <Button variant="ghost" size="icon">
+                            <Button variant="ghost" size="icon">
                                 <Backpack className="h-5 w-5" />
                                 <span className="sr-only">Open Inventory</span>
-                             </Button>
+                            </Button>
                          </SheetTrigger>
                          <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
                              <SheetHeader className="p-4 border-b"> <SheetTitle>Inventory</SheetTitle> </SheetHeader>
@@ -646,8 +653,9 @@ export function Gameplay() {
                       {/* Mobile Skill Tree Trigger */}
                      <Sheet>
                          <SheetTrigger asChild>
-                             <Button variant="ghost" size="icon" disabled={isGeneratingSkillTree || !character.skillTree}>
-                                 <Workflow className="h-5 w-5" /> <span className="sr-only">Open Skill Tree</span>
+                            <Button variant="ghost" size="icon" disabled={isGeneratingSkillTree || !character.skillTree}>
+                                <Workflow className="h-5 w-5" />
+                                <span className="sr-only">Open Skill Tree</span>
                              </Button>
                          </SheetTrigger>
                          <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
@@ -660,9 +668,11 @@ export function Gameplay() {
                  </div>
             </div>
 
-            {/* Story Display Area */}
-            <CardboardCard className="flex-1 flex flex-col overflow-hidden mb-4 border-2 border-foreground/20 shadow-inner">
-                 <CardHeader className="py-3 px-4 border-b border-foreground/10"> <CardTitle className="text-lg font-semibold">Story Log</CardTitle> </CardHeader>
+            {/* Story Display Area - Adjusted for flex layout */}
+            {/* Added min-h-0 to allow shrinking and flex-grow to take space */}
+            <CardboardCard className="flex-1 flex flex-col overflow-hidden mb-4 border-2 border-foreground/20 shadow-inner min-h-0">
+                 <CardHeader className="py-3 px-4 border-b border-foreground/10 flex-shrink-0"> <CardTitle className="text-lg font-semibold">Story Log</CardTitle> </CardHeader>
+                 {/* Scroll area now takes the full height of the content area */}
                  <CardContent className="flex-1 p-0 overflow-hidden">
                     <ScrollArea className="h-full">
                         <div className="p-4 space-y-4">
@@ -672,6 +682,7 @@ export function Gameplay() {
                                 </div>
                             ))}
                             {renderDynamicContent()}
+                            {/* Ensure scroll end ref is inside scrollable content */}
                             <div ref={scrollEndRef} style={{ height: '1px' }} />
                         </div>
                          <ScrollBar orientation="vertical" />
@@ -679,8 +690,8 @@ export function Gameplay() {
                  </CardContent>
             </CardboardCard>
 
-             {/* Input Area */}
-             <form onSubmit={handleSubmit} className="flex gap-2 items-center mt-auto">
+             {/* Input Area - Remains at the bottom */}
+             <form onSubmit={handleSubmit} className="flex gap-2 items-center mt-auto flex-shrink-0">
                 <Button type="button" variant="ghost" size="icon" onClick={handleSuggestAction} disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || isGeneratingInventoryImages || isGeneratingSkillTree} aria-label="Suggest an action" className="text-muted-foreground hover:text-accent flex-shrink-0" title="Suggest Action">
                     <Sparkles className="h-5 w-5" />
                 </Button>
@@ -690,9 +701,10 @@ export function Gameplay() {
                 </Button>
              </form>
 
-             {/* Buttons for smaller screens (Mobile View) */}
-              <div className="md:hidden flex flex-col gap-2 mt-4 border-t pt-4">
-                   <CharacterDisplay />
+             {/* Buttons for smaller screens (Mobile View) - Added below input */}
+              <div className="md:hidden flex flex-col gap-2 mt-4 border-t pt-4 flex-shrink-0">
+                   {/* Mobile Character Display (optional, could be in header) */}
+                   {/* <CharacterDisplay /> */}
                    <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" /> } {isSaving ? "Saving..." : "Save Game"}
                    </Button>
@@ -741,3 +753,4 @@ export function Gameplay() {
     </div>
   );
 }
+
