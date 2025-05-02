@@ -2,20 +2,20 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useGame, type InventoryItem } from "@/context/GameContext";
+import { useGame, type InventoryItem, type StoryLogEntry } from "@/context/GameContext"; // Added StoryLogEntry
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"; // Added ScrollBar
 import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
 import { CharacterDisplay } from "@/components/game/CharacterDisplay";
-import { WorldMapDisplay } from "@/components/game/WorldMapDisplay";
+// import { WorldMapDisplay } from "@/components/game/WorldMapDisplay"; // Removed map import
 import { InventoryDisplay } from "@/components/game/InventoryDisplay"; // Import InventoryDisplay
 import { narrateAdventure } from "@/ai/flows/narrate-adventure";
 import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
 import { assessActionDifficulty, type DifficultyLevel } from "@/ai/flows/assess-action-difficulty"; // Import assessment flow and type
 import type { NarrateAdventureOutput } from "@/ai/flows/narrate-adventure"; // Import type
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save } from "lucide-react"; // Added Save icon
+import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack } from "lucide-react"; // Added Backpack icon
 import { rollDice, rollDifficultDice } from "@/services/dice-roller"; // Import both dice rollers
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -29,6 +29,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet"
+
 
 // Helper function to map difficulty dice string to roller function
 const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null => {
@@ -73,51 +82,71 @@ export function Gameplay() {
   const [isRollingDice, setIsRollingDice] = useState(false);
   const [diceResult, setDiceResult] = useState<number | null>(null);
   const [diceType, setDiceType] = useState<string>("None"); // Track which die was rolled (string like "d10", "d100", "None")
-  const scrollAreaViewportRef = useRef<HTMLDivElement>(null); // Ref for the ScrollArea viewport
+  // const scrollAreaViewportRef = useRef<HTMLDivElement>(null); // Ref for the ScrollArea viewport - Removed, use scrollEndRef
   const scrollEndRef = useRef<HTMLDivElement>(null); // Ref for an element at the bottom
   const [isGeneratingInventoryImages, setIsGeneratingInventoryImages] = useState(false);
 
   // Function to scroll to bottom
   const scrollToBottom = useCallback(() => {
      scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+     // Alternative: direct manipulation if ref is on ScrollArea's viewport
+     // if (scrollAreaViewportRef.current) {
+     //    scrollAreaViewportRef.current.scrollTop = scrollAreaViewportRef.current.scrollHeight;
+     // }
   }, []);
 
    // --- Handle Inventory Image Generation ---
    const generateInventoryImages = useCallback(async (itemNames: string[]) => {
-       if (!itemNames || itemNames.length === 0 || isGeneratingInventoryImages) {
+        if (!itemNames || itemNames.length === 0 || isGeneratingInventoryImages) {
            return;
-       }
+        }
 
-        // Find items that are in the list but don't have an image URI yet
-       const itemsToGenerate = inventory.filter(item => itemNames.includes(item.name) && !item.imageDataUri);
+       // Find items that are in the list but don't have an image URI yet OR items already in inventory missing URI
+       const itemsInStateNeedingImage = inventory.filter(item => itemNames.includes(item.name) && !item.imageDataUri);
+       const namesInList = new Set(itemNames);
+       const itemsMissingFromList = inventory.filter(item => namesInList.has(item.name) && !item.imageDataUri);
 
-       if (itemsToGenerate.length === 0) {
+       const combinedNeedsGeneration = [...new Set([...itemsInStateNeedingImage, ...itemsMissingFromList])];
+
+
+       if (combinedNeedsGeneration.length === 0) {
            console.log("All listed inventory items already have images (or list is empty).");
+            // Ensure state inventory matches the provided itemNames list even if no images generated
+            const finalInventory = inventory.filter(item => namesInList.has(item.name));
+            if(finalInventory.length !== inventory.length || !finalInventory.every((item, index) => item.name === inventory[index]?.name)) {
+                 dispatch({ type: "UPDATE_CHARACTER", payload: { inventory: finalInventory } as any });
+            }
            return;
        }
 
        setIsGeneratingInventoryImages(true);
-       console.log("Generating images for inventory items:", itemsToGenerate.map(i => i.name));
-       toast({ title: "Loading Item Images...", description: `Fetching visuals for ${itemsToGenerate.length} item(s).`, duration: 2000 });
+       console.log("Generating images for inventory items:", combinedNeedsGeneration.map(i => i.name));
+       toast({ title: "Loading Item Images...", description: `Fetching visuals for ${combinedNeedsGeneration.length} item(s).`, duration: 2000 });
 
        try {
-           const generationPromises = itemsToGenerate.map(async (item) => {
+           const generationPromises = combinedNeedsGeneration.map(async (item) => {
                const imageDataUri = await generatePlaceholderImageUri(item.name);
-               return { ...item, imageDataUri }; // Return item with new image URI
+               return { name: item.name, imageDataUri }; // Return item with new image URI
            });
 
-           const generatedItems = await Promise.all(generationPromises);
+           const generatedItemsData = await Promise.all(generationPromises);
+           const generatedMap = new Map(generatedItemsData.map(item => [item.name, item.imageDataUri]));
 
-           // Update the state by merging generated items with existing ones
+           // Update the state by merging generated items with existing ones, filtered by itemNames
+            const finalInventory = itemNames.map(name => {
+                const existingItem = inventory.find(i => i.name === name);
+                const generatedUri = generatedMap.get(name);
+                return {
+                    name: name,
+                    description: existingItem?.description, // Keep description if exists
+                    imageDataUri: generatedUri || existingItem?.imageDataUri // Use generated or existing URI
+                };
+            });
+
+
            dispatch({
                type: "UPDATE_CHARACTER", // Use a generic update for simplicity, or add specific inventory action
-               payload: {
-                    // Merge existing inventory with newly generated images
-                   inventory: inventory.map(existingItem => {
-                       const generated = generatedItems.find(g => g.name === existingItem.name);
-                       return generated ? generated : existingItem;
-                   })
-               } as any // Cast as any to bypass strict type check if needed for inventory update
+               payload: { inventory: finalInventory } as any // Cast as any to bypass strict type check if needed for inventory update
            });
 
            console.log("Finished generating inventory images.");
@@ -126,6 +155,17 @@ export function Gameplay() {
        } catch (error) {
            console.error("Error generating inventory images:", error);
            toast({ title: "Image Loading Error", description: "Could not load some item images.", variant: "destructive" });
+            // Update inventory based on names list, but without images for failed ones
+            const fallbackInventory = itemNames.map(name => {
+                const existingItem = inventory.find(i => i.name === name);
+                return {
+                    name: name,
+                    description: existingItem?.description,
+                    imageDataUri: existingItem?.imageDataUri // Keep existing URI if present
+                };
+             });
+            dispatch({ type: "UPDATE_CHARACTER", payload: { inventory: fallbackInventory } as any });
+
        } finally {
            setIsGeneratingInventoryImages(false);
        }
@@ -165,8 +205,8 @@ export function Gameplay() {
         try {
              const assessmentInput = {
                 playerAction: action,
-                 // Include inventory in capabilities string
-                characterCapabilities: `Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, AGI ${character.stats.agility}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}. Inventory: ${inventory.map(i => i.name).join(', ') || 'Empty'}`,
+                 // Include inventory and class in capabilities string
+                characterCapabilities: `Class: ${character.class}. Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, AGI ${character.stats.agility}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}. Inventory: ${inventory.map(i => i.name).join(', ') || 'Empty'}`,
                 currentSituation: currentNarration?.narration || "At the beginning of the scene.", // Use last narration as situation
                 gameStateSummary: currentGameStateString,
              };
@@ -259,6 +299,7 @@ export function Gameplay() {
     const inputForAI: NarrateAdventureInput = { // Ensure type correctness
       character: {
         name: character.name,
+        class: character.class, // Include class
         description: character.description,
         traits: character.traits,
         knowledge: character.knowledge,
@@ -275,7 +316,19 @@ export function Gameplay() {
       console.log("Sending to narrateAdventure flow:", JSON.stringify(inputForAI, null, 2));
       const result: NarrateAdventureOutput = await narrateAdventure(inputForAI);
       console.log("Received from narrateAdventure flow:", result);
-      dispatch({ type: "UPDATE_NARRATION", payload: result }); // Dispatch full result including optional inventory
+
+      // Dispatch the full result, including potential character progression updates
+      const logEntryForResult: StoryLogEntry = {
+          narration: result.narration,
+          updatedGameState: result.updatedGameState,
+          updatedInventory: result.updatedInventory,
+          updatedStats: result.updatedStats,
+          updatedTraits: result.updatedTraits,
+          updatedKnowledge: result.updatedKnowledge,
+          updatedClass: result.updatedClass,
+          timestamp: Date.now(),
+      };
+      dispatch({ type: "UPDATE_NARRATION", payload: logEntryForResult });
       setError(null); // Clear error on success
 
       // Trigger inventory image generation if inventory changed
@@ -291,13 +344,13 @@ export function Gameplay() {
        if (isGameOver) {
             if (adventureSettings.permanentDeath && (lowerNarration.includes("you have died"))) {
                 toast({title: "Game Over!", description: "Your journey has reached its final, permanent end.", variant: "destructive", duration: 5000});
-                await handleEndAdventure(result);
+                await handleEndAdventure(logEntryForResult); // Pass final log entry
             } else if (lowerNarration.includes("you have died")) {
                 toast({title: "Defeat!", description: "You were overcome, but perhaps fate offers another chance (Respawn not implemented).", variant: "destructive", duration: 5000});
-                 await handleEndAdventure(result);
+                 await handleEndAdventure(logEntryForResult); // Pass final log entry
             } else {
                  toast({title: "Adventure Concluded!", description: "Your tale reaches its current conclusion.", duration: 5000});
-                 await handleEndAdventure(result);
+                 await handleEndAdventure(logEntryForResult); // Pass final log entry
             }
        }
 
@@ -315,24 +368,24 @@ export function Gameplay() {
 
 
   // --- End Adventure ---
-  const handleEndAdventure = useCallback(async (finalNarration?: NarrateAdventureOutput) => {
+  const handleEndAdventure = useCallback(async (finalNarrationEntry?: StoryLogEntry) => { // Accept StoryLogEntry
      if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages) return;
      setIsEnding(true); // Use dedicated ending state
      setError(null);
      toast({ title: "Ending Adventure", description: "Summarizing your tale..." });
 
-     const finalNarrationContext = finalNarration ?? currentNarration ?? (storyLog.length > 0 ? storyLog[storyLog.length - 1] : null);
+      // Use the provided final entry or the last one from the log
+     const finalContext = finalNarrationEntry ?? (storyLog.length > 0 ? storyLog[storyLog.length - 1] : null);
 
      let summary = "Your adventure has concluded.";
-     const hasLog = storyLog.length > 0 || finalNarrationContext;
-     if (hasLog) {
-          // Ensure finalNarrationContext matches StoryLogEntry structure if used directly
-          const finalLogEntryMaybe: StoryLogEntry | null = finalNarrationContext ? { ...finalNarrationContext, timestamp: Date.now() } : null;
+      // Ensure storyLog potentially includes the finalNarrationEntry before summarizing
+      const fullStoryLog = [...storyLog];
+      if (finalNarrationEntry && (!storyLog.length || storyLog[storyLog.length - 1].narration !== finalNarrationEntry.narration)) {
+         fullStoryLog.push(finalNarrationEntry);
+      }
 
-          const fullStoryLog = [...storyLog];
-          if (finalLogEntryMaybe && (!storyLog.length || storyLog[storyLog.length - 1].narration !== finalLogEntryMaybe.narration)) {
-             fullStoryLog.push(finalLogEntryMaybe);
-          }
+     const hasLog = fullStoryLog.length > 0;
+     if (hasLog) {
          const fullStory = fullStoryLog.map((log, index) => `[Turn ${index + 1}]\n${log.narration}`).join("\n\n---\n\n");
 
          if(fullStory.trim().length > 0) {
@@ -355,7 +408,7 @@ export function Gameplay() {
      }
 
      // Dispatch END_ADVENTURE which will change status and save summary/final log
-      dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationContext ?? undefined } });
+      dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationEntry } });
      // No need to set isLoading/isEnding false here, as the component will transition
 
    }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, storyLog, currentNarration, dispatch, toast]);
@@ -388,8 +441,7 @@ export function Gameplay() {
      if (isNewGame) {
          console.log("Gameplay: Triggering initial narration for new game.");
          handlePlayerAction("Begin the adventure by looking around.", true);
-         // Trigger initial inventory image generation AFTER the initial narration potentially adds items
-         // This check might be better placed after handlePlayerAction completes for the initial action
+          // Trigger initial inventory image generation AFTER the initial state setup which adds items
           if (inventory.length > 0) {
              generateInventoryImages(inventory.map(i => i.name));
          }
@@ -400,7 +452,8 @@ export function Gameplay() {
           generateInventoryImages(inventory.map(i => i.name));
           requestAnimationFrame(scrollToBottom);
      }
-  }, [state.status, character, storyLog.length, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, handlePlayerAction, state.savedAdventures, state.currentAdventureId, toast, scrollToBottom, generateInventoryImages]);
+     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.status, character?.name, state.currentAdventureId]); // Simplified dependencies for initial trigger
 
 
    // Scroll to bottom when new narration/log entries arrive or loading/assessment/rolling starts/ends
@@ -531,13 +584,34 @@ export function Gameplay() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen max-h-screen overflow-hidden bg-gradient-to-br from-background to-muted/30">
-        {/* Left Panel (Character, Map, Inventory) - Fixed width, scrollable content */}
+        {/* Left Panel (Character) - Fixed width */}
         <div className="hidden md:flex flex-col w-80 lg:w-96 p-4 border-r border-foreground/10 overflow-y-auto bg-card/50 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
              <CharacterDisplay />
-             <WorldMapDisplay />
-             <InventoryDisplay /> {/* Add Inventory Display */}
+             {/* <WorldMapDisplay /> */}
+             {/* No inventory display here on desktop, it's in the sheet/modal */}
+
              {/* Actions at the bottom */}
              <div className="mt-auto space-y-2 pt-4 sticky bottom-0 bg-card/50 pb-4"> {/* Make actions sticky */}
+                 {/* Inventory Trigger for Desktop */}
+                 <Sheet>
+                     <SheetTrigger asChild>
+                         <Button variant="outline" className="w-full" disabled={isLoading || isGeneratingInventoryImages}>
+                             <Backpack className="mr-2 h-4 w-4" /> View Inventory
+                         </Button>
+                     </SheetTrigger>
+                     <SheetContent side="left" className="w-full sm:w-96 p-0 flex flex-col">
+                         <SheetHeader className="p-4 border-b">
+                             <SheetTitle>Inventory</SheetTitle>
+                             <SheetDescription>
+                                 Items carried by {character.name}.
+                             </SheetDescription>
+                         </SheetHeader>
+                         <div className="flex-grow overflow-hidden">
+                            <InventoryDisplay />
+                         </div>
+                     </SheetContent>
+                 </Sheet>
+
                  <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages}>
                       {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" /> }
                       {isSaving ? "Saving..." : "Save Game"}
@@ -554,7 +628,7 @@ export function Gameplay() {
                       <AlertDialogDescription>
                         Abandoning the adventure will end your current progress (any unsaved changes will be lost) and return you to the main menu.
                       </AlertDialogDescription>
-                    </AlertDialogHeader>
+                    </AlertDialogFooter>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction>
@@ -571,13 +645,39 @@ export function Gameplay() {
 
         {/* Right Panel (Story & Input) - Flexible width, main interaction area */}
         <div className="flex-1 flex flex-col p-4 overflow-hidden">
+            {/* Mobile Header: Character Name and Inventory Button */}
+            <div className="md:hidden flex justify-between items-center mb-2 pb-2 border-b border-foreground/10">
+                 <h2 className="text-lg font-semibold truncate">{character.name}</h2>
+                  <Sheet>
+                     <SheetTrigger asChild>
+                         <Button variant="ghost" size="icon">
+                             <Backpack className="h-5 w-5" />
+                             <span className="sr-only">Open Inventory</span>
+                         </Button>
+                     </SheetTrigger>
+                     <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
+                         <SheetHeader className="p-4 border-b">
+                             <SheetTitle>Inventory</SheetTitle>
+                             {/* <SheetDescription>
+                                 Items carried by {character.name}.
+                             </SheetDescription> */}
+                         </SheetHeader>
+                         <div className="flex-grow overflow-hidden">
+                             <InventoryDisplay />
+                         </div>
+                     </SheetContent>
+                 </Sheet>
+            </div>
+
+
             {/* Story Display Area */}
             <CardboardCard className="flex-1 flex flex-col overflow-hidden mb-4 border-2 border-foreground/20 shadow-inner">
                  <CardHeader className="py-3 px-4 border-b border-foreground/10">
                     <CardTitle className="text-lg font-semibold">Story Log</CardTitle>
                  </CardHeader>
                  <CardContent className="flex-1 p-0 overflow-hidden">
-                    <ScrollArea className="h-full" viewportRef={scrollAreaViewportRef}>
+                     {/* Use ScrollArea directly */}
+                    <ScrollArea className="h-full">
                         <div className="p-4 space-y-4"> {/* Add padding here instead of ScrollArea */}
                             {/* Render story log entries */}
                             {storyLog.map((log, index) => (
@@ -594,6 +694,7 @@ export function Gameplay() {
                             {/* Add invisible element at the very end for scrolling */}
                             <div ref={scrollEndRef} style={{ height: '1px' }} />
                         </div>
+                         <ScrollBar orientation="vertical" /> {/* Explicitly add scrollbar */}
                     </ScrollArea>
                  </CardContent>
             </CardboardCard>
@@ -635,8 +736,10 @@ export function Gameplay() {
 
              {/* Buttons for smaller screens (Mobile View) */}
               <div className="md:hidden flex flex-col gap-2 mt-4 border-t pt-4">
-                   {/* Add Inventory for Mobile */}
-                   <InventoryDisplay />
+                   {/* Mobile Character Display (Simplified) */}
+                   <CharacterDisplay />
+                   {/* Add Inventory for Mobile - Now triggered by button */}
+                   {/* <InventoryDisplay /> */}
                    <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages}>
                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" /> }
                         {isSaving ? "Saving..." : "Save Game"}

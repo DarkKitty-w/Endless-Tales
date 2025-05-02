@@ -18,7 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { FolderClock, ArrowLeft, Trash2, Play, Info, BookOpenText, Package } from "lucide-react"; // Added Package icon
+import { FolderClock, ArrowLeft, Trash2, Play, Info, BookOpenText, Package, ShieldQuestion } from "lucide-react"; // Added Package, ShieldQuestion icons
 import { formatDistanceToNow } from 'date-fns'; // For displaying relative time
 import { useToast } from "@/hooks/use-toast";
 
@@ -68,6 +68,9 @@ export function SavedAdventuresList() {
                   <CardboardCard key={adventure.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-card/60 border border-foreground/10">
                     <div className="flex-1 min-w-0">
                       <p className="text-lg font-semibold truncate" title={adventure.characterName}>{adventure.characterName}</p>
+                      <p className="text-sm text-muted-foreground flex items-center gap-1">
+                        <ShieldQuestion className="w-3 h-3"/> {adventure.character?.class || 'Unknown Class'}
+                      </p>
                       <p className="text-sm text-muted-foreground">
                         {adventure.statusBeforeSave === 'AdventureSummary' ? 'Finished' : 'In Progress'} - Saved {formatDistanceToNow(new Date(adventure.saveTimestamp), { addSuffix: true })}
                       </p>

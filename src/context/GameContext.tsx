@@ -4,8 +4,6 @@
 import type { ReactNode } from "react";
 import React, { createContext, useContext, useReducer, Dispatch, useEffect } from "react";
 import type { GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
-// Remove direct import of NarrateAdventureOutput, use generic object for now
-// import type { NarrateAdventureOutput } from "@/ai/flows/narrate-adventure";
 
 export type GameStatus =
   | "MainMenu"
@@ -26,6 +24,7 @@ export interface CharacterStats {
 export interface Character {
   name: string;
   description: string; // User input description (basic combined or text-based)
+  class: string; // Character class (e.g., Adventurer, Warrior, Mage)
   traits: string[]; // Array of traits
   knowledge: string[]; // Array of knowledge areas
   background: string; // Single background string
@@ -49,11 +48,16 @@ export interface InventoryItem {
     imageDataUri?: string; // Placeholder for AI generated image
 }
 
-// Represents one turn/log entry in the story - Use generic object for AI output payload
+// Represents one turn/log entry in the story
 export interface StoryLogEntry {
   narration: string;
   updatedGameState: string;
   updatedInventory?: string[]; // Array of item names in the inventory after the turn
+  // Optional fields for character progression updates from AI
+  updatedStats?: Partial<CharacterStats>;
+  updatedTraits?: string[]; // Can be a full new list or just new additions based on AI logic
+  updatedKnowledge?: string[]; // Can be a full new list or just new additions
+  updatedClass?: string;
   timestamp: number; // Track when the entry occurred
 }
 
@@ -89,6 +93,7 @@ export interface GameState {
 const initialCharacterState: Character = {
   name: "",
   description: "",
+  class: "Adventurer", // Default starting class
   traits: [],
   knowledge: [],
   background: "",
@@ -119,12 +124,12 @@ const SAVED_ADVENTURES_KEY = "endlessTalesSavedAdventures";
 type Action =
   | { type: "SET_GAME_STATUS"; payload: GameStatus }
   | { type: "CREATE_CHARACTER"; payload: Partial<Character> } // Accepts partial character data
-  | { type: "UPDATE_CHARACTER"; payload: Partial<Character> }
+  | { type: "UPDATE_CHARACTER"; payload: Partial<Character> } // Can update stats, traits, knowledge, class etc.
   | { type: "SET_AI_DESCRIPTION"; payload: string } // Action specifically for AI description
   | { type: "SET_ADVENTURE_SETTINGS"; payload: Partial<AdventureSettings> }
   | { type: "START_GAMEPLAY" }
-  | { type: "UPDATE_NARRATION"; payload: { narration: string; updatedGameState: string; updatedInventory?: string[] } } // Use generic payload type
-  | { type: "END_ADVENTURE"; payload: { summary: string | null; finalNarration?: { narration: string; updatedGameState: string; updatedInventory?: string[] } } }
+  | { type: "UPDATE_NARRATION"; payload: StoryLogEntry } // Payload is now the full log entry structure
+  | { type: "END_ADVENTURE"; payload: { summary: string | null; finalNarration?: StoryLogEntry } } // Use StoryLogEntry for final narration
   | { type: "RESET_GAME" }
   | { type: "LOAD_SAVED_ADVENTURES"; payload: SavedAdventure[] } // Load saves from storage
   | { type: "SAVE_CURRENT_ADVENTURE" } // Save the current game state
@@ -160,44 +165,58 @@ async function handleInventoryUpdate(currentState: GameState, updatedItemNames: 
         return {}; // Return empty object, no immediate state change
     }
 
-    isGeneratingImages = true;
-    const currentInventoryNames = new Set(currentState.inventory.map(item => item.name));
-    const newItemsToGenerate = updatedItemNames.filter(name => !currentInventoryNames.has(name));
+    // Always filter inventory based on the provided list, even if no new items
+    const currentInventoryMap = new Map(currentState.inventory.map(item => [item.name, item]));
+    const itemsToGenerate: string[] = [];
+    const finalInventoryItems: InventoryItem[] = [];
 
-    if (newItemsToGenerate.length === 0) {
-        // Only update inventory if names changed (items removed potentially)
-        const updatedInventory = currentState.inventory.filter(item => updatedItemNames.includes(item.name));
-         isGeneratingImages = false; // Reset flag
-        return { inventory: updatedInventory };
+    for (const name of updatedItemNames) {
+        const existingItem = currentInventoryMap.get(name);
+        if (existingItem) {
+            finalInventoryItems.push(existingItem); // Keep existing item
+            if (!existingItem.imageDataUri) {
+                // If existing item is missing image (e.g., from load), mark for generation
+                itemsToGenerate.push(name);
+            }
+        } else {
+            // New item, needs image generation
+            finalInventoryItems.push({ name }); // Add temporarily without image
+            itemsToGenerate.push(name);
+        }
     }
 
-    console.log("Generating images for new items:", newItemsToGenerate);
+
+    if (itemsToGenerate.length === 0) {
+         // No new images needed, just return the filtered inventory
+        return { inventory: finalInventoryItems };
+    }
+
+    isGeneratingImages = true;
+    console.log("Generating images for items:", itemsToGenerate);
 
     try {
-        const generationPromises = newItemsToGenerate.map(async (name) => {
+        const generationPromises = itemsToGenerate.map(async (name) => {
             const imageDataUri = await generatePlaceholderImageUri(name);
             return { name, imageDataUri };
         });
 
         const generatedItems = await Promise.all(generationPromises);
+        const generatedMap = new Map(generatedItems.map(item => [item.name, item]));
 
-        // Combine old items (that still exist) with newly generated ones
-        const finalInventory = [
-            ...currentState.inventory.filter(item => updatedItemNames.includes(item.name)), // Keep existing items that are still in the list
-            ...generatedItems // Add new items with images
-        ];
+        // Merge generated images into the final inventory list
+        const inventoryWithImages = finalInventoryItems.map(item => {
+            const generated = generatedMap.get(item.name);
+            return generated ? { ...item, imageDataUri: generated.imageDataUri } : item;
+        });
+
 
          isGeneratingImages = false; // Reset flag
-        return { inventory: finalInventory };
+        return { inventory: inventoryWithImages };
     } catch (error) {
         console.error("Error generating item images:", error);
-        // Keep existing items, add new ones without images as fallback
-        const fallbackInventory = [
-             ...currentState.inventory.filter(item => updatedItemNames.includes(item.name)),
-             ...newItemsToGenerate.map(name => ({ name })) // Add new items without images
-        ];
+        // Return the list with placeholders (items without images) as fallback
          isGeneratingImages = false; // Reset flag
-        return { inventory: fallbackInventory };
+        return { inventory: finalInventoryItems };
     }
 }
 
@@ -208,11 +227,12 @@ function gameReducer(state: GameState, action: Action): GameState {
       return { ...state, status: action.payload };
     case "CREATE_CHARACTER":
       const newCharacter: Character = {
-        ...initialCharacterState,
-        ...action.payload,
+        ...initialCharacterState, // Start with defaults (including class)
+        ...action.payload, // Apply payload overrides
          stats: action.payload.stats ? { ...initialCharacterState.stats, ...action.payload.stats } : initialCharacterState.stats,
          traits: action.payload.traits ?? [],
          knowledge: action.payload.knowledge ?? [],
+         class: action.payload.class ?? initialCharacterState.class, // Ensure class is set
       };
       return {
         ...state,
@@ -224,12 +244,22 @@ function gameReducer(state: GameState, action: Action): GameState {
         adventureSummary: null,
         inventory: [], // Reset inventory on new character
       };
-    case "UPDATE_CHARACTER":
-        if (!state.character) return state;
-        return {
-            ...state,
-            character: { ...state.character, ...action.payload },
-        };
+     case "UPDATE_CHARACTER":
+         if (!state.character) return state;
+         const updatedCharacter: Character = {
+             ...state.character,
+             ...action.payload,
+             // Ensure stats are merged, not replaced, if provided partially
+             stats: action.payload.stats ? { ...state.character.stats, ...action.payload.stats } : state.character.stats,
+             // Handle potential updates to traits, knowledge, class if included in payload
+             traits: action.payload.traits ?? state.character.traits,
+             knowledge: action.payload.knowledge ?? state.character.knowledge,
+             class: action.payload.class ?? state.character.class,
+         };
+         return {
+             ...state,
+             character: updatedCharacter,
+         };
     case "SET_AI_DESCRIPTION":
         if (!state.character) return state;
         return {
@@ -250,7 +280,8 @@ function gameReducer(state: GameState, action: Action): GameState {
        // Initialize with starting items if necessary, e.g., "Basic Clothes"
         const initialItems = [{ name: "Basic Clothes" }];
         const initialInventoryNames = initialItems.map(item => item.name);
-        const initialGameState = `Location: Starting Point\nInventory: ${initialInventoryNames.join(', ') || 'Empty'}\nStatus: Healthy\nTime: Day 1, Morning\nQuest: None\nMilestones: None\nCharacter Name: ${state.character.name}\nTraits: ${state.character.traits.join(', ') || 'None'}\nKnowledge: ${state.character.knowledge.join(', ') || 'None'}\nBackground: ${state.character.background || 'None'}\nStats: STR ${state.character.stats.strength}, STA ${state.character.stats.stamina}, AGI ${state.character.stats.agility}\nDescription: ${charDesc}\nAdventure Mode: ${state.adventureSettings.adventureType}, ${state.adventureSettings.permanentDeath ? 'Permadeath' : 'Respawn'}`;
+        // Include class in initial game state string
+        const initialGameState = `Location: Starting Point\nInventory: ${initialInventoryNames.join(', ') || 'Empty'}\nStatus: Healthy\nTime: Day 1, Morning\nQuest: None\nMilestones: None\nCharacter Name: ${state.character.name}\nClass: ${state.character.class}\nTraits: ${state.character.traits.join(', ') || 'None'}\nKnowledge: ${state.character.knowledge.join(', ') || 'None'}\nBackground: ${state.character.background || 'None'}\nStats: STR ${state.character.stats.strength}, STA ${state.character.stats.stamina}, AGI ${state.character.stats.agility}\nDescription: ${charDesc}\nAdventure Mode: ${state.adventureSettings.adventureType}, ${state.adventureSettings.permanentDeath ? 'Permadeath' : 'Respawn'}`;
        const adventureId = state.currentAdventureId || generateAdventureId(); // Use existing ID if loading, else generate new
 
        // Handle initial inventory image generation asynchronously
@@ -272,12 +303,24 @@ function gameReducer(state: GameState, action: Action): GameState {
       };
     case "UPDATE_NARRATION":
       const newLogEntry: StoryLogEntry = {
-          narration: action.payload.narration,
-          updatedGameState: action.payload.updatedGameState,
-          updatedInventory: action.payload.updatedInventory, // Store the list of item names
-          timestamp: Date.now(),
+          ...action.payload, // Use the full payload which includes potential character updates
+          timestamp: action.payload.timestamp || Date.now(), // Ensure timestamp exists
        };
       const newLog = [...state.storyLog, newLogEntry];
+
+      // --- Apply Character Progression from Narration ---
+      let charAfterNarration = state.character;
+      if (state.character) {
+          charAfterNarration = {
+              ...state.character,
+              stats: newLogEntry.updatedStats ? { ...state.character.stats, ...newLogEntry.updatedStats } : state.character.stats,
+              traits: newLogEntry.updatedTraits ?? state.character.traits, // Replace or keep existing
+              knowledge: newLogEntry.updatedKnowledge ?? state.character.knowledge, // Replace or keep existing
+              class: newLogEntry.updatedClass ?? state.character.class, // Update if provided
+          };
+           console.log("Character updated via narration:", { stats: newLogEntry.updatedStats, traits: newLogEntry.updatedTraits, knowledge: newLogEntry.updatedKnowledge, class: newLogEntry.updatedClass });
+      }
+
 
        // Handle inventory updates (images generated async, see handleInventoryUpdate)
        let updatedInventoryState = state.inventory;
@@ -288,15 +331,12 @@ function gameReducer(state: GameState, action: Action): GameState {
                 const existingItem = state.inventory.find(item => item.name === name);
                 return existingItem ? existingItem : { name }; // Keep existing or add new without image yet
             });
-
-           // TODO: Trigger async image generation for new items outside reducer
-           // Maybe via useEffect in Gameplay component watching storyLog changes?
-            // For now, we just update names and rely on later generation/display logic
             console.log("Inventory names updated:", action.payload.updatedInventory);
        }
 
       return {
         ...state,
+        character: charAfterNarration, // Update character state with progression
         currentNarration: newLogEntry,
         storyLog: newLog,
         inventory: updatedInventoryState, // Update with potentially new item names
@@ -306,16 +346,29 @@ function gameReducer(state: GameState, action: Action): GameState {
        let finalLog = [...state.storyLog];
        let finalGameState = state.currentGameStateString;
        let finalInventoryNames = state.inventory.map(i => i.name);
+       let finalCharacterState = state.character; // Capture final character state
 
        if (action.payload.finalNarration && (!state.currentNarration || action.payload.finalNarration.narration !== state.currentNarration.narration)) {
           const finalEntry: StoryLogEntry = {
             ...action.payload.finalNarration,
-            timestamp: Date.now(),
+            timestamp: action.payload.finalNarration.timestamp || Date.now(),
           };
           finalLog.push(finalEntry);
           finalGameState = action.payload.finalNarration.updatedGameState; // Update final game state
           finalInventoryNames = action.payload.finalNarration.updatedInventory || finalInventoryNames; // Update final inventory names
-          console.log("Added final narration entry to log.");
+
+           // Apply final character updates if present in the last narration
+            if(state.character) {
+                finalCharacterState = {
+                    ...state.character, // Start with state before final narration
+                    stats: finalEntry.updatedStats ? { ...state.character.stats, ...finalEntry.updatedStats } : state.character.stats,
+                    traits: finalEntry.updatedTraits ?? state.character.traits,
+                    knowledge: finalEntry.updatedKnowledge ?? state.character.knowledge,
+                    class: finalEntry.updatedClass ?? state.character.class,
+                };
+            }
+
+          console.log("Added final narration entry to log and applied final character updates.");
        } else {
          console.log("Final narration not added (either missing or same as last entry).")
        }
@@ -325,12 +378,12 @@ function gameReducer(state: GameState, action: Action): GameState {
 
        // Auto-save on end
        let updatedSavedAdventures = state.savedAdventures;
-        if (state.character && state.currentAdventureId) {
+        if (finalCharacterState && state.currentAdventureId) { // Use finalCharacterState here
            const endedAdventure: SavedAdventure = {
                id: state.currentAdventureId,
                saveTimestamp: Date.now(),
-               characterName: state.character.name,
-               character: state.character,
+               characterName: finalCharacterState.name,
+               character: finalCharacterState, // Save the final character state
                adventureSettings: state.adventureSettings,
                storyLog: finalLog, // Save the complete log
                currentGameStateString: finalGameState, // Save the final state
@@ -349,6 +402,7 @@ function gameReducer(state: GameState, action: Action): GameState {
       return {
         ...state,
         status: "AdventureSummary",
+        character: finalCharacterState, // Update state with final character details
         adventureSummary: action.payload.summary,
         storyLog: finalLog,
         inventory: finalInventory, // Update state with final inventory
@@ -376,7 +430,7 @@ function gameReducer(state: GameState, action: Action): GameState {
         id: state.currentAdventureId,
         saveTimestamp: Date.now(),
         characterName: state.character.name,
-        character: state.character,
+        character: state.character, // Save current character state
         adventureSettings: state.adventureSettings,
         storyLog: state.storyLog,
         currentGameStateString: state.currentGameStateString,
@@ -415,7 +469,7 @@ function gameReducer(state: GameState, action: Action): GameState {
             return {
                 ...state,
                 status: "Gameplay", // Set status to trigger gameplay screen
-                character: adventureToLoad.character,
+                character: adventureToLoad.character, // Load the character state
                 adventureSettings: adventureToLoad.adventureSettings,
                 storyLog: adventureToLoad.storyLog,
                 inventory: adventureToLoad.inventory, // Load inventory state
@@ -459,7 +513,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
                 // Basic validation (check if it's an array)
                 if (Array.isArray(loadedAdventures)) {
                     // Validate structure further if needed (e.g., check for required fields)
-                    const validAdventures = loadedAdventures.filter(adv => adv.id && adv.characterName && adv.saveTimestamp);
+                    const validAdventures = loadedAdventures.filter(adv => adv.id && adv.characterName && adv.saveTimestamp && adv.character); // Ensure character exists
                     dispatch({ type: "LOAD_SAVED_ADVENTURES", payload: validAdventures });
                     console.log(`Loaded ${validAdventures.length} valid adventures from storage.`);
                     if (validAdventures.length !== loadedAdventures.length) {

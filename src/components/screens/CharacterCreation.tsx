@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
 import { Slider } from "@/components/ui/slider";
-import { Wand2, Dices, User, Save, RotateCcw, Info } from "lucide-react";
+import { Wand2, Dices, User, Save, RotateCcw, Info, ShieldQuestion } from "lucide-react"; // Added ShieldQuestion for Class
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons";
 import { generateCharacterDescription } from "@/ai/flows/generate-character-description";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -33,19 +33,24 @@ const baseCharacterSchema = z.object({
 // Custom refinement for comma-separated strings with max items
 const commaSeparatedMaxItems = (max: number, message: string) =>
   z.string()
-   .refine(val => val === "" || val.split(',').filter(Boolean).length <= max, { message })
-   .optional();
+   .max(200, `Input too long (max 200 chars).`) // Add a general max length for the string itself
+   .refine(val => val === undefined || val === "" || val.split(',').map(s => s.trim()).filter(Boolean).length <= max, { message })
+   .optional(); // Make the whole thing optional
+
 
 const basicCreationSchema = baseCharacterSchema.extend({
   creationType: z.literal("basic"),
-  traits: commaSeparatedMaxItems(5, "Max 5 traits allowed."),
-  knowledge: commaSeparatedMaxItems(5, "Max 5 knowledge areas allowed."),
+  class: z.string().min(1, "Class is required.").max(30, "Class name too long (max 30).").default("Adventurer"), // Add class field
+  traits: commaSeparatedMaxItems(5, "Max 5 traits allowed (comma-separated)."),
+  knowledge: commaSeparatedMaxItems(5, "Max 5 knowledge areas allowed (comma-separated)."),
+  // Ensure optional fields have max length BEFORE optional()
   background: z.string().max(100, "Background too long (max 100).").optional(),
 });
 
 const textCreationSchema = baseCharacterSchema.extend({
   creationType: z.literal("text"),
   description: z.string().min(10, "Please provide a brief description (at least 10 characters).").max(300, "Description too long (max 300)."),
+  // Class is derived or default in text mode, not directly set here
 });
 
 // This combined schema helps if you need to validate the whole form based on the type
@@ -58,7 +63,7 @@ type FormData = z.infer<typeof basicCreationSchema> | z.infer<typeof textCreatio
 
 // --- Component ---
 export function CharacterCreation() {
-  const { dispatch } = useGame();
+  const { state, dispatch } = useGame();
   const { toast } = useToast(); // Get toast function
   const [creationType, setCreationType] = useState<"basic" | "text">("basic");
   const [stats, setStats] = useState<CharacterStats>({ strength: 5, stamina: 5, agility: 5 });
@@ -75,6 +80,7 @@ export function CharacterCreation() {
      defaultValues: {
        creationType: "basic", // Set initial type for resolver
        name: "",
+       class: "Adventurer", // Default class
        traits: "",
        knowledge: "",
        background: "",
@@ -165,6 +171,7 @@ const randomizeStats = useCallback(() => {
   const randomizeAll = useCallback(() => {
     // Basic examples, could be expanded with more options
     const randomNames = ["Anya", "Borin", "Carys", "Darian", "Elara", "Fendrel", "Gorok"];
+    const randomClasses = ["Warrior", "Rogue", "Mage", "Scout", "Scholar", "Wanderer", "Guard", "Tinkerer"]; // Added class options
     const randomTraitsPool = ["Brave", "Curious", "Cautious", "Impulsive", "Loyal", "Clever", "Resourceful", "Quiet"];
     const randomKnowledgePool = ["Herbalism", "Local Lore", "Survival", "Trading", "Ancient Runes", "Beasts", "Smithing"];
     const randomBackgrounds = ["Farmer", "Orphan", "Noble Exile", "Street Urchin", "Acolyte", "Guard", "Merchant's Child"];
@@ -183,9 +190,11 @@ const randomizeStats = useCallback(() => {
     setValue("name", name);
 
     if (creationType === 'basic') {
+        const charClass = randomClasses[Math.floor(Math.random() * randomClasses.length)]; // Randomize class
         const traits = randomTraitsPool.sort(() => 0.5 - Math.random()).slice(0, Math.floor(Math.random() * 3) + 1).join(', '); // 1-3 random traits
         const knowledge = randomKnowledgePool.sort(() => 0.5 - Math.random()).slice(0, Math.floor(Math.random() * 3) + 1).join(', '); // 1-3 random knowledge
         const background = randomBackgrounds[Math.floor(Math.random() * randomBackgrounds.length)];
+        setValue("class", charClass);
         setValue("traits", traits);
         setValue("knowledge", knowledge);
         setValue("background", background);
@@ -194,6 +203,7 @@ const randomizeStats = useCallback(() => {
          const description = randomDescriptions[Math.floor(Math.random() * randomDescriptions.length)];
          setValue("description", description);
          // Clear basic fields if switching to text
+         setValue("class", "Adventurer"); // Default class for text mode
          setValue("traits", "");
          setValue("knowledge", "");
          setValue("background", "");
@@ -257,6 +267,7 @@ const randomizeStats = useCallback(() => {
       characterData = {
         name: data.name,
         description: data.description, // User's short description
+        class: "Adventurer", // Default class for text-based, could be derived by AI later
         stats: stats,
         // AI description is handled separately by handleGenerateDescription and stored in context
          traits: [], // Explicitly empty for text-based, could be derived by AI later
@@ -267,10 +278,11 @@ const randomizeStats = useCallback(() => {
         const traitsArray = data.traits?.split(',').map(t => t.trim()).filter(Boolean) ?? [];
         const knowledgeArray = data.knowledge?.split(',').map(k => k.trim()).filter(Boolean) ?? [];
         // Combine basic fields into a simple description string
-        const basicDescription = `A ${data.background || 'person'} with traits like ${traitsArray.join(', ') || 'none'} and knowledge of ${knowledgeArray.join(', ') || 'nothing specific'}.`;
+        const basicDescription = `A ${data.class || 'Adventurer'} ${data.background ? `with a background as a ${data.background}` : ''}, possessing traits like ${traitsArray.join(', ') || 'none'} and knowledge of ${knowledgeArray.join(', ') || 'nothing specific'}.`;
 
         characterData = {
             name: data.name,
+            class: data.class?.trim() ?? "Adventurer", // Use provided class or default
             description: basicDescription, // Use the combined string as the base description
             traits: traitsArray,
             knowledge: knowledgeArray,
@@ -360,6 +372,21 @@ const randomizeStats = useCallback(() => {
                         {/* --- Basic Creation Content --- */}
                         <TabsContent value="basic" className="space-y-4 pt-4 border rounded-md p-4 mt-2 bg-card/50">
                              <h3 className="text-lg font-medium mb-3 border-b pb-2">Define Details</h3>
+                             {/* Class Input */}
+                             <div className="space-y-2">
+                                 <Label htmlFor="class" className="flex items-center gap-1">
+                                     <ShieldQuestion className="w-4 h-4 text-muted-foreground"/> Class
+                                 </Label>
+                                <Input
+                                    id="class"
+                                    {...register("class")}
+                                    placeholder="e.g., Warrior, Mage, Rogue"
+                                    className={errors.class ? 'border-destructive' : ''}
+                                    aria-invalid={errors.class ? "true" : "false"}
+                                />
+                                {errors.class && <p className="text-sm text-destructive mt-1">{errors.class.message}</p>}
+                             </div>
+                             {/* Traits Input */}
                              <div className="space-y-2">
                                 <Label htmlFor="traits">Traits (comma-separated, max 5)</Label>
                                 <Input
@@ -369,8 +396,9 @@ const randomizeStats = useCallback(() => {
                                     className={errors.traits ? 'border-destructive' : ''}
                                     aria-invalid={errors.traits ? "true" : "false"}
                                 />
-                                {errors.traits && <p className="text-sm text-destructive mt-1">{errors.traits.message}</p>}
+                                {errors.traits && <p className="text-sm text-destructive mt-1">{errors.traits.message as string}</p>}
                              </div>
+                             {/* Knowledge Input */}
                              <div className="space-y-2">
                                 <Label htmlFor="knowledge">Knowledge (comma-separated, max 5)</Label>
                                 <Input
@@ -380,8 +408,9 @@ const randomizeStats = useCallback(() => {
                                     className={errors.knowledge ? 'border-destructive' : ''}
                                      aria-invalid={errors.knowledge ? "true" : "false"}
                                  />
-                                {errors.knowledge && <p className="text-sm text-destructive mt-1">{errors.knowledge.message}</p>}
+                                {errors.knowledge && <p className="text-sm text-destructive mt-1">{errors.knowledge.message as string}</p>}
                              </div>
+                             {/* Background Input */}
                              <div className="space-y-2">
                                 <Label htmlFor="background">Background Story (brief)</Label>
                                 <Input
@@ -424,7 +453,7 @@ const randomizeStats = useCallback(() => {
                                             <Wand2 className="mr-2 h-4 w-4" />
                                             {isGenerating ? "Generating..." : "Ask AI for Detailed Profile"}
                                          </Button>
-                                    </TooltipTrigger>
+                                    </TooltipContent>
                                     <TooltipContent>
                                         <p>Let AI expand on your description for a richer character profile (optional, stored separately).</p>
                                         <p>Requires a name and description first.</p>

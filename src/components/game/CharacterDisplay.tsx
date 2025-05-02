@@ -4,7 +4,7 @@
 import { useGame } from "@/context/GameContext";
 import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons";
-import { User } from "lucide-react"; // Keep User icon
+import { User, ShieldQuestion } from "lucide-react"; // Import ShieldQuestion for Class
 import { Badge } from "@/components/ui/badge";
 
 export function CharacterDisplay() {
@@ -21,8 +21,13 @@ export function CharacterDisplay() {
         <CardTitle className="text-xl font-semibold flex items-center gap-2">
           <User className="w-5 h-5 text-primary"/> {character.name || "Unnamed Adventurer"}
         </CardTitle>
-         {/* Display background, traits, and knowledge using Badges */}
+         {/* Display class, background, traits, and knowledge using Badges */}
          <div className="flex flex-wrap gap-1 mt-2">
+             {character.class && (
+                 <Badge variant="default" className="text-xs bg-purple-200 dark:bg-purple-800/60 border-purple-400 dark:border-purple-600 text-purple-900 dark:text-purple-100 flex items-center gap-1">
+                     <ShieldQuestion className="w-3 h-3"/> {character.class}
+                 </Badge>
+             )}
             {character.background && (
               <Badge variant="secondary" className="text-xs">BG: {character.background}</Badge>
             )}

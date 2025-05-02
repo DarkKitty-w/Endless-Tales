@@ -1,0 +1,65 @@
+STAT_VALUE}.
+*   **Text-Based Creation:** Allows players to provide a free-text description of their character's appearance, personality, and backstory. An AI flow (`generateCharacterDescription`) can optionally expand this into a more detailed profile. The character starts with a default class (e.g., "Adventurer").
+*   **Stat Distribution:** Players allocate a fixed number of points (`TOTAL_STAT_POINTS`) across Strength, Stamina, and Agility. Each stat has a defined minimum (`MIN_STAT_VALUE`) and maximum (`MAX_STAT_VALUE`). The UI includes sliders and displays the remaining points, enforcing the total limit.
+*   **Randomization:** Players can randomize their stats or their entire character (name, class, traits, knowledge, background/description, and stats) based on predefined pools of options.
+
+**2. Adventure Setup (`src/components/screens/AdventureSetup.tsx`):**
+
+*   **Adventure Type Selection:** Players choose between:
+    *   **Randomized Adventure:** The default and currently implemented option. The AI generates a unique world, quests, and challenges based on the character.
+    *   **Custom Adventure:** Planned for future implementation, allowing players to define specific parameters.
+*   **Challenge Mode:** Players select either:
+    *   **Permanent Death:** The adventure ends permanently upon character death.
+    *   **Respawn Enabled:** (Not fully implemented) Allows the character to respawn at a checkpoint upon death.
+
+**3. Gameplay Loop (`src/components/screens/Gameplay.tsx`):**
+
+*   **Player Input:** Players enter text commands describing their desired actions.
+*   **AI Difficulty Assessment (`src/ai/flows/assess-action-difficulty.ts`):** Before processing the action, the AI evaluates its difficulty based on the character's capabilities (class, stats, traits, knowledge, inventory), the current situation (from the last narration), and the overall game state. It assigns a difficulty level (Trivial, Easy, Normal, Hard, Very Hard, Impossible) and suggests an appropriate dice type (d6, d10, d20, d100, or None). Impossible actions are blocked with a narrative explanation.
+*   **Dice Mechanic (`src/services/dice-roller.ts`):** If the action requires a roll (i.e., not Trivial or Impossible), the game simulates rolling the suggested die. The result influences the outcome.
+*   **AI Narration (`src/ai/flows/narrate-adventure.ts`):** The core AI flow takes the player's action (including difficulty and dice roll results), the character's details, the previous narration, and the current game state string. It generates the next part of the story, describing the outcome.
+    *   **Logical Progression & Restrictions:** The AI enforces logical constraints, preventing impossible actions or actions requiring unearned skills/milestones (like ruling a kingdom instantly). It explains failures narratively.
+    *   **Consequences & Progression:** The AI's narration updates the `currentGameStateString` (reflecting changes in location, inventory, time, status, quest progress, milestones). It can also optionally return updates to the character's stats, traits, knowledge, or even class if the narrative logically leads to such development.
+    *   **Inventory Updates:** If the action results in inventory changes, the AI returns a complete list of the character's *current* inventory item names in the `updatedInventory` field.
+*   **State Update (`src/context/GameContext.tsx`):** The `dispatch` function updates the game state with the new narration, the updated game state string, and any character progression or inventory changes returned by the AI.
+*   **Inventory Image Generation:** When the inventory changes, the system attempts to generate placeholder images (using Picsum) for any new items or items missing images.
+*   **End Game Check:** The game checks the narration and game state for end conditions (death, victory). If an end condition is met, it triggers the adventure summary flow.
+
+**4. Adventure End and Saving (`src/components/screens/AdventureSummary.tsx`, `src/context/GameContext.tsx`):**
+
+*   **End Trigger:** Initiated manually by the player or automatically when the AI narration indicates the adventure's end (death, victory, etc.).
+*   **AI Summary Generation (`src/ai/flows/summarize-adventure.ts`):** The `handleEndAdventure` function gathers the full `storyLog` and sends it to the AI to generate a concise summary.
+*   **Summary Screen Display:** Shows the AI-generated summary and provides an accordion to view the detailed `storyLog` turn by turn.
+*   **Automatic Saving:** When an adventure ends (or is manually saved), the complete game state (character details, settings, full story log, final game state string, final inventory, summary) is saved as a `SavedAdventure` object using the `currentAdventureId`. This save includes the status (`AdventureSummary` or `Gameplay`) at the time of saving. Saves are persisted in the browser's `localStorage`.
+
+**5. Saving and Loading (`src/components/screens/SavedAdventuresList.tsx`, `src/context/GameContext.tsx`):**
+
+*   **Save Button:** Available during gameplay to manually save the current state.
+*   **View Saved Adventures:** Accessible from the main menu (`MainMenu` -> `ViewSavedAdventures`). Displays a list of saved games, sorted by save time.
+*   **Loading:** Selecting a saved game restores the game state (character, log, inventory, etc.) to the point it was saved. If the save was made during gameplay, it resumes in the `Gameplay` screen. If the save represents a completed adventure, it loads into the `AdventureSummary` screen.
+*   **Deleting:** Players can delete saved adventures.
+
+**6. Replayability:**
+
+*   **Randomization:** Randomized adventure types and character creation options ensure varied starting points.
+*   **Branching Narratives:** The AI's dynamic narration based on player choices leads to different story paths and outcomes.
+*   **Restarting:** Players can easily start new adventures from the main menu or after completing one.
+
+**Visual Elements & UI (`src/components/game`, `src/components/ui`, `src/app/globals.css`):**
+
+*   **Cardboard Aesthetic:** Achieved through CSS variables defining neutral grays, earth tones, and a burnt orange accent. Components like `CardboardCard` provide a consistent visual style.
+*   **Character Display (`CharacterDisplay.tsx`):** A persistent card showing the character's name, class, stats (with icons), traits, knowledge, background, and a snippet of their description.
+*   **Inventory Display (`InventoryDisplay.tsx`):** Shows items in a grid within a scrollable card. Includes item names and attempts to display generated images with tooltips for details. Accessible via a button/sheet component on both desktop and mobile.
+*   **Story Log:** Displayed in a scrollable area during gameplay, showing each narration entry.
+*   **Input:** A text input field and send button for player commands. Includes a "Suggest Action" button.
+*   **Component Library:** Uses ShadCN UI components (Button, Input, Slider, Tabs, ScrollArea, Dialog, Sheet, etc.) styled to match the cardboard theme.
+*   **Responsiveness:** The layout adapts for different screen sizes, with dedicated mobile views for inventory and action buttons.
+
+**Technical Details:**
+
+*   **State Management:** `GameContext` and `useReducer` handle the application's state.
+*   **AI Integration:** Genkit flows (`src/ai/flows`) define the interactions with the AI model, using Zod for input/output schema validation.
+*   **Persistence:** `localStorage` is used to store and retrieve saved adventure data.
+*   **Error Handling:** Basic error handling is implemented for AI calls and state updates, often providing feedback via toasts. Fallbacks are used where appropriate (e.g., default difficulty if AI assessment fails).
+
+This detailed breakdown covers the primary features, mechanics, and technical implementation of the "Endless Tales" application.
