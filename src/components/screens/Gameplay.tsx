@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/sheet";
 import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay"; // Import SkillTreeDisplay
 import { Skeleton } from "../ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Import Tabs
 
 // Helper function to map difficulty dice string to roller function
 const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null => {
@@ -576,38 +577,33 @@ export function Gameplay() {
         <div className="hidden md:flex flex-col w-80 lg:w-96 p-4 border-r border-foreground/10 overflow-y-auto bg-card/50 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
              <CharacterDisplay />
 
+             {/* Tabs for Inventory and Skill Tree */}
+             <Tabs defaultValue="inventory" className="flex-grow flex flex-col mt-4">
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="inventory"><Backpack className="mr-1 h-4 w-4"/> Inventory</TabsTrigger>
+                    <TabsTrigger value="skills" disabled={isGeneratingSkillTree || !character.skillTree}>
+                        {isGeneratingSkillTree ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Workflow className="mr-1 h-4 w-4"/>} Skills
+                    </TabsTrigger>
+                </TabsList>
+                <TabsContent value="inventory" className="flex-grow overflow-hidden mt-2">
+                     <InventoryDisplay />
+                </TabsContent>
+                <TabsContent value="skills" className="flex-grow overflow-hidden mt-2">
+                     {character.skillTree ? (
+                        <SkillTreeDisplay skillTree={character.skillTree} currentStage={character.skillTreeStage} />
+                     ) : isGeneratingSkillTree ? (
+                        <div className="flex items-center justify-center h-full text-muted-foreground">
+                             <Loader2 className="mr-2 h-4 w-4 animate-spin"/> Loading Skills...
+                        </div>
+                     ) : (
+                        <p className="p-4 text-muted-foreground italic text-center">No skill tree available.</p>
+                     )}
+                </TabsContent>
+            </Tabs>
+
+
              {/* Actions at the bottom */}
              <div className="mt-auto space-y-2 pt-4 sticky bottom-0 bg-card/50 pb-4">
-                 {/* Inventory Trigger */}
-                 <Sheet>
-                     <SheetTrigger asChild>
-                         <Button variant="outline" className="w-full" disabled={isLoading || isGeneratingInventoryImages}>
-                             <Backpack className="mr-2 h-4 w-4" /> View Inventory
-                         </Button>
-                     </SheetTrigger>
-                     <SheetContent side="left" className="w-full sm:w-96 p-0 flex flex-col">
-                         <SheetHeader className="p-4 border-b"> <SheetTitle>Inventory</SheetTitle> <SheetDescription> Items carried by {character.name}. </SheetDescription> </SheetHeader>
-                         <div className="flex-grow overflow-hidden"> <InventoryDisplay /> </div>
-                     </SheetContent>
-                 </Sheet>
-
-                  {/* Skill Tree Trigger */}
-                  <Sheet>
-                     <SheetTrigger asChild>
-                         <Button variant="outline" className="w-full" disabled={isLoading || isGeneratingSkillTree || !character.skillTree}>
-                              {isGeneratingSkillTree ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Workflow className="mr-2 h-4 w-4" />}
-                              {isGeneratingSkillTree ? "Generating..." : "View Skill Tree"}
-                         </Button>
-                     </SheetTrigger>
-                     <SheetContent side="left" className="w-full sm:w-96 p-0 flex flex-col">
-                         <SheetHeader className="p-4 border-b"> <SheetTitle>Skill Tree: {character.skillTree?.className || character.class}</SheetTitle> <SheetDescription> Current Stage: {character.skillTreeStage} / 4 </SheetDescription> </SheetHeader>
-                         <div className="flex-grow overflow-hidden">
-                            {character.skillTree ? <SkillTreeDisplay skillTree={character.skillTree} currentStage={character.skillTreeStage} /> : <p className="p-4 text-muted-foreground italic">No skill tree available.</p>}
-                         </div>
-                     </SheetContent>
-                  </Sheet>
-
-
                  <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
                       {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" /> } {isSaving ? "Saving..." : "Save Game"}
                  </Button>
@@ -706,7 +702,18 @@ export function Gameplay() {
                            <ArrowLeft className="mr-2 h-4 w-4" /> Abandon
                         </Button>
                      </AlertDialogTrigger>
-                     <AlertDialogContent> <AlertDialogHeader> <AlertDialogTitle>Are you sure?</AlertDialogTitle> <AlertDialogDescription> Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu. </AlertDialogDescription> </AlertDialogHeader> <AlertDialogFooter> <AlertDialogCancel>Cancel</AlertDialogCancel> <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction> </AlertDialogFooter> </AlertDialogContent>
+                     <AlertDialogContent>
+                         <AlertDialogHeader>
+                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                             <AlertDialogDescription>
+                                Abandoning the adventure will end your current progress (any unsaved changes will be lost) and return you to the main menu.
+                             </AlertDialogDescription>
+                         </AlertDialogHeader>
+                         <AlertDialogFooter>
+                             <AlertDialogCancel>Cancel</AlertDialogCancel>
+                             <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction>
+                         </AlertDialogFooter>
+                     </AlertDialogContent>
                  </AlertDialog>
                  <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
                     {isEnding ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BookCopy className="mr-2 h-4 w-4" /> } {isEnding ? "Summarizing..." : "End Adventure"}
@@ -734,5 +741,3 @@ export function Gameplay() {
     </div>
   );
 }
-
-    
