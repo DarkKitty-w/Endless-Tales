@@ -18,8 +18,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { FolderClock, ArrowLeft, Trash2, Play, Info, BookOpenText, Package, ShieldQuestion } from "lucide-react"; // Added Package, ShieldQuestion icons
-import { formatDistanceToNow } from 'date-fns'; // For displaying relative time
+import { FolderClock, ArrowLeft, Trash2, Play, Info, BookOpenText, Package, ShieldQuestion, Star } from "lucide-react"; // Added Star
+import { formatDistanceToNow } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 
 export function SavedAdventuresList() {
@@ -29,7 +29,6 @@ export function SavedAdventuresList() {
 
   const handleLoad = (id: string) => {
     dispatch({ type: "LOAD_ADVENTURE", payload: id });
-    // The reducer will set the status to Gameplay or AdventureSummary
     toast({ title: "Loading Adventure...", description: "Resuming your journey." });
   };
 
@@ -68,10 +67,16 @@ export function SavedAdventuresList() {
                   <CardboardCard key={adventure.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-card/60 border border-foreground/10">
                     <div className="flex-1 min-w-0">
                       <p className="text-lg font-semibold truncate" title={adventure.characterName}>{adventure.characterName}</p>
-                      <p className="text-sm text-muted-foreground flex items-center gap-1">
-                        <ShieldQuestion className="w-3 h-3"/> {adventure.character?.class || 'Unknown Class'}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
+                      {/* Display Class and Skill Stage */}
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                            <div className="flex items-center gap-1">
+                                <ShieldQuestion className="w-3 h-3"/> {adventure.character?.class || 'Unknown Class'}
+                            </div>
+                            <div className="flex items-center gap-0.5" title={`Skill Stage ${adventure.character?.skillTreeStage ?? 0}`}>
+                                <Star className="w-3 h-3"/> {adventure.character?.skillTreeStage ?? 0}/4
+                            </div>
+                      </div>
+                       <p className="text-sm text-muted-foreground">
                         {adventure.statusBeforeSave === 'AdventureSummary' ? 'Finished' : 'In Progress'} - Saved {formatDistanceToNow(new Date(adventure.saveTimestamp), { addSuffix: true })}
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">

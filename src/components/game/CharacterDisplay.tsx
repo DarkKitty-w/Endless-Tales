@@ -4,8 +4,9 @@
 import { useGame } from "@/context/GameContext";
 import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons";
-import { User, ShieldQuestion } from "lucide-react"; // Import ShieldQuestion for Class
+import { User, ShieldQuestion, Star } from "lucide-react"; // Added Star for skill stage
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator"; // Import Separator
 
 export function CharacterDisplay() {
   const { state } = useGame();
@@ -14,6 +15,21 @@ export function CharacterDisplay() {
   if (!character) {
     return null; // Don't display if no character exists
   }
+
+  // Helper to render stars based on stage
+  const renderStageStars = (stage: number) => {
+    const stars = [];
+    for (let i = 0; i < 4; i++) {
+      stars.push(
+        <Star
+          key={i}
+          className={`w-3 h-3 ${i < stage ? 'fill-yellow-400 text-yellow-500' : 'text-muted-foreground/50'}`}
+        />
+      );
+    }
+    return stars;
+  };
+
 
   return (
     <CardboardCard className="mb-4 sticky top-4 bg-card/90 backdrop-blur-sm z-10 border-2 border-foreground/20">
@@ -44,7 +60,7 @@ export function CharacterDisplay() {
       </CardHeader>
       <CardContent className="pt-4 pb-4">
         {/* Stats Display */}
-        <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="grid grid-cols-3 gap-2 text-center mb-4">
           <div className="flex flex-col items-center">
             <HandDrawnStrengthIcon className="w-6 h-6 mb-1 text-destructive" />
             <span className="text-sm font-medium">STR</span>
@@ -62,18 +78,48 @@ export function CharacterDisplay() {
           </div>
         </div>
 
-         {/* Optional: Display a snippet of the AI description if available */}
-         {character.aiGeneratedDescription && (
-             <p className="text-xs text-muted-foreground mt-3 italic line-clamp-3 border-t border-foreground/10 pt-2">
-                 <strong>AI Profile:</strong> {character.aiGeneratedDescription}
-             </p>
-          )}
-           {/* Display base description if no AI one exists */}
-          {!character.aiGeneratedDescription && character.description && (
-               <p className="text-xs text-muted-foreground mt-3 italic line-clamp-3 border-t border-foreground/10 pt-2">
-                  <strong>Description:</strong> {character.description}
-               </p>
-          )}
+        {/* Skill Tree Stage Display */}
+        {character.skillTree && (
+             <div className="mt-3 pt-3 border-t border-foreground/10">
+                 <p className="text-sm font-medium text-center mb-1">Skill Progression</p>
+                 <div className="flex justify-center items-center gap-1">
+                    {renderStageStars(character.skillTreeStage)}
+                 </div>
+                 <p className="text-xs text-muted-foreground text-center mt-1">
+                     Stage {character.skillTreeStage} / 4 ({character.skillTree.className} Tree)
+                 </p>
+                 {/* Optionally list skills for the current stage */}
+                 {character.skillTreeStage > 0 && character.skillTree.stages[character.skillTreeStage - 1]?.skills.length > 0 && (
+                    <div className="mt-2 text-center">
+                        <p className="text-xs font-semibold">Stage {character.skillTreeStage} Skills:</p>
+                        <div className="flex flex-wrap justify-center gap-1 mt-1">
+                         {character.skillTree.stages[character.skillTreeStage - 1].skills.map(skill => (
+                            <Badge key={skill.name} variant="secondary" className="text-xs">{skill.name}</Badge>
+                         ))}
+                        </div>
+                    </div>
+                 )}
+             </div>
+         )}
+
+         {/* Separator before Description */}
+         <Separator className="my-3"/>
+
+         {/* Description Display */}
+         <div className="text-xs text-muted-foreground italic">
+             {character.aiGeneratedDescription ? (
+                 <>
+                     <strong>AI Profile:</strong> {character.aiGeneratedDescription.length > 150 ? character.aiGeneratedDescription.substring(0, 150) + "..." : character.aiGeneratedDescription}
+                 </>
+             ) : character.description ? (
+                 <>
+                     <strong>Description:</strong> {character.description.length > 150 ? character.description.substring(0, 150) + "..." : character.description}
+                 </>
+             ) : (
+                 "No description available."
+             )}
+         </div>
+
       </CardContent>
     </CardboardCard>
   );
