@@ -453,7 +453,7 @@ const randomizeStats = useCallback(() => {
                                             <Wand2 className="mr-2 h-4 w-4" />
                                             {isGenerating ? "Generating..." : "Ask AI for Detailed Profile"}
                                          </Button>
-                                    </TooltipContent>
+                                    </TooltipTrigger>
                                     <TooltipContent>
                                         <p>Let AI expand on your description for a richer character profile (optional, stored separately).</p>
                                         <p>Requires a name and description first.</p>

@@ -8,7 +8,6 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"; // Added ScrollBar
 import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
 import { CharacterDisplay } from "@/components/game/CharacterDisplay";
-// import { WorldMapDisplay } from "@/components/game/WorldMapDisplay"; // Removed map import
 import { InventoryDisplay } from "@/components/game/InventoryDisplay"; // Import InventoryDisplay
 import { narrateAdventure } from "@/ai/flows/narrate-adventure";
 import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
@@ -82,17 +81,12 @@ export function Gameplay() {
   const [isRollingDice, setIsRollingDice] = useState(false);
   const [diceResult, setDiceResult] = useState<number | null>(null);
   const [diceType, setDiceType] = useState<string>("None"); // Track which die was rolled (string like "d10", "d100", "None")
-  // const scrollAreaViewportRef = useRef<HTMLDivElement>(null); // Ref for the ScrollArea viewport - Removed, use scrollEndRef
   const scrollEndRef = useRef<HTMLDivElement>(null); // Ref for an element at the bottom
   const [isGeneratingInventoryImages, setIsGeneratingInventoryImages] = useState(false);
 
   // Function to scroll to bottom
   const scrollToBottom = useCallback(() => {
      scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-     // Alternative: direct manipulation if ref is on ScrollArea's viewport
-     // if (scrollAreaViewportRef.current) {
-     //    scrollAreaViewportRef.current.scrollTop = scrollAreaViewportRef.current.scrollHeight;
-     // }
   }, []);
 
    // --- Handle Inventory Image Generation ---
@@ -150,7 +144,6 @@ export function Gameplay() {
            });
 
            console.log("Finished generating inventory images.");
-          // toast({ title: "Item Images Loaded", duration: 1500 });
 
        } catch (error) {
            console.error("Error generating inventory images:", error);
@@ -587,8 +580,6 @@ export function Gameplay() {
         {/* Left Panel (Character) - Fixed width */}
         <div className="hidden md:flex flex-col w-80 lg:w-96 p-4 border-r border-foreground/10 overflow-y-auto bg-card/50 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
              <CharacterDisplay />
-             {/* <WorldMapDisplay /> */}
-             {/* No inventory display here on desktop, it's in the sheet/modal */}
 
              {/* Actions at the bottom */}
              <div className="mt-auto space-y-2 pt-4 sticky bottom-0 bg-card/50 pb-4"> {/* Make actions sticky */}
@@ -628,7 +619,7 @@ export function Gameplay() {
                       <AlertDialogDescription>
                         Abandoning the adventure will end your current progress (any unsaved changes will be lost) and return you to the main menu.
                       </AlertDialogDescription>
-                    </AlertDialogFooter>
+                    </AlertDialogHeader> {/* Corrected closing tag position */}
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
                       <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction>
