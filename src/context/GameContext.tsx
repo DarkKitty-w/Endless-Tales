@@ -75,7 +75,7 @@ export interface AdventureSettings {
 export interface InventoryItem {
     name: string;
     description?: string;
-    imageDataUri?: string;
+    // imageDataUri removed
 }
 
 export interface StoryLogEntry {
@@ -104,7 +104,7 @@ export interface SavedAdventure {
     adventureSettings: AdventureSettings; // Includes custom settings if applicable
     storyLog: StoryLogEntry[];
     currentGameStateString: string;
-    inventory: InventoryItem[];
+    inventory: InventoryItem[]; // Removed imageDataUri
     statusBeforeSave?: GameStatus;
     adventureSummary?: string | null;
 }
@@ -118,7 +118,7 @@ export interface GameState {
   storyLog: StoryLogEntry[];
   adventureSummary: string | null;
   currentGameStateString: string;
-  inventory: InventoryItem[];
+  inventory: InventoryItem[]; // Removed imageDataUri
   savedAdventures: SavedAdventure[];
   currentAdventureId: string | null;
   isGeneratingSkillTree: boolean; // Track skill tree generation
@@ -249,54 +249,16 @@ function generateAdventureId(): string {
     return `adv_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
-// Placeholder for AI-generated image URI
-async function generatePlaceholderImageUri(itemName: string): Promise<string> {
-    let hash = 0;
-    for (let i = 0; i < itemName.length; i++) {
-        hash = itemName.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const width = 200 + (Math.abs(hash) % 101);
-    const height = 200 + (Math.abs(hash >> 16) % 101);
-    return `https://picsum.photos/${width}/${height}?random=${encodeURIComponent(itemName)}&t=${Date.now()}`;
-}
+// Placeholder image generation removed
+
 
 // --- Reducer ---
-let isGeneratingImages = false;
 
-// Async inventory update logic (remains the same)
-async function handleInventoryUpdate(currentState: GameState, updatedItemNames: string[]): Promise<Partial<GameState>> {
-    if (isGeneratingImages) {
-        console.log("Image generation already in progress, skipping.");
-        return {};
-    }
-    const currentInventoryMap = new Map(currentState.inventory.map(item => [item.name, item]));
-    const itemsToGenerate: string[] = [];
-    const finalInventoryItems: InventoryItem[] = [];
-    for (const name of updatedItemNames) {
-        const existingItem = currentInventoryMap.get(name);
-        if (existingItem) {
-            finalInventoryItems.push(existingItem);
-            if (!existingItem.imageDataUri) itemsToGenerate.push(name);
-        } else {
-            finalInventoryItems.push({ name });
-            itemsToGenerate.push(name);
-        }
-    }
-    if (itemsToGenerate.length === 0) return { inventory: finalInventoryItems };
-    isGeneratingImages = true;
-    console.log("Generating images for items:", itemsToGenerate);
-    try {
-        const generationPromises = itemsToGenerate.map(name => generatePlaceholderImageUri(name).then(uri => ({ name, imageDataUri: uri })));
-        const generatedItems = await Promise.all(generationPromises);
-        const generatedMap = new Map(generatedItems.map(item => [item.name, item.imageDataUri]));
-        const inventoryWithImages = finalInventoryItems.map(item => generatedMap.get(item.name) ? { ...item, imageDataUri: generatedMap.get(item.name) } : item);
-        isGeneratingImages = false;
-        return { inventory: inventoryWithImages };
-    } catch (error) {
-        console.error("Error generating item images:", error);
-        isGeneratingImages = false;
-        return { inventory: finalInventoryItems };
-    }
+// Inventory update logic simplified, no async image generation
+function handleInventoryUpdate(currentState: GameState, updatedItemNames: string[]): InventoryItem[] {
+    // Create new inventory based only on names provided by AI
+    // Potential improvement: AI could provide name & description
+    return updatedItemNames.map(name => ({ name }));
 }
 
 
@@ -465,13 +427,11 @@ function gameReducer(state: GameState, action: Action): GameState {
             console.log("Character updated via narration:", { stats: newLogEntry.updatedStats, traits: newLogEntry.updatedTraits, knowledge: newLogEntry.updatedKnowledge, staminaChange, manaChange, gainedSkill: newLogEntry.gainedSkill?.name });
         }
 
+        // Handle inventory update synchronously now
         if (action.payload.updatedInventory) {
             const itemNames = action.payload.updatedInventory;
-            handleInventoryUpdate(state, itemNames).then(inventoryUpdate => {
-                 console.log("Async inventory update result (may not be immediate):", inventoryUpdate);
-            });
-             inventoryAfterNarration = itemNames.map(name => state.inventory.find(item => item.name === name) ?? { name });
-             console.log("Inventory names updated based on narration payload.");
+            inventoryAfterNarration = handleInventoryUpdate(state, itemNames);
+            console.log("Inventory updated based on narration payload:", inventoryAfterNarration.map(i => i.name));
         }
 
         return {
@@ -616,7 +576,7 @@ function gameReducer(state: GameState, action: Action): GameState {
                }))
            } : null,
            skillTreeStage: adventureToLoad.character?.skillTreeStage ?? 0,
-           learnedSkills: adventureToLoad.character?.learnedSkills ?? getStarterSkillsForClass(adventureToLoad.character?.class || "Adventurer"), // Provide default starter skills if missing
+           learnedSkills: adventureToLoad.character?.learnedSkills ?? getStarterSkillsForClass(adventureToLoad.character?.class || "Adventurer"), // Provide default starter skills if missing on load
            aiGeneratedDescription: adventureToLoad.character?.aiGeneratedDescription ?? undefined,
        };
 
@@ -783,40 +743,74 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
                 if (Array.isArray(loadedAdventures)) {
                      const validatedAdventures = loadedAdventures.map(adv => {
                          const validatedChar = {
-                             ...initialCharacterState,
-                             ...(adv.character || {}),
+                             ...initialCharacterState, // Start with defaults
+                             ...(adv.character || {}), // Load saved data
+                             // Ensure critical fields have defaults if missing from save
+                             name: adv.character?.name || "",
+                             description: adv.character?.description || "",
+                             class: adv.character?.class || "Adventurer",
+                             traits: adv.character?.traits || [],
+                             knowledge: adv.character?.knowledge || [],
+                             background: adv.character?.background || "",
                              stats: adv.character?.stats ? { ...initialCharacterState.stats, ...adv.character.stats } : initialCharacterState.stats,
                              maxStamina: adv.character?.maxStamina ?? calculateMaxStamina(adv.character?.stats ?? initialCharacterState.stats),
                              currentStamina: adv.character?.currentStamina ?? (adv.character?.maxStamina ?? calculateMaxStamina(adv.character?.stats ?? initialCharacterState.stats)),
                              maxMana: adv.character?.maxMana ?? calculateMaxMana(adv.character?.stats ?? initialCharacterState.stats, adv.character?.knowledge ?? []),
                              currentMana: adv.character?.currentMana ?? (adv.character?.maxMana ?? calculateMaxMana(adv.character?.stats ?? initialCharacterState.stats, adv.character?.knowledge ?? [])),
-                             skillTree: adv.character?.skillTree ? {
+                             skillTree: adv.character?.skillTree ? { // Validate skill tree structure
                                  ...adv.character.skillTree,
-                                 stages: (adv.character.skillTree.stages || []).map((stage, index) => ({
-                                     ...stage,
-                                     stageName: stage.stageName || `Stage ${stage.stage ?? index}`
-                                 }))
+                                 className: adv.character.skillTree.className || adv.character.class || "Adventurer", // Default class name
+                                 stages: (adv.character.skillTree.stages || []).map((stage, index) => ({ // Validate stages
+                                     stage: stage.stage ?? index, // Default stage number
+                                     stageName: stage.stageName || `Stage ${stage.stage ?? index}`, // Default stage name
+                                     skills: (stage.skills || []).map(skill => ({ // Validate skills
+                                        name: skill.name || "Unknown Skill",
+                                        description: skill.description || "",
+                                        type: skill.type || 'Learned',
+                                        manaCost: skill.manaCost,
+                                        staminaCost: skill.staminaCost,
+                                     })),
+                                 })).slice(0, 5) // Ensure max 5 stages
                              } : null,
                              skillTreeStage: adv.character?.skillTreeStage ?? 0,
-                             learnedSkills: adv.character?.learnedSkills ?? getStarterSkillsForClass(adv.character?.class || "Adventurer"), // Default starter skills if missing on load
+                             learnedSkills: (adv.character?.learnedSkills && adv.character.learnedSkills.length > 0) // Validate learned skills
+                                ? adv.character.learnedSkills.map(skill => ({
+                                     name: skill.name || "Unknown Skill",
+                                     description: skill.description || "",
+                                     type: skill.type || 'Learned',
+                                     manaCost: skill.manaCost,
+                                     staminaCost: skill.staminaCost,
+                                  }))
+                                : getStarterSkillsForClass(adv.character?.class || "Adventurer"), // Provide default starter skills if missing
                              aiGeneratedDescription: adv.character?.aiGeneratedDescription ?? undefined,
                          };
 
                          return {
                            ...adv,
+                           id: adv.id || generateAdventureId(), // Ensure ID exists
+                           saveTimestamp: adv.saveTimestamp || Date.now(),
+                           characterName: validatedChar.name || "Unnamed Adventurer",
                            character: validatedChar,
                            adventureSettings: { // Ensure defaults for potentially missing custom settings
                                ...initialState.adventureSettings,
                                ...(adv.adventureSettings || {})
-                           }
+                           },
+                           storyLog: adv.storyLog || [],
+                           currentGameStateString: adv.currentGameStateString || "",
+                           inventory: (adv.inventory || []).map(item => ({ // Validate inventory
+                               name: item.name || "Unknown Item",
+                               description: item.description,
+                           })),
+                           statusBeforeSave: adv.statusBeforeSave || "Gameplay",
+                           adventureSummary: adv.adventureSummary || null,
                          };
-                     }).filter(adv => adv.id && adv.characterName && adv.saveTimestamp && adv.character);
+                     }).filter(adv => adv.character.name); // Ensure character has a name after validation
 
 
                     dispatch({ type: "LOAD_SAVED_ADVENTURES", payload: validatedAdventures });
                     console.log(`Loaded ${validatedAdventures.length} valid adventures from storage.`);
                     if (validatedAdventures.length !== loadedAdventures.length) {
-                         console.warn("Some saved adventure data was invalid or missing character data and discarded.");
+                         console.warn("Some saved adventure data was invalid or missing critical data and discarded.");
                          localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(validatedAdventures));
                     }
                 } else {
@@ -867,4 +861,3 @@ export const useGame = () => {
   }
   return context;
 };
-
