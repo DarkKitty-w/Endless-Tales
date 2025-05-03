@@ -59,9 +59,7 @@ export function CharacterDisplay() {
              {character.knowledge.length > 0 && character.knowledge.map((k, index) => (
                 <Badge key={`knowledge-${index}`} variant="outline" className="text-xs bg-blue-100 dark:bg-blue-900/50 border-blue-300 dark:border-blue-700">{k}</Badge>
             ))}
-             {character.traits.length === 0 && character.knowledge.length === 0 && !character.background && (
-                 <Badge variant="outline" className="text-xs italic">No details provided</Badge>
-             )}
+            {/* Removed the "No details provided" badge - handled by the description section */}
          </div>
       </CardHeader>
       <CardContent className="pt-4 pb-4">
@@ -118,11 +116,11 @@ export function CharacterDisplay() {
          <div className="text-xs text-muted-foreground italic">
              {character.aiGeneratedDescription ? (
                  <>
-                     <strong>AI Profile:</strong> {character.aiGeneratedDescription.length > 150 ? character.aiGeneratedDescription.substring(0, 150) + "..." : character.aiGeneratedDescription}
+                     <strong className="not-italic text-foreground/80">AI Profile:</strong> {character.aiGeneratedDescription.length > 150 ? character.aiGeneratedDescription.substring(0, 150) + "..." : character.aiGeneratedDescription}
                  </>
              ) : character.description ? (
                  <>
-                     <strong>Description:</strong> {character.description.length > 150 ? character.description.substring(0, 150) + "..." : character.description}
+                     <strong className="not-italic text-foreground/80">Description:</strong> {character.description.length > 150 ? character.description.substring(0, 150) + "..." : character.description}
                  </>
              ) : (
                  "No description available."
