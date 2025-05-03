@@ -4,7 +4,7 @@
 import type { ReactNode } from "react";
 import React, { createContext, useContext, useReducer, Dispatch, useEffect } from "react";
 import type { GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
-import { calculateXpToNextLevel } from "@/lib/utils"; // Import from lib/gameUtils
+import { calculateXpToNextLevel } from "@/lib/utils"; // Import from lib/utils
 
 export type GameStatus =
   | "MainMenu"
@@ -1165,7 +1165,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
           ? state.character.skillTree.stages[state.character.skillTreeStage]?.stageName ?? `Stage ${state.character.skillTreeStage}`
           : "Stage 0";
       const reputationString = state.character ? Object.entries(state.character.reputation).map(([f, s]) => `${f}: ${s}`).join(', ') || 'None' : 'N/A';
-      const relationshipString = state.character ? Object.entries(state.character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'N/A' : 'N/A'; // Log relationships
+      const relationshipString = state.character ? Object.entries(state.character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'None' : 'N/A'; // Log relationships
       const inventoryString = state.inventory.map(i => `${i.name}${i.quality ? ` (${i.quality})` : ''}`).join(', ') || 'Empty';
      console.log("Game State Updated:", {
         status: state.status,

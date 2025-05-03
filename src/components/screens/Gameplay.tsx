@@ -2,7 +2,8 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useGame, type InventoryItem, type StoryLogEntry, type SkillTree, type Skill, type Character, type Reputation, type NpcRelationships, calculateXpToNextLevel } from "@/context/GameContext"; // Added NpcRelationships
+import { useGame, type InventoryItem, type StoryLogEntry, type SkillTree, type Skill, type Character, type Reputation, type NpcRelationships } from "@/context/GameContext"; // Added NpcRelationships
+import { calculateXpToNextLevel } from "@/lib/utils"; // Import from lib/utils
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -774,11 +775,11 @@ export function Gameplay() {
     };
 
    // Helper function to render NPC relationship list
-    const renderNpcRelationships = (NpcRelationships | undefined) => {
-        if (!NpcRelationships) {
+    const renderNpcRelationships = (relationships: NpcRelationships | undefined) => {
+        if (!relationships) {
             return <p className="text-xs text-muted-foreground italic">No known relationships.</p>;
         }
-        const entries = Object.entries(NpcRelationships);
+        const entries = Object.entries(relationships);
         if (entries.length === 0) {
             return <p className="text-xs text-muted-foreground italic">No known relationships.</p>;
         }
@@ -913,19 +914,15 @@ export function Gameplay() {
              {/* Tabs for Inventory and Skill Tree */}
              <Tabs defaultValue="inventory" className="w-full flex flex-col flex-grow min-h-0"> {/* Adjust Tabs structure */}
                 <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
-
-                     {/* Desktop Inventory Tab */}
                     <TabsTrigger value="inventory" className="flex items-center gap-1">
                         <Backpack className="h-4 w-4"/> Inventory
                     </TabsTrigger>
-
-                      {/* Desktop Skill Tree Tab */}
-                     <TabsTrigger value="skills" disabled={isGeneratingSkillTree} className="flex items-center gap-1">
+                    <TabsTrigger value="skills" disabled={isGeneratingSkillTree} className="flex items-center gap-1">
                         <Workflow className="h-4 w-4"/>
                         {isGeneratingSkillTree ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Skills
                     </TabsTrigger>
-
                 </TabsList>
+
                 {/* Desktop Tab Content */}
                 <TabsContent value="inventory" className="flex-grow overflow-hidden">
                      <InventoryDisplay />
@@ -952,7 +949,6 @@ export function Gameplay() {
                      )}
                 </TabsContent>
              </Tabs>
-
         </div>
 
         {/* Right Panel (Game Log & Input) - Flexible width */}
@@ -998,43 +994,44 @@ export function Gameplay() {
 
                    {/* Combined Inventory/Skills Sheet Trigger */}
                    <Sheet>
-                        <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                                <Backpack className="h-5 w-5" />
-                                <span className="sr-only">Inventory & Skills</span>
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
-                             <SheetHeader className="p-4 border-b">
-                                 <SheetTitle>Inventory & Skills</SheetTitle>
-                             </SheetHeader>
-                             <Tabs defaultValue="inventory" className="w-full flex-grow flex flex-col min-h-0">
-                                 <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
-                                     <TabsTrigger value="inventory">Inventory</TabsTrigger>
-                                     <TabsTrigger value="skills" disabled={isGeneratingSkillTree}>
-                                         {isGeneratingSkillTree ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Skills
-                                     </TabsTrigger>
-                                 </TabsList>
-                                 <TabsContent value="inventory" className="flex-grow overflow-hidden">
-                                     <InventoryDisplay />
-                                 </TabsContent>
-                                 <TabsContent value="skills" className="flex-grow overflow-hidden">
-                                     {character.skillTree && !isGeneratingSkillTree ? (
-                                         <SkillTreeDisplay
-                                             skillTree={character.skillTree}
-                                             currentStage={character.skillTreeStage}
-                                             learnedSkills={character.learnedSkills}
-                                         />
-                                     ) : (
-                                         <div className="p-4 text-center text-muted-foreground flex flex-col items-center justify-center h-full">
-                                              {isGeneratingSkillTree ? <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" /> : null}
-                                             {isGeneratingSkillTree ? "Generating skill tree..." : "No skill tree available."}
-                                         </div>
-                                     )}
-                                 </TabsContent>
-                             </Tabs>
-                         </SheetContent>
+                       <SheetTrigger asChild>
+                           <Button variant="ghost" size="icon">
+                               <Backpack className="h-5 w-5" />
+                               <span className="sr-only">Inventory & Skills</span>
+                           </Button>
+                       </SheetTrigger>
+                       <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
+                           <SheetHeader className="p-4 border-b">
+                               <SheetTitle>Inventory & Skills</SheetTitle>
+                           </SheetHeader>
+                           <Tabs defaultValue="inventory" className="w-full flex-grow flex flex-col min-h-0">
+                               <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
+                                   <TabsTrigger value="inventory">Inventory</TabsTrigger>
+                                   <TabsTrigger value="skills" disabled={isGeneratingSkillTree}>
+                                       {isGeneratingSkillTree ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Skills
+                                   </TabsTrigger>
+                               </TabsList>
+                               <TabsContent value="inventory" className="flex-grow overflow-hidden">
+                                   <InventoryDisplay />
+                               </TabsContent>
+                               <TabsContent value="skills" className="flex-grow overflow-hidden">
+                                   {character.skillTree && !isGeneratingSkillTree ? (
+                                       <SkillTreeDisplay
+                                           skillTree={character.skillTree}
+                                           currentStage={character.skillTreeStage}
+                                           learnedSkills={character.learnedSkills}
+                                       />
+                                   ) : (
+                                       <div className="p-4 text-center text-muted-foreground flex flex-col items-center justify-center h-full">
+                                           {isGeneratingSkillTree ? <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" /> : null}
+                                           {isGeneratingSkillTree ? "Generating skill tree..." : "No skill tree available."}
+                                       </div>
+                                   )}
+                               </TabsContent>
+                           </Tabs>
+                       </SheetContent>
                    </Sheet>
+
              </div>
 
 
@@ -1104,9 +1101,9 @@ export function Gameplay() {
              {/* Bottom Buttons for Mobile and Desktop */}
             <div className="flex justify-between items-center mt-4 flex-shrink-0 gap-2">
                    <AlertDialog>
-                     <AlertDialogTrigger asChild>
-                         <Button variant="outline" className="w-1/4" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}> <ArrowLeft className="mr-1 h-4 w-4" /> Abandon </Button>
-                      </AlertDialogTrigger>
+                       <AlertDialogTrigger asChild>
+                           <Button variant="outline" className="w-1/4" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}> <ArrowLeft className="mr-1 h-4 w-4" /> Abandon </Button>
+                       </AlertDialogTrigger>
                       <AlertDialogContent>
                          <AlertDialogHeader>
                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
@@ -1234,5 +1231,3 @@ export function Gameplay() {
     </div>
   );
 }
-
-    
