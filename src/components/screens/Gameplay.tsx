@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useGame, type InventoryItem, type StoryLogEntry, type SkillTree, type Skill, type Character, calculateXpToNextLevel } from "@/context/GameContext";
+import type { InventoryItem, StoryLogEntry, SkillTree, Skill, Character, calculateXpToNextLevel } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -453,7 +453,7 @@ export function Gameplay() {
          summary = "Your adventure ended before it could be properly logged.";
      }
      dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationEntry } });
-   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, storyLog, dispatch, toast]); // Removed currentNarration dep
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, storyLog, dispatch, toast]);
 
 
    // --- Handle Save Game ---
@@ -632,254 +632,158 @@ export function Gameplay() {
              <CharacterDisplay />
 
               {/* Progression Info */}
-              <CardboardCard className="my-4">
-                  <CardHeader className="p-3 border-b">
-                      <CardTitle className="text-base font-semibold flex items-center gap-1.5">
-                          <Star className="w-4 h-4 text-yellow-500"/> Progression
+              <CardboardCard className="mb-4 bg-card/90 backdrop-blur-sm z-10 border-2 border-foreground/20">
+                  <CardHeader className="pb-2 pt-4 border-b border-foreground/10">
+                      <CardTitle className="text-xl font-semibold flex items-center justify-center gap-2">
+                          Progression
                       </CardTitle>
                   </CardHeader>
-                  <CardContent className="p-3 space-y-3 text-sm">
-                      <div className="flex justify-between items-center">
-                          <span>Level:</span>
-                          <span className="font-bold">{character.level}</span>
-                      </div>
-                      <div>
-                          <div className="flex justify-between items-center mb-1 text-xs text-muted-foreground">
-                              <span>XP:</span>
-                              <span>{character.xp} / {character.xpToNextLevel}</span>
+                   <CardContent className="pt-4 pb-4">
+                      <div className="space-y-2">
+                          <div className="flex items-center justify-between text-sm">
+                              <span>Level:</span>
+                              <span className="font-bold">{character.level}</span>
                           </div>
-                          <Progress value={(character.xp / character.xpToNextLevel) * 100} className="h-2 [&>div]:bg-yellow-400" />
+                          <div className="flex items-center justify-between text-sm">
+                              <span>XP:</span>
+                              <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
+                          </div>
+                           <Progress
+                               value={(character.xp / character.xpToNextLevel) * 100}
+                               className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"
+                               aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`}
+                           />
                       </div>
-                      <div>
-                          <p className="mb-1 font-medium">Reputation:</p>
+                      <Separator className="my-3"/>
+
+                      <div className="space-y-1">
+                          <p className="text-sm font-semibold">Reputation:</p>
                           {renderReputation(character.reputation)}
                       </div>
-                  </CardContent>
+                   </CardContent>
               </CardboardCard>
 
              {/* Tabs for Inventory and Skill Tree */}
-             <Tabs defaultValue="inventory" className="flex-grow flex flex-col">
+             <Tabs defaultValue="inventory" className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="inventory"><Backpack className="mr-1 h-4 w-4"/> Inventory</TabsTrigger>
-                    <TabsTrigger value="skills" disabled={isGeneratingSkillTree || !character.skillTree}>
-                        {isGeneratingSkillTree ? <Loader2 className="mr-1 h-4 w-4 animate-spin"/> : <Workflow className="mr-1 h-4 w-4"/>} Skills
+                    <TabsTrigger value="inventory">
+                         Inventory
+                    </TabsTrigger>
+                    <TabsTrigger value="skills" disabled={isGeneratingSkillTree}>
+                        {isGeneratingSkillTree ? <Skeleton className="h-12 w-24" /> : "Skills"}
                     </TabsTrigger>
                 </TabsList>
-                <TabsContent value="inventory" className="flex-grow overflow-hidden mt-2">
+                <TabsContent value="inventory">
                      <InventoryDisplay />
                 </TabsContent>
-                <TabsContent value="skills" className="flex-grow overflow-hidden mt-2">
+                <TabsContent value="skills">
                      {character.skillTree ? (
-                        <SkillTreeDisplay
-                            skillTree={character.skillTree}
-                            currentStage={character.skillTreeStage}
-                            learnedSkills={character.learnedSkills} // Pass learned skills
-                        />
-                     ) : isGeneratingSkillTree ? (
-                        <div className="flex items-center justify-center h-full text-muted-foreground">
-                             <Loader2 className="mr-2 h-4 w-4 animate-spin"/> Loading Skills...
-                        </div>
+                        <ScrollArea className="h-full p-4">
+                            <SkillTreeDisplay
+                                skillTree={character.skillTree}
+                                currentStage={character.skillTreeStage}
+                                learnedSkills={character.learnedSkills} // Pass learned skills
+                            />
+                        </ScrollArea>
                      ) : (
-                        <p className="p-4 text-muted-foreground italic text-center">No skill tree available.</p>
+                        <CardboardCard className="m-4">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2"><Workflow className="w-5 h-5"/> No Skill Tree</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                Skill tree is being generated...
+                            </CardContent>
+                        </CardboardCard>
                      )}
                 </TabsContent>
-            </Tabs>
+             </Tabs>
 
-
-             {/* Actions at the bottom */}
-             <div className="mt-auto space-y-2 pt-4 sticky bottom-0 bg-card/50 pb-4">
-                 <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
-                      {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" /> } {isSaving ? "Saving..." : "Save Game"}
-                 </Button>
-                 <AlertDialog>
-                     <AlertDialogTrigger asChild>
-                          <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
-                             <ArrowLeft className="mr-2 h-4 w-4" /> Abandon Adventure
-                         </Button>
-                     </AlertDialogTrigger>
-                     <AlertDialogContent>
-                         <AlertDialogHeader>
-                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                             <AlertDialogDescription> Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu. </AlertDialogDescription> </AlertDialogHeader>
-                         <AlertDialogFooter>
-                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                             <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction>
-                         </AlertDialogFooter>
-                     </AlertDialogContent>
-                 </AlertDialog>
-                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
-                    {isEnding ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BookCopy className="mr-2 h-4 w-4" /> } {isEnding ? "Summarizing..." : "End Adventure"}
-                 </Button>
-             </div>
         </div>
 
-        {/* Right Panel (Story & Input) - Takes remaining space */}
-        {/* Adjusted flex properties for mobile */}
-        <div className="flex-1 flex flex-col p-4 overflow-hidden h-screen md:h-auto">
-
-            {/* Mobile Header - Displays Character Name and Action Buttons */}
-             <div className="md:hidden flex justify-between items-center mb-2 pb-2 border-b border-foreground/10 flex-shrink-0">
-                 {/* Character Info Trigger */}
-                 <Sheet>
-                     <SheetTrigger asChild>
-                         <Button variant="ghost" className="text-lg font-semibold px-2 py-1 h-auto truncate">
-                             <User className="mr-2 h-4 w-4 flex-shrink-0"/> {character.name} (Lvl {character.level})
-                         </Button>
-                     </SheetTrigger>
-                     <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
-                         <SheetHeader className="p-4 border-b"> <SheetTitle>Character Info (Level {character.level})</SheetTitle> </SheetHeader>
-                         <ScrollArea className="flex-grow overflow-y-auto p-4">
-                             <CharacterDisplay />
-                             {/* Mobile Progression Info */}
-                              <CardboardCard className="my-4">
-                                 <CardHeader className="p-3 border-b">
-                                     <CardTitle className="text-base font-semibold flex items-center gap-1.5">
-                                         <Star className="w-4 h-4 text-yellow-500"/> Progression
-                                     </CardTitle>
-                                 </CardHeader>
-                                 <CardContent className="p-3 space-y-3 text-sm">
-                                      <div className="flex justify-between items-center">
-                                          <span>Level:</span>
-                                          <span className="font-bold">{character.level}</span>
-                                      </div>
-                                     <div>
-                                         <div className="flex justify-between items-center mb-1 text-xs text-muted-foreground">
-                                             <span>XP:</span>
-                                             <span>{character.xp} / {character.xpToNextLevel}</span>
-                                         </div>
-                                         <Progress value={(character.xp / character.xpToNextLevel) * 100} className="h-2 [&>div]:bg-yellow-400" />
-                                     </div>
-                                     <div>
-                                         <p className="mb-1 font-medium">Reputation:</p>
-                                         {renderReputation(character.reputation)}
-                                     </div>
-                                 </CardContent>
-                             </CardboardCard>
-                         </ScrollArea>
-                     </SheetContent>
-                 </Sheet>
-
-                 <div className="flex items-center gap-1">
-                      {/* Mobile Inventory Trigger */}
-                      <Sheet>
-                         <SheetTrigger asChild>
-                              <Button variant="ghost" size="icon" aria-label="Open Inventory">
-                                 <Backpack className="h-5 w-5" />
-                             </Button>
-                         </SheetTrigger>
-                         <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
-                             <SheetHeader className="p-4 border-b"> <SheetTitle>Inventory</SheetTitle> </SheetHeader>
-                             <div className="flex-grow overflow-hidden"> <InventoryDisplay /> </div>
-                         </SheetContent>
-                     </Sheet>
-                      {/* Mobile Skill Tree Trigger */}
-                     <Sheet>
-                        <SheetTrigger asChild>
-                             <Button variant="ghost" size="icon" disabled={isGeneratingSkillTree || !character.skillTree} aria-label="Open Skill Tree">
-                                <Workflow className="h-5 w-5" />
-                             </Button>
-                         </SheetTrigger>
-                         <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
-                             <SheetHeader className="p-4 border-b">
-                                <SheetTitle>Skill Tree: {character.skillTree?.className || character.class}</SheetTitle>
-                                <SheetDescription>Current Stage: {currentStageName} ({character.skillTreeStage}/4)</SheetDescription>
-                             </SheetHeader>
-                             <div className="flex-grow overflow-hidden">
-                                 {character.skillTree ? (
-                                     <SkillTreeDisplay
-                                        skillTree={character.skillTree}
-                                        currentStage={character.skillTreeStage}
-                                        learnedSkills={character.learnedSkills} // Pass learned skills
-                                    />
-                                 ) : (
-                                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                                         <Loader2 className="mr-2 h-4 w-4 animate-spin"/> Loading Skills...
-                                    </div>
-                                  )}
-                             </div>
-                         </SheetContent>
-                     </Sheet>
-                 </div>
-            </div>
-
-            {/* Story Display Area - Adjusted for flex layout */}
-            {/* Added min-h-0 to allow shrinking and flex-grow to take space */}
-            <CardboardCard className="flex-1 flex flex-col overflow-hidden mb-4 border-2 border-foreground/20 shadow-inner min-h-0">
-                 <CardHeader className="py-3 px-4 border-b border-foreground/10 flex-shrink-0"> <CardTitle className="text-lg font-semibold">Story Log</CardTitle> </CardHeader>
-                 {/* Scroll area now takes the full height of the content area */}
+        {/* Right Panel (Game Log & Input) - Flexible width */}
+        <div className="flex-1 flex flex-col">
+            <CardboardCard className="shadow-md rounded-sm bg-card flex-1 flex flex-col overflow-hidden mb-4 border-2 border-foreground/20 shadow-inner min-h-0">
+                <CardHeader className="pb-2 pt-4 border-b border-foreground/10">
+                    <CardTitle className="text-xl font-semibold flex items-center gap-2">
+                        Adventure Log
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
                     <ScrollArea className="h-full">
-                        <div className="p-4 space-y-4">
-                             {storyLog.map((log, index) => (
-                                <div key={log.timestamp ? `log-${log.timestamp}-${index}` : `log-fallback-${index}`} className="pb-4 group">
-                                    <p className="text-sm font-medium text-muted-foreground mb-1 opacity-70 group-hover:opacity-100 transition-opacity">Turn {index + 1} <span className="text-xs">({new Date(log.timestamp || Date.now()).toLocaleTimeString()})</span></p>
-                                    <p className="text-base whitespace-pre-wrap leading-relaxed text-foreground">{log.narration}</p>
-                                     {/* Add separator unless it's the last item */}
-                                     {index < storyLog.length - 1 && <Separator className="mt-4 opacity-30 group-hover:opacity-70 transition-opacity"/>}
+                        <div>
+                            {storyLog.map((log, index) => (
+                                <div key={index} className="mb-4 pb-2 border-b border-foreground/10 last:border-b-0">
+                                    <div className="text-xs text-muted-foreground italic mb-1">
+                                        Turn {index + 1}
+                                        <span className="ml-2">{new Date(log.timestamp).toLocaleTimeString()}</span>
+                                    </div>
+                                    <p className="text-sm">{log.narration}</p>
                                 </div>
-                             ))}
-                            {renderDynamicContent()}
-                            {/* Ensure scroll end ref is inside scrollable content */}
-                            <div ref={scrollEndRef} style={{ height: '1px' }} />
+                            ))}
+                            {/* Dynamic Content at the End */}
+                            <div ref={scrollEndRef}>
+                                {renderDynamicContent()}
+                            </div>
                         </div>
-                         <ScrollBar orientation="vertical" />
                     </ScrollArea>
-                 </CardContent>
+                </CardContent>
             </CardboardCard>
 
-             {/* Input Area - Remains at the bottom */}
-             <form onSubmit={handleSubmit} className="flex gap-2 items-center mt-auto flex-shrink-0">
-                <Button type="button" variant="ghost" size="icon" onClick={handleSuggestAction} disabled={isLoading || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree} aria-label="Suggest an action" className="text-muted-foreground hover:text-accent flex-shrink-0" title="Suggest Action">
-                    <Sparkles className="h-5 w-5" />
-                </Button>
-                <Input type="text" value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder="What do you do next?" disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || isGeneratingSkillTree} className="flex-grow text-base h-11 min-w-0" aria-label="Player action input" autoComplete="off" />
-                <Button type="submit" disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || isGeneratingSkillTree || !playerInput.trim()} className="bg-accent hover:bg-accent/90 text-accent-foreground h-11 px-5 flex-shrink-0" aria-label="Submit action">
-                   {(isLoading || isGeneratingSkillTree) ? <Loader2 className="h-5 w-5 animate-spin"/> : <Send className="h-5 w-5" />}
-                </Button>
-             </form>
-
-             {/* Buttons for smaller screens (Mobile View) - Added below input */}
-              <div className="md:hidden flex flex-col gap-2 mt-4 border-t pt-4 flex-shrink-0">
-                   <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
-                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" /> } {isSaving ? "Saving..." : "Save Game"}
-                   </Button>
-                  <AlertDialog>
-                     <AlertDialogTrigger asChild>
-                          <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
-                             <ArrowLeft className="mr-2 h-4 w-4" /> Abandon Adventure
+            {/* Action Input */}
+            <CardboardCard className="mb-4 border-2 border-foreground/20 shadow-inner">
+                <CardContent>
+                    <form onSubmit={handleSubmit} className="flex items-center space-x-2">
+                        <Input
+                            type="text"
+                            value={playerInput}
+                            onChange={(e) => setPlayerInput(e.target.value)}
+                            placeholder="Enter your action..."
+                            className="flex-1 text-sm"
+                            disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}
+                        />
+                         {/* Suggest Action Button */}
+                         <Button
+                            type="button"
+                            onClick={handleSuggestAction}
+                            variant="secondary"
+                            size="sm"
+                            disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}
+                            aria-label="Suggest Action"
+                         >
+                             <Sparkles className="mr-2 h-4 w-4" /> Suggest
                          </Button>
-                     </AlertDialogTrigger>
-                     <AlertDialogContent>
+                        <Button type="submit" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree} aria-label="Submit Action">
+                            <Send className="h-4 w-4" />
+                        </Button>
+                    </form>
+                </CardContent>
+            </CardboardCard>
+             {/* Mobile Abandon Button (AlertDialog) */}
+             <div className="md:hidden flex justify-between items-center">
+                   <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                         <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
+                            <ArrowLeft className="mr-2 h-4 w-4" /> Abandon
+                         </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
                          <AlertDialogHeader>
-                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                             <AlertDialogDescription> Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu. </AlertDialogDescription> </AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                               Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu.
+                            </AlertDialogDescription>
+                         </AlertDialogHeader>
                          <AlertDialogFooter>
-                             <AlertDialogCancel>Cancel</AlertDialogCancel>
-                             <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction> </AlertDialogFooter>
-                     </AlertDialogContent>
-                 </AlertDialog>
-                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
-                    {isEnding ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BookCopy className="mr-2 h-4 w-4" /> } {isEnding ? "Summarizing..." : "End Adventure"}
-                 </Button>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction>
+                         </AlertDialogFooter>
+                      </AlertDialogContent>
+                   </AlertDialog>
+                  <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
+                     End Adventure
+                  </Button>
              </div>
         </div>
-
-        {/* Class Change Confirmation Dialog */}
-        {pendingClassChange && (
-             <AlertDialog open={!!pendingClassChange} onOpenChange={(open) => !open && setPendingClassChange(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Class Change Suggested!</AlertDialogTitle>
-                        <AlertDialogDescription>
-                             Your actions suggest a path closer to the <span className="font-semibold">{pendingClassChange}</span> class. Would you like to embrace this change? Your current class progress (<span className="font-semibold">{character.class} - {currentStageName} ({character.skillTreeStage}/4)</span>) will be reset, and you'll start fresh on the {pendingClassChange} skill tree at Stage 0. Your starter skills will change to match the new class.
-                        </AlertDialogDescription>
-                    </AlertDialogFooter>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setPendingClassChange(null)}>Stay as {character.class}</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleConfirmClassChange(pendingClassChange)} className="bg-accent hover:bg-accent/90">Become a {pendingClassChange}</AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-             </AlertDialog>
-        )}
     </div>
   );
 }

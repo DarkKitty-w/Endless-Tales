@@ -322,9 +322,9 @@ function gameReducer(state: GameState, action: Action): GameState {
         level: initialLevel, // Start at level 1
         xp: 0, // Start with 0 XP
         xpToNextLevel: initialXpToNext, // XP needed for level 2
-        reputation: {}, // Start with empty reputation
-        skillTree: null,
-        skillTreeStage: 0,
+        reputation: {}, // Starts with no reputation
+        skillTree: null, // Starts with no skill tree
+        skillTreeStage: 0, // Starts at stage 0
         learnedSkills: starterSkills, // Assign dynamic starter skills
       };
       return {
@@ -479,8 +479,7 @@ function gameReducer(state: GameState, action: Action): GameState {
                 knowledge: updatedKnowledge,
                 maxStamina: maxStamina,
                 currentStamina: newCurrentStamina,
-                maxMana: maxMana,
-                currentMana: newCurrentMana,
+                maxMana: newCurrentMana,
                 traits: newLogEntry.updatedTraits ?? state.character.traits,
                 learnedSkills: newLearnedSkills,
                 xp: currentXp, // Update XP here
@@ -700,43 +699,43 @@ function gameReducer(state: GameState, action: Action): GameState {
            name: adventureToLoad.character?.name || "Recovered Adventurer",
            description: adventureToLoad.character?.description || "",
            class: adventureToLoad.character?.class || "Adventurer",
-           traits: adventureToLoad.character?.traits || [],
-           knowledge: adventureToLoad.character?.knowledge || [],
+           traits: Array.isArray(adventureToLoad.character?.traits) ? adventureToLoad.character.traits : [],
+           knowledge: Array.isArray(adventureToLoad.character?.knowledge) ? adventureToLoad.character.knowledge : [],
            background: adventureToLoad.character?.background || "",
            stats: adventureToLoad.character?.stats ? { ...initialCharacterState.stats, ...adventureToLoad.character.stats } : initialCharacterState.stats,
-           maxStamina: adventureToLoad.character?.maxStamina ?? calculateMaxStamina(adventureToLoad.character?.stats ?? initialCharacterState.stats),
-           currentStamina: adventureToLoad.character?.currentStamina ?? (adventureToLoad.character?.maxStamina ?? calculateMaxStamina(adventureToLoad.character?.stats ?? initialCharacterState.stats)),
-           maxMana: adventureToLoad.character?.maxMana ?? calculateMaxMana(adventureToLoad.character?.stats ?? initialCharacterState.stats, adventureToLoad.character?.knowledge ?? []),
-           currentMana: adventureToLoad.character?.currentMana ?? (adventureToLoad.character?.maxMana ?? calculateMaxMana(adventureToLoad.character?.stats ?? initialCharacterState.stats, adventureToLoad.character?.knowledge ?? [])),
+           maxStamina: typeof adventureToLoad.character?.maxStamina === 'number' ? adventureToLoad.character.maxStamina : calculateMaxStamina(adventureToLoad.character?.stats ?? initialCharacterState.stats),
+           currentStamina: typeof adventureToLoad.character?.currentStamina === 'number' ? adventureToLoad.character.currentStamina : (adventureToLoad.character?.maxStamina ?? calculateMaxStamina(adventureToLoad.character?.stats ?? initialCharacterState.stats)),
+           maxMana: typeof adventureToLoad.character?.maxMana === 'number' ? adventureToLoad.character.maxMana : calculateMaxMana(adventureToLoad.character?.stats ?? initialCharacterState.stats, adventureToLoad.character?.knowledge ?? []),
+           currentMana: typeof adventureToLoad.character?.currentMana === 'number' ? adventureToLoad.character.currentMana : (adventureToLoad.character?.maxMana ?? calculateMaxMana(adventureToLoad.character?.stats ?? initialCharacterState.stats, adventureToLoad.character?.knowledge ?? [])),
             // Progression fields with defaults
-           level: adventureToLoad.character?.level ?? 1,
-           xp: adventureToLoad.character?.xp ?? 0,
-           xpToNextLevel: adventureToLoad.character?.xpToNextLevel ?? calculateXpToNextLevel(adventureToLoad.character?.level ?? 1),
-           reputation: adventureToLoad.character?.reputation ?? {},
+           level: typeof adventureToLoad.character?.level === 'number' ? adventureToLoad.character.level : 1,
+           xp: typeof adventureToLoad.character?.xp === 'number' ? adventureToLoad.character.xp : 0,
+           xpToNextLevel: typeof adventureToLoad.character?.xpToNextLevel === 'number' ? adventureToLoad.character.xpToNextLevel : calculateXpToNextLevel(adventureToLoad.character?.level ?? 1),
+           reputation: typeof adventureToLoad.character?.reputation === 'object' && adventureToLoad.character.reputation !== null ? adventureToLoad.character.reputation : {},
            // Skill tree and learned skills validation
            skillTree: adventureToLoad.character?.skillTree ? {
                ...adventureToLoad.character.skillTree,
                 className: adventureToLoad.character.skillTree.className || adventureToLoad.character.class || "Adventurer", // Ensure class name is set
-               stages: (adventureToLoad.character.skillTree.stages || []).map((stage, index) => ({
-                    stage: stage.stage ?? index, // Provide default stage number if missing
+               stages: (Array.isArray(adventureToLoad.character.skillTree.stages) ? adventureToLoad.character.skillTree.stages : []).map((stage, index) => ({
+                    stage: typeof stage.stage === 'number' ? stage.stage : index, // Provide default stage number if missing
                     stageName: stage.stageName || `Stage ${stage.stage ?? index}`, // Default stage name if missing
-                     skills: (stage.skills || []).map(skill => ({ // Validate skills within stage
+                     skills: (Array.isArray(stage.skills) ? stage.skills : []).map(skill => ({ // Validate skills within stage
                         name: skill.name || "Unknown Skill",
                         description: skill.description || "",
                         type: skill.type || 'Learned',
-                        manaCost: skill.manaCost,
-                        staminaCost: skill.staminaCost,
+                        manaCost: typeof skill.manaCost === 'number' ? skill.manaCost : undefined,
+                        staminaCost: typeof skill.staminaCost === 'number' ? skill.staminaCost : undefined,
                     })),
                })).slice(0, 5) // Ensure only 5 stages
            } : null,
-           skillTreeStage: adventureToLoad.character?.skillTreeStage ?? 0,
-           learnedSkills: (adventureToLoad.character?.learnedSkills && adventureToLoad.character.learnedSkills.length > 0)
+           skillTreeStage: typeof adventureToLoad.character?.skillTreeStage === 'number' ? adventureToLoad.character.skillTreeStage : 0,
+           learnedSkills: (Array.isArray(adventureToLoad.character?.learnedSkills) && adventureToLoad.character.learnedSkills.length > 0)
                 ? adventureToLoad.character.learnedSkills.map(skill => ({ // Validate learned skills
                      name: skill.name || "Unknown Skill",
                      description: skill.description || "",
                      type: skill.type || 'Learned',
-                     manaCost: skill.manaCost,
-                     staminaCost: skill.staminaCost,
+                     manaCost: typeof skill.manaCost === 'number' ? skill.manaCost : undefined,
+                     staminaCost: typeof skill.staminaCost === 'number' ? skill.staminaCost : undefined,
                   }))
                 : getStarterSkillsForClass(adventureToLoad.character?.class || "Adventurer"), // Provide default starter skills if missing
            aiGeneratedDescription: adventureToLoad.character?.aiGeneratedDescription ?? undefined,
@@ -1039,4 +1038,3 @@ export const useGame = () => {
   }
   return context;
 };
-```
