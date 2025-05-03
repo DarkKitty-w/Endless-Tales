@@ -88,6 +88,7 @@ export function SkillTreeDisplay({ skillTree, currentStage, learnedSkills }: Ski
             const isCurrent = stageData.stage === currentStage;
             const stageIcon = stageData.stage === 0 ? Sparkles : isUnlocked ? Unlock : Lock;
             const stageColor = isCurrent ? 'text-accent' : isUnlocked ? 'text-primary' : 'text-muted-foreground';
+            const StageIcon = stageIcon; // Assign to an uppercase variable
 
             return (
               <AccordionItem key={`stage-${stageData.stage}`} value={`stage-${stageData.stage}`} className="mb-2 border rounded-md overflow-hidden border-border/50">
@@ -95,13 +96,13 @@ export function SkillTreeDisplay({ skillTree, currentStage, learnedSkills }: Ski
                     className={`flex justify-between items-center px-3 py-2 ${
                       isCurrent ? 'bg-accent/10 border-l-4 border-accent' : isUnlocked ? 'bg-primary/5' : 'bg-muted/30 opacity-70'
                     } hover:bg-accent/5 hover:no-underline transition-colors`}
-                     disabled={!isUnlocked}
+                     disabled={!isUnlocked && stageData.stage > 0} // Only disable locked stages > 0
                  >
                    <div className="flex items-center gap-2 flex-1 min-w-0">
                      <Tooltip>
                         <TooltipTrigger asChild>
                             <span className="flex items-center gap-2">
-                                <stageIcon className={`w-4 h-4 flex-shrink-0 ${isUnlocked ? 'text-green-600' : 'text-muted-foreground'}`} />
+                                <StageIcon className={`w-4 h-4 flex-shrink-0 ${isUnlocked ? 'text-green-600' : 'text-muted-foreground'}`} />
                                 <span className={`font-semibold truncate ${stageColor}`}>
                                    {stageData.stageName || `Stage ${stageData.stage}`}
                                 </span>
@@ -130,7 +131,7 @@ export function SkillTreeDisplay({ skillTree, currentStage, learnedSkills }: Ski
                     </div>
                  </AccordionTrigger>
                  <AccordionContent className="pt-3 pl-5 pr-3 pb-4 bg-background">
-                   {isUnlocked ? (
+                   {isUnlocked || stageData.stage === 0 ? ( // Allow viewing stage 0 even if technically "locked" (currentStage is 0)
                      stageData.skills && stageData.skills.length > 0 ? (
                        <ul className="space-y-2">
                           <p className="text-xs text-muted-foreground mb-2 italic">Skills available at this stage:</p>
