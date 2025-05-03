@@ -154,7 +154,7 @@ let memoryState: State = { toasts: [] }
 
 // Dispatches an action to the reducer and notifies listeners
 function dispatch(action: Action) {
- // console.log("Dispatching toast action:", action.type, action); // Optional logging
+  // console.log("Dispatching toast action:", action.type, action); // Optional logging
   memoryState = reducer(memoryState, action)
   // Call all registered listener functions with the new state
   listeners.forEach((listener) => {

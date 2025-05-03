@@ -10,6 +10,7 @@
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
 import type { CharacterStats, SkillTree, Skill, ReputationChange, NpcRelationshipChange } from '@/context/GameContext'; // Import Skill and Reputation/NPC Relationship Change types
+import { toast } from '@/hooks/use-toast'; // Import toast for user feedback
 
 // --- Zod Schemas (Internal - Not Exported) ---
 const CharacterStatsSchema = z.object({
@@ -74,7 +75,7 @@ const NarrateAdventureInputSchema = z.object({
   gameState: z.string().describe('A string representing the current state of the game, including location, **current full inventory list**, ongoing events, character progression milestones achieved, **and known NPC states/relationships**.'), // Emphasize inventory and NPC relationships needed
   previousNarration: z.string().optional().describe('The narration text immediately preceding the player\'s current choice, for context.'),
   adventureSettings: z.object({ // Include adventure settings
-      difficulty: z.string().describe("Overall game difficulty (e.g., Easy, Normal, Hard). Influences challenge levels and potential event triggers."),
+      difficulty: z.string().describe("Overall game difficulty (e.g., Easy, Normal, Hard, Nightmare). Influences challenge levels and potential event triggers."),
       permanentDeath: z.boolean().describe("Whether permanent death is enabled."),
       adventureType: z.enum(["Randomized", "Custom"]).nullable().describe("Type of adventure."),
   }).describe("The overall settings for the current adventure."),
@@ -121,7 +122,7 @@ const narrateAdventurePrompt = ai.definePrompt({
 
 **Game Context:**
 {{{gameState}}}
-*Note: The game state string above contains the character's current inventory, status, level, XP, reputation, **NPC relationships**, and progress.*
+*Note: The game state string above contains the character's current inventory, status, level, XP, reputation, NPC relationships, and progress.*
 
 {{#if previousNarration}}
 **Previous Scene:**
@@ -154,31 +155,31 @@ Generate the next part of the story based on ALL the information above.
 1.  **React Dynamically:** Describe the outcome of the player's action. Consider their character's class, level, xp, reputation, **NPC relationships**, stats, **current stamina and mana**, traits, knowledge, background, *current skill stage*, **learned skills**, inventory, the current gameState, and the **game difficulty**.
 2.  **Logical Progression, Resource Costs & Restrictions:**
     *   **Evaluate Feasibility:** Assess if the action is logically possible. *Actions tied to higher skill stages should only be possible if the character has reached that stage.* Harder difficulties might make certain actions less feasible initially.
-    *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output `staminaChange`, `manaChange` **only if they changed**.
+    *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output staminaChange, manaChange **only if they changed**.
     *   **Block Impossible Actions:** Prevent universe-breaking actions unless EXTREME justification exists in gameState AND skill stage is high.
-    *   **Narrate Failure Reason:** If blocked/failed, explain why (lack of skill, resources, item, stage, reputation, **NPC relationships**, difficulty, etc.).
+    *   **Narrate Failure Reason:** If blocked/failed, explain why (lack of skill, resources, item, stage, reputation, NPC relationships, difficulty, etc.).
     *   **Skill-based Progression:** Very powerful actions require high milestones AND skill stages.
 3.  **Incorporate Dice Rolls:** Interpret dice roll results (e.g., "(Difficulty: Hard, Dice Roll Result: 75/100)") contextually. High rolls succeed, low rolls fail, adjusted by **game difficulty**. Narrate the degree of success/failure. Success might grant more XP or better reputation/relationship changes. Failure might have negative consequences, potentially more severe on higher difficulties.
 4.  **Consequences, Resources, XP, Reputation, Relationships & Character Progression:**
-    *   **Resource Changes:** If current stamina or mana changed, include `staminaChange` or `manaChange`. **Do not include if unchanged.**
-    *   **XP Awards:** If the action was significant (overcame challenge, clever solution, quest progress), award XP via `xpGained` (adjust based on **difficulty** - harder challenges grant more). **Only include if XP was gained.**
-    *   **Reputation Changes:** If the action affects a faction's view, include `reputationChange`. **Only include if reputation changed.**
-    *   **NPC Relationship Changes:** If the action affects an NPC's view, include `npcRelationshipChange`. **Only include if relationship changed.**
+    *   **Resource Changes:** If current stamina or mana changed, include staminaChange or manaChange. **Do not include if unchanged.**
+    *   **XP Awards:** If the action was significant (overcame challenge, clever solution, quest progress), award XP via xpGained (adjust based on **difficulty** - harder challenges grant more). **Only include if XP was gained.**
+    *   **Reputation Changes:** If the action affects a faction's view, include reputationChange. **Only include if reputation changed.**
+    *   **NPC Relationship Changes:** If the action affects an NPC's view, include npcRelationshipChange. **Only include if relationship changed.**
     *   **Character Progression (Optional):** If events lead to development:
-        *   Include `updatedStats`, `updatedTraits`, `updatedKnowledge`. **Only include if they changed.**
-        *   **Skill Stage Progression:** Include `progressedToStage` **only if milestones warrant advancement.**
-        *   **Class Change Suggestion:** Include `suggestedClassChange` **only if actions strongly align elsewhere.**
-        *   **Gaining Skills:** Include `gainedSkill` **only if appropriate.**
+        *   Include updatedStats, updatedTraits, updatedKnowledge. **Only include if they changed.**
+        *   **Skill Stage Progression:** Include progressedToStage **only if milestones warrant advancement.**
+        *   **Class Change Suggestion:** Include suggestedClassChange **only if actions strongly align elsewhere.**
+        *   **Gaining Skills:** Include gainedSkill **only if appropriate.**
 5.  **Update Game State:** **REQUIRED.** Modify the 'gameState' string concisely to reflect ALL changes (location, **inventory**, NPC mood, **NPC relationships**, time, quest progress, milestones, **status including resources, level, XP, and reputation**). **Ensure the inventory listed in the 'updatedGameState' string is the character's complete and accurate inventory after the action.** **MUST include the current Turn count (e.g., "Turn: 16").**
 6.  **Branching Narratives & Dynamic Events (Introduce Occasionally):**
-    *   **Branching Choices:** At significant moments, present 2-4 meaningful `branchingChoices` that significantly alter the path forward. Provide optional subtle `consequenceHint` for each. **Only include if relevant.**
-    *   **Dynamic Events:** Based on 'turnCount' or randomness (especially on higher difficulties), trigger a `dynamicEventTriggered`. This event should integrate into the current narration. Keep these events relatively infrequent. **Only include if triggered.**
+    *   **Branching Choices:** At significant moments, present 2-4 meaningful 'branchingChoices' that significantly alter the path forward. Provide optional subtle 'consequenceHint' for each. **Only include if relevant.**
+    *   **Dynamic Events:** Based on 'turnCount' or randomness (especially on higher difficulties), trigger a 'dynamicEventTriggered'. This event should integrate into the current narration. Keep these events relatively infrequent. **Only include if triggered.**
 7.  **Tone:** Maintain a consistent fantasy text adventure tone. Be descriptive and engaging. Adjust tone slightly based on **difficulty** (e.g., more ominous on Hard).
 
 **Output Format:** Respond **ONLY** with a valid JSON object matching the NarrateAdventureOutput schema.
-*   `narration` and `updatedGameState` are **REQUIRED**.
-*   All other fields are **OPTIONAL** and should **ONLY** be included if their corresponding event actually occurred (e.g., include `xpGained` only if XP was actually awarded).
-*   Ensure the `updatedGameState` string contains the correct turn count.
+*   'narration' and 'updatedGameState' are **REQUIRED**.
+*   All other fields are **OPTIONAL** and should **ONLY** be included if their corresponding event actually occurred (e.g., include xpGained only if XP was actually awarded).
+*   Ensure the 'updatedGameState' string contains the correct turn count.
 
 Example Output (Success with XP and branching choice):
 {
@@ -284,17 +285,25 @@ const narrateAdventureFlow = ai.defineFlow<
             errorOccurred = true;
              if (err.message?.includes('503') || err.message?.includes('overloaded')) {
                 errorMessage = `AI Service Overloaded (Attempt ${attempt}/${maxAttempts}). Please try again shortly. Retrying...`;
+                // No toast on server-side
+                // toast({ title: "AI Busy", description: `Service overloaded. Retrying...`, variant: "default"});
                 // Optional: Wait longer before retrying on overload
                 if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
              } else if (err.message?.includes('400 Bad Request')) {
-                 errorMessage = `AI Error: Bad Request (${errorMessage.substring(0, 50)}...). Check prompt or input format. Retrying... (Attempt ${attempt}/${maxAttempts + 1})`;
+                 errorMessage = `AI Error: Bad Request (${err.message?.substring(0, 50)}...). Check prompt or input format. Retrying... (Attempt ${attempt}/${maxAttempts + 1})`;
+                 // No toast on server-side
+                 // toast({ title: "AI Error", description: `${errorMessage.substring(0, 60)}... Retrying...`, variant: "destructive"});
                  if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 500 * attempt));
              }
               else if (err.message?.includes('Error fetching')) {
                   errorMessage = `AI Error: Could not reach or process request with the story generation service (Attempt ${attempt}/${maxAttempts}). Check network or try again. (${err.message})`;
+                  // No toast on server-side
+                  // toast({ title: "Network Error", description: "Could not reach AI service. Retrying...", variant: "destructive"});
                   if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 500 * attempt));
               } else {
                  errorMessage = `AI Error: ${err.message?.substring(0, 150) || 'Unknown error'} (Attempt ${attempt}/${maxAttempts})`;
+                 // No toast on server-side
+                 // toast({ title: "Story Error", description: `${errorMessage.substring(0, 60)}... Retrying...`, variant: "destructive"});
                  if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 500 * attempt));
              }
         }
@@ -303,6 +312,8 @@ const narrateAdventureFlow = ai.defineFlow<
      // --- Validation & Fallback after all attempts ---
      if (!output || !output.narration || !output.updatedGameState) {
         console.error("AI narration failed after all attempts:", errorMessage);
+        // Return a structured error response instead of throwing,
+        // allowing the client to handle the failure gracefully.
         return {
             narration: `The threads of fate seem momentarily tangled. You pause, considering your next move as the world holds its breath. (${errorMessage})`,
             updatedGameState: `${input.gameState}\nTurn: ${input.turnCount + 1}`, // Return original game state but increment turn
@@ -367,3 +378,6 @@ const narrateAdventureFlow = ai.defineFlow<
     };
   }
 );
+
+
+

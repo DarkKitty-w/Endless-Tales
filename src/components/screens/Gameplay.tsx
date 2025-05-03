@@ -15,9 +15,9 @@ import { assessActionDifficulty, type DifficultyLevel } from "@/ai/flows/assess-
 import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "@/ai/flows/attempt-crafting"; // Import crafting flow
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award, Hammer, CheckSquare, Square, Users, Milestone, CalendarClock } from "lucide-react"; // Added Milestone, CalendarClock
+import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award, Hammer, CheckSquare, Square, Users, Milestone, CalendarClock, Skull, HeartPulse } from "lucide-react"; // Added Milestone, CalendarClock, Skull, HeartPulse, Users
 import { rollD6, rollD10, rollD20, rollD100 } from "@/services/dice-roller"; // Import specific rollers
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast"; // Import useToast hook
 import {
   AlertDialog,
   AlertDialogAction,
@@ -70,6 +70,7 @@ const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null =
 
 export function Gameplay() {
   const { state, dispatch } = useGame();
+  const { toast } = useToast();
   const { character, currentNarration, currentGameStateString, storyLog, adventureSettings, inventory, currentAdventureId, isGeneratingSkillTree, turnCount } = state; // Add turnCount
   const [playerInput, setPlayerInput] = useState("");
   const [isLoading, setIsLoading] = useState(false); // General loading for narration/assessment
