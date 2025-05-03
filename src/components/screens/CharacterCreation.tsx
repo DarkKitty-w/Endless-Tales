@@ -215,11 +215,13 @@ const randomizeStats = useCallback(() => {
   // Watch form values for dynamic checks
   const watchedName = watch("name");
   const watchedDescription = watch("description");
+  const isDescriptionValid = !!watchedDescription && watchedDescription.length >= 10; // Check if description is valid for AI generation
+
 
   // --- AI Description Generation ---
   const handleGenerateDescription = async () => {
      // Use watched values directly for the check
-     if (!watchedName || !watchedDescription || watchedDescription.length < 10) {
+     if (!watchedName || !isDescriptionValid) { // Check pre-calculated validity
        setError("Please provide a name and a brief description (at least 10 characters) before generating.");
        toast({ title: "Input Required", description: "Name and description needed for AI generation.", variant: "destructive"});
        return;
@@ -446,7 +448,7 @@ const randomizeStats = useCallback(() => {
                                          <Button
                                             type="button"
                                             onClick={handleGenerateDescription}
-                                            disabled={isGenerating || !watchedName || !watchedDescription || watchedDescription.length < 10}
+                                            disabled={isGenerating || !watchedName || !isDescriptionValid} // Use pre-calculated validity
                                             variant="outline"
                                             size="sm"
                                             aria-label="Generate detailed description using AI"
@@ -543,5 +545,3 @@ const randomizeStats = useCallback(() => {
     </div>
   );
 }
-
-    
