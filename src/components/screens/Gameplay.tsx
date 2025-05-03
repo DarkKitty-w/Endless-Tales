@@ -39,6 +39,7 @@ import {
 import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay"; // Import SkillTreeDisplay
 import { Skeleton } from "../ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Import Tabs
+import { Separator } from "@/components/ui/separator"; // Import Separator for visual breaks
 
 // Helper function to map difficulty dice string to roller function
 const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null => {
@@ -621,10 +622,10 @@ export function Gameplay() {
                  </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                     <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}> <ArrowLeft className="mr-2 h-4 w-4" /> Abandon Adventure </Button>
+                    <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}> <ArrowLeft className="mr-2 h-4 w-4" /> Abandon Adventure </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
-                    <AlertDialogHeader> <AlertDialogTitle>Are you sure?</AlertDialogTitle> <AlertDialogDescription> Abandoning the adventure will end your current progress (any unsaved changes will be lost) and return you to the main menu. </AlertDialogDescription> </AlertDialogHeader>
+                    <AlertDialogHeader> <AlertDialogTitle>Are you sure?</AlertDialogTitle> <AlertDialogDescription> Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu. </AlertDialogDescription> </AlertDialogHeader>
                     <AlertDialogFooter> <AlertDialogCancel>Cancel</AlertDialogCancel> <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction> </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -641,13 +642,12 @@ export function Gameplay() {
             {/* Mobile Header - Displays Character Name and Action Buttons */}
             <div className="md:hidden flex justify-between items-center mb-2 pb-2 border-b border-foreground/10 flex-shrink-0">
                  <h2 className="text-lg font-semibold truncate">{character.name}</h2>
-                 <div>
+                 <div className="flex items-center gap-1">
                       {/* Mobile Inventory Trigger */}
                      <Sheet>
                         <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                             <Button variant="ghost" size="icon" aria-label="Open Inventory">
                                 <Backpack className="h-5 w-5" />
-                                <span className="sr-only">Open Inventory</span>
                             </Button>
                          </SheetTrigger>
                          <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
@@ -658,9 +658,8 @@ export function Gameplay() {
                       {/* Mobile Skill Tree Trigger */}
                      <Sheet>
                         <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon" disabled={isGeneratingSkillTree || !character.skillTree}>
+                             <Button variant="ghost" size="icon" disabled={isGeneratingSkillTree || !character.skillTree} aria-label="Open Skill Tree">
                                 <Workflow className="h-5 w-5" />
-                                <span className="sr-only">Open Skill Tree</span>
                              </Button>
                          </SheetTrigger>
                          <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
@@ -684,11 +683,14 @@ export function Gameplay() {
                  <CardContent className="flex-1 p-0 overflow-hidden">
                     <ScrollArea className="h-full">
                         <div className="p-4 space-y-4">
-                            {storyLog.map((log, index) => (
-                                <div key={log.timestamp ? `log-${log.timestamp}-${index}` : `log-fallback-${index}`} className="pb-4 border-b border-foreground/10 last:border-b-0">
+                             {storyLog.map((log, index) => (
+                                <div key={log.timestamp ? `log-${log.timestamp}-${index}` : `log-fallback-${index}`} className="pb-4 group">
+                                    <p className="text-sm font-medium text-muted-foreground mb-1 opacity-70 group-hover:opacity-100 transition-opacity">Turn {index + 1} <span className="text-xs">({new Date(log.timestamp || Date.now()).toLocaleTimeString()})</span></p>
                                     <p className="text-base whitespace-pre-wrap leading-relaxed text-foreground">{log.narration}</p>
+                                     {/* Add separator unless it's the last item */}
+                                     {index < storyLog.length - 1 && <Separator className="mt-4 opacity-30 group-hover:opacity-70 transition-opacity"/>}
                                 </div>
-                            ))}
+                             ))}
                             {renderDynamicContent()}
                             {/* Ensure scroll end ref is inside scrollable content */}
                             <div ref={scrollEndRef} style={{ height: '1px' }} />
@@ -718,12 +720,12 @@ export function Gameplay() {
                    </Button>
                   <AlertDialog>
                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}> <ArrowLeft className="mr-2 h-4 w-4" /> Abandon </Button>
+                         <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}> <ArrowLeft className="mr-2 h-4 w-4" /> Abandon </Button>
                      </AlertDialogTrigger>
                      <AlertDialogContent>
                          <AlertDialogHeader>
                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                             <AlertDialogDescription> Abandoning the adventure will end your current progress (any unsaved changes will be lost) and return you to the main menu. </AlertDialogDescription>
+                             <AlertDialogDescription> Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu. </AlertDialogDescription>
                          </AlertDialogHeader>
                          <AlertDialogFooter>
                              <AlertDialogCancel>Cancel</AlertDialogCancel>
