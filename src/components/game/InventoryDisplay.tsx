@@ -43,15 +43,17 @@ export function InventoryDisplay() {
                        <div className="relative w-12 h-12 mb-1">
                            {item.imageDataUri ? (
                               <Image
-                                  src={item.imageDataUri}
+                                  src={item.imageDataUri} // Use the actual imageDataUri from context
                                   alt={item.name}
                                   layout="fill"
                                   objectFit="contain" // Use contain to see the whole item
                                   className="rounded-sm"
-                                  unoptimized // Necessary for URLs like picsum
+                                  unoptimized // Important for data URIs or external URLs like Picsum
+                                  // Optionally add a hint for AI image generation if needed later
+                                  data-ai-hint={item.name.toLowerCase().replace(/ /g, '_')} // Example hint: rusty_sword
                               />
                               ) : (
-                              // Skeleton loader while image is potentially generating
+                              // Skeleton loader while image is potentially generating or missing
                               <Skeleton className="w-full h-full rounded-sm" />
                               )}
                        </div>

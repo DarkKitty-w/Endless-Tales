@@ -52,15 +52,6 @@ const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null =
   }
 };
 
-// Placeholder for image URI generation
-async function generatePlaceholderImageUri(itemName: string): Promise<string> {
-    let hash = 0;
-    for (let i = 0; i < itemName.length; i++) hash = itemName.charCodeAt(i) + ((hash << 5) - hash);
-    const width = 200 + (Math.abs(hash) % 101);
-    const height = 200 + (Math.abs(hash >> 16) % 101);
-    return `https://picsum.photos/${width}/${height}?random=${encodeURIComponent(itemName)}&t=${Date.now()}`;
-}
-
 
 export function Gameplay() {
   const { state, dispatch } = useGame();
@@ -76,7 +67,7 @@ export function Gameplay() {
   const [diceResult, setDiceResult] = useState<number | null>(null);
   const [diceType, setDiceType] = useState<string>("None");
   const scrollEndRef = useRef<HTMLDivElement>(null);
-  const [isGeneratingInventoryImages, setIsGeneratingInventoryImages] = useState(false);
+  const [isGeneratingInventoryImages, setIsGeneratingInventoryImages] = useState(false); // Track image generation state locally if needed for UI feedback
   const [pendingClassChange, setPendingClassChange] = useState<string | null>(null); // State for pending class change confirmation
 
 
@@ -88,49 +79,20 @@ export function Gameplay() {
      }, 100);
   }, []);
 
-   // --- Handle Inventory Image Generation ---
-   const generateInventoryImages = useCallback(async (itemNames: string[]) => {
-       if (!itemNames || itemNames.length === 0 || isGeneratingInventoryImages) return;
-       const itemsInStateNeedingImage = inventory.filter(item => itemNames.includes(item.name) && !item.imageDataUri);
-       const namesInList = new Set(itemNames);
-       const itemsMissingFromList = inventory.filter(item => namesInList.has(item.name) && !item.imageDataUri);
-       const combinedNeedsGeneration = [...new Set([...itemsInStateNeedingImage, ...itemsMissingFromList])];
-       if (combinedNeedsGeneration.length === 0) {
-           const finalInventory = inventory.filter(item => namesInList.has(item.name));
-           if(finalInventory.length !== inventory.length || !finalInventory.every((item, index) => item.name === inventory[index]?.name)) {
-                dispatch({ type: "UPDATE_CHARACTER", payload: { inventory: finalInventory } as any });
-           }
-           return;
-       }
-       setIsGeneratingInventoryImages(true);
-       console.log("Generating images for inventory items:", combinedNeedsGeneration.map(i => i.name));
-       toast({ title: "Loading Item Images...", description: `Fetching visuals for ${combinedNeedsGeneration.length} item(s).`, duration: 2000 });
-       try {
-           const generationPromises = combinedNeedsGeneration.map(async (item) => {
-               const imageDataUri = await generatePlaceholderImageUri(item.name);
-               return { name: item.name, imageDataUri };
-           });
-           const generatedItemsData = await Promise.all(generationPromises);
-           const generatedMap = new Map(generatedItemsData.map(item => [item.name, item.imageDataUri]));
-           const finalInventory = itemNames.map(name => {
-               const existingItem = inventory.find(i => i.name === name);
-               const generatedUri = generatedMap.get(name);
-               return { name: name, description: existingItem?.description, imageDataUri: generatedUri || existingItem?.imageDataUri };
-           });
-           dispatch({ type: "UPDATE_CHARACTER", payload: { inventory: finalInventory } as any });
-           console.log("Finished generating inventory images.");
-       } catch (error) {
-           console.error("Error generating inventory images:", error);
-           toast({ title: "Image Loading Error", description: "Could not load some item images.", variant: "destructive" });
-           const fallbackInventory = itemNames.map(name => {
-               const existingItem = inventory.find(i => i.name === name);
-               return { name: name, description: existingItem?.description, imageDataUri: existingItem?.imageDataUri };
-            });
-           dispatch({ type: "UPDATE_CHARACTER", payload: { inventory: fallbackInventory } as any });
-       } finally {
-           setIsGeneratingInventoryImages(false);
-       }
-   }, [inventory, dispatch, toast, isGeneratingInventoryImages]);
+   // --- Handle Inventory Image Generation (now relies on context/reducer) ---
+   // Removed generateInventoryImages function from component state.
+   // The context reducer now handles async image generation and updates the state.
+   // We might still need the local isGeneratingInventoryImages state for UI feedback.
+
+   useEffect(() => {
+     // Check if any inventory items are missing images and set local loading state
+     const needsImages = inventory.some(item => !item.imageDataUri);
+     setIsGeneratingInventoryImages(needsImages);
+     if (needsImages) {
+        // Optional: Show a generic loading toast, but avoid spamming it.
+        // toast({ title: "Loading Item Images...", description: `Fetching visuals...`, duration: 1500 });
+     }
+   }, [inventory]);
 
 
   // --- Trigger Skill Tree Generation ---
@@ -347,10 +309,8 @@ export function Gameplay() {
       dispatch({ type: "UPDATE_NARRATION", payload: logEntryForResult });
       setError(null);
 
-      // Handle inventory image generation
-      if (result.updatedInventory) {
-         await generateInventoryImages(result.updatedInventory);
-      }
+      // Inventory image generation is now handled by the context reducer triggered by UPDATE_NARRATION.
+      // No need to call generateInventoryImages here.
 
       // Handle AI-driven progression AFTER updating narration/state
        if (result.progressedToStage && result.progressedToStage > character.skillTreeStage) {
@@ -401,7 +361,7 @@ export function Gameplay() {
   }, [
       character, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages,
       isGeneratingSkillTree, // Include skill tree generation state
-      currentGameStateString, currentNarration, storyLog, adventureSettings, dispatch, toast, scrollToBottom, generateInventoryImages,
+      currentGameStateString, currentNarration, storyLog, adventureSettings, dispatch, toast, scrollToBottom,
       triggerSkillTreeGeneration // Add trigger function dependency
   ]);
 
@@ -475,8 +435,9 @@ export function Gameplay() {
           } else if (!isLoading && !isGeneratingSkillTree) { // Only trigger narration if tree exists and not loading
              console.log("Gameplay: Triggering initial narration (skill tree exists).");
              handlePlayerAction("Begin the adventure by looking around.", true);
+             // Trigger inventory image update in context if needed
              if (inventory.length > 0) {
-                 generateInventoryImages(inventory.map(i => i.name));
+                dispatch({ type: "UPDATE_NARRATION", payload: { updatedInventory: inventory.map(i => i.name), narration: '', updatedGameState: currentGameStateString, timestamp: Date.now() } });
              }
           }
      } else if (isLoadedGame) {
@@ -487,12 +448,15 @@ export function Gameplay() {
               console.log("Gameplay (Load): Triggering skill tree generation for loaded character.");
               triggerSkillTreeGeneration(character.class);
           }
-          generateInventoryImages(inventory.map(i => i.name));
+           // Trigger inventory image update in context if needed
+           if (inventory.length > 0) {
+                dispatch({ type: "UPDATE_NARRATION", payload: { updatedInventory: inventory.map(i => i.name), narration: '', updatedGameState: currentGameStateString, timestamp: Date.now() } });
+           }
           requestAnimationFrame(scrollToBottom);
      }
   // Trigger specifically when skill tree becomes available after generation in a new game
   // Also re-trigger initial action if skill tree becomes available later and story log is still empty
-   }, [state.status, character?.name, character?.class, character?.skillTree, state.currentAdventureId, storyLog.length, isLoading, isEnding, isSaving, isGeneratingSkillTree, triggerSkillTreeGeneration, handlePlayerAction, generateInventoryImages, inventory, state.savedAdventures, toast, scrollToBottom]);
+   }, [state.status, character?.name, character?.class, character?.skillTree, state.currentAdventureId, storyLog.length, isLoading, isEnding, isSaving, isGeneratingSkillTree, triggerSkillTreeGeneration, handlePlayerAction, inventory, state.savedAdventures, toast, scrollToBottom, dispatch, currentGameStateString]);
 
 
    // Scroll to bottom effect
@@ -662,7 +626,7 @@ export function Gameplay() {
                       {/* Mobile Inventory Trigger */}
                      <Sheet>
                         <SheetTrigger asChild>
-                             <Button variant="ghost" size="icon" aria-label="Open Inventory">
+                            <Button variant="ghost" size="icon" aria-label="Open Inventory">
                                 <Backpack className="h-5 w-5" />
                             </Button>
                          </SheetTrigger>
@@ -772,7 +736,7 @@ export function Gameplay() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Class Change Suggested!</AlertDialogTitle>
                         <AlertDialogDescription>
-                             Your actions suggest a path closer to the <span className="font-semibold">{pendingClassChange}</span> class. Would you like to embrace this change? Your current class progress (<span className="font-semibold">{character.class} - {currentStageName} ({character.skillTreeStage}/4)</span>) will be reset, and you'll start fresh on the {pendingClassChange} skill tree at Stage 0. Your starter skills will remain.
+                             Your actions suggest a path closer to the <span className="font-semibold">{pendingClassChange}</span> class. Would you like to embrace this change? Your current class progress (<span className="font-semibold">{character.class} - {currentStageName} ({character.skillTreeStage}/4)</span>) will be reset, and you'll start fresh on the {pendingClassChange} skill tree at Stage 0. Your starter skills will change to match the new class.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

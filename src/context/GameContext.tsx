@@ -131,11 +131,56 @@ const calculateMaxStamina = (stats: CharacterStats): number => {
 
 const calculateMaxMana = (stats: CharacterStats, knowledge: string[]): number => {
     const baseMana = 10;
-    const knowledgeBonus = knowledge.includes("Magic") || knowledge.includes("Arcana") ? 20 : 0;
+    const knowledgeBonus = knowledge.includes("Magic") || knowledge.includes("Arcana") || knowledge.includes("Healing") ? 20 : 0; // Expanded check
     // Add bonus from a potential 'Intelligence' stat later if needed
     return baseMana + knowledgeBonus;
 };
 
+// --- Starter Skill Definitions ---
+const COMMON_STARTER_SKILL: Skill = { name: "Observe", description: "Carefully examine your surroundings.", type: 'Starter' };
+
+const CLASS_STARTER_SKILLS: Record<string, Skill[]> = {
+    "Warrior": [
+        { name: "Basic Strike", description: "A simple physical attack.", type: 'Starter', staminaCost: 5 },
+        { name: "Shield Block", description: "Raise your shield to deflect an incoming attack.", type: 'Starter', staminaCost: 10 }
+    ],
+    "Mage": [
+        { name: "Zap", description: "Hurl a small bolt of arcane energy.", type: 'Starter', manaCost: 5 },
+        { name: "Mana Shield", description: "Expend mana to create a temporary magical barrier.", type: 'Starter', manaCost: 10 }
+    ],
+    "Rogue": [
+        { name: "Sneak", description: "Attempt to move silently or hide.", type: 'Starter', staminaCost: 5 },
+        { name: "Quick Strike", description: "A fast dagger attack.", type: 'Starter', staminaCost: 5 }
+    ],
+    "Scholar": [
+        { name: "Analyze", description: "Examine an object or creature for weaknesses or details.", type: 'Starter' },
+        { name: "Distract", description: "Use words or a minor illusion to divert attention.", type: 'Starter', manaCost: 5 }
+    ],
+    "Hunter": [
+        { name: "Track", description: "Look for signs of passage or nearby creatures.", type: 'Starter' },
+        { name: "Aimed Shot", description: "Take careful aim for a more accurate ranged attack.", type: 'Starter', staminaCost: 10 }
+    ],
+    "Healer": [
+        { name: "Minor Heal", description: "Restore a small amount of health.", type: 'Starter', manaCost: 10 },
+        { name: "Ward", description: "Place a protective ward against minor harm.", type: 'Starter', manaCost: 5 }
+    ],
+    "Bard": [
+        { name: "Inspire", description: "Bolster courage or morale with a short performance.", type: 'Starter', manaCost: 5 },
+        { name: "Distract", description: "Use music or performance to divert attention.", type: 'Starter', manaCost: 5 }
+    ],
+    // Add more classes and their specific starter skills here
+    "Default": [ // Fallback for Adventurer or unknown classes
+        { name: "Basic Strike", description: "A simple physical attack.", type: 'Starter', staminaCost: 5 },
+        { name: "First Aid", description: "Attempt to patch up minor wounds.", type: 'Starter', staminaCost: 10 }
+    ],
+};
+
+function getStarterSkillsForClass(className: string): Skill[] {
+    const classSkills = CLASS_STARTER_SKILLS[className] || CLASS_STARTER_SKILLS["Default"];
+    return [COMMON_STARTER_SKILL, ...classSkills];
+}
+
+// --- Initial State ---
 const initialCharacterState: Character = {
   name: "",
   description: "",
@@ -151,7 +196,7 @@ const initialCharacterState: Character = {
   currentMana: calculateMaxMana({ strength: 5, stamina: 5, agility: 5 }, []),
   skillTree: null, // Starts with no skill tree
   skillTreeStage: 0, // Starts at stage 0
-  learnedSkills: [], // Starts with no learned skills
+  learnedSkills: [], // Initialized dynamically based on class
 };
 
 const initialState: GameState = {
@@ -266,19 +311,14 @@ function gameReducer(state: GameState, action: Action): GameState {
        const baseKnowledge = action.payload.knowledge ?? [];
        const maxStamina = calculateMaxStamina(baseStats);
        const maxMana = calculateMaxMana(baseStats, baseKnowledge);
-
-       // Starter Skills Example (can be moved to a config or generated based on class later)
-       const starterSkills: Skill[] = [
-           { name: "Observe", description: "Carefully examine your surroundings.", type: 'Starter' },
-           { name: "Basic Strike", description: "A simple physical attack.", type: 'Starter', staminaCost: 5 },
-           { name: "First Aid", description: "Attempt to patch up minor wounds.", type: 'Starter', manaCost: 0, staminaCost: 10 },
-       ];
+       const characterClass = action.payload.class ?? initialCharacterState.class;
+       const starterSkills = getStarterSkillsForClass(characterClass); // Get class-specific starter skills
 
       const newCharacter: Character = {
         ...initialCharacterState, // Use spread of initialCharacterState to ensure all fields are present
         name: action.payload.name ?? "",
         description: action.payload.description ?? "",
-        class: action.payload.class ?? initialCharacterState.class,
+        class: characterClass,
         traits: action.payload.traits ?? [],
         knowledge: baseKnowledge,
         background: action.payload.background ?? "",
@@ -290,7 +330,7 @@ function gameReducer(state: GameState, action: Action): GameState {
         currentMana: maxMana,
         skillTree: null,
         skillTreeStage: 0,
-        learnedSkills: starterSkills, // Add starter skills
+        learnedSkills: starterSkills, // Assign dynamic starter skills
       };
       return {
         ...state,
@@ -576,7 +616,7 @@ function gameReducer(state: GameState, action: Action): GameState {
                }))
            } : null,
            skillTreeStage: adventureToLoad.character?.skillTreeStage ?? 0,
-           learnedSkills: adventureToLoad.character?.learnedSkills ?? [], // Default to empty array if missing
+           learnedSkills: adventureToLoad.character?.learnedSkills ?? getStarterSkillsForClass(adventureToLoad.character?.class || "Adventurer"), // Provide default starter skills if missing
            aiGeneratedDescription: adventureToLoad.character?.aiGeneratedDescription ?? undefined,
        };
 
@@ -686,8 +726,8 @@ function gameReducer(state: GameState, action: Action): GameState {
             stages: validatedStages
          };
 
-          // Reset learned skills to only include starter skills
-         const starterSkills = state.character.learnedSkills.filter(skill => skill.type === 'Starter');
+          // Get starter skills for the *new* class
+         const starterSkills = getStarterSkillsForClass(action.payload.newClass);
 
          return {
              ...state,
@@ -696,7 +736,7 @@ function gameReducer(state: GameState, action: Action): GameState {
                  class: action.payload.newClass,
                  skillTree: newValidatedSkillTree,
                  skillTreeStage: 0, // Reset stage to 0
-                 learnedSkills: starterSkills, // Reset learned skills
+                 learnedSkills: starterSkills, // Assign starter skills for the new class
              },
              isGeneratingSkillTree: false,
          };
@@ -758,7 +798,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
                                  }))
                              } : null,
                              skillTreeStage: adv.character?.skillTreeStage ?? 0,
-                             learnedSkills: adv.character?.learnedSkills ?? [],
+                             learnedSkills: adv.character?.learnedSkills ?? getStarterSkillsForClass(adv.character?.class || "Adventurer"), // Default starter skills if missing on load
                              aiGeneratedDescription: adv.character?.aiGeneratedDescription ?? undefined,
                          };
 
@@ -827,3 +867,4 @@ export const useGame = () => {
   }
   return context;
 };
+
