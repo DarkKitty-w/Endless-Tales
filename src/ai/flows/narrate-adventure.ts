@@ -22,9 +22,11 @@ const CharacterStatsSchema = z.object({
 const SkillSchema = z.object({
     name: z.string().describe("The name of the skill."),
     description: z.string().describe("A brief description of what the skill does or represents."),
+    type: z.enum(["Starter", "Learned"]).optional().describe("Indicates if the skill was a starter skill or learned during gameplay."), // Added type
     manaCost: z.number().optional().describe("Mana cost to use the skill, if any."),
     staminaCost: z.number().optional().describe("Stamina cost to use the skill, if any."),
 });
+
 
 const SkillTreeSummarySchema = z.object({
     className: z.string().describe("The class the skill tree belongs to."),
@@ -65,14 +67,14 @@ const NarrateAdventureInputSchema = z.object({
     xp: z.number().describe("Character's current experience points."),
     xpToNextLevel: z.number().describe("Experience points needed for the next level."),
     reputation: z.record(z.number()).describe("Current reputation scores with various factions (e.g., {\"Town Guard\": 10, \"Thieves Guild\": -5})."),
-    npcRelationships: z.record(z.number()).describe("Current relationship scores with specific NPCs (e.g., {\"Elara\": 25, \"Guard Captain\": -10})."), // Add NPC relationships
+    npcRelationships: z.record(z.number()).describe("Current relationship scores with specific NPCs (e.g., {\"Elara\": 25, \"Guard Captain\": -10})."), // Keep schema, remove from prompt for now
     skillTreeSummary: SkillTreeSummarySchema.describe("A summary of the character's current class skill tree and available skills at their stage."), // Add skill tree summary
     skillTreeStage: z.number().min(0).max(4).describe("The character's current skill progression stage (0-4). Stage affects available actions/skill power."), // Add current stage
     learnedSkills: z.array(z.string()).describe("List of skill names the character has actually learned."), // Add learned skills list
     aiGeneratedDescription: z.string().optional().describe('Optional detailed AI-generated character profile.'),
   }).describe('The player character details.'),
   playerChoice: z.string().describe('The player\'s chosen action or command. May include dice roll result like "(Dice Roll Result: 4)". May be an attempt to use a learned skill by name.'),
-  gameState: z.string().describe('A string representing the current state of the game, including location, **current full inventory list**, ongoing events, character progression milestones achieved, **and known NPC states/relationships**.'), // Emphasize inventory and NPC relationships needed
+  gameState: z.string().describe('A string representing the current state of the game, including location, **current full inventory list**, ongoing events, character progression milestones achieved, **and known NPC states**.'), // Temporarily removed relationships from description
   previousNarration: z.string().optional().describe('The narration text immediately preceding the player\'s current choice, for context.'),
   adventureSettings: z.object({ // Include adventure settings
       difficulty: z.string().describe("Overall game difficulty (e.g., Easy, Normal, Hard, Nightmare). Influences challenge levels and potential event triggers."),
@@ -84,7 +86,7 @@ const NarrateAdventureInputSchema = z.object({
 
 const NarrateAdventureOutputSchema = z.object({
   narration: z.string().describe('**REQUIRED.** The AI-generated narration describing the outcome of the action and the current situation. **Should occasionally introduce branching choices or dynamic events.**'),
-  updatedGameState: z.string().describe('**REQUIRED.** The updated state of the game string after the player action and narration. **MUST accurately reflect changes** in location, inventory, character status (including stamina/mana, level, XP, reputation, NPC relationships), time, or achieved milestones. **MUST include the current Turn count (e.g., "Turn: 16").**'),
+  updatedGameState: z.string().describe('**REQUIRED.** The updated state of the game string after the player action and narration. **MUST accurately reflect changes** in location, inventory, character status (including stamina/mana, level, XP, reputation), time, or achieved milestones. **MUST include the current Turn count (e.g., "Turn: 16").**'), // Temporarily removed npc relationships from description
   updatedStats: CharacterStatsSchema.partial().optional().describe('Optional: Changes to character stats resulting from the narration (e.g., gained 1 strength). **Only include if stats actually changed.**'),
   updatedTraits: z.array(z.string()).optional().describe('Optional: The complete new list of character traits **only if they changed.**'),
   updatedKnowledge: z.array(z.string()).optional().describe('Optional: The complete new list of character knowledge areas **only if they changed.**'),
@@ -122,7 +124,7 @@ const narrateAdventurePrompt = ai.definePrompt({
 
 **Game Context:**
 {{{gameState}}}
-*Note: The game state string above contains the character's current inventory, status, level, XP, reputation, NPC relationships, and progress.*
+*Note: The game state string above contains the character's current inventory, status, level, XP, reputation, known NPC states and progress.*
 
 {{#if previousNarration}}
 **Previous Scene:**
@@ -134,7 +136,6 @@ Name: {{{character.name}}}
 Class: {{{character.class}}} (Level {{{character.level}}})
 XP: {{{character.xp}}}/{{{character.xpToNextLevel}}}
 Reputation: {{#if character.reputation}}{{#each character.reputation}} {{ @key }}: {{ this }}; {{/each}}{{else}}None{{/if}}
-NPC Relationships: {{#if character.npcRelationships}}{{#each character.npcRelationships}} {{ @key }}: {{ this }}; {{/each}}{{else}}None{{/if}}
 Stats: Strength {{{character.stats.strength}}}, Stamina {{{character.stats.stamina}}}, Agility {{{character.stats.agility}}}
 Resources: Stamina {{{character.currentStamina}}}/{{{character.maxStamina}}}, Mana {{{character.currentMana}}}/{{{character.maxMana}}}
 Traits: {{#if character.traits}}{{#each character.traits}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{else}}None{{/if}}
@@ -152,25 +153,25 @@ Description: {{{character.description}}}
 **Your Task:**
 Generate the next part of the story based on ALL the information above.
 
-1.  **React Dynamically:** Describe the outcome of the player's action. Consider their character's class, level, xp, reputation, **NPC relationships**, stats, **current stamina and mana**, traits, knowledge, background, *current skill stage*, **learned skills**, inventory, the current gameState, and the **game difficulty**.
+1.  **React Dynamically:** Describe the outcome of the player's action. Consider their character's class, level, xp, reputation, relationships, stats, **current stamina and mana**, traits, knowledge, background, *current skill stage*, **learned skills**, inventory, the current gameState, and the **game difficulty**.
 2.  **Logical Progression, Resource Costs & Restrictions:**
     *   **Evaluate Feasibility:** Assess if the action is logically possible. *Actions tied to higher skill stages should only be possible if the character has reached that stage.* Harder difficulties might make certain actions less feasible initially.
-    *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output staminaChange, manaChange **only if they changed**.
+    *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output \`staminaChange\`, \`manaChange\` **only if they changed**.
     *   **Block Impossible Actions:** Prevent universe-breaking actions unless EXTREME justification exists in gameState AND skill stage is high.
-    *   **Narrate Failure Reason:** If blocked/failed, explain why (lack of skill, resources, item, stage, reputation, NPC relationships, difficulty, etc.).
+    *   **Narrate Failure Reason:** If blocked/failed, explain why (lack of skill, resources, item, stage, reputation, **NPC relationships**, difficulty, etc.).
     *   **Skill-based Progression:** Very powerful actions require high milestones AND skill stages.
 3.  **Incorporate Dice Rolls:** Interpret dice roll results (e.g., "(Difficulty: Hard, Dice Roll Result: 75/100)") contextually. High rolls succeed, low rolls fail, adjusted by **game difficulty**. Narrate the degree of success/failure. Success might grant more XP or better reputation/relationship changes. Failure might have negative consequences, potentially more severe on higher difficulties.
 4.  **Consequences, Resources, XP, Reputation, Relationships & Character Progression:**
-    *   **Resource Changes:** If current stamina or mana changed, include staminaChange or manaChange. **Do not include if unchanged.**
-    *   **XP Awards:** If the action was significant (overcame challenge, clever solution, quest progress), award XP via xpGained (adjust based on **difficulty** - harder challenges grant more). **Only include if XP was gained.**
-    *   **Reputation Changes:** If the action affects a faction's view, include reputationChange. **Only include if reputation changed.**
-    *   **NPC Relationship Changes:** If the action affects an NPC's view, include npcRelationshipChange. **Only include if relationship changed.**
+    *   **Resource Changes:** If current stamina or mana changed, include \`staminaChange\` or \`manaChange\`. **Do not include if unchanged.**
+    *   **XP Awards:** If the action was significant (overcame challenge, clever solution, quest progress), award XP via \`xpGained\` (adjust based on **difficulty** - harder challenges grant more). **Only include if XP was gained.**
+    *   **Reputation Changes:** If the action affects a faction's view, include \`reputationChange\`. **Only include if reputation changed.**
+    *   **NPC Relationship Changes:** If the action affects an NPC's view, include \`npcRelationshipChange\`. **Only include if relationship changed.**
     *   **Character Progression (Optional):** If events lead to development:
         *   Include updatedStats, updatedTraits, updatedKnowledge. **Only include if they changed.**
         *   **Skill Stage Progression:** Include progressedToStage **only if milestones warrant advancement.**
         *   **Class Change Suggestion:** Include suggestedClassChange **only if actions strongly align elsewhere.**
         *   **Gaining Skills:** Include gainedSkill **only if appropriate.**
-5.  **Update Game State:** **REQUIRED.** Modify the 'gameState' string concisely to reflect ALL changes (location, **inventory**, NPC mood, **NPC relationships**, time, quest progress, milestones, **status including resources, level, XP, and reputation**). **Ensure the inventory listed in the 'updatedGameState' string is the character's complete and accurate inventory after the action.** **MUST include the current Turn count (e.g., "Turn: 16").**
+5.  **Update Game State:** **REQUIRED.** Modify the 'gameState' string concisely to reflect ALL changes (location, **inventory**, NPC mood, time, quest progress, milestones, **status including resources, level, XP, reputation, and NPC relationships**). **Ensure the inventory listed in the 'updatedGameState' string is the character's complete and accurate inventory after the action.** **MUST include the current Turn count (e.g., "Turn: 16").**
 6.  **Branching Narratives & Dynamic Events (Introduce Occasionally):**
     *   **Branching Choices:** At significant moments, present 2-4 meaningful 'branchingChoices' that significantly alter the path forward. Provide optional subtle 'consequenceHint' for each. **Only include if relevant.**
     *   **Dynamic Events:** Based on 'turnCount' or randomness (especially on higher difficulties), trigger a 'dynamicEventTriggered'. This event should integrate into the current narration. Keep these events relatively infrequent. **Only include if triggered.**
@@ -184,7 +185,7 @@ Generate the next part of the story based on ALL the information above.
 Example Output (Success with XP and branching choice):
 {
   "narration": "You successfully sneak past the sleeping goblin! Ahead, the tunnel forks. To the left, you hear dripping water. To the right, a faint metallic clang echoes.",
-  "updatedGameState": "Turn: 15\\nLocation: Goblin Tunnel\\nInventory: Torch, Sword, Lockpicks\\nStatus: Healthy (STA: 90/100, MANA: 15/20)\\nTime: Night\\nQuest: Find Cave Exit\\nCharacter Class: Rogue (Level 2, 160/250 XP)\\nReputation: None\\nNPC Relationships: None\\nLearned Skills: Observe, Sneak, Quick Strike",
+  "updatedGameState": "Turn: 15\\nLocation: Goblin Tunnel\\nInventory: Torch, Sword, Lockpicks\\nStatus: Healthy (STA: 90/100, MANA: 15/20)\\nLevel: 2, XP: 160/250\\nReputation: None\\nNPC Relationships: None\\nLearned Skills: Observe, Sneak, Quick Strike",
   "xpGained": 15,
   "staminaChange": -5,
   "branchingChoices": [
@@ -196,7 +197,7 @@ Example Output (Success with XP and branching choice):
 Example Output (Failure with no other changes):
 {
   "narration": "You try to force the rusty lever, but it refuses to budge. Your muscles strain, but it's stuck fast.",
-  "updatedGameState": "Turn: 17\\nLocation: Rusty Lever Room\\nInventory: Torch, Rope\\nStatus: Healthy (STA: 85/95, MANA: 10/10)\\nTime: Afternoon\\nQuest: Open the Gate\\nCharacter Class: Warrior (Level 1, 50/100 XP)\\nReputation: Town Guard: 5\\nNPC Relationships: Guard Captain: -5\\nLearned Skills: Basic Strike, Shield Block, Observe",
+  "updatedGameState": "Turn: 17\\nLocation: Rusty Lever Room\\nInventory: Torch, Rope\\nStatus: Healthy (STA: 85/95, MANA: 10/10)\\nLevel: 1, XP: 50/100\\nReputation: Town Guard: 5\\nNPC Relationships: Guard Captain: -5\\nLearned Skills: Basic Strike, Shield Block, Observe",
   "staminaChange": -5
 }
 `,
@@ -378,6 +379,5 @@ const narrateAdventureFlow = ai.defineFlow<
     };
   }
 );
-
-
-
+    
+    

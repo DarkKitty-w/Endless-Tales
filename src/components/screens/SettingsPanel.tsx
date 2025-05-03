@@ -96,3 +96,5 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
         </SheetContent>
     );
 }
+
+    

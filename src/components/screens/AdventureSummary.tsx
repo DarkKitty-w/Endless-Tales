@@ -78,3 +78,5 @@ export function AdventureSummary() {
     </div>
   );
 }
+
+    
