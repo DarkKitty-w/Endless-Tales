@@ -9,7 +9,7 @@
 
 import { ai } from '@/ai/ai-instance';
 import { z } from 'genkit';
-import type { InventoryItem, ItemQuality } from '@/context/GameContext'; // Import types
+import type { InventoryItem, ItemQuality } from '@/types/game-types'; // Import types
 
 // Define possible crafting outcomes/quality levels if needed directly in output
 const ItemQualitySchema = z.enum(["Poor", "Common", "Uncommon", "Rare", "Epic", "Legendary"]).optional();
@@ -153,6 +153,3 @@ const attemptCraftingFlow = ai.defineFlow<
      return output;
   }
 );
-
-    
-    

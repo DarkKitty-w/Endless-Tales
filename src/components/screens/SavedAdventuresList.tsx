@@ -2,7 +2,8 @@
 "use client";
 
 import React from "react";
-import { useGame, type SavedAdventure, type Character, type Reputation, type NpcRelationships } from "@/context/GameContext"; // Import Character, Reputation, NpcRelationships
+import { useGame } from "@/context/GameContext"; // Import main context hook
+import type { SavedAdventure, Character, Reputation, NpcRelationships } from "@/types/game-types"; // Import types from central location
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
@@ -194,5 +195,3 @@ export function SavedAdventuresList() {
     </div>
   );
 }
-
-    

@@ -9,7 +9,7 @@
 
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
-import type { CharacterStats, SkillTree, Skill, ReputationChange, NpcRelationshipChange } from '@/context/GameContext'; // Import Skill and Reputation/NPC Relationship Change types
+import type { CharacterStats, SkillTree, Skill, ReputationChange, NpcRelationshipChange } from '@/types/game-types'; // Import types from central location
 import { toast } from '@/hooks/use-toast'; // Import toast for user feedback
 
 // --- Zod Schemas (Internal - Not Exported) ---
@@ -136,6 +136,7 @@ Name: {{{character.name}}}
 Class: {{{character.class}}} (Level {{{character.level}}})
 XP: {{{character.xp}}}/{{{character.xpToNextLevel}}}
 Reputation: {{#if character.reputation}}{{#each character.reputation}} {{ @key }}: {{ this }}; {{/each}}{{else}}None{{/if}}
+Relationships: {{#if character.npcRelationships}}{{#each character.npcRelationships}} {{ @key }}: {{ this }}; {{/each}}{{else}}None{{/if}}
 Stats: Strength {{{character.stats.strength}}}, Stamina {{{character.stats.stamina}}}, Agility {{{character.stats.agility}}}
 Resources: Stamina {{{character.currentStamina}}}/{{{character.maxStamina}}}, Mana {{{character.currentMana}}}/{{{character.maxMana}}}
 Traits: {{#if character.traits}}{{#each character.traits}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{else}}None{{/if}}
@@ -379,5 +380,3 @@ const narrateAdventureFlow = ai.defineFlow<
     };
   }
 );
-    
-    

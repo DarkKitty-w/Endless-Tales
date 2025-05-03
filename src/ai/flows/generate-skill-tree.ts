@@ -9,7 +9,7 @@
 
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
-import type { SkillTree, SkillTreeStage, Skill } from '@/context/GameContext'; // Import types
+import type { SkillTree, SkillTreeStage, Skill } from '@/types/game-types'; // Import types from central location
 
 // --- Zod Schemas (Internal - Not Exported) ---
 // Define input schema first
@@ -171,5 +171,3 @@ const generateSkillTreeFlow = ai.defineFlow<
      return output; // Return the validated output
   }
 );
-
-    

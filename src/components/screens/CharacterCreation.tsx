@@ -5,7 +5,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import { useGame, type Character, type CharacterStats } from "@/context/GameContext";
+import { useGame } from "@/context/GameContext";
+import type { Character, CharacterStats } from "@/types/game-types"; // Import centralized types
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -48,8 +49,7 @@ const basicCreationSchema = baseCharacterSchema.extend({
 
 const textCreationSchema = baseCharacterSchema.extend({
   creationType: z.literal("text"),
-  description: z.string().min(10, "Please provide a brief description (at least 10 characters)."), // Removed max(300)
-  // Class etc. are derived or default in text mode initially
+  description: z.string().min(10, "Please provide a brief description (at least 10 characters)."),
 });
 
 const combinedSchema = z.discriminatedUnion("creationType", [
@@ -341,11 +341,6 @@ export function CharacterCreation() {
    }, [creationType, reset, watch, setValue, trigger]);
 
 
-  // Reset validation state when component mounts if needed (optional)
-  // useEffect(() => {
-  //   reset();
-  // }, [reset]);
-
   // Update slider max values dynamically based on remaining points
    const getMaxSliderValue = useCallback((statName: keyof CharacterStats) => {
      const otherStatsTotal = Object.entries(stats)
@@ -570,5 +565,3 @@ export function CharacterCreation() {
     </div>
   );
 }
-
-    

@@ -2,7 +2,7 @@
 "use client";
 
 import React from "react";
-import type { SkillTree, Skill } from "@/context/GameContext"; // Import Skill type
+import type { SkillTree, Skill } from "@/types/game-types"; // Import types from central location
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/game/CardboardCard";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";

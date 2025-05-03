@@ -2,8 +2,9 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useGame, type InventoryItem, type StoryLogEntry, type SkillTree, type Skill, type Character, type Reputation, type NpcRelationships } from "@/context/GameContext"; // Added NpcRelationships
-import { calculateXpToNextLevel } from "@/lib/utils"; // Import from lib/utils
+import { useGame } from "@/context/GameContext"; // Import main context hook
+import type { InventoryItem, StoryLogEntry, SkillTree, Skill, Character, Reputation, NpcRelationships } from "@/types/game-types"; // Import types
+import { calculateXpToNextLevel } from "@/lib/gameUtils"; // Import specific game utils
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -55,7 +56,7 @@ import { Progress } from "../ui/progress"; // Import Progress
 import { Skeleton } from "../ui/skeleton";
 import { Label } from "../ui/label"; // Import Label
 import { Badge } from "../ui/badge"; // Import Badge for item selection
-import { getQualityColor } from "@/lib/utils"; // Import quality color helper
+import { getQualityColor } from "@/lib/utils"; // Import quality color helper (kept in main utils)
 
 // Helper function to map difficulty dice string to roller function
 const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null => {

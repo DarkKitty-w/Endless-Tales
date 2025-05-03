@@ -1,7 +1,8 @@
 // src/components/game/InventoryDisplay.tsx
 "use client";
 
-import { useGame, type ItemQuality } from "@/context/GameContext";
+import { useGame } from "@/context/GameContext";
+import type { ItemQuality } from "@/types/game-types"; // Import types from central location
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Backpack, PackageSearch, Package, Info, Weight, Gem, Sparkles, HeartCrack, ShieldCheck } from "lucide-react"; // Added icons
 import { Badge } from "@/components/ui/badge";

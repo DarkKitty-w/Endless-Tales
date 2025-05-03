@@ -3,6 +3,7 @@
 
 import React from "react";
 import { useGame } from "@/context/GameContext";
+import type { StoryLogEntry } from "@/types/game-types"; // Import type
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
@@ -78,5 +79,3 @@ export function AdventureSummary() {
     </div>
   );
 }
-
-    
