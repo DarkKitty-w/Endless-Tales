@@ -35,7 +35,8 @@ const commaSeparatedMaxItems = (max: number, message: string) =>
   z.string()
    .max(200, `Input too long (max 200 chars).`) // Add a general max length for the string itself
    .refine(val => val === undefined || val === "" || val.split(',').map(s => s.trim()).filter(Boolean).length <= max, { message })
-   .optional(); // Make the whole thing optional
+   .optional() // Allow empty string
+   .transform(val => val || ""); // Transform undefined/null to empty string if needed
 
 
 const basicCreationSchema = baseCharacterSchema.extend({
@@ -43,8 +44,7 @@ const basicCreationSchema = baseCharacterSchema.extend({
   class: z.string().min(1, "Class is required.").max(30, "Class name too long (max 30).").default("Adventurer"), // Add class field
   traits: commaSeparatedMaxItems(5, "Max 5 traits allowed (comma-separated)."),
   knowledge: commaSeparatedMaxItems(5, "Max 5 knowledge areas allowed (comma-separated)."),
-  // Ensure optional fields have max length BEFORE optional()
-  background: z.string().max(100, "Background too long (max 100).").optional(),
+  background: z.string().max(100, "Background too long (max 100).").optional().transform(val => val || ""),
 });
 
 const textCreationSchema = baseCharacterSchema.extend({
@@ -88,9 +88,6 @@ export function CharacterCreation() {
      },
    });
 
-   // Watch the description field in text mode
-   const textDescription = watch("description");
-   const currentName = watch("name"); // Watch name for enabling AI generation
 
   // --- Stat Allocation Logic ---
  const handleStatChange = useCallback((statName: keyof CharacterStats, value: number) => {
@@ -215,10 +212,14 @@ const randomizeStats = useCallback(() => {
   }, [creationType, reset, setValue, randomizeStats, toast, trigger]);
 
 
+  // Watch form values for dynamic checks
+  const watchedName = watch("name");
+  const watchedDescription = watch("description");
+
   // --- AI Description Generation ---
   const handleGenerateDescription = async () => {
-      // Also require a name for context, though AI doesn't explicitly use it in the prompt
-     if (!currentName || !textDescription || textDescription.length < 10) {
+     // Use watched values directly for the check
+     if (!watchedName || !watchedDescription || watchedDescription.length < 10) {
        setError("Please provide a name and a brief description (at least 10 characters) before generating.");
        toast({ title: "Input Required", description: "Name and description needed for AI generation.", variant: "destructive"});
        return;
@@ -226,7 +227,7 @@ const randomizeStats = useCallback(() => {
      setError(null);
      setIsGenerating(true);
      try {
-       const result = await generateCharacterDescription({ characterDescription: textDescription });
+       const result = await generateCharacterDescription({ characterDescription: watchedDescription });
         // Store the AI description in the game state context
         dispatch({ type: "SET_AI_DESCRIPTION", payload: result.detailedDescription });
         toast({
@@ -445,7 +446,7 @@ const randomizeStats = useCallback(() => {
                                          <Button
                                             type="button"
                                             onClick={handleGenerateDescription}
-                                            disabled={isGenerating || !currentName || !textDescription || textDescription.length < 10}
+                                            disabled={isGenerating || !watchedName || !watchedDescription || watchedDescription.length < 10}
                                             variant="outline"
                                             size="sm"
                                             aria-label="Generate detailed description using AI"
@@ -456,7 +457,7 @@ const randomizeStats = useCallback(() => {
                                     </TooltipTrigger>
                                     <TooltipContent>
                                         <p>Let AI expand on your description for a richer character profile (optional, stored separately).</p>
-                                        <p>Requires a name and description first.</p>
+                                        <p className="text-xs text-muted-foreground">Requires a name and a description (min 10 chars) first.</p>
                                     </TooltipContent>
                                 </Tooltip>
                             </TooltipProvider>
@@ -542,3 +543,5 @@ const randomizeStats = useCallback(() => {
     </div>
   );
 }
+
+    
