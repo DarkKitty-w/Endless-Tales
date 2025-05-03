@@ -1,4 +1,3 @@
-// src/ai/flows/generate-skill-tree.ts
 'use server';
 /**
  * @fileOverview An AI agent that generates a 4-stage skill tree for a given character class, including stage names.
@@ -12,7 +11,16 @@ import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
 import type { SkillTree, SkillTreeStage, Skill } from '@/context/GameContext'; // Import types
 
-// Define Zod schemas for the skill tree structure
+// --- Zod Schemas (Internal - Not Exported) ---
+// Define input schema first
+const GenerateSkillTreeInputSchema = z.object({
+  characterClass: z.string().describe('The character class for which to generate the skill tree (e.g., Warrior, Mage, Rogue, Scholar).'),
+  // Optional: Add character traits/knowledge for more tailored trees later
+  // characterTraits: z.array(z.string()).optional().describe("Character's defining traits."),
+  // characterKnowledge: z.array(z.string()).optional().describe("Character's areas of expertise."),
+});
+
+// Define the structure of a single skill
 const SkillSchema = z.object({
     name: z.string().describe("The name of the skill."),
     description: z.string().describe("A brief description of what the skill does or represents."),
@@ -20,41 +28,34 @@ const SkillSchema = z.object({
     staminaCost: z.number().optional().describe("Stamina cost to use the skill, if any."), // Add costs
 });
 
+// Define the structure of a skill tree stage
 const SkillTreeStageSchema = z.object({
     stage: z.number().min(0).max(4).describe("The progression stage (0-4). Stage 0 is 'Potential'."), // Allow stage 0
     stageName: z.string().describe("A thematic name for this stage (e.g., Apprentice, Adept, Master, Grandmaster). Stage 0 should be named 'Potential' or similar."), // Added stage name
     skills: z.array(SkillSchema).min(0).max(3).describe("A list of 0-3 skills unlocked at this stage. Stage 0 has no skills."), // Define min/max skills per stage, 0 for stage 0
 });
 
-const SkillTreeSchema = z.object({
+// Define the final output schema (Skill Tree)
+const GenerateSkillTreeOutputSchema = z.object({
     className: z.string().describe("The character class this skill tree belongs to."),
     stages: z.array(SkillTreeStageSchema).length(5).describe("An array containing exactly 5 skill tree stages (0-4)."), // Ensure 5 stages
 });
 
-// Define input/output schemas for the flow
-const GenerateSkillTreeInputSchema = z.object({
-  characterClass: z.string().describe('The character class for which to generate the skill tree (e.g., Warrior, Mage, Rogue, Scholar).'),
-  // Optional: Add character traits/knowledge for more tailored trees later
-  // characterTraits: z.array(z.string()).optional().describe("Character's defining traits."),
-  // characterKnowledge: z.array(z.string()).optional().describe("Character's areas of expertise."),
-});
+// --- Exported Types (Derived from internal schemas) ---
 export type GenerateSkillTreeInput = z.infer<typeof GenerateSkillTreeInputSchema>;
-
-// Output schema uses the defined SkillTreeSchema
-const GenerateSkillTreeOutputSchema = SkillTreeSchema;
 export type GenerateSkillTreeOutput = z.infer<typeof GenerateSkillTreeOutputSchema>;
 
-// Exported function to call the flow
+// --- Exported Async Function ---
 export async function generateSkillTree(input: GenerateSkillTreeInput): Promise<GenerateSkillTreeOutput> {
   console.log("Initiating skill tree generation for class:", input.characterClass);
   return generateSkillTreeFlow(input);
 }
 
-// AI Prompt Definition
+// --- Internal Prompt and Flow Definitions ---
 const generateSkillTreePrompt = ai.definePrompt({
   name: 'generateSkillTreePrompt',
   input: { schema: GenerateSkillTreeInputSchema },
-  output: { schema: GenerateSkillTreeOutputSchema },
+  output: { schema: GenerateSkillTreeOutputSchema }, // Use the renamed schema
   prompt: `You are a creative game designer crafting skill trees for the text adventure "Endless Tales". Generate a unique and thematic 5-stage skill tree (stages 0 through 4) for the following character class:
 
 **Character Class:** {{{characterClass}}}

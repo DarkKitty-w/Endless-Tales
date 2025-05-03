@@ -10,7 +10,7 @@
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
 
-// Define standard classes for better inference consistency
+// --- Zod Schemas (Internal - Not Exported) ---
 const CharacterClasses = z.enum([
     "Warrior", "Mage", "Rogue", "Scholar", "Hunter", "Healer", "Bard", "Artisan", "Noble", "Commoner", "Adventurer" // Added Adventurer as a fallback
 ]).default("Adventurer"); // Default if cannot infer
@@ -20,7 +20,6 @@ const GenerateCharacterDescriptionInputSchema = z.object({
     .string()
     .describe("A free-text description of the character's appearance, personality, and backstory."),
 });
-export type GenerateCharacterDescriptionInput = z.infer<typeof GenerateCharacterDescriptionInputSchema>;
 
 const GenerateCharacterDescriptionOutputSchema = z.object({
   detailedDescription: z
@@ -31,21 +30,26 @@ const GenerateCharacterDescriptionOutputSchema = z.object({
   inferredKnowledge: z.array(z.string()).max(5).describe("A list of up to 5 distinct areas of knowledge or skills inferred (e.g., Herbalism, Swordplay, Ancient History)."),
   inferredBackground: z.string().max(100).describe("A brief background summary inferred from the description (e.g., Exiled Noble, Village Blacksmith, Mysterious Wanderer)."),
 });
+
+// --- Exported Types (Derived from internal schemas) ---
+export type GenerateCharacterDescriptionInput = z.infer<typeof GenerateCharacterDescriptionInputSchema>;
 export type GenerateCharacterDescriptionOutput = z.infer<typeof GenerateCharacterDescriptionOutputSchema>;
 
+// --- Exported Async Function ---
 export async function generateCharacterDescription(
   input: GenerateCharacterDescriptionInput
 ): Promise<GenerateCharacterDescriptionOutput> {
   return generateCharacterDescriptionFlow(input);
 }
 
+// --- Internal Prompt and Flow Definitions ---
 const prompt = ai.definePrompt({
   name: 'generateCharacterDescriptionPrompt',
   input: { schema: GenerateCharacterDescriptionInputSchema },
   output: { schema: GenerateCharacterDescriptionOutputSchema },
   prompt: `You are a fantasy story writer and character profiler. Based on the provided character description:
 
-1.  **Elaborate:** Write a detailed character profile that expands on the user's description, capturing appearance, personality, and potential backstory hints. Store this in 'detailedDescription'.
+1.  **Elaborate:** Write a detailed character profile that expands on the user's description, capturing appearance, personality, and potential backstory hints. **This elaborated text should be the main content of the 'detailedDescription' field.**
 2.  **Infer Class:** Determine the most fitting character class from the list [Warrior, Mage, Rogue, Scholar, Hunter, Healer, Bard, Artisan, Noble, Commoner, Adventurer]. Prioritize specific classes if strongly suggested, otherwise default to 'Adventurer'. Store this in 'inferredClass'.
 3.  **Infer Traits:** Identify and list up to 5 distinct personality traits evident in the description. Store these as an array of strings in 'inferredTraits'.
 4.  **Infer Knowledge/Skills:** Identify and list up to 5 distinct areas of knowledge or key skills mentioned or strongly implied. Store these as an array of strings in 'inferredKnowledge'.
@@ -54,7 +58,7 @@ const prompt = ai.definePrompt({
 **User's Character Description:**
 {{{characterDescription}}}
 
-**Output Format:** Respond ONLY with the JSON object matching the GenerateCharacterDescriptionOutput schema. Ensure all fields (detailedDescription, inferredClass, inferredTraits, inferredKnowledge, inferredBackground) are populated correctly based on your inferences.
+**Output Format:** Respond ONLY with the JSON object matching the GenerateCharacterDescriptionOutput schema. Ensure all fields (detailedDescription, inferredClass, inferredTraits, inferredKnowledge, inferredBackground) are populated correctly based on your inferences. The 'detailedDescription' should be your elaborated version of the user's input.
 `,
 });
 

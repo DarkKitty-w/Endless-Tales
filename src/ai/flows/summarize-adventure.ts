@@ -1,5 +1,4 @@
 'use server';
-
 /**
  * @fileOverview Summarizes the key events, choices, and consequences of a player's adventure.
  *
@@ -11,40 +10,33 @@
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
 
+// --- Zod Schemas (Internal - Not Exported) ---
 const SummarizeAdventureInputSchema = z.object({
   story: z
     .string()
     .describe('The full text of the adventure story to summarize.'),
 });
-export type SummarizeAdventureInput = z.infer<typeof SummarizeAdventureInputSchema>;
 
 const SummarizeAdventureOutputSchema = z.object({
   summary: z
     .string()
     .describe('A concise summary of the adventure, including key events, choices, and consequences.'),
 });
+
+// --- Exported Types (Derived from internal schemas) ---
+export type SummarizeAdventureInput = z.infer<typeof SummarizeAdventureInputSchema>;
 export type SummarizeAdventureOutput = z.infer<typeof SummarizeAdventureOutputSchema>;
 
+// --- Exported Async Function ---
 export async function summarizeAdventure(input: SummarizeAdventureInput): Promise<SummarizeAdventureOutput> {
   return summarizeAdventureFlow(input);
 }
 
+// --- Internal Prompt and Flow Definitions ---
 const prompt = ai.definePrompt({
   name: 'summarizeAdventurePrompt',
-  input: {
-    schema: z.object({
-      story: z
-        .string()
-        .describe('The full text of the adventure story to summarize.'),
-    }),
-  },
-  output: {
-    schema: z.object({
-      summary: z
-        .string()
-        .describe('A concise summary of the adventure, including key events, choices, and consequences.'),
-    }),
-  },
+  input: { schema: SummarizeAdventureInputSchema },
+  output: { schema: SummarizeAdventureOutputSchema },
   prompt: `You are an AI assistant that summarizes adventure stories. Please provide a concise summary of the following adventure, including the key events, choices, and consequences:\n\n{{{story}}}`,
 });
 

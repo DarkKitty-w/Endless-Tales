@@ -81,10 +81,18 @@ export interface AdventureSettings {
   difficulty?: string;
 }
 
+// Updated InventoryItem type
+export type ItemQuality = "Poor" | "Common" | "Uncommon" | "Rare" | "Epic" | "Legendary";
+
 export interface InventoryItem {
     name: string;
-    description?: string;
+    description: string; // Make description mandatory
+    weight?: number; // Optional weight
+    durability?: number; // Optional durability (e.g., 0-100)
+    magicalEffect?: string; // Optional description of magical effects
+    quality?: ItemQuality; // Optional quality level
 }
+
 
 // Structure for AI-driven reputation changes
 export interface ReputationChange {
@@ -92,11 +100,19 @@ export interface ReputationChange {
     change: number; // Positive or negative change amount
 }
 
+// Structure for crafting results (placeholder, might be expanded)
+export interface CraftedItemResult {
+    success: boolean;
+    item?: InventoryItem; // The crafted item if successful
+    message: string; // Message about the crafting attempt
+}
+
 
 export interface StoryLogEntry {
   narration: string;
   updatedGameState: string;
-  updatedInventory?: string[];
+  // Inventory changes are now inferred from gameState or handled by specific actions
+  // updatedInventory?: InventoryItem[]; // Use full items instead of just names if needed
   // Character progression updates from AI
   updatedStats?: Partial<CharacterStats>;
   updatedTraits?: string[];
@@ -111,6 +127,8 @@ export interface StoryLogEntry {
   gainedSkill?: Skill; // Optional: If a new skill was learned/gained
   xpGained?: number; // Optional: XP awarded by AI for the action/event
   reputationChange?: ReputationChange; // Optional: Reputation change awarded by AI
+  // Crafting-related fields can be added if needed, but outcome might be part of narration/gameState
+  // craftedItem?: CraftedItemResult;
 }
 
 export interface SavedAdventure {
@@ -121,7 +139,7 @@ export interface SavedAdventure {
     adventureSettings: AdventureSettings; // Includes custom settings if applicable
     storyLog: StoryLogEntry[];
     currentGameStateString: string;
-    inventory: InventoryItem[];
+    inventory: InventoryItem[]; // Store full item objects
     statusBeforeSave?: GameStatus;
     adventureSummary?: string | null;
 }
@@ -135,7 +153,7 @@ export interface GameState {
   storyLog: StoryLogEntry[];
   adventureSummary: string | null;
   currentGameStateString: string;
-  inventory: InventoryItem[];
+  inventory: InventoryItem[]; // Use the updated type
   savedAdventures: SavedAdventure[];
   currentAdventureId: string | null;
   isGeneratingSkillTree: boolean; // Track skill tree generation
@@ -191,6 +209,10 @@ const CLASS_STARTER_SKILLS: Record<string, Skill[]> = {
         { name: "Inspire", description: "Bolster courage or morale with a short performance.", type: 'Starter', manaCost: 5 },
         { name: "Distract", description: "Use music or performance to divert attention.", type: 'Starter', manaCost: 5 }
     ],
+    "Tinkerer": [ // Added Tinkerer for skill tree example
+        { name: "Jury-Rig", description: "Attempt a temporary fix on a broken item.", type: 'Starter', staminaCost: 5 },
+        { name: "Identify Device", description: "Try to understand the function of a mechanism.", type: 'Starter' }
+    ],
     // Add more classes and their specific starter skills here
     "Default": [ // Fallback for Adventurer or unknown classes
         { name: "Basic Strike", description: "A simple physical attack.", type: 'Starter', staminaCost: 5 },
@@ -226,6 +248,11 @@ const initialCharacterState: Character = {
   learnedSkills: getStarterSkillsForClass("Adventurer"), // Assign default starter skills initially
 };
 
+const initialInventory: InventoryItem[] = [
+    { name: "Basic Clothes", description: "Simple, slightly worn clothes.", quality: "Poor", weight: 1 },
+    { name: "Crusty Bread", description: "A piece of somewhat stale bread.", quality: "Poor", weight: 0.5 }
+];
+
 const initialState: GameState = {
   status: "MainMenu",
   character: null,
@@ -241,7 +268,7 @@ const initialState: GameState = {
   storyLog: [],
   adventureSummary: null,
   currentGameStateString: "The adventure is about to begin...",
-  inventory: [],
+  inventory: [], // Start with empty inventory, populated on new game
   savedAdventures: [],
   currentAdventureId: null,
   isGeneratingSkillTree: false, // Initially not generating
@@ -259,7 +286,7 @@ type Action =
   | { type: "SET_AI_DESCRIPTION"; payload: string } // This sets the separate aiGeneratedDescription
   | { type: "SET_ADVENTURE_SETTINGS"; payload: Partial<AdventureSettings> }
   | { type: "START_GAMEPLAY" }
-  | { type: "UPDATE_NARRATION"; payload: StoryLogEntry }
+  | { type: "UPDATE_NARRATION"; payload: StoryLogEntry } // Updated payload structure might be needed for inventory
   | { type: "GRANT_XP"; payload: number } // New action for granting XP
   | { type: "LEVEL_UP"; payload: { newLevel: number; newXpToNextLevel: number /* Add rewards here later */ } } // New action for leveling up
   | { type: "UPDATE_REPUTATION"; payload: ReputationChange } // New action for updating reputation
@@ -272,7 +299,11 @@ type Action =
   | { type: "SET_SKILL_TREE_GENERATING"; payload: boolean } // Action to set generation status
   | { type: "SET_SKILL_TREE"; payload: { class: string; skillTree: SkillTree } } // Action to set the generated skill tree and class
   | { type: "CHANGE_CLASS_AND_RESET_SKILLS"; payload: { newClass: string; newSkillTree: SkillTree } } // Action to change class and reset skills/stage
-  | { type: "PROGRESS_SKILL_STAGE"; payload: number }; // Action to update skill stage
+  | { type: "PROGRESS_SKILL_STAGE"; payload: number } // Action to update skill stage
+  | { type: "ADD_ITEM"; payload: InventoryItem } // Action to add an item
+  | { type: "REMOVE_ITEM"; payload: { itemName: string; quantity?: number } } // Action to remove item(s)
+  | { type: "UPDATE_ITEM"; payload: { itemName: string; updates: Partial<InventoryItem> } } // Action to update item properties
+  | { type: "UPDATE_INVENTORY"; payload: InventoryItem[] }; // Action to replace the whole inventory
 
 // --- Helper Functions ---
 function generateAdventureId(): string {
@@ -281,12 +312,16 @@ function generateAdventureId(): string {
 
 // --- Reducer ---
 
-// Inventory update logic simplified
+// Inventory update logic will now likely be handled by specific ADD/REMOVE/UPDATE actions,
+// triggered potentially by the AI response parsing or other game logic.
+// The handleInventoryUpdate helper might become obsolete or repurposed.
+/*
 function handleInventoryUpdate(currentState: GameState, updatedItemNames: string[]): InventoryItem[] {
     // Basic implementation: just create items with names.
     // TODO: Enhance to preserve descriptions if items already exist or fetch descriptions?
-    return updatedItemNames.map(name => ({ name }));
+    return updatedItemNames.map(name => ({ name, description: "An item found during your adventure." })); // Add default desc
 }
+*/
 
 
 function gameReducer(state: GameState, action: Action): GameState {
@@ -336,7 +371,7 @@ function gameReducer(state: GameState, action: Action): GameState {
         storyLog: [],
         currentNarration: null,
         adventureSummary: null,
-        inventory: [],
+        inventory: [], // Start new character with empty inventory (will be populated in START_GAMEPLAY)
         isGeneratingSkillTree: false,
       };
     }
@@ -383,8 +418,7 @@ function gameReducer(state: GameState, action: Action): GameState {
       }
       // Build initial game state string based on settings
       const charDesc = state.character.description || "No description provided.";
-      const initialItems = [{ name: "Basic Clothes" }]; // Start with basic clothes
-      const initialInventoryNames = initialItems.map(item => item.name);
+      const startingItems = state.currentAdventureId ? state.inventory : initialInventory; // Load saved inventory or use defaults
       const currentStage = state.character.skillTreeStage;
       const stageName = currentStage >= 0 && state.character.skillTree && state.character.skillTree.stages[currentStage]
           ? state.character.skillTree.stages[currentStage].stageName
@@ -395,6 +429,7 @@ function gameReducer(state: GameState, action: Action): GameState {
       const aiDescString = state.character.aiGeneratedDescription ? `\nAI Profile: ${state.character.aiGeneratedDescription}` : "";
       const progressionSummary = `Level: ${state.character.level} (${state.character.xp}/${state.character.xpToNextLevel} XP)`;
       const repSummary = Object.entries(state.character.reputation).map(([faction, score]) => `${faction}: ${score}`).join(', ') || 'None';
+      const inventoryString = startingItems.length > 0 ? startingItems.map(item => `${item.name}${item.quality ? ` (${item.quality})` : ''}`).join(', ') : 'Empty';
 
 
       let adventureDetails = `Adventure Mode: ${state.adventureSettings.adventureType}, ${state.adventureSettings.permanentDeath ? 'Permadeath' : 'Respawn'}`;
@@ -402,7 +437,7 @@ function gameReducer(state: GameState, action: Action): GameState {
           adventureDetails += `\nWorld: ${state.adventureSettings.worldType || '?'}\nQuest: ${state.adventureSettings.mainQuestline || '?'}\nDifficulty: ${state.adventureSettings.difficulty || '?'}`;
       }
 
-       const initialGameState = `Location: Starting Point\nInventory: ${initialInventoryNames.join(', ') || 'Empty'}\nStatus: Healthy (STA: ${state.character.currentStamina}/${state.character.maxStamina}, MANA: ${state.character.currentMana}/${state.character.maxMana})\nTime: Day 1, Morning\nQuest: None\nMilestones: None\nCharacter Name: ${state.character.name}\n${progressionSummary}\nReputation: ${repSummary}\nClass: ${state.character.class}\nTraits: ${state.character.traits.join(', ') || 'None'}\nKnowledge: ${state.character.knowledge.join(', ') || 'None'}\nBackground: ${state.character.background || 'None'}\nStats: STR ${state.character.stats.strength}, STA ${state.character.stats.stamina}, AGI ${state.character.stats.agility}\nDescription: ${charDesc}${aiDescString}\n${adventureDetails}\n${skillTreeSummary}\nLearned Skills: ${state.character.learnedSkills.map(s => s.name).join(', ') || 'None'}`;
+       const initialGameState = `Location: Starting Point\nInventory: ${inventoryString}\nStatus: Healthy (STA: ${state.character.currentStamina}/${state.character.maxStamina}, MANA: ${state.character.currentMana}/${state.character.maxMana})\nTime: Day 1, Morning\nQuest: None\nMilestones: None\nCharacter Name: ${state.character.name}\n${progressionSummary}\nReputation: ${repSummary}\nClass: ${state.character.class}\nTraits: ${state.character.traits.join(', ') || 'None'}\nKnowledge: ${state.character.knowledge.join(', ') || 'None'}\nBackground: ${state.character.background || 'None'}\nStats: STR ${state.character.stats.strength}, STA ${state.character.stats.stamina}, AGI ${state.character.stats.agility}\nDescription: ${charDesc}${aiDescString}\n${adventureDetails}\n${skillTreeSummary}\nLearned Skills: ${state.character.learnedSkills.map(s => s.name).join(', ') || 'None'}`;
 
       const adventureId = state.currentAdventureId || generateAdventureId();
 
@@ -412,7 +447,7 @@ function gameReducer(state: GameState, action: Action): GameState {
         storyLog: state.currentAdventureId ? state.storyLog : [],
         currentNarration: state.currentAdventureId ? state.currentNarration : null,
         adventureSummary: null,
-        inventory: state.currentAdventureId ? state.inventory : initialItems,
+        inventory: startingItems, // Use loaded or default items
         currentGameStateString: state.currentAdventureId ? state.currentGameStateString : initialGameState,
         currentAdventureId: adventureId,
         isGeneratingSkillTree: state.currentAdventureId ? state.isGeneratingSkillTree : false,
@@ -420,7 +455,7 @@ function gameReducer(state: GameState, action: Action): GameState {
             ...state.character,
             skillTree: state.currentAdventureId ? state.character.skillTree : state.character.skillTree,
             skillTreeStage: state.currentAdventureId ? state.character.skillTreeStage : state.character.skillTreeStage,
-             // Ensure stamina/mana are full on new game start
+             // Ensure stamina/mana are full on new game start or loaded
              currentStamina: state.currentAdventureId ? state.character.currentStamina : state.character.maxStamina,
              currentMana: state.currentAdventureId ? state.character.currentMana : state.character.maxMana,
              learnedSkills: state.currentAdventureId ? state.character.learnedSkills : state.character.learnedSkills,
@@ -437,7 +472,15 @@ function gameReducer(state: GameState, action: Action): GameState {
         const newLogEntry: StoryLogEntry = { ...action.payload, timestamp: action.payload.timestamp || Date.now() };
         const newLog = [...state.storyLog, newLogEntry];
         let charAfterNarration = state.character;
-        let inventoryAfterNarration = state.inventory;
+        let inventoryAfterNarration = state.inventory; // Start with current inventory
+
+        // Note: Inventory updates are now expected to be handled by separate actions
+        // or inferred from the updatedGameState string. The `updatedInventory`
+        // field in StoryLogEntry might be deprecated or used differently.
+        // We will prioritize the ADD_ITEM/REMOVE_ITEM/UPDATE_INVENTORY actions.
+        // If the AI flow needs to directly manipulate inventory, it should ideally
+        // suggest actions that lead to these dispatches, or the parsing logic
+        // needs to be robust enough to trigger them based on the `updatedGameState`.
 
         if (state.character) {
             const updatedStats = newLogEntry.updatedStats ? { ...state.character.stats, ...newLogEntry.updatedStats } : state.character.stats;
@@ -459,7 +502,6 @@ function gameReducer(state: GameState, action: Action): GameState {
             }
 
             // Process XP gain (defer level up check to GRANT_XP action)
-            // Note: XP is just accumulated here, LEVEL_UP action handles the rest
             const xpGained = newLogEntry.xpGained ?? 0;
             const currentXp = state.character.xp + xpGained;
 
@@ -479,7 +521,8 @@ function gameReducer(state: GameState, action: Action): GameState {
                 knowledge: updatedKnowledge,
                 maxStamina: maxStamina,
                 currentStamina: newCurrentStamina,
-                maxMana: newCurrentMana,
+                maxMana: maxMana,
+                currentMana: newCurrentMana, // Ensure currentMana is updated
                 traits: newLogEntry.updatedTraits ?? state.character.traits,
                 learnedSkills: newLearnedSkills,
                 xp: currentXp, // Update XP here
@@ -489,19 +532,18 @@ function gameReducer(state: GameState, action: Action): GameState {
             console.log("Character updated via narration:", { stats: newLogEntry.updatedStats, traits: newLogEntry.updatedTraits, knowledge: newLogEntry.updatedKnowledge, staminaChange, manaChange, gainedSkill: newLogEntry.gainedSkill?.name, xpGained, reputationChange: newLogEntry.reputationChange });
         }
 
-        // Handle inventory update synchronously now
-        if (action.payload.updatedInventory) {
-            const itemNames = action.payload.updatedInventory;
-            inventoryAfterNarration = handleInventoryUpdate(state, itemNames);
-            console.log("Inventory updated based on narration payload:", inventoryAfterNarration.map(i => i.name));
-        }
+        // Inventory handling: We rely on the updatedGameState or specific inventory actions now.
+        // The `updatedInventory` in the log entry might be used for verification or reconciliation if needed.
+        // For now, inventoryAfterNarration remains unchanged unless specific actions are dispatched.
+        console.log("Narration updated. Inventory state relies on subsequent actions or gameState parsing.");
+
 
         return {
             ...state,
             character: charAfterNarration,
             currentNarration: newLogEntry,
             storyLog: newLog,
-            inventory: inventoryAfterNarration,
+            inventory: inventoryAfterNarration, // Keep current inventory unless explicitly changed
             currentGameStateString: action.payload.updatedGameState,
         };
     }
@@ -562,15 +604,16 @@ function gameReducer(state: GameState, action: Action): GameState {
     case "END_ADVENTURE": {
         let finalLog = [...state.storyLog];
         let finalGameState = state.currentGameStateString;
-        let finalInventoryNames = state.inventory.map(i => i.name);
+        // let finalInventoryNames = state.inventory.map(i => i.name); // Not needed anymore
         let finalCharacterState = state.character;
+        let finalInventoryState = state.inventory; // Keep the full inventory objects
 
         // Apply updates from the very last narration step if provided
         if (action.payload.finalNarration && (!state.currentNarration || action.payload.finalNarration.narration !== state.currentNarration.narration)) {
             const finalEntry: StoryLogEntry = { ...action.payload.finalNarration, timestamp: action.payload.finalNarration.timestamp || Date.now() };
             finalLog.push(finalEntry);
             finalGameState = action.payload.finalNarration.updatedGameState;
-            finalInventoryNames = action.payload.finalNarration.updatedInventory || finalInventoryNames;
+            // Inventory updates are handled via specific actions, not directly from final narration payload usually
 
             if (state.character) {
                  // Apply final character updates from the last narration step
@@ -606,13 +649,11 @@ function gameReducer(state: GameState, action: Action): GameState {
                     maxMana: finalMaxMana,
                     currentMana: finalCurrentMana,
                     traits: finalEntry.updatedTraits ?? state.character.traits,
-                    // Class change handled separately
                     skillTreeStage: finalEntry.progressedToStage ?? state.character.skillTreeStage,
                     aiGeneratedDescription: state.character.aiGeneratedDescription,
                     learnedSkills: finalLearnedSkills,
                     xp: finalXp,
                     reputation: finalReputation,
-                    // Level, xpToNextLevel remain as they were before the final action
                 };
             }
             console.log("Added final narration entry to log and applied final character updates.");
@@ -620,7 +661,7 @@ function gameReducer(state: GameState, action: Action): GameState {
             console.log("Final narration not added or same as current.");
         }
 
-        const finalInventory = state.inventory.filter(item => finalInventoryNames.includes(item.name));
+        // finalInventoryState is the inventory *before* the end is processed
         let updatedSavedAdventures = state.savedAdventures;
         // Automatically save the ended adventure
         if (finalCharacterState && state.currentAdventureId) {
@@ -632,7 +673,7 @@ function gameReducer(state: GameState, action: Action): GameState {
                 adventureSettings: state.adventureSettings, // Save current settings
                 storyLog: finalLog,
                 currentGameStateString: finalGameState,
-                inventory: finalInventory,
+                inventory: finalInventoryState, // Save the inventory as it was at the end
                 statusBeforeSave: "AdventureSummary", // Mark as ended
                 adventureSummary: action.payload.summary,
             };
@@ -648,7 +689,7 @@ function gameReducer(state: GameState, action: Action): GameState {
             character: finalCharacterState,
             adventureSummary: action.payload.summary,
             storyLog: finalLog, // Keep the log for the summary screen
-            inventory: finalInventory, // Keep final inventory for summary
+            inventory: finalInventoryState, // Keep final inventory for summary
             currentNarration: null, // Clear current narration
             savedAdventures: updatedSavedAdventures,
             isGeneratingSkillTree: false,
@@ -676,7 +717,7 @@ function gameReducer(state: GameState, action: Action): GameState {
         adventureSettings: state.adventureSettings, // Save current settings
         storyLog: state.storyLog,
         currentGameStateString: state.currentGameStateString,
-        inventory: state.inventory,
+        inventory: state.inventory, // Save full inventory objects
         statusBeforeSave: state.status, // Save the status before saving (should be Gameplay)
         adventureSummary: state.adventureSummary, // Usually null when saving during gameplay
       };
@@ -741,6 +782,16 @@ function gameReducer(state: GameState, action: Action): GameState {
            aiGeneratedDescription: adventureToLoad.character?.aiGeneratedDescription ?? undefined,
        };
 
+      // Load inventory with defaults for missing properties
+      const validatedInventory = (Array.isArray(adventureToLoad.inventory) ? adventureToLoad.inventory : []).map(item => ({
+           name: item.name || "Unknown Item",
+           description: item.description || "An item of unclear origin.", // Default description
+           weight: typeof item.weight === 'number' ? item.weight : 1, // Default weight
+           quality: item.quality || "Common", // Default quality
+           durability: typeof item.durability === 'number' ? item.durability : undefined,
+           magicalEffect: item.magicalEffect || undefined,
+       }));
+
 
       // If loading an adventure that was previously finished (on summary screen)
       if (adventureToLoad.statusBeforeSave === "AdventureSummary") {
@@ -751,7 +802,7 @@ function gameReducer(state: GameState, action: Action): GameState {
               character: validatedCharacter, // Load the character state as it was at the end
               adventureSummary: adventureToLoad.adventureSummary,
               storyLog: adventureToLoad.storyLog, // Show the full log
-              inventory: adventureToLoad.inventory, // Show final inventory
+              inventory: validatedInventory, // Show final inventory
               currentAdventureId: adventureToLoad.id,
               adventureSettings: adventureToLoad.adventureSettings, // Load settings for context
               isGeneratingSkillTree: false,
@@ -765,7 +816,7 @@ function gameReducer(state: GameState, action: Action): GameState {
               character: validatedCharacter, // Load the character state
               adventureSettings: adventureToLoad.adventureSettings, // Load settings
               storyLog: adventureToLoad.storyLog,
-              inventory: adventureToLoad.inventory,
+              inventory: validatedInventory, // Load inventory
               currentGameStateString: adventureToLoad.currentGameStateString,
               currentNarration: adventureToLoad.storyLog.length > 0 ? adventureToLoad.storyLog[adventureToLoad.storyLog.length - 1] : null, // Set current narration
               adventureSummary: null, // No summary for ongoing game
@@ -884,6 +935,57 @@ function gameReducer(state: GameState, action: Action): GameState {
              return state;
          }
         }
+    // --- Inventory Actions ---
+    case "ADD_ITEM": {
+        // Simple add, assuming quantity 1 for now
+        const newItem = {
+            description: "An item acquired during your journey.", // Default description
+            quality: "Common" as ItemQuality, // Default quality
+            weight: 1, // Default weight
+            ...action.payload, // Allow overwriting defaults
+        };
+        console.log("Adding item:", newItem.name);
+        return { ...state, inventory: [...state.inventory, newItem] };
+      }
+    case "REMOVE_ITEM": {
+        const { itemName, quantity = 1 } = action.payload;
+        console.log(`Removing ${quantity} of item:`, itemName);
+        const updatedInventory = [...state.inventory];
+        let removedCount = 0;
+        for (let i = updatedInventory.length - 1; i >= 0 && removedCount < quantity; i--) {
+            if (updatedInventory[i].name === itemName) {
+                updatedInventory.splice(i, 1);
+                removedCount++;
+            }
+        }
+        if (removedCount < quantity) {
+            console.warn(`Tried to remove ${quantity} of ${itemName}, but only found ${removedCount}.`);
+        }
+        return { ...state, inventory: updatedInventory };
+      }
+    case "UPDATE_ITEM": {
+        const { itemName, updates } = action.payload;
+        console.log("Updating item:", itemName, "with", updates);
+        return {
+            ...state,
+            inventory: state.inventory.map(item =>
+                item.name === itemName ? { ...item, ...updates } : item
+            ),
+        };
+     }
+    case "UPDATE_INVENTORY": {
+        console.log("Replacing inventory with new list:", action.payload.map(i => i.name));
+        // Validate items in the payload
+        const validatedNewInventory = action.payload.map(item => ({
+            name: item.name || "Unknown Item",
+            description: item.description || "An item of unclear origin.",
+            weight: typeof item.weight === 'number' ? item.weight : 1,
+            quality: item.quality || "Common",
+            durability: typeof item.durability === 'number' ? item.durability : undefined,
+            magicalEffect: item.magicalEffect || undefined,
+        }));
+        return { ...state, inventory: validatedNewInventory };
+      }
 
     default:
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -957,6 +1059,17 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
                              aiGeneratedDescription: adv.character?.aiGeneratedDescription ?? undefined,
                          };
 
+                         // Validate inventory items within the loaded adventure
+                         const validatedAdvInventory = (Array.isArray(adv.inventory) ? adv.inventory : []).map(item => ({
+                              name: item.name || "Unknown Item",
+                              description: item.description || "An item of unclear origin.",
+                              weight: typeof item.weight === 'number' ? item.weight : 1,
+                              quality: item.quality || "Common",
+                              durability: typeof item.durability === 'number' ? item.durability : undefined,
+                              magicalEffect: item.magicalEffect || undefined,
+                          }));
+
+
                          return {
                            ...adv,
                            id: adv.id || generateAdventureId(), // Ensure ID exists
@@ -970,10 +1083,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
                            },
                            storyLog: Array.isArray(adv.storyLog) ? adv.storyLog : [],
                            currentGameStateString: adv.currentGameStateString || "",
-                           inventory: (Array.isArray(adv.inventory) ? adv.inventory : []).map(item => ({ // Validate inventory
-                               name: item.name || "Unknown Item",
-                               description: item.description,
-                           })),
+                           inventory: validatedAdvInventory, // Use validated inventory
                            statusBeforeSave: adv.statusBeforeSave || "Gameplay",
                            adventureSummary: adv.adventureSummary || null,
                          };
@@ -1006,6 +1116,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
           ? state.character.skillTree.stages[state.character.skillTreeStage]?.stageName ?? `Stage ${state.character.skillTreeStage}`
           : "Stage 0";
       const reputationString = state.character ? Object.entries(state.character.reputation).map(([f, s]) => `${f}: ${s}`).join(', ') || 'None' : 'N/A';
+      const inventoryString = state.inventory.map(i => `${i.name}${i.quality ? ` (${i.quality})` : ''}`).join(', ') || 'Empty';
      console.log("Game State Updated:", {
         status: state.status,
         character: state.character?.name,
@@ -1018,8 +1129,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         mana: `${state.character?.currentMana}/${state.character?.maxMana}`,
         adventureId: state.currentAdventureId,
         settings: state.adventureSettings, // Log settings
+        inventory: inventoryString, // Log inventory summary
     });
-   }, [state.status, state.character, state.currentAdventureId, state.adventureSettings]);
+   }, [state]);
 
 
   return (

@@ -5,12 +5,13 @@
  * - assessActionDifficulty - A function that assesses the difficulty of an action.
  * - AssessActionDifficultyInput - The input type for the assessActionDifficulty function.
  * - AssessActionDifficultyOutput - The return type for the assessActionDifficulty function.
+ * - DifficultyLevel - The possible difficulty levels.
  */
 
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
 
-// Define the possible difficulty levels
+// --- Zod Schemas (Internal - Not Exported) ---
 const DifficultyLevelSchema = z.enum([
     "Trivial", // Requires almost no effort or skill. (No roll needed typically)
     "Easy",    // Requires minimal effort or skill. (Low DC roll, maybe d6/d10)
@@ -19,7 +20,6 @@ const DifficultyLevelSchema = z.enum([
     "Very Hard", // Borderline possible, requires great skill/luck. (Very high DC roll, d100)
     "Impossible", // Cannot be done given the current context/character abilities. (No roll possible)
 ]);
-export type DifficultyLevel = z.infer<typeof DifficultyLevelSchema>;
 
 const AssessActionDifficultyInputSchema = z.object({
     playerAction: z.string().describe('The action the player wants to perform.'),
@@ -27,19 +27,24 @@ const AssessActionDifficultyInputSchema = z.object({
     currentSituation: z.string().describe('A brief description of the immediate environment, ongoing events, and any relevant obstacles or NPCs.'),
     gameStateSummary: z.string().describe('Broader context including location, major quest progress, significant items, and achieved milestones.'),
 });
-export type AssessActionDifficultyInput = z.infer<typeof AssessActionDifficultyInputSchema>;
 
 const AssessActionDifficultyOutputSchema = z.object({
     difficulty: DifficultyLevelSchema.describe('The assessed difficulty level of the action.'),
     reasoning: z.string().describe('A brief explanation for the assessed difficulty level, considering the inputs.'),
     suggestedDice: z.enum(["d6", "d10", "d20", "d100", "None"]).describe('The suggested type of die to roll based on difficulty (None if Trivial or Impossible).'),
 });
+
+// --- Exported Types (Derived from internal schemas) ---
+export type DifficultyLevel = z.infer<typeof DifficultyLevelSchema>;
+export type AssessActionDifficultyInput = z.infer<typeof AssessActionDifficultyInputSchema>;
 export type AssessActionDifficultyOutput = z.infer<typeof AssessActionDifficultyOutputSchema>;
 
+// --- Exported Async Function ---
 export async function assessActionDifficulty(input: AssessActionDifficultyInput): Promise<AssessActionDifficultyOutput> {
   return assessActionDifficultyFlow(input);
 }
 
+// --- Internal Prompt and Flow Definitions ---
 const assessActionDifficultyPrompt = ai.definePrompt({
   name: 'assessActionDifficultyPrompt',
   input: { schema: AssessActionDifficultyInputSchema },
@@ -98,4 +103,3 @@ const assessActionDifficultyFlow = ai.defineFlow<
      return output;
   }
 );
-
