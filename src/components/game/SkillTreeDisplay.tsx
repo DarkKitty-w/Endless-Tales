@@ -23,6 +23,7 @@ import {
 interface SkillTreeDisplayProps {
   skillTree: SkillTree;
   currentStage: number; // Stage the character has achieved (0-4)
+  // learnedSkills: Skill[]; // TODO: Uncomment and use when learnedSkills state is implemented
 }
 
 export function SkillTreeDisplay({ skillTree, currentStage }: SkillTreeDisplayProps) {
@@ -70,7 +71,7 @@ export function SkillTreeDisplay({ skillTree, currentStage }: SkillTreeDisplayPr
           </div>
         )}
 
-        <Accordion type="single" collapsible defaultValue={defaultOpenStage}>
+        <Accordion type="single" collapsible defaultValue={defaultOpenStage} className="w-full">
           {sortedStages.map((stageData) => {
             const isUnlocked = stageData.stage <= currentStage;
             const isCurrent = stageData.stage === currentStage; // Will be false if currentStage is 0
@@ -87,7 +88,8 @@ export function SkillTreeDisplay({ skillTree, currentStage }: SkillTreeDisplayPr
                      <span className={`font-semibold ${isCurrent ? 'text-accent' : isUnlocked ? 'text-primary' : 'text-muted-foreground'}`}>
                         {stageData.stageName || `Stage ${stageData.stage}`} {/* Display stage name */}
                      </span>
-                     {/* Remove Current badge here as it's handled above for stage 0 or below for stages 1-4 */}
+                     {/* Display 'Current' badge for stages 1-4 */}
+                      {isCurrent && <Badge variant="default" className="text-xs ml-1">Current</Badge>}
                    </div>
                     <div className="flex items-center gap-0.5 mr-2">
                         {[...Array(stageData.stage)].map((_, i) => (
@@ -98,30 +100,37 @@ export function SkillTreeDisplay({ skillTree, currentStage }: SkillTreeDisplayPr
                         ))}
                     </div>
                  </AccordionTrigger>
-                 <AccordionContent className="pt-3 pl-6 pr-2">
+                 <AccordionContent className="pt-3 pl-6 pr-2 pb-4"> {/* Added pb-4 */}
                    {isUnlocked ? (
-                     stageData.skills.length > 0 ? (
+                     stageData.skills && stageData.skills.length > 0 ? (
                        <ul className="space-y-2">
-                         {stageData.skills.map((skill) => (
-                           <li key={skill.name} className="text-sm">
-                              <Tooltip>
-                                 <TooltipTrigger asChild>
-                                    <span className="font-medium cursor-help underline decoration-dotted decoration-muted-foreground/50">
-                                        {skill.name}
-                                    </span>
-                                 </TooltipTrigger>
-                                 <TooltipContent side="bottom" align="start">
-                                    <p>{skill.description}</p>
-                                 </TooltipContent>
-                             </Tooltip>
-                           </li>
-                         ))}
+                         {stageData.skills.map((skill) => {
+                            // TODO: Check if skill.name is in learnedSkills array when implemented
+                            const isLearned = true; // Placeholder: Assume all skills in unlocked stages are learned for now
+
+                           return (
+                             <li key={skill.name} className="text-sm">
+                                <Tooltip>
+                                   <TooltipTrigger asChild>
+                                      <span className={`font-medium ${isLearned ? 'cursor-help underline decoration-dotted decoration-muted-foreground/50' : 'text-muted-foreground italic'}`}>
+                                          {skill.name}
+                                      </span>
+                                   </TooltipTrigger>
+                                   {isLearned && ( // Only show tooltip if learned (or for all, adjust as needed)
+                                        <TooltipContent side="bottom" align="start">
+                                           <p>{skill.description}</p>
+                                        </TooltipContent>
+                                   )}
+                               </Tooltip>
+                             </li>
+                           );
+                         })}
                        </ul>
                      ) : (
                        <p className="text-sm text-muted-foreground italic">No specific skills listed for this stage.</p>
                      )
                    ) : (
-                     <p className="text-sm text-muted-foreground italic">Locked. Progress further to unlock.</p>
+                     <p className="text-sm text-muted-foreground italic">Locked. Progress further to unlock these skills.</p>
                    )}
                  </AccordionContent>
               </AccordionItem>
