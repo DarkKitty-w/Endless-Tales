@@ -15,7 +15,7 @@ import { assessActionDifficulty, type DifficultyLevel } from "@/ai/flows/assess-
 import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow } from "lucide-react";
-import { rollDice, rollDifficultDice } from "@/services/dice-roller";
+import { rollD6, rollD10, rollD20, rollD100 } from "@/services/dice-roller"; // Import specific rollers
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -44,10 +44,10 @@ import { Skeleton } from "../ui/skeleton"; // Added Skeleton import
 // Helper function to map difficulty dice string to roller function
 const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null => {
   switch (diceType) {
-    case 'd6':
-    case 'd10': return rollDice;
-    case 'd20': return rollDice; // Map d20 to d10 for now
-    case 'd100': return rollDifficultDice;
+    case 'd6': return rollD6;
+    case 'd10': return rollD10;
+    case 'd20': return rollD20;
+    case 'd100': return rollD100;
     case 'None': default: return null;
   }
 };
@@ -246,8 +246,8 @@ export function Gameplay() {
             setError("Failed to assess difficulty. Assuming 'Normal'.");
             toast({ title: "Assessment Error", description: "Assuming normal difficulty.", variant: "destructive" });
             assessedDifficulty = "Normal";
-            setDiceType("d10");
-            rollFunction = rollDice;
+            setDiceType("d10"); // Default to d10 on error
+            rollFunction = rollD10; // Default roll function
             requiresRoll = true;
         } finally {
             setIsAssessingDifficulty(false);
@@ -285,7 +285,7 @@ export function Gameplay() {
         } finally {
             setIsRollingDice(false);
         }
-    } else if (!isPassiveAction && assessedDifficulty !== "Impossible") {
+    } else if (!isPassiveAction && assessedDifficulty !== "Impossible" && diceType !== 'None') { // Check diceType !== 'None'
          actionWithDice += ` (Difficulty: ${assessedDifficulty}, No Roll Required)`;
     }
 
@@ -581,6 +581,7 @@ export function Gameplay() {
       else if (isRollingDice) { loadingText = `Rolling ${diceType}...`; LoadingIcon = Dices; }
       return ( <div className="flex items-center justify-center py-4 text-muted-foreground animate-pulse"> <LoadingIcon className={`h-5 w-5 mr-2 ${isRollingDice ? 'animate-spin duration-500' : 'animate-spin'}`} /> <span>{loadingText}</span> </div> );
     }
+    // Only show dice result if it's not null AND diceType is not 'None'
     if (diceResult !== null && diceType !== "None") {
       return ( <div key={`dice-${Date.now()}`} className="flex items-center justify-center py-2 text-accent font-semibold italic animate-fade-in-out"> <Dices className="h-5 w-5 mr-2" /> Rolled {diceResult} on {diceType}! </div> );
     }
