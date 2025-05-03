@@ -23,7 +23,7 @@ const DifficultyLevelSchema = z.enum([
 
 const AssessActionDifficultyInputSchema = z.object({
     playerAction: z.string().describe('The action the player wants to perform.'),
-    characterCapabilities: z.string().describe('A summary of the character\'s relevant stats, skills, traits, knowledge, and equipment.'),
+    characterCapabilities: z.string().describe("A summary of the character's relevant stats, skills, traits, knowledge, and equipment."),
     currentSituation: z.string().describe('A brief description of the immediate environment, ongoing events, and any relevant obstacles or NPCs.'),
     gameStateSummary: z.string().describe('Broader context including location, major quest progress, significant items, and achieved milestones.'),
     gameDifficulty: z.string().describe("The overall game difficulty setting (e.g., Easy, Normal, Hard, Nightmare). This should influence the baseline difficulty."),
@@ -125,3 +125,4 @@ const assessActionDifficultyFlow = ai.defineFlow<
   }
 );
 
+    

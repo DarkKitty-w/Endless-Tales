@@ -70,7 +70,7 @@ const attemptCraftingPrompt = ai.definePrompt({
 
 **Evaluation Task:**
 Determine if the crafting attempt is possible and likely to succeed. Consider:
-1.  **Plausibility:** Is crafting '{{{desiredItem}}}' feasible given a fantasy/medieval setting? (e.g., crafting a 'Laser Gun' is likely impossible).
+1.  **Plausibility:** Is crafting {{{desiredItem}}} feasible given a fantasy/medieval setting? (e.g., crafting a 'Laser Gun' is likely impossible).
 2.  **Knowledge/Skills:** Does the character have relevant knowledge (e.g., Smithing for a sword, Herbalism for a potion)? Do they have crafting skills? Lack of relevant knowledge/skills makes success much less likely or impossible for complex items.
 3.  **Ingredients:**
     *   Are the specified 'usedIngredients' actually in the 'Full Inventory' list?
@@ -153,3 +153,5 @@ const attemptCraftingFlow = ai.defineFlow<
      return output;
   }
 );
+
+    
