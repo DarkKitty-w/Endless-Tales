@@ -244,7 +244,7 @@ async function handleInventoryUpdate(currentState: GameState, updatedItemNames: 
         const generationPromises = itemsToGenerate.map(name => generatePlaceholderImageUri(name).then(uri => ({ name, imageDataUri: uri })));
         const generatedItems = await Promise.all(generationPromises);
         const generatedMap = new Map(generatedItems.map(item => [item.name, item.imageDataUri]));
-        const inventoryWithImages = finalInventoryItems.map(item => generatedMap.get(item.name) ? { ...item, imageDataUri: generatedMap.get(item.name)?.imageDataUri } : item);
+        const inventoryWithImages = finalInventoryItems.map(item => generatedMap.get(item.name) ? { ...item, imageDataUri: generatedMap.get(item.name) } : item);
         isGeneratingImages = false;
         return { inventory: inventoryWithImages };
     } catch (error) {
@@ -627,8 +627,15 @@ function gameReducer(state: GameState, action: Action): GameState {
         }
         // Ensure the skill tree has 5 stages (0-4) and default names
          const stages = action.payload.skillTree.stages || [];
+         if (stages.length !== 5) {
+             console.error(`Reducer: Received skill tree with ${stages.length} stages, expected 5. Discarding.`);
+             return { ...state, isGeneratingSkillTree: false };
+         }
          const validatedStages: SkillTreeStage[] = Array.from({ length: 5 }, (_, i) => {
             const foundStage = stages.find(s => s.stage === i);
+            if (!foundStage) {
+                console.warn(`Reducer: Skill tree missing stage data for stage ${i}. Using defaults.`);
+            }
             return {
                 stage: i,
                 stageName: foundStage?.stageName || (i === 0 ? "Potential" : `Stage ${i}`), // Default stage 0 name
@@ -657,8 +664,15 @@ function gameReducer(state: GameState, action: Action): GameState {
          console.log(`Changing class from ${state.character.class} to ${action.payload.newClass} and resetting skills/stage.`);
           // Ensure the new skill tree has 5 stages (0-4) and default names
          const stages = action.payload.newSkillTree.stages || [];
+          if (stages.length !== 5) {
+             console.error(`Reducer: Received skill tree for new class with ${stages.length} stages, expected 5. Aborting class change.`);
+             return { ...state, isGeneratingSkillTree: false }; // Stop loading
+         }
          const validatedStages: SkillTreeStage[] = Array.from({ length: 5 }, (_, i) => {
             const foundStage = stages.find(s => s.stage === i);
+             if (!foundStage) {
+                console.warn(`Reducer: New skill tree missing stage data for stage ${i}. Using defaults.`);
+            }
             return {
                 stage: i,
                 stageName: foundStage?.stageName || (i === 0 ? "Potential" : `Stage ${i}`),

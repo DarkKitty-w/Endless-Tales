@@ -16,17 +16,19 @@ import type { SkillTree, SkillTreeStage, Skill } from '@/context/GameContext'; /
 const SkillSchema = z.object({
     name: z.string().describe("The name of the skill."),
     description: z.string().describe("A brief description of what the skill does or represents."),
+    manaCost: z.number().optional().describe("Mana cost to use the skill, if any."), // Add costs
+    staminaCost: z.number().optional().describe("Stamina cost to use the skill, if any."), // Add costs
 });
 
 const SkillTreeStageSchema = z.object({
-    stage: z.number().min(1).max(4).describe("The progression stage (1-4)."),
-    stageName: z.string().describe("A thematic name for this stage (e.g., Apprentice, Adept, Master, Grandmaster)."), // Added stage name
-    skills: z.array(SkillSchema).min(1).max(3).describe("A list of 1-3 skills unlocked at this stage."), // Define min/max skills per stage
+    stage: z.number().min(0).max(4).describe("The progression stage (0-4). Stage 0 is 'Potential'."), // Allow stage 0
+    stageName: z.string().describe("A thematic name for this stage (e.g., Apprentice, Adept, Master, Grandmaster). Stage 0 should be named 'Potential' or similar."), // Added stage name
+    skills: z.array(SkillSchema).min(0).max(3).describe("A list of 0-3 skills unlocked at this stage. Stage 0 has no skills."), // Define min/max skills per stage, 0 for stage 0
 });
 
 const SkillTreeSchema = z.object({
     className: z.string().describe("The character class this skill tree belongs to."),
-    stages: z.array(SkillTreeStageSchema).length(4).describe("An array containing exactly 4 skill tree stages."), // Ensure 4 stages
+    stages: z.array(SkillTreeStageSchema).length(5).describe("An array containing exactly 5 skill tree stages (0-4)."), // Ensure 5 stages
 });
 
 // Define input/output schemas for the flow
@@ -53,20 +55,31 @@ const generateSkillTreePrompt = ai.definePrompt({
   name: 'generateSkillTreePrompt',
   input: { schema: GenerateSkillTreeInputSchema },
   output: { schema: GenerateSkillTreeOutputSchema },
-  prompt: `You are a creative game designer crafting skill trees for the text adventure "Endless Tales". Generate a unique and thematic 4-stage skill tree for the following character class:
+  prompt: `You are a creative game designer crafting skill trees for the text adventure "Endless Tales". Generate a unique and thematic 5-stage skill tree (stages 0 through 4) for the following character class:
 
 **Character Class:** {{{characterClass}}}
 
 **Requirements:**
-1.  **Four Stages:** The skill tree MUST have exactly four distinct stages of progression (stage 1, 2, 3, 4).
-2.  **Stage Names:** Each stage MUST have a thematic 'stageName' (e.g., Stage 1: "Initiate", Stage 2: "Adept", Stage 3: "Master", Stage 4: "Grandmaster" for a Mage; or Stage 1: "Squire", Stage 2: "Knight", Stage 3: "Champion", Stage 4: "Warlord" for a Warrior).
-3.  **Skills per Stage:** Each stage MUST unlock between 1 and 3 thematically appropriate skills. More powerful or defining skills should appear in later stages.
-4.  **Skill Definition:** Each skill needs a clear 'name' and a concise 'description' explaining its effect or purpose within the game context (e.g., combat advantage, new ability, knowledge unlock, social influence).
-5.  **Class Theme:** The stage names, skills, and stage progression should strongly reflect the identity and typical abilities associated with the '{{{characterClass}}}' class.
-    *   Example (Warrior): Stage 1 (Squire) might have "Basic Parry", Stage 2 (Knight) "Power Attack", Stage 3 (Champion) "Shield Bash", Stage 4 (Warlord) "Battle Cry".
-    *   Example (Mage): Stage 1 (Initiate) "Mana Bolt", Stage 2 (Adept) "Arcane Ward", Stage 3 (Master) "Fireball", Stage 4 (Grandmaster) "Summon Familiar".
-    *   Example (Rogue): Stage 1 (Apprentice) "Sneak", Stage 2 (Journeyman) "Lockpicking", Stage 3 (Assassin) "Backstab", Stage 4 (Shadow) "Shadow Cloak".
-6.  **Output Format:** Respond ONLY with the JSON object matching the SkillTree schema, containing the 'className' and the 'stages' array with 4 stages, each having 'stage', 'stageName', and 1-3 skills with 'name' and 'description'. Ensure the JSON is valid.
+1.  **Five Stages (0-4):** The skill tree MUST have exactly five distinct stages of progression (stage 0, 1, 2, 3, 4).
+2.  **Thematic Stage Names:**
+    *   Stage 0 MUST have a 'stageName' like "Potential", "Initiate", "Neophyte", or similar, representing the starting point before specialization.
+    *   Stages 1-4 MUST have increasingly impressive and thematically **evocative** 'stageName's relevant to the class. Avoid generic names like "Stage 1".
+    *   **Good Examples:**
+        *   Warrior: Squire -> Knight -> Champion -> Warlord
+        *   Mage: Apprentice -> Conjurer -> Archmage -> Harbinger
+        *   Rogue: Pickpocket -> Cutpurse -> Assassin -> Shadow Master
+        *   Necromancer: Acolyte -> Ghoul Caller -> Lord of Bones -> Plague Sovereign
+        *   Priest: Acolyte -> Cleric -> High Priest -> Saint
+        *   Tinkerer: Apprentice -> Artisan -> Inventor -> Visionary
+3.  **Skills per Stage:**
+    *   Stage 0 MUST have an empty 'skills' array \`[]\`.
+    *   Stages 1-4 MUST unlock between 1 and 3 thematically appropriate skills each. More powerful or defining skills should appear in later stages.
+4.  **Skill Definition:** Each skill needs:
+    *   A clear 'name'.
+    *   A concise 'description' explaining its effect or purpose (e.g., combat advantage, new ability, knowledge unlock, social influence).
+    *   Optionally include 'manaCost' or 'staminaCost' if the skill logically requires resources (use small numbers like 5, 10, 15, 20). Don't add costs to passive skills.
+5.  **Class Theme:** The stage names, skills, and stage progression should strongly reflect the identity and typical abilities associated with the '{{{characterClass}}}' class archetype. Be creative and evocative.
+6.  **Output Format:** Respond ONLY with the JSON object matching the SkillTree schema, containing the 'className' and the 'stages' array with 5 stages (0-4), each having 'stage', 'stageName', and the appropriate skills (with 'name', 'description', optional 'manaCost'/'staminaCost'). Ensure the JSON is valid.
 
 **Generate the Skill Tree:**
 `,
@@ -96,22 +109,44 @@ const generateSkillTreeFlow = ai.defineFlow<
             output = result.output;
 
              // Basic validation of the output structure
-             if (!output || !output.className || !Array.isArray(output.stages) || output.stages.length !== 4) {
-                 throw new Error("AI returned invalid skill tree structure (missing class, stages array, or incorrect stage count).");
+             if (!output || !output.className || !Array.isArray(output.stages) || output.stages.length !== 5) { // Expect 5 stages (0-4)
+                 throw new Error(`AI returned invalid skill tree structure (missing class, stages array, or incorrect stage count - expected 5). Got: ${JSON.stringify(output).substring(0,100)}`);
              }
              for (const stage of output.stages) {
-                 if (!stage.stageName) { // Validate stage name presence
+                 if (stage.stage === undefined || stage.stage < 0 || stage.stage > 4) {
+                     throw new Error(`AI returned invalid stage number: ${stage.stage}. Must be 0-4.`);
+                 }
+                 if (!stage.stageName) {
                      throw new Error(`AI returned invalid structure for stage ${stage.stage} (missing stageName).`);
                  }
-                if (!stage.skills || stage.skills.length < 1 || stage.skills.length > 3) {
-                    throw new Error(`AI returned invalid skill count for stage ${stage.stage} (must be 1-3).`);
-                }
-                for(const skill of stage.skills) {
-                    if (!skill.name || !skill.description) {
-                         throw new Error(`AI returned invalid skill definition in stage ${stage.stage} (missing name or description).`);
+                 if (stage.stage === 0 && (!stage.skills || stage.skills.length !== 0)) {
+                     throw new Error(`AI returned invalid structure for stage 0 (skills array must be empty). Got: ${stage.skills?.length}`);
+                 }
+                 if (stage.stage > 0 && (!stage.skills || stage.skills.length < 1 || stage.skills.length > 3)) {
+                    throw new Error(`AI returned invalid skill count for stage ${stage.stage} (must be 1-3). Got: ${stage.skills?.length}`);
+                 }
+                 // Validate skills within stages > 0
+                 if (stage.stage > 0 && stage.skills) {
+                    for(const skill of stage.skills) {
+                        if (!skill.name || !skill.description) {
+                             throw new Error(`AI returned invalid skill definition in stage ${stage.stage} (missing name or description).`);
+                        }
+                        // Optional cost validation (check if number if present)
+                        if (skill.manaCost !== undefined && typeof skill.manaCost !== 'number') {
+                            throw new Error(`AI returned invalid manaCost type for skill "${skill.name}" in stage ${stage.stage}.`);
+                        }
+                        if (skill.staminaCost !== undefined && typeof skill.staminaCost !== 'number') {
+                             throw new Error(`AI returned invalid staminaCost type for skill "${skill.name}" in stage ${stage.stage}.`);
+                        }
                     }
-                }
+                 }
              }
+             // Ensure Stage 0 exists and has a proper name
+             const stage0 = output.stages.find(s => s.stage === 0);
+             if (!stage0 || !stage0.stageName || stage0.skills.length !== 0) {
+                 throw new Error("AI failed to generate a valid Stage 0 (Potential/Initiate) with an empty skill list.");
+             }
+
 
         } catch (err: any) {
             console.error(`Skill tree generation attempt ${attempt} failed:`, err);
