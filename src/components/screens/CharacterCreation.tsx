@@ -49,7 +49,7 @@ const basicCreationSchema = baseCharacterSchema.extend({
 
 const textCreationSchema = baseCharacterSchema.extend({
   creationType: z.literal("text"),
-  description: z.string().min(10, "Please provide a brief description (at least 10 characters).").max(300, "Description too long (max 300)."),
+  description: z.string().min(10, "Please provide a brief description (at least 10 characters).").max(1000, "Description too long (max 1000)."), // Increased max length for AI output
   // Class is derived or default in text mode, not directly set here
 });
 
@@ -232,9 +232,11 @@ const randomizeStats = useCallback(() => {
        const result = await generateCharacterDescription({ characterDescription: watchedDescription });
         // Store the AI description in the game state context
         dispatch({ type: "SET_AI_DESCRIPTION", payload: result.detailedDescription });
+        // **Update the form's description field**
+        setValue("description", result.detailedDescription, { shouldValidate: true });
         toast({
           title: "AI Description Generated",
-          description: "A detailed profile has been added to your character's context.",
+          description: "Detailed profile added and description field updated.",
         });
      } catch (err) {
        console.error("AI generation failed:", err);
@@ -269,13 +271,14 @@ const randomizeStats = useCallback(() => {
     if (data.creationType === 'text') { // Text-based creation
       characterData = {
         name: data.name,
-        description: data.description, // User's short description
+        description: data.description, // User's short description OR the AI-generated one if updated
         class: "Adventurer", // Default class for text-based, could be derived by AI later
         stats: stats,
         // AI description is handled separately by handleGenerateDescription and stored in context
          traits: [], // Explicitly empty for text-based, could be derived by AI later
          knowledge: [],
          background: '', // Explicitly empty
+         // The aiGeneratedDescription from context will be passed during dispatch if it exists
       };
     } else { // Basic creation (data.creationType === 'basic')
         const traitsArray = data.traits?.split(',').map(t => t.trim()).filter(Boolean) ?? [];
@@ -291,8 +294,15 @@ const randomizeStats = useCallback(() => {
             knowledge: knowledgeArray,
             background: data.background?.trim() ?? "",
             stats: stats,
+            // No aiGeneratedDescription needed here unless we allow AI gen in basic mode too
         };
     }
+
+    // Add the potentially stored AI-generated description to the payload
+    if (state.character?.aiGeneratedDescription) {
+        characterData.aiGeneratedDescription = state.character.aiGeneratedDescription;
+    }
+
 
     // Dispatch the character creation action, which moves to the next screen
     dispatch({ type: "CREATE_CHARACTER", payload: characterData });
@@ -431,11 +441,11 @@ const randomizeStats = useCallback(() => {
                         <TabsContent value="text" className="space-y-4 pt-4 border rounded-md p-4 mt-2 bg-card/50">
                              <h3 className="text-lg font-medium mb-3 border-b pb-2">Describe Your Character</h3>
                              <div className="space-y-2">
-                                <Label htmlFor="description">Appearance, Personality, Backstory (min 10, max 300 chars)</Label>
+                                <Label htmlFor="description">Appearance, Personality, Backstory (min 10, max 1000 chars)</Label>
                                 <Textarea
                                     id="description"
                                     {...register("description")}
-                                    placeholder="Write a short description of your character..."
+                                    placeholder="Write a short description of your character... The AI can expand on this for you."
                                     rows={4}
                                     className={errors.description ? 'border-destructive' : ''}
                                      aria-invalid={errors.description ? "true" : "false"}
@@ -458,7 +468,7 @@ const randomizeStats = useCallback(() => {
                                          </Button>
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                        <p>Let AI expand on your description for a richer character profile (optional, stored separately).</p>
+                                        <p>Let AI expand on your description, updating the text field above (optional).</p>
                                         <p className="text-xs text-muted-foreground">Requires a name and a description (min 10 chars) first.</p>
                                     </TooltipContent>
                                 </Tooltip>
@@ -545,3 +555,4 @@ const randomizeStats = useCallback(() => {
     </div>
   );
 }
+
