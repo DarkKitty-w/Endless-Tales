@@ -29,7 +29,7 @@ const CraftedItemSchema = z.object({
 const AttemptCraftingInputSchema = z.object({
   characterKnowledge: z.array(z.string()).describe("List of character's knowledge areas (e.g., Herbalism, Smithing, Alchemy)."),
   characterSkills: z.array(z.string()).describe("List of character's learned skills relevant to crafting (e.g., Basic Crafting, Forge Mastery)."),
-  inventoryItems: z.string().describe("Comma-separated list of all items currently in the character's inventory."),
+  inventoryItems: z.array(z.string()).describe("List of all item names currently in the character's inventory."), // Changed to array of strings
   desiredItem: z.string().describe("The item the player is trying to craft."),
   usedIngredients: z.array(z.string()).describe("List of specific item names from the inventory the player intends to use."),
 });
@@ -61,8 +61,8 @@ const attemptCraftingPrompt = ai.definePrompt({
 *   Knowledge: {{#if characterKnowledge}}{{#each characterKnowledge}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{else}}None{{/if}}
 *   Skills: {{#if characterSkills}}{{#each characterSkills}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{else}}None{{/if}}
 
-**Inventory:**
-{{{inventoryItems}}}
+**Full Inventory:**
+{{#if inventoryItems}}{{#each inventoryItems}}- {{{this}}}\n{{/each}}{{else}}Empty{{/if}}
 
 **Crafting Attempt:**
 *   Goal: {{{desiredItem}}}
@@ -73,7 +73,7 @@ Determine if the crafting attempt is possible and likely to succeed. Consider:
 1.  **Plausibility:** Is crafting '{{{desiredItem}}}' feasible given a fantasy/medieval setting? (e.g., crafting a 'Laser Gun' is likely impossible).
 2.  **Knowledge/Skills:** Does the character have relevant knowledge (e.g., Smithing for a sword, Herbalism for a potion)? Do they have crafting skills? Lack of relevant knowledge/skills makes success much less likely or impossible for complex items.
 3.  **Ingredients:**
-    *   Are the specified 'usedIngredients' actually in the 'inventoryItems' list?
+    *   Are the specified 'usedIngredients' actually in the 'Full Inventory' list?
     *   Are the ingredients logical for crafting the 'desiredItem'? (e.g., using 'Iron Ore' and 'Wood' for a sword is plausible, using 'Flowers' is not).
     *   Are *enough* suitable ingredients used?
 4.  **Outcome Determination:**

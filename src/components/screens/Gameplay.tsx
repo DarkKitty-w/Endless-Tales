@@ -539,15 +539,15 @@ export function Gameplay() {
         setCraftingError(null);
         toast({ title: "Attempting to craft...", description: `Trying to make: ${craftingGoal}` });
 
-        // Prepare inventory list for the AI
-        const inventoryList = inventory.map(item => `${item.name}${item.description ? ` (${item.description.substring(0,30)}...)` : ''}`).join(', ');
+        // Prepare inventory list for the AI (send names only)
+        const inventoryListNames = inventory.map(item => item.name);
         // Use selectedIngredients directly as it's now an array of names
         const ingredientsUsed = selectedIngredients;
 
         const craftingInput: AttemptCraftingInput = {
             characterKnowledge: character.knowledge,
             characterSkills: character.learnedSkills.map(s => s.name),
-            inventoryItems: inventoryList,
+            inventoryItems: inventoryListNames, // Pass array of names
             desiredItem: craftingGoal,
             usedIngredients: ingredientsUsed,
         };
