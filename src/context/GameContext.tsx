@@ -54,6 +54,7 @@ export interface Character {
 export interface AdventureSettings {
   adventureType: "Randomized" | "Custom" | null;
   permanentDeath: boolean;
+  // Fields for Custom Adventure
   worldType?: string;
   mainQuestline?: string;
   difficulty?: string;
@@ -84,7 +85,7 @@ export interface SavedAdventure {
     saveTimestamp: number;
     characterName: string;
     character: Character; // Includes skill tree (with stage names) and stage number
-    adventureSettings: AdventureSettings;
+    adventureSettings: AdventureSettings; // Includes custom settings if applicable
     storyLog: StoryLogEntry[];
     currentGameStateString: string;
     inventory: InventoryItem[];
@@ -126,6 +127,10 @@ const initialState: GameState = {
   adventureSettings: {
     adventureType: null,
     permanentDeath: true,
+    // Default custom settings to empty strings
+    worldType: "",
+    mainQuestline: "",
+    difficulty: "Normal", // Default difficulty
   },
   currentNarration: null,
   storyLog: [],
@@ -223,24 +228,23 @@ function gameReducer(state: GameState, action: Action): GameState {
     case "SET_GAME_STATUS":
       return { ...state, status: action.payload };
     case "CREATE_CHARACTER":
-      // The payload contains the character data from the form
-      // The aiGeneratedDescription might be passed in the payload if it exists in the context state
+      // Reset adventure settings when creating a new character
       const newCharacter: Character = {
-        ...initialCharacterState, // Start with defaults
-        ...action.payload, // Apply payload data (name, description from form, stats, etc.)
+        ...initialCharacterState,
+        ...action.payload,
         stats: action.payload.stats ? { ...initialCharacterState.stats, ...action.payload.stats } : initialCharacterState.stats,
         traits: action.payload.traits ?? [],
         knowledge: action.payload.knowledge ?? [],
         class: action.payload.class ?? initialCharacterState.class,
         skillTree: null,
         skillTreeStage: 0,
-        // Use aiGeneratedDescription from the payload if it was passed, otherwise keep undefined
         aiGeneratedDescription: action.payload.aiGeneratedDescription ?? undefined,
       };
       return {
         ...state,
-        character: newCharacter, // Store the fully formed character object
+        character: newCharacter,
         status: "AdventureSetup",
+        adventureSettings: { ...initialState.adventureSettings }, // Reset adventure settings
         currentAdventureId: null,
         storyLog: [],
         currentNarration: null,
@@ -256,9 +260,6 @@ function gameReducer(state: GameState, action: Action): GameState {
              stats: action.payload.stats ? { ...state.character.stats, ...action.payload.stats } : state.character.stats,
              traits: action.payload.traits ?? state.character.traits,
              knowledge: action.payload.knowledge ?? state.character.knowledge,
-             // Class update is handled by CHANGE_CLASS_AND_RESET_SKILLS now
-             // class: action.payload.class ?? state.character.class,
-             // Preserve skill tree and stage during general updates
              skillTree: action.payload.skillTree !== undefined ? action.payload.skillTree : state.character.skillTree,
              skillTreeStage: action.payload.skillTreeStage !== undefined ? action.payload.skillTreeStage : state.character.skillTreeStage,
              aiGeneratedDescription: action.payload.aiGeneratedDescription !== undefined ? action.payload.aiGeneratedDescription : state.character.aiGeneratedDescription,
@@ -266,30 +267,36 @@ function gameReducer(state: GameState, action: Action): GameState {
          };
          return { ...state, character: updatedCharacter };
     case "SET_AI_DESCRIPTION":
-        // This action specifically updates the separate aiGeneratedDescription field
         if (!state.character) return state;
         return { ...state, character: { ...state.character, aiGeneratedDescription: action.payload } };
     case "SET_ADVENTURE_SETTINGS":
+      // Merge new settings with existing ones
       return { ...state, adventureSettings: { ...state.adventureSettings, ...action.payload } };
     case "START_GAMEPLAY":
       if (!state.character || !state.adventureSettings.adventureType) {
         console.error("Cannot start gameplay: Missing character or adventure type.");
         return state;
       }
-       // Use the main description field, which might contain the AI one if updated by user
+      // Build initial game state string based on settings
       const charDesc = state.character.description || "No description provided.";
       const initialItems = [{ name: "Basic Clothes" }];
       const initialInventoryNames = initialItems.map(item => item.name);
-       const currentStage = state.character.skillTreeStage;
-       const stageName = currentStage > 0 && state.character.skillTree
-            ? state.character.skillTree.stages.find(s => s.stage === currentStage)?.stageName ?? `Stage ${currentStage}`
-            : "Stage 0";
+      const currentStage = state.character.skillTreeStage;
+      const stageName = currentStage > 0 && state.character.skillTree
+          ? state.character.skillTree.stages.find(s => s.stage === currentStage)?.stageName ?? `Stage ${currentStage}`
+          : "Stage 0";
       const skillTreeSummary = state.character.skillTree
           ? `Class: ${state.character.skillTree.className} (${stageName} - Stage ${currentStage}/4)`
           : "No skill tree assigned yet.";
-      // Include aiGeneratedDescription in the initial game state string if it exists
       const aiDescString = state.character.aiGeneratedDescription ? `\nAI Profile: ${state.character.aiGeneratedDescription}` : "";
-      const initialGameState = `Location: Starting Point\nInventory: ${initialInventoryNames.join(', ') || 'Empty'}\nStatus: Healthy\nTime: Day 1, Morning\nQuest: None\nMilestones: None\nCharacter Name: ${state.character.name}\nClass: ${state.character.class}\nTraits: ${state.character.traits.join(', ') || 'None'}\nKnowledge: ${state.character.knowledge.join(', ') || 'None'}\nBackground: ${state.character.background || 'None'}\nStats: STR ${state.character.stats.strength}, STA ${state.character.stats.stamina}, AGI ${state.character.stats.agility}\nDescription: ${charDesc}${aiDescString}\nAdventure Mode: ${state.adventureSettings.adventureType}, ${state.adventureSettings.permanentDeath ? 'Permadeath' : 'Respawn'}\n${skillTreeSummary}`;
+
+      let adventureDetails = `Adventure Mode: ${state.adventureSettings.adventureType}, ${state.adventureSettings.permanentDeath ? 'Permadeath' : 'Respawn'}`;
+      if (state.adventureSettings.adventureType === "Custom") {
+          adventureDetails += `\nWorld: ${state.adventureSettings.worldType || '?'}\nQuest: ${state.adventureSettings.mainQuestline || '?'}\nDifficulty: ${state.adventureSettings.difficulty || '?'}`;
+      }
+
+      const initialGameState = `Location: Starting Point\nInventory: ${initialInventoryNames.join(', ') || 'Empty'}\nStatus: Healthy\nTime: Day 1, Morning\nQuest: None\nMilestones: None\nCharacter Name: ${state.character.name}\nClass: ${state.character.class}\nTraits: ${state.character.traits.join(', ') || 'None'}\nKnowledge: ${state.character.knowledge.join(', ') || 'None'}\nBackground: ${state.character.background || 'None'}\nStats: STR ${state.character.stats.strength}, STA ${state.character.stats.stamina}, AGI ${state.character.stats.agility}\nDescription: ${charDesc}${aiDescString}\n${adventureDetails}\n${skillTreeSummary}`;
+
       const adventureId = state.currentAdventureId || generateAdventureId();
 
       return {
@@ -301,12 +308,11 @@ function gameReducer(state: GameState, action: Action): GameState {
         inventory: state.currentAdventureId ? state.inventory : initialItems,
         currentGameStateString: state.currentAdventureId ? state.currentGameStateString : initialGameState,
         currentAdventureId: adventureId,
-        isGeneratingSkillTree: state.currentAdventureId ? state.isGeneratingSkillTree : false, // Keep flag if loading
-        // Ensure skill tree and stage are kept if loading
+        isGeneratingSkillTree: state.currentAdventureId ? state.isGeneratingSkillTree : false,
         character: {
             ...state.character,
-            skillTree: state.currentAdventureId ? state.character.skillTree : state.character.skillTree, // Keep skill tree if loading
-            skillTreeStage: state.currentAdventureId ? state.character.skillTreeStage : state.character.skillTreeStage, // Keep stage if loading
+            skillTree: state.currentAdventureId ? state.character.skillTree : state.character.skillTree,
+            skillTreeStage: state.currentAdventureId ? state.character.skillTreeStage : state.character.skillTreeStage,
         }
       };
     case "UPDATE_NARRATION":
@@ -321,21 +327,15 @@ function gameReducer(state: GameState, action: Action): GameState {
                 stats: newLogEntry.updatedStats ? { ...state.character.stats, ...newLogEntry.updatedStats } : state.character.stats,
                 traits: newLogEntry.updatedTraits ?? state.character.traits,
                 knowledge: newLogEntry.updatedKnowledge ?? state.character.knowledge,
-                // Stage progression is handled by PROGRESS_SKILL_STAGE triggered externally after AI confirms
-                // Class change is handled by CHANGE_CLASS_AND_RESET_SKILLS triggered externally
             };
             console.log("Character stats/traits/knowledge updated via narration:", { stats: newLogEntry.updatedStats, traits: newLogEntry.updatedTraits, knowledge: newLogEntry.updatedKnowledge });
         }
 
         if (action.payload.updatedInventory) {
             const itemNames = action.payload.updatedInventory;
-            // Trigger async update but don't wait for it in the reducer
             handleInventoryUpdate(state, itemNames).then(inventoryUpdate => {
-                 // Update inventory if needed, this might happen after the current render cycle
-                // This part needs careful handling, perhaps triggering another dispatch or managing in component
                  console.log("Async inventory update result (may not be immediate):", inventoryUpdate);
             });
-            // Immediately update names for consistency, images will follow
              inventoryAfterNarration = itemNames.map(name => state.inventory.find(item => item.name === name) ?? { name });
              console.log("Inventory names updated based on narration payload.");
         }
@@ -368,9 +368,7 @@ function gameReducer(state: GameState, action: Action): GameState {
                     traits: finalEntry.updatedTraits ?? state.character.traits,
                     knowledge: finalEntry.updatedKnowledge ?? state.character.knowledge,
                     class: finalEntry.updatedClass ?? state.character.class,
-                    // Capture final stage if provided
                     skillTreeStage: finalEntry.progressedToStage ?? state.character.skillTreeStage,
-                    // Capture final aiGeneratedDescription if it somehow changed (unlikely but safe)
                     aiGeneratedDescription: state.character.aiGeneratedDescription,
                 };
             }
@@ -386,8 +384,8 @@ function gameReducer(state: GameState, action: Action): GameState {
                 id: state.currentAdventureId,
                 saveTimestamp: Date.now(),
                 characterName: finalCharacterState.name,
-                character: finalCharacterState, // Save final character state including skill tree/stage/aiDesc
-                adventureSettings: state.adventureSettings,
+                character: finalCharacterState,
+                adventureSettings: state.adventureSettings, // Save current settings
                 storyLog: finalLog,
                 currentGameStateString: finalGameState,
                 inventory: finalInventory,
@@ -409,10 +407,9 @@ function gameReducer(state: GameState, action: Action): GameState {
             inventory: finalInventory,
             currentNarration: null,
             savedAdventures: updatedSavedAdventures,
-            isGeneratingSkillTree: false, // Reset flag on end
+            isGeneratingSkillTree: false,
         };
     case "RESET_GAME":
-       // Keep saved adventures but reset everything else
        const saved = state.savedAdventures;
        return { ...initialState, savedAdventures: saved, status: "MainMenu" };
 
@@ -429,8 +426,8 @@ function gameReducer(state: GameState, action: Action): GameState {
         id: state.currentAdventureId,
         saveTimestamp: Date.now(),
         characterName: state.character.name,
-        character: state.character, // Save current character state including skill tree/stage/aiDesc
-        adventureSettings: state.adventureSettings,
+        character: state.character,
+        adventureSettings: state.adventureSettings, // Save current settings
         storyLog: state.storyLog,
         currentGameStateString: state.currentGameStateString,
         inventory: state.inventory,
@@ -448,48 +445,47 @@ function gameReducer(state: GameState, action: Action): GameState {
         console.error(`Adventure with ID ${action.payload} not found.`);
         return state;
       }
-       // Ensure loaded characters have default skill tree/stage and aiDesc if missing from old save format
        const characterWithValidatedSkillTree = {
-           ...initialCharacterState, // Start with defaults
-           ...adventureToLoad.character, // Apply saved data
-           skillTree: adventureToLoad.character.skillTree ? { // Validate skill tree structure
+           ...initialCharacterState,
+           ...adventureToLoad.character,
+           skillTree: adventureToLoad.character.skillTree ? {
                ...adventureToLoad.character.skillTree,
                stages: (adventureToLoad.character.skillTree.stages || []).map((stage, index) => ({
                     ...stage,
-                    stageName: stage.stageName || `Stage ${stage.stage || index + 1}` // Add fallback name
+                    stageName: stage.stageName || `Stage ${stage.stage || index + 1}`
                }))
            } : null,
-           skillTreeStage: adventureToLoad.character.skillTreeStage ?? 0, // Ensure 0 if missing
-           aiGeneratedDescription: adventureToLoad.character.aiGeneratedDescription ?? undefined, // Ensure undefined if missing
+           skillTreeStage: adventureToLoad.character.skillTreeStage ?? 0,
+           aiGeneratedDescription: adventureToLoad.character.aiGeneratedDescription ?? undefined,
        };
 
 
       if (adventureToLoad.statusBeforeSave === "AdventureSummary") {
           return {
-              ...initialState, // Start from initial state for summary view
-              savedAdventures: state.savedAdventures, // Keep the list of saves
-              status: "AdventureSummary", // Set status to summary
-              character: characterWithValidatedSkillTree, // Load the character
-              adventureSummary: adventureToLoad.adventureSummary, // Load the summary
-              storyLog: adventureToLoad.storyLog, // Load the log
-              inventory: adventureToLoad.inventory, // Load inventory
-              currentAdventureId: adventureToLoad.id, // Keep track of which adventure summary is viewed
+              ...initialState,
+              savedAdventures: state.savedAdventures,
+              status: "AdventureSummary",
+              character: characterWithValidatedSkillTree,
+              adventureSummary: adventureToLoad.adventureSummary,
+              storyLog: adventureToLoad.storyLog,
+              inventory: adventureToLoad.inventory,
+              currentAdventureId: adventureToLoad.id,
+              adventureSettings: adventureToLoad.adventureSettings, // Load settings for context
           };
       } else {
-          // Restore full game state for gameplay
           return {
-              ...initialState, // Start from initial state for gameplay load
-              savedAdventures: state.savedAdventures, // Keep the list of saves
-              status: "Gameplay", // Set status to gameplay
-              character: characterWithValidatedSkillTree, // Load character including skills/stage/aiDesc
+              ...initialState,
+              savedAdventures: state.savedAdventures,
+              status: "Gameplay",
+              character: characterWithValidatedSkillTree,
               adventureSettings: adventureToLoad.adventureSettings, // Load settings
-              storyLog: adventureToLoad.storyLog, // Load log
-              inventory: adventureToLoad.inventory, // Load inventory
-              currentGameStateString: adventureToLoad.currentGameStateString, // Load game state string
-              currentNarration: adventureToLoad.storyLog.length > 0 ? adventureToLoad.storyLog[adventureToLoad.storyLog.length - 1] : null, // Set last narration
-              adventureSummary: null, // No summary during gameplay
-              currentAdventureId: adventureToLoad.id, // Set current adventure ID
-              isGeneratingSkillTree: false, // Assume tree is already loaded
+              storyLog: adventureToLoad.storyLog,
+              inventory: adventureToLoad.inventory,
+              currentGameStateString: adventureToLoad.currentGameStateString,
+              currentNarration: adventureToLoad.storyLog.length > 0 ? adventureToLoad.storyLog[adventureToLoad.storyLog.length - 1] : null,
+              adventureSummary: null,
+              currentAdventureId: adventureToLoad.id,
+              isGeneratingSkillTree: false,
           };
       }
 
@@ -504,17 +500,15 @@ function gameReducer(state: GameState, action: Action): GameState {
 
     case "SET_SKILL_TREE":
         if (!state.character) return state;
-        // Ensure the skill tree class matches the current character class
         if (state.character.class !== action.payload.class) {
             console.warn(`Skill tree class "${action.payload.class}" does not match character class "${state.character.class}". Ignoring.`);
             return { ...state, isGeneratingSkillTree: false };
         }
-         // Validate stage names exist
          const validatedSkillTree = {
             ...action.payload.skillTree,
             stages: action.payload.skillTree.stages.map((stage, index) => ({
                 ...stage,
-                stageName: stage.stageName || `Stage ${stage.stage || index + 1}` // Fallback
+                stageName: stage.stageName || `Stage ${stage.stage || index + 1}`
             }))
          };
         return {
@@ -522,7 +516,7 @@ function gameReducer(state: GameState, action: Action): GameState {
             character: {
                 ...state.character,
                 skillTree: validatedSkillTree,
-                skillTreeStage: state.character.skillTreeStage, // Keep current stage when setting tree initially
+                skillTreeStage: state.character.skillTreeStage,
             },
             isGeneratingSkillTree: false,
         };
@@ -530,28 +524,26 @@ function gameReducer(state: GameState, action: Action): GameState {
      case "CHANGE_CLASS_AND_RESET_SKILLS":
          if (!state.character) return state;
          console.log(`Changing class from ${state.character.class} to ${action.payload.newClass} and resetting skills.`);
-         // Validate stage names exist in the new tree
          const newValidatedSkillTree = {
             ...action.payload.newSkillTree,
             stages: action.payload.newSkillTree.stages.map((stage, index) => ({
                 ...stage,
-                stageName: stage.stageName || `Stage ${stage.stage || index + 1}` // Fallback
+                stageName: stage.stageName || `Stage ${stage.stage || index + 1}`
             }))
          };
          return {
              ...state,
              character: {
                  ...state.character,
-                 class: action.payload.newClass, // Update class
-                 skillTree: newValidatedSkillTree, // Assign new skill tree
-                 skillTreeStage: 0, // Reset stage progression to 0
+                 class: action.payload.newClass,
+                 skillTree: newValidatedSkillTree,
+                 skillTreeStage: 0,
              },
-             isGeneratingSkillTree: false, // Ensure generation flag is off
+             isGeneratingSkillTree: false,
          };
 
      case "PROGRESS_SKILL_STAGE":
          if (!state.character || !state.character.skillTree) return state;
-         // Ensure progression is within bounds (1-4) and sequential or equal
          const newStage = Math.max(1, Math.min(4, action.payload));
          if (newStage > state.character.skillTreeStage) {
               const newStageName = state.character.skillTree.stages.find(s => s.stage === newStage)?.stageName || `Stage ${newStage}`;
@@ -565,7 +557,7 @@ function gameReducer(state: GameState, action: Action): GameState {
              };
          } else {
              console.log(`Attempted to progress skill stage to ${newStage}, but current stage is ${state.character.skillTreeStage}. No change.`);
-             return state; // No change if not progressing
+             return state;
          }
 
 
@@ -590,30 +582,32 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
             if (savedData) {
                 const loadedAdventures: SavedAdventure[] = JSON.parse(savedData);
                 if (Array.isArray(loadedAdventures)) {
-                    // Ensure loaded characters have default skill tree/stage if missing from old save format
                      const validatedAdventures = loadedAdventures.map(adv => ({
                        ...adv,
                        character: {
-                           ...initialCharacterState, // Apply defaults first
-                           ...adv.character, // Then load saved data
-                           skillTree: adv.character.skillTree ? { // Validate skill tree structure
+                           ...initialCharacterState,
+                           ...adv.character,
+                           skillTree: adv.character.skillTree ? {
                                ...adv.character.skillTree,
                                stages: (adv.character.skillTree.stages || []).map((stage, index) => ({
                                    ...stage,
-                                   stageName: stage.stageName || `Stage ${stage.stage || index + 1}` // Add fallback name
+                                   stageName: stage.stageName || `Stage ${stage.stage || index + 1}`
                                }))
                            } : null,
-                           skillTreeStage: adv.character.skillTreeStage ?? 0, // Ensure 0 if missing
-                           aiGeneratedDescription: adv.character.aiGeneratedDescription ?? undefined, // Ensure undefined if missing
+                           skillTreeStage: adv.character.skillTreeStage ?? 0,
+                           aiGeneratedDescription: adv.character.aiGeneratedDescription ?? undefined,
+                       },
+                       adventureSettings: { // Ensure defaults for potentially missing custom settings
+                           ...initialState.adventureSettings,
+                           ...adv.adventureSettings
                        }
-                    })).filter(adv => adv.id && adv.characterName && adv.saveTimestamp && adv.character); // Basic validation
+                    })).filter(adv => adv.id && adv.characterName && adv.saveTimestamp && adv.character);
 
 
                     dispatch({ type: "LOAD_SAVED_ADVENTURES", payload: validatedAdventures });
                     console.log(`Loaded ${validatedAdventures.length} valid adventures from storage.`);
                     if (validatedAdventures.length !== loadedAdventures.length) {
                          console.warn("Some saved adventure data was invalid or missing character data and discarded.");
-                         // Optionally update localStorage with only valid adventures
                          localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(validatedAdventures));
                     }
                 } else {
@@ -635,8 +629,15 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       const currentStageName = state.character?.skillTreeStage && state.character?.skillTree
           ? state.character.skillTree.stages.find(s => s.stage === state.character.skillTreeStage)?.stageName ?? `Stage ${state.character.skillTreeStage}`
           : "Stage 0";
-     console.log("Game State Updated:", { status: state.status, character: state.character?.name, class: state.character?.class, stage: `${currentStageName} (${state.character?.skillTreeStage}/4)`, adventureId: state.currentAdventureId });
-   }, [state.status, state.character, state.currentAdventureId]);
+     console.log("Game State Updated:", {
+        status: state.status,
+        character: state.character?.name,
+        class: state.character?.class,
+        stage: `${currentStageName} (${state.character?.skillTreeStage}/4)`,
+        adventureId: state.currentAdventureId,
+        settings: state.adventureSettings, // Log settings
+    });
+   }, [state.status, state.character, state.currentAdventureId, state.adventureSettings]);
 
 
   return (

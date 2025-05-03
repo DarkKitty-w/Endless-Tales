@@ -1,23 +1,52 @@
 // src/components/screens/AdventureSetup.tsx
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useGame } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input"; // Import Input
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings } from "lucide-react";
+import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings, Globe, ScrollText, BarChart } from "lucide-react"; // Added icons
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert"; // Import Alert
 
 export function AdventureSetup() {
   const { state, dispatch } = useGame();
   const { toast } = useToast();
   const [adventureType, setAdventureType] = useState<"Randomized" | "Custom" | null>(state.adventureSettings.adventureType);
   const [permanentDeath, setPermanentDeath] = useState<boolean>(state.adventureSettings.permanentDeath);
+  // State for custom adventure parameters
+  const [worldType, setWorldType] = useState<string>(state.adventureSettings.worldType ?? "");
+  const [mainQuestline, setMainQuestline] = useState<string>(state.adventureSettings.mainQuestline ?? "");
+  const [difficulty, setDifficulty] = useState<string>(state.adventureSettings.difficulty ?? "Normal");
+  const [customError, setCustomError] = useState<string | null>(null);
+
+  const validateCustomSettings = (): boolean => {
+     if (adventureType === "Custom") {
+        if (!worldType.trim()) {
+            setCustomError("Please specify a World Type.");
+            return false;
+        }
+        if (!mainQuestline.trim()) {
+             setCustomError("Please specify a Main Questline.");
+             return false;
+        }
+        if (!difficulty.trim()) {
+             setCustomError("Please specify a Difficulty.");
+             return false;
+        }
+     }
+     setCustomError(null); // Clear error if validation passes
+     return true;
+  };
+
 
   const handleStartAdventure = () => {
+     setCustomError(null); // Clear previous errors
+
     if (!adventureType) {
         toast({
             title: "Selection Required",
@@ -26,25 +55,47 @@ export function AdventureSetup() {
          });
         return;
     }
-    if (adventureType === "Custom") {
+
+     // Validate custom settings if Custom type is selected
+     if (adventureType === "Custom" && !validateCustomSettings()) {
          toast({
-            title: "Not Implemented",
-            description: "Custom adventures are coming soon!",
-            variant: "destructive",
-         });
+             title: "Custom Settings Required",
+             description: customError || "Please fill in all custom adventure details.",
+             variant: "destructive",
+          });
          return;
-    }
-    dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: { adventureType, permanentDeath } });
+     }
+
+    const settingsPayload = {
+      adventureType,
+      permanentDeath,
+      ...(adventureType === "Custom" && { worldType, mainQuestline, difficulty }),
+    };
+
+    dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload });
     dispatch({ type: "START_GAMEPLAY" }); // This action will set the status to Gameplay
+
+    const description = adventureType === "Custom"
+      ? `Get ready for a custom journey in ${worldType} with quest "${mainQuestline}" (${difficulty}).`
+      : `Get ready for a randomized journey.`;
+
     toast({
         title: "Adventure Starting!",
-        description: `Get ready for a ${adventureType.toLowerCase()} journey.`,
+        description: description,
     });
   };
 
    const handleBack = () => {
     dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
   };
+
+   // Update local state when adventure type changes
+   useEffect(() => {
+      if (adventureType) {
+         setCustomError(null); // Clear errors when changing type
+      }
+   }, [adventureType]);
+
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
@@ -71,14 +122,53 @@ export function AdventureSetup() {
                  <p className="text-sm text-muted-foreground text-center mt-1">Generate a unique world, quests, and challenges.</p>
               </Label>
                <Label htmlFor="custom" className="flex flex-col items-center justify-center p-4 border-2 rounded-md cursor-pointer hover:bg-accent/10 data-[state=checked]:bg-accent/20 data-[state=checked]:border-accent transition-colors">
-                 <RadioGroupItem value="Custom" id="custom" className="sr-only" aria-label="Custom Adventure (Coming Soon)" />
+                 <RadioGroupItem value="Custom" id="custom" className="sr-only" aria-label="Custom Adventure" />
                  <Swords className="w-8 h-8 mb-2 text-primary" />
                  <span className="font-medium">Custom</span>
-                 <p className="text-sm text-muted-foreground text-center mt-1">Select world type, quests, difficulty (coming soon!).</p>
+                 <p className="text-sm text-muted-foreground text-center mt-1">Define world type, main quest, and difficulty.</p>
               </Label>
             </RadioGroup>
+
+             {/* Custom Adventure Parameter Inputs - Conditionally Rendered */}
              {adventureType === "Custom" && (
-                <p className="text-sm text-center text-muted-foreground italic pt-2">Custom adventure parameters are not yet implemented.</p>
+                <div className="space-y-4 border-t border-foreground/10 pt-6 mt-6">
+                   <h3 className="text-lg font-medium mb-3 border-b pb-2">Customize Your Adventure</h3>
+                    {customError && (
+                        <Alert variant="destructive">
+                            <AlertDescription>{customError}</AlertDescription>
+                        </Alert>
+                    )}
+                   <div className="space-y-2">
+                       <Label htmlFor="worldType" className="flex items-center gap-1"><Globe className="w-4 h-4"/> World Type</Label>
+                       <Input
+                           id="worldType"
+                           value={worldType}
+                           onChange={(e) => setWorldType(e.target.value)}
+                           placeholder="e.g., Forgotten Kingdom, Sci-Fi Metropolis"
+                           className={customError && !worldType.trim() ? 'border-destructive' : ''}
+                        />
+                    </div>
+                   <div className="space-y-2">
+                        <Label htmlFor="mainQuestline" className="flex items-center gap-1"><ScrollText className="w-4 h-4"/> Main Questline (Goal)</Label>
+                       <Input
+                           id="mainQuestline"
+                           value={mainQuestline}
+                           onChange={(e) => setMainQuestline(e.target.value)}
+                           placeholder="e.g., Find the Lost Artifact, Overthrow the AI Overlord"
+                            className={customError && !mainQuestline.trim() ? 'border-destructive' : ''}
+                       />
+                    </div>
+                   <div className="space-y-2">
+                       <Label htmlFor="difficulty" className="flex items-center gap-1"><BarChart className="w-4 h-4"/> Difficulty</Label>
+                       <Input
+                           id="difficulty"
+                           value={difficulty}
+                           onChange={(e) => setDifficulty(e.target.value)}
+                           placeholder="e.g., Easy, Normal, Hard, Nightmare"
+                           className={customError && !difficulty.trim() ? 'border-destructive' : ''}
+                       />
+                    </div>
+                </div>
             )}
           </div>
 
@@ -110,7 +200,7 @@ export function AdventureSetup() {
            </Button>
           <Button
             onClick={handleStartAdventure}
-            disabled={!adventureType || adventureType === 'Custom'} // Disable if custom is selected (until implemented) or none selected
+            disabled={!adventureType} // Only disable if no type is selected
             className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
             aria-label="Start Adventure"
            >
