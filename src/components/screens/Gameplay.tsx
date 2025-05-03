@@ -2,7 +2,9 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useGame, type InventoryItem, type StoryLogEntry, type SkillTree, type Skill, type Character, calculateXpToNextLevel } from "@/context/GameContext"; // Ensure useGame is imported
+import { useGame } from "@/context/GameContext"; // Ensure useGame is imported
+import type { InventoryItem, StoryLogEntry, SkillTree, Skill, Character, Reputation } from "@/context/GameContext"; // Import types
+import { calculateXpToNextLevel } from "@/context/GameContext"; // Import the helper
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -14,7 +16,7 @@ import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
 import { assessActionDifficulty, type DifficultyLevel } from "@/ai/flows/assess-action-difficulty";
 import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award } from "lucide-react"; // Added Star, ThumbsUp, ThumbsDown
+import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award } from "lucide-react";
 import { rollD6, rollD10, rollD20, rollD100 } from "@/services/dice-roller"; // Import specific rollers
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -310,8 +312,14 @@ export function Gameplay() {
         } catch (err: any) {
           console.error(`Narration error (Attempt ${retryCount + 1}):`, err);
           const errorMessage = err.message || "The story encountered an unexpected snag.";
-          setError(`${errorMessage} (Attempt ${retryCount + 1}/${maxRetries + 1}). Retrying...`);
-          toast({ title: "Story Error", description: `${errorMessage.substring(0, 60)}... Retrying...`, variant: "destructive"});
+           if (err.message?.includes('503') || err.message?.includes('overloaded')) {
+               setError(`AI Service Overloaded (Attempt ${retryCount + 1}/${maxRetries + 1}). Please try again shortly. Retrying...`);
+               toast({ title: "AI Busy", description: `Service overloaded. Retrying...`, variant: "default"});
+           } else {
+               setError(`${errorMessage} (Attempt ${retryCount + 1}/${maxRetries + 1}). Retrying...`);
+               toast({ title: "Story Error", description: `${errorMessage.substring(0, 60)}... Retrying...`, variant: "destructive"});
+           }
+
 
           if (retryCount >= maxRetries) {
             // Final failure after retries
@@ -637,7 +645,7 @@ export function Gameplay() {
         <div className="hidden md:flex flex-col w-80 lg:w-96 p-4 border-r border-foreground/10 overflow-y-auto bg-card/50 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
              <CharacterDisplay />
 
-              {/* Progression Info */}
+              {/* Progression Info - Desktop Only */}
               <CardboardCard className="mb-4 bg-card/90 backdrop-blur-sm z-10 border-2 border-foreground/20">
                   <CardHeader className="pb-2 pt-4 border-b border-foreground/10">
                       <CardTitle className="text-xl font-semibold flex items-center justify-center gap-2">
@@ -672,56 +680,15 @@ export function Gameplay() {
              {/* Tabs for Inventory and Skill Tree */}
              <Tabs defaultValue="inventory" className="w-full flex flex-col flex-grow min-h-0"> {/* Adjust Tabs structure */}
                 <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
-                    <Sheet> {/* Inventory Sheet Trigger */}
-                        <SheetTrigger asChild>
-                           <Button variant="ghost" size="icon" className="md:hidden">
-                             <Backpack className="h-5 w-5" />
-                             <span className="sr-only">Inventory</span>
-                           </Button>
-                         </SheetTrigger>
-                         <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
-                            <SheetHeader className="p-4 border-b">
-                              <SheetTitle>Inventory</SheetTitle>
-                            </SheetHeader>
-                             <div className="flex-grow overflow-hidden">
-                               <InventoryDisplay />
-                             </div>
-                         </SheetContent>
-                    </Sheet>
+
                      {/* Desktop Inventory Tab */}
                     <TabsTrigger value="inventory" className="hidden md:inline-flex">
-                         Inventory
+                        <Backpack className="mr-1 h-4 w-4"/> Inventory
                     </TabsTrigger>
 
-                    <Sheet> {/* Skill Tree Sheet Trigger */}
-                         <SheetTrigger asChild>
-                             <Button variant="ghost" size="icon" className="md:hidden" disabled={isGeneratingSkillTree}>
-                                 {isGeneratingSkillTree ? <Loader2 className="h-5 w-5 animate-spin" /> : <Workflow className="h-5 w-5" />}
-                                 <span className="sr-only">Skills</span>
-                             </Button>
-                         </SheetTrigger>
-                         <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
-                             <SheetHeader className="p-4 border-b">
-                                 <SheetTitle>Skill Tree - {character.skillTree?.className || 'Loading...'}</SheetTitle>
-                                 <SheetDescription>
-                                     Current Stage: {currentStageName} ({character.skillTreeStage}/4)
-                                 </SheetDescription>
-                             </SheetHeader>
-                             <div className="flex-grow overflow-hidden">
-                                {character.skillTree && !isGeneratingSkillTree ? (
-                                     <SkillTreeDisplay
-                                         skillTree={character.skillTree}
-                                         currentStage={character.skillTreeStage}
-                                         learnedSkills={character.learnedSkills}
-                                     />
-                                 ) : (
-                                     <div className="p-4 text-center text-muted-foreground">Generating skill tree...</div>
-                                 )}
-                             </div>
-                         </SheetContent>
-                     </Sheet>
                       {/* Desktop Skill Tree Tab */}
                      <TabsTrigger value="skills" disabled={isGeneratingSkillTree} className="hidden md:inline-flex">
+                        <Workflow className="mr-1 h-4 w-4"/>
                         {isGeneratingSkillTree ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Skills
                     </TabsTrigger>
 
@@ -777,10 +744,11 @@ export function Gameplay() {
                               <CardboardCard className="mb-4">
                                   <CardHeader className="pb-2 pt-4 border-b"> <CardTitle className="text-lg">Progression</CardTitle> </CardHeader>
                                   <CardContent className="pt-3 pb-3 text-xs">
-                                      <p>Level: {character.level}</p>
-                                      <p>XP: {character.xp} / {character.xpToNextLevel}</p>
-                                       <Progress value={(character.xp / character.xpToNextLevel) * 100} className="h-1.5 mt-1 mb-2" />
-                                      <p className="font-medium">Reputation:</p>
+                                      <div className="flex items-center justify-between"><span>Level:</span> <span className="font-bold">{character.level}</span></div>
+                                      <div className="flex items-center justify-between"><span>XP:</span> <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span></div>
+                                       <Progress value={(character.xp / character.xpToNextLevel) * 100} className="h-1.5 mt-1 mb-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500" />
+                                      <Separator className="my-2"/>
+                                      <p className="font-medium mb-1">Reputation:</p>
                                       {renderReputation(character.reputation)}
                                   </CardContent>
                               </CardboardCard>
@@ -897,10 +865,8 @@ export function Gameplay() {
             <div className="flex justify-between items-center mt-4 flex-shrink-0 gap-2">
                    <AlertDialog>
                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" className="flex-1" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
-                           <ArrowLeft className="mr-2 h-4 w-4" /> Abandon
-                        </Button>
-                     </AlertDialogTrigger>
+                         <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}> <ArrowLeft className="mr-2 h-4 w-4" /> Abandon </Button>
+                      </AlertDialogTrigger>
                       <AlertDialogContent>
                          <AlertDialogHeader>
                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
@@ -915,11 +881,11 @@ export function Gameplay() {
                       </AlertDialogContent>
                    </AlertDialog>
 
-                  <Button variant="destructive" onClick={() => handleEndAdventure()} className="flex-1" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
+                  <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
                      End Adventure
                   </Button>
 
-                   <Button variant="secondary" onClick={handleSaveGame} className="flex-1" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
+                   <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
                       <Save className="mr-2 h-4 w-4" />
                       {isSaving ? "Saving..." : "Save"}
                    </Button>
