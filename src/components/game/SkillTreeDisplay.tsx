@@ -6,7 +6,7 @@ import type { SkillTree } from "@/context/GameContext";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/game/CardboardCard";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { Star, Lock, Unlock } from "lucide-react";
+import { Star, Lock, Unlock, Sparkles } from "lucide-react"; // Added Sparkles for Stage 0
 import {
   Accordion,
   AccordionContent,
@@ -43,13 +43,37 @@ export function SkillTreeDisplay({ skillTree, currentStage }: SkillTreeDisplayPr
   // Sort stages just in case they are not in order
   const sortedStages = [...skillTree.stages].sort((a, b) => a.stage - b.stage);
 
+  const defaultOpenStage = currentStage > 0 ? `stage-${currentStage}` : undefined; // Don't open anything by default at stage 0
+
   return (
     <ScrollArea className="h-full p-4">
       <TooltipProvider delayDuration={100}>
-        <Accordion type="single" collapsible defaultValue={`stage-${currentStage > 0 ? currentStage : 1}`}>
+
+        {/* Explicit Stage 0 Display */}
+        {currentStage === 0 && (
+          <div
+            className={`flex justify-between items-center p-3 rounded-md border-2 mb-3 border-accent bg-accent/10`} // Style as current
+          >
+            <div className="flex items-center gap-2">
+               <Sparkles className="w-4 h-4 text-accent" /> {/* Icon for beginning */}
+               <span className={`font-semibold text-accent`}>
+                  Stage 0 - Potential
+               </span>
+               <Badge variant="default" className="text-xs ml-2">Current</Badge>
+            </div>
+            {/* Show 0 stars */}
+            <div className="flex items-center gap-0.5 mr-2">
+                {[...Array(4)].map((_, i) => (
+                    <Star key={`empty-${i}`} className="w-3 h-3 text-muted-foreground/30" />
+                ))}
+            </div>
+          </div>
+        )}
+
+        <Accordion type="single" collapsible defaultValue={defaultOpenStage}>
           {sortedStages.map((stageData) => {
             const isUnlocked = stageData.stage <= currentStage;
-            const isCurrent = stageData.stage === currentStage;
+            const isCurrent = stageData.stage === currentStage; // Will be false if currentStage is 0
 
             return (
               <AccordionItem key={`stage-${stageData.stage}`} value={`stage-${stageData.stage}`} className="mb-3 border-b-0">
@@ -63,11 +87,11 @@ export function SkillTreeDisplay({ skillTree, currentStage }: SkillTreeDisplayPr
                      <span className={`font-semibold ${isCurrent ? 'text-accent' : isUnlocked ? 'text-primary' : 'text-muted-foreground'}`}>
                         {stageData.stageName || `Stage ${stageData.stage}`} {/* Display stage name */}
                      </span>
-                     {isCurrent && <Badge variant="default" className="text-xs ml-2">Current</Badge>}
+                     {/* Remove Current badge here as it's handled above for stage 0 or below for stages 1-4 */}
                    </div>
                     <div className="flex items-center gap-0.5 mr-2">
                         {[...Array(stageData.stage)].map((_, i) => (
-                            <Star key={i} className={`w-3 h-3 ${isUnlocked ? 'fill-yellow-400 text-yellow-500' : 'text-muted-foreground/30'}`} />
+                             <Star key={i} className={`w-3 h-3 ${isUnlocked ? 'fill-yellow-400 text-yellow-500' : 'text-muted-foreground/30'}`} />
                         ))}
                          {[...Array(4 - stageData.stage)].map((_, i) => (
                             <Star key={`empty-${i}`} className="w-3 h-3 text-muted-foreground/30" />
@@ -90,7 +114,6 @@ export function SkillTreeDisplay({ skillTree, currentStage }: SkillTreeDisplayPr
                                     <p>{skill.description}</p>
                                  </TooltipContent>
                              </Tooltip>
-                             {/* <p className="text-xs text-muted-foreground ml-2">- {skill.description}</p> */}
                            </li>
                          ))}
                        </ul>
