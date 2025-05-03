@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import type { InventoryItem, StoryLogEntry, SkillTree, Skill, Character, calculateXpToNextLevel } from "@/context/GameContext";
+import { useGame, type InventoryItem, type StoryLogEntry, type SkillTree, type Skill, type Character, calculateXpToNextLevel } from "@/context/GameContext"; // Ensure useGame is imported
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -14,7 +14,7 @@ import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
 import { assessActionDifficulty, type DifficultyLevel } from "@/ai/flows/assess-action-difficulty";
 import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown } from "lucide-react"; // Added Star, ThumbsUp, ThumbsDown
+import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award } from "lucide-react"; // Added Star, ThumbsUp, ThumbsDown
 import { rollD6, rollD10, rollD20, rollD100 } from "@/services/dice-roller"; // Import specific rollers
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -39,7 +39,7 @@ import {
 import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Progress } from "@/components/ui/progress"; // Import Progress
+import { Progress } from "../ui/progress"; // Import Progress
 import { Skeleton } from "../ui/skeleton";
 
 // Helper function to map difficulty dice string to roller function
@@ -218,19 +218,25 @@ export function Gameplay() {
         try {
             const roll = await rollFunction();
             setDiceResult(roll);
-            actionWithDice += ` (Difficulty: ${assessedDifficulty}, Dice Roll Result: ${roll}/${diceType.substring(1)})`;
-            console.log(`Dice rolled ${diceType}: ${roll}`);
             const numericDiceType = parseInt(diceType.substring(1), 10);
-            if (isNaN(numericDiceType)) { // Check if dice type is numeric (handles 'None')
-                throw new Error(`Invalid dice type: ${diceType}`);
+            // Ensure we have a valid number for the dice type before including it in the action string
+            if (!isNaN(numericDiceType) && numericDiceType > 0) {
+                actionWithDice += ` (Difficulty: ${assessedDifficulty}, Dice Roll Result: ${roll}/${numericDiceType})`;
+                console.log(`Dice rolled ${diceType}: ${roll}`);
+                // Simple outcome logic: > 60% is success, < 30% is challenging/partial fail, rest is average
+                const successThreshold = Math.ceil(numericDiceType * 0.6);
+                const failThreshold = Math.floor(numericDiceType * 0.3);
+                let outcomeDesc = "Average outcome.";
+                if (roll >= successThreshold) outcomeDesc = "Success!";
+                if (roll <= failThreshold) outcomeDesc = "Challenging...";
+                toast({ title: `Rolled ${roll} on ${diceType}!`, description: outcomeDesc, duration: 2000 });
+            } else {
+                // Handle cases where diceType was invalid or None (should not happen if rollFunction is valid)
+                console.warn(`Dice roll successful (${roll}), but dice type '${diceType}' was unexpected. Not adding roll details to action string.`);
+                actionWithDice += ` (Difficulty: ${assessedDifficulty}, Roll: ${roll})`; // Indicate roll happened but type was off
+                toast({ title: `Rolled ${roll} (Dice Type: ${diceType})`, description: "Outcome determined...", duration: 2000 });
             }
-            // Simple outcome logic: > 60% is success, < 30% is challenging/partial fail, rest is average
-            const successThreshold = Math.ceil(numericDiceType * 0.6);
-            const failThreshold = Math.floor(numericDiceType * 0.3);
-            let outcomeDesc = "Average outcome.";
-            if (roll >= successThreshold) outcomeDesc = "Success!";
-            if (roll <= failThreshold) outcomeDesc = "Challenging...";
-            toast({ title: `Rolled ${roll} on ${diceType}!`, description: outcomeDesc, duration: 2000 });
+
             await new Promise(resolve => setTimeout(resolve, 800));
         } catch (diceError) {
             console.error("Dice roll failed:", diceError);
@@ -664,34 +670,83 @@ export function Gameplay() {
               </CardboardCard>
 
              {/* Tabs for Inventory and Skill Tree */}
-             <Tabs defaultValue="inventory" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="inventory">
+             <Tabs defaultValue="inventory" className="w-full flex flex-col flex-grow min-h-0"> {/* Adjust Tabs structure */}
+                <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
+                    <Sheet> {/* Inventory Sheet Trigger */}
+                        <SheetTrigger asChild>
+                           <Button variant="ghost" size="icon" className="md:hidden">
+                             <Backpack className="h-5 w-5" />
+                             <span className="sr-only">Inventory</span>
+                           </Button>
+                         </SheetTrigger>
+                         <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
+                            <SheetHeader className="p-4 border-b">
+                              <SheetTitle>Inventory</SheetTitle>
+                            </SheetHeader>
+                             <div className="flex-grow overflow-hidden">
+                               <InventoryDisplay />
+                             </div>
+                         </SheetContent>
+                    </Sheet>
+                     {/* Desktop Inventory Tab */}
+                    <TabsTrigger value="inventory" className="hidden md:inline-flex">
                          Inventory
                     </TabsTrigger>
-                    <TabsTrigger value="skills" disabled={isGeneratingSkillTree}>
-                        {isGeneratingSkillTree ? <Skeleton className="h-12 w-24" /> : "Skills"}
+
+                    <Sheet> {/* Skill Tree Sheet Trigger */}
+                         <SheetTrigger asChild>
+                             <Button variant="ghost" size="icon" className="md:hidden" disabled={isGeneratingSkillTree}>
+                                 {isGeneratingSkillTree ? <Loader2 className="h-5 w-5 animate-spin" /> : <Workflow className="h-5 w-5" />}
+                                 <span className="sr-only">Skills</span>
+                             </Button>
+                         </SheetTrigger>
+                         <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
+                             <SheetHeader className="p-4 border-b">
+                                 <SheetTitle>Skill Tree - {character.skillTree?.className || 'Loading...'}</SheetTitle>
+                                 <SheetDescription>
+                                     Current Stage: {currentStageName} ({character.skillTreeStage}/4)
+                                 </SheetDescription>
+                             </SheetHeader>
+                             <div className="flex-grow overflow-hidden">
+                                {character.skillTree && !isGeneratingSkillTree ? (
+                                     <SkillTreeDisplay
+                                         skillTree={character.skillTree}
+                                         currentStage={character.skillTreeStage}
+                                         learnedSkills={character.learnedSkills}
+                                     />
+                                 ) : (
+                                     <div className="p-4 text-center text-muted-foreground">Generating skill tree...</div>
+                                 )}
+                             </div>
+                         </SheetContent>
+                     </Sheet>
+                      {/* Desktop Skill Tree Tab */}
+                     <TabsTrigger value="skills" disabled={isGeneratingSkillTree} className="hidden md:inline-flex">
+                        {isGeneratingSkillTree ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Skills
                     </TabsTrigger>
+
                 </TabsList>
-                <TabsContent value="inventory">
+                {/* Desktop Tab Content */}
+                <TabsContent value="inventory" className="flex-grow overflow-hidden hidden md:block">
                      <InventoryDisplay />
                 </TabsContent>
-                <TabsContent value="skills">
-                     {character.skillTree ? (
-                        <ScrollArea className="h-full p-4">
-                            <SkillTreeDisplay
+                <TabsContent value="skills" className="flex-grow overflow-hidden hidden md:block">
+                     {character.skillTree && !isGeneratingSkillTree ? (
+                          <SkillTreeDisplay
                                 skillTree={character.skillTree}
                                 currentStage={character.skillTreeStage}
-                                learnedSkills={character.learnedSkills} // Pass learned skills
-                            />
-                        </ScrollArea>
+                                learnedSkills={character.learnedSkills}
+                           />
                      ) : (
-                        <CardboardCard className="m-4">
+                        <CardboardCard className="m-4 flex flex-col items-center justify-center h-full">
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2"><Workflow className="w-5 h-5"/> No Skill Tree</CardTitle>
+                                <CardTitle className="flex items-center gap-2"><Workflow className="w-5 h-5"/> Skill Tree</CardTitle>
                             </CardHeader>
-                            <CardContent>
-                                Skill tree is being generated...
+                            <CardContent className="text-center">
+                                 {isGeneratingSkillTree ? <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" /> : null}
+                                <p className="text-muted-foreground">
+                                    {isGeneratingSkillTree ? "Generating skill tree..." : "No skill tree available."}
+                                </p>
                             </CardContent>
                         </CardboardCard>
                      )}
@@ -701,23 +756,101 @@ export function Gameplay() {
         </div>
 
         {/* Right Panel (Game Log & Input) - Flexible width */}
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col p-4 min-h-0"> {/* Added min-h-0 */}
+             {/* Mobile Header with Icons */}
+             <div className="md:hidden flex justify-between items-center mb-2 flex-shrink-0">
+                   {/* Mobile Character Sheet Trigger */}
+                   <Sheet>
+                      <SheetTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <User className="h-5 w-5" />
+                          <span className="sr-only">Character Info</span>
+                        </Button>
+                      </SheetTrigger>
+                      <SheetContent side="left" className="w-[85vw] sm:w-[400px] p-0 flex flex-col">
+                         <SheetHeader className="p-4 border-b">
+                           <SheetTitle>Character Info</SheetTitle>
+                         </SheetHeader>
+                         <ScrollArea className="flex-grow p-4">
+                             <CharacterDisplay />
+                              {/* Progression Info in Mobile Sheet */}
+                              <CardboardCard className="mb-4">
+                                  <CardHeader className="pb-2 pt-4 border-b"> <CardTitle className="text-lg">Progression</CardTitle> </CardHeader>
+                                  <CardContent className="pt-3 pb-3 text-xs">
+                                      <p>Level: {character.level}</p>
+                                      <p>XP: {character.xp} / {character.xpToNextLevel}</p>
+                                       <Progress value={(character.xp / character.xpToNextLevel) * 100} className="h-1.5 mt-1 mb-2" />
+                                      <p className="font-medium">Reputation:</p>
+                                      {renderReputation(character.reputation)}
+                                  </CardContent>
+                              </CardboardCard>
+                         </ScrollArea>
+                      </SheetContent>
+                   </Sheet>
+
+                   <h2 className="text-lg font-semibold">Adventure Log</h2>
+
+                   {/* Combined Inventory/Skills Sheet Trigger */}
+                   <Sheet>
+                        <SheetTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                                <Backpack className="h-5 w-5" />
+                                <Workflow className="h-5 w-5 ml-1" />
+                                <span className="sr-only">Inventory & Skills</span>
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
+                             <SheetHeader className="p-4 border-b">
+                                 <SheetTitle>Inventory & Skills</SheetTitle>
+                             </SheetHeader>
+                             <Tabs defaultValue="inventory" className="w-full flex-grow flex flex-col min-h-0">
+                                 <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
+                                     <TabsTrigger value="inventory">Inventory</TabsTrigger>
+                                     <TabsTrigger value="skills" disabled={isGeneratingSkillTree}>
+                                         {isGeneratingSkillTree ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null} Skills
+                                     </TabsTrigger>
+                                 </TabsList>
+                                 <TabsContent value="inventory" className="flex-grow overflow-hidden">
+                                     <InventoryDisplay />
+                                 </TabsContent>
+                                 <TabsContent value="skills" className="flex-grow overflow-hidden">
+                                     {character.skillTree && !isGeneratingSkillTree ? (
+                                         <SkillTreeDisplay
+                                             skillTree={character.skillTree}
+                                             currentStage={character.skillTreeStage}
+                                             learnedSkills={character.learnedSkills}
+                                         />
+                                     ) : (
+                                         <div className="p-4 text-center text-muted-foreground flex flex-col items-center justify-center h-full">
+                                              {isGeneratingSkillTree ? <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" /> : null}
+                                             {isGeneratingSkillTree ? "Generating skill tree..." : "No skill tree available."}
+                                         </div>
+                                     )}
+                                 </TabsContent>
+                             </Tabs>
+                         </SheetContent>
+                   </Sheet>
+             </div>
+
+
+            {/* Narration Area */}
             <CardboardCard className="shadow-md rounded-sm bg-card flex-1 flex flex-col overflow-hidden mb-4 border-2 border-foreground/20 shadow-inner min-h-0">
-                <CardHeader className="pb-2 pt-4 border-b border-foreground/10">
+                <CardHeader className="hidden md:block pb-2 pt-4 border-b border-foreground/10">
                     <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                        Adventure Log
+                        Story Log
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+                <CardContent className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent p-4 md:p-6">
                     <ScrollArea className="h-full">
                         <div>
                             {storyLog.map((log, index) => (
                                 <div key={index} className="mb-4 pb-2 border-b border-foreground/10 last:border-b-0">
-                                    <div className="text-xs text-muted-foreground italic mb-1">
+                                    {/* Removed Timestamp and Turn number for cleaner look */}
+                                    {/* <div className="text-xs text-muted-foreground italic mb-1">
                                         Turn {index + 1}
                                         <span className="ml-2">{new Date(log.timestamp).toLocaleTimeString()}</span>
-                                    </div>
-                                    <p className="text-sm">{log.narration}</p>
+                                    </div> */}
+                                    <p className="text-sm whitespace-pre-wrap leading-relaxed">{log.narration}</p>
                                 </div>
                             ))}
                             {/* Dynamic Content at the End */}
@@ -730,8 +863,8 @@ export function Gameplay() {
             </CardboardCard>
 
             {/* Action Input */}
-            <CardboardCard className="mb-4 border-2 border-foreground/20 shadow-inner">
-                <CardContent>
+            <CardboardCard className="border-2 border-foreground/20 shadow-inner flex-shrink-0">
+                <CardContent className="p-3 md:p-4">
                     <form onSubmit={handleSubmit} className="flex items-center space-x-2">
                         <Input
                             type="text"
@@ -750,39 +883,65 @@ export function Gameplay() {
                             disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}
                             aria-label="Suggest Action"
                          >
-                             <Sparkles className="mr-2 h-4 w-4" /> Suggest
+                             <Sparkles className="mr-1 md:mr-2 h-4 w-4" />
+                             <span className="hidden md:inline">Suggest</span>
                          </Button>
-                        <Button type="submit" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree} aria-label="Submit Action">
+                        <Button type="submit" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree} aria-label="Submit Action" size="icon">
                             <Send className="h-4 w-4" />
                         </Button>
                     </form>
                 </CardContent>
             </CardboardCard>
-             {/* Mobile Abandon Button (AlertDialog) */}
-             <div className="md:hidden flex justify-between items-center">
+
+             {/* Bottom Buttons for Mobile and Desktop */}
+            <div className="flex justify-between items-center mt-4 flex-shrink-0 gap-2">
                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                         <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
-                            <ArrowLeft className="mr-2 h-4 w-4" /> Abandon
-                         </Button>
-                      </AlertDialogTrigger>
+                     <AlertDialogTrigger asChild>
+                        <Button variant="outline" className="flex-1" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
+                           <ArrowLeft className="mr-2 h-4 w-4" /> Abandon
+                        </Button>
+                     </AlertDialogTrigger>
                       <AlertDialogContent>
                          <AlertDialogHeader>
-                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                               Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu.
-                            </AlertDialogDescription>
+                           <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                           <AlertDialogDescription>
+                              Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu.
+                           </AlertDialogDescription>
                          </AlertDialogHeader>
                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction>
+                           <AlertDialogCancel>Cancel</AlertDialogCancel>
+                           <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction>
                          </AlertDialogFooter>
                       </AlertDialogContent>
                    </AlertDialog>
-                  <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
+
+                  <Button variant="destructive" onClick={() => handleEndAdventure()} className="flex-1" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
                      End Adventure
                   </Button>
-             </div>
+
+                   <Button variant="secondary" onClick={handleSaveGame} className="flex-1" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
+                      <Save className="mr-2 h-4 w-4" />
+                      {isSaving ? "Saving..." : "Save"}
+                   </Button>
+
+                    {/* Confirmation Dialog for Class Change */}
+                    <AlertDialog open={!!pendingClassChange} onOpenChange={(open) => !open && setPendingClassChange(null)}>
+                       <AlertDialogContent>
+                          <AlertDialogHeader>
+                             <AlertDialogTitle>Path Divergence!</AlertDialogTitle>
+                             <AlertDialogDescription>
+                                Your actions suggest a path towards the <span className="font-semibold">{pendingClassChange}</span> class. Do you wish to embrace this new direction? Your current skill progress will be reset, and you'll start learning {pendingClassChange} abilities.
+                             </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                             <AlertDialogCancel onClick={() => setPendingClassChange(null)}>Stay Current Path</AlertDialogCancel>
+                             <AlertDialogAction onClick={() => pendingClassChange && handleConfirmClassChange(pendingClassChange)} className="bg-accent hover:bg-accent/90">
+                                Embrace {pendingClassChange}
+                             </AlertDialogAction>
+                          </AlertDialogFooter>
+                       </AlertDialogContent>
+                    </AlertDialog>
+            </div>
         </div>
     </div>
   );
