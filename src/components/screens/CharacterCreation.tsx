@@ -48,7 +48,7 @@ const basicCreationSchema = baseCharacterSchema.extend({
 
 const textCreationSchema = baseCharacterSchema.extend({
   creationType: z.literal("text"),
-  description: z.string().min(10, "Please provide a brief description (at least 10 characters).").max(300, "Description too long (max 300)."), // Adjusted max length
+  description: z.string().min(10, "Please provide a brief description (at least 10 characters)."), // Removed max(300)
   // Class etc. are derived or default in text mode initially
 });
 
@@ -456,7 +456,7 @@ export function CharacterCreation() {
                         <TabsContent value="text" className="space-y-4 pt-4 border rounded-md p-4 mt-2 bg-card/50">
                              <h3 className="text-lg font-medium mb-3 border-b pb-2">Describe Your Character</h3>
                              <div className="space-y-2">
-                                <Label htmlFor="description">Appearance, Personality, Backstory (min 10, max 300 chars)</Label>
+                                <Label htmlFor="description">Appearance, Personality, Backstory (min 10 chars)</Label>
                                 <Textarea
                                     id="description"
                                     {...register("description")}
