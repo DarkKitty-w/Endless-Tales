@@ -1,7 +1,7 @@
 // src/components/screens/MainMenu.tsx
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Import useEffect
 import { useGame } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
@@ -16,7 +16,13 @@ export function MainMenu() {
   const { dispatch } = useGame();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
+   // Add useEffect for logging
+   useEffect(() => {
+     console.log("MainMenu component mounted.");
+   }, []);
+
   const handleNewGame = () => {
+    console.log("MainMenu: Handling New Game button click.");
     // Reset game state before starting character creation ensures a fresh start
     dispatch({ type: "RESET_GAME" });
     // Set status to CharacterCreation immediately after reset
@@ -24,6 +30,7 @@ export function MainMenu() {
   };
 
   const handleViewSaved = () => {
+     console.log("MainMenu: Handling View Saved Adventures button click.");
     dispatch({ type: "SET_GAME_STATUS", payload: "ViewSavedAdventures" });
   };
 
@@ -67,5 +74,3 @@ export function MainMenu() {
     </div>
   );
 }
-
-    

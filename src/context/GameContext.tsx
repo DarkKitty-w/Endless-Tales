@@ -4,6 +4,7 @@
 import type { ReactNode } from "react";
 import React, { createContext, useContext, useReducer, Dispatch, useEffect } from "react";
 import type { GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
+import { calculateXpToNextLevel } from "@/lib/utils"; // Import from lib/gameUtils
 
 export type GameStatus =
   | "MainMenu"
@@ -183,11 +184,6 @@ const calculateMaxMana = (stats: CharacterStats, knowledge: string[]): number =>
     return baseMana + knowledgeBonus;
 };
 
-// Export this function
-export const calculateXpToNextLevel = (level: number): number => {
-    // Example formula: Exponential growth
-    return Math.floor(100 * Math.pow(1.5, level -1));
-};
 
 // --- Starter Skill Definitions ---
 const COMMON_STARTER_SKILL: Skill = { name: "Observe", description: "Carefully examine your surroundings.", type: 'Starter' };
@@ -436,7 +432,7 @@ function gameReducer(state: GameState, action: Action): GameState {
           : "No skill tree assigned yet.";
       const aiDescString = state.character.aiGeneratedDescription ? `\nAI Profile: ${state.character.aiGeneratedDescription}` : "";
       const progressionSummary = `Level: ${state.character.level} (${state.character.xp}/${state.character.xpToNextLevel} XP)`;
-      const repSummary = Object.entries(state.character.reputation).map(([faction, score]) => `${faction}: ${score}`).join(', ') || 'None';
+      const repSummary = Object.entries(state.character.reputation).map(([f, s]) => `${f}: ${s}`).join(', ') || 'None';
       const npcRelSummary = Object.entries(state.character.npcRelationships).map(([npc, score]) => `${npc}: ${score}`).join(', ') || 'None'; // Add NPC relationship summary
       const inventoryString = startingItems.length > 0 ? startingItems.map(item => `${item.name}${item.quality ? ` (${item.quality})` : ''}`).join(', ') : 'Empty';
       const turnCount = state.currentAdventureId ? state.turnCount : 0; // Load or reset turn count
@@ -778,7 +774,7 @@ function gameReducer(state: GameState, action: Action): GameState {
        // Validate and provide defaults for potentially missing character fields from older saves
        const validatedCharacter: Character = {
            ...initialCharacterState, // Start with defaults
-           ...(adventureToLoad.character || {}), // Load saved data, ensure character obj exists
+           ...(adventureToLoad.character || {}), // Load saved data
            // Ensure all required fields have values
            name: adventureToLoad.character?.name || "Recovered Adventurer",
            description: adventureToLoad.character?.description || "",
@@ -829,9 +825,9 @@ function gameReducer(state: GameState, action: Action): GameState {
       // Load inventory with defaults for missing properties
       const validatedInventory = (Array.isArray(adventureToLoad.inventory) ? adventureToLoad.inventory : []).map(item => ({
            name: item.name || "Unknown Item",
-           description: item.description || "An item of unclear origin.", // Default description
-           weight: typeof item.weight === 'number' ? item.weight : 1, // Default weight
-           quality: item.quality || "Common", // Default quality
+           description: item.description || "An item of unclear origin.",
+           weight: typeof item.weight === 'number' ? item.weight : 1,
+           quality: item.quality || "Common",
            durability: typeof item.durability === 'number' ? item.durability : undefined,
            magicalEffect: item.magicalEffect || undefined,
        }));
@@ -1050,6 +1046,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
 
     // --- Persistence Effect ---
     useEffect(() => {
+        console.log("GameProvider mounted. Attempting to load saved adventures."); // Log provider mount
         try {
             const savedData = localStorage.getItem(SAVED_ADVENTURES_KEY);
             if (savedData) {
@@ -1072,12 +1069,12 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
                              currentStamina: typeof adv.character?.currentStamina === 'number' ? adv.character.currentStamina : (adv.character?.maxStamina ?? calculateMaxStamina(adv.character?.stats ?? initialCharacterState.stats)),
                              maxMana: typeof adv.character?.maxMana === 'number' ? adv.character.maxMana : calculateMaxMana(adv.character?.stats ?? initialCharacterState.stats, adv.character?.knowledge ?? []),
                              currentMana: typeof adv.character?.currentMana === 'number' ? adv.character.currentMana : (adv.character?.maxMana ?? calculateMaxMana(adv.character?.stats ?? initialCharacterState.stats, adv.character?.knowledge ?? [])),
-                             // Progression fields validation
+                              // Progression fields with defaults
                              level: typeof adv.character?.level === 'number' ? adv.character.level : 1,
                              xp: typeof adv.character?.xp === 'number' ? adv.character.xp : 0,
                              xpToNextLevel: typeof adv.character?.xpToNextLevel === 'number' ? adv.character.xpToNextLevel : calculateXpToNextLevel(adv.character?.level ?? 1),
                              reputation: typeof adv.character?.reputation === 'object' && adv.character.reputation !== null ? adv.character.reputation : {},
-                             npcRelationships: typeof adv.character?.npcRelationships === 'object' && adv.character.npcRelationships !== null ? adv.character.npcRelationships : {}, // Validate relationships
+                             npcRelationships: typeof adv.character?.npcRelationships === 'object' && adv.character.npcRelationships !== null ? adv.character.npcRelationships : {}, // Load or default relationships
                              // Skill tree and learned skills validation
                              skillTree: adv.character?.skillTree ? {
                                  ...adv.character.skillTree,
@@ -1168,7 +1165,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
           ? state.character.skillTree.stages[state.character.skillTreeStage]?.stageName ?? `Stage ${state.character.skillTreeStage}`
           : "Stage 0";
       const reputationString = state.character ? Object.entries(state.character.reputation).map(([f, s]) => `${f}: ${s}`).join(', ') || 'None' : 'N/A';
-      const relationshipString = state.character ? Object.entries(state.character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'None' : 'N/A'; // Log relationships
+      const relationshipString = state.character ? Object.entries(state.character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'N/A' : 'N/A'; // Log relationships
       const inventoryString = state.inventory.map(i => `${i.name}${i.quality ? ` (${i.quality})` : ''}`).join(', ') || 'Empty';
      console.log("Game State Updated:", {
         status: state.status,
@@ -1205,4 +1202,3 @@ export const useGame = () => {
   }
   return context;
 };
-
