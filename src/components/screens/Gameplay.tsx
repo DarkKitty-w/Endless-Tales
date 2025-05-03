@@ -2,19 +2,19 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useGame, type InventoryItem, type StoryLogEntry, type SkillTree } from "@/context/GameContext"; // Added StoryLogEntry, SkillTree
+import { useGame, type InventoryItem, type StoryLogEntry, type SkillTree, type Skill } from "@/context/GameContext"; // Added Skill
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area"; // Added ScrollBar
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
 import { CharacterDisplay } from "@/components/game/CharacterDisplay";
 import { InventoryDisplay } from "@/components/game/InventoryDisplay";
-import { narrateAdventure, type NarrateAdventureInput, type NarrateAdventureOutput } from "@/ai/flows/narrate-adventure"; // Import types
+import { narrateAdventure, type NarrateAdventureInput, type NarrateAdventureOutput } from "@/ai/flows/narrate-adventure";
 import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
 import { assessActionDifficulty, type DifficultyLevel } from "@/ai/flows/assess-action-difficulty";
-import { generateSkillTree } from "@/ai/flows/generate-skill-tree"; // Import skill tree generation flow
+import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow } from "lucide-react"; // Added Workflow icon
+import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow } from "lucide-react";
 import { rollDice, rollDifficultDice } from "@/services/dice-roller";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -36,10 +36,10 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay"; // Import SkillTreeDisplay
-import { Skeleton } from "../ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Import Tabs
-import { Separator } from "@/components/ui/separator"; // Import Separator for visual breaks
+import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Separator } from "@/components/ui/separator";
+import { Skeleton } from "../ui/skeleton"; // Added Skeleton import
 
 // Helper function to map difficulty dice string to roller function
 const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null => {
@@ -218,7 +218,7 @@ export function Gameplay() {
         try {
              const assessmentInput = {
                 playerAction: action,
-                characterCapabilities: `Class: ${character.class}. Stage: ${character.skillTreeStage}. Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, AGI ${character.stats.agility}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}. Inventory: ${inventory.map(i => i.name).join(', ') || 'Empty'}`,
+                characterCapabilities: `Class: ${character.class}. Stage: ${character.skillTreeStage}. Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, AGI ${character.stats.agility}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}. Inventory: ${inventory.map(i => i.name).join(', ') || 'Empty'}. Stamina: ${character.currentStamina}/${character.maxStamina}. Mana: ${character.currentMana}/${character.maxMana}. Learned Skills: ${character.learnedSkills.map(s=>s.name).join(', ') || 'None'}.`,
                 currentSituation: currentNarration?.narration || "At the beginning of the scene.",
                 gameStateSummary: currentGameStateString,
              };
@@ -292,21 +292,14 @@ export function Gameplay() {
     // --- 3. Narrate Action Outcome ---
      // Prepare skill tree summary for the AI prompt
     let skillTreeSummaryForAI = null;
-    if (character.skillTree && character.skillTreeStage > 0) {
+    if (character.skillTree && character.skillTreeStage >= 0) { // Check for >= 0
         const currentStageData = character.skillTree.stages.find(s => s.stage === character.skillTreeStage);
         skillTreeSummaryForAI = {
             className: character.skillTree.className,
             stageCount: character.skillTree.stages.length,
-            skillsInCurrentStage: currentStageData ? currentStageData.skills.map(s => s.name) : [],
+            availableSkillsAtCurrentStage: currentStageData ? currentStageData.skills.map(s => s.name) : [],
         };
-    } else if (character.skillTree) {
-         skillTreeSummaryForAI = {
-             className: character.skillTree.className,
-             stageCount: character.skillTree.stages.length,
-             skillsInCurrentStage: [], // No skills at stage 0
-         };
     }
-
 
     const inputForAI: NarrateAdventureInput = {
       character: {
@@ -317,8 +310,13 @@ export function Gameplay() {
         knowledge: character.knowledge,
         background: character.background,
         stats: character.stats,
+        currentStamina: character.currentStamina, // Pass current resources
+        maxStamina: character.maxStamina,
+        currentMana: character.currentMana,
+        maxMana: character.maxMana,
         skillTreeSummary: skillTreeSummaryForAI, // Pass summary
         skillTreeStage: character.skillTreeStage, // Pass current stage
+        learnedSkills: character.learnedSkills.map(s => s.name), // Pass learned skill names
         aiGeneratedDescription: character.aiGeneratedDescription,
       },
       playerChoice: actionWithDice,
@@ -341,6 +339,9 @@ export function Gameplay() {
           updatedClass: result.updatedClass, // Can be directly updated by AI (though prompt discourages it)
           progressedToStage: result.progressedToStage,
           suggestedClassChange: result.suggestedClassChange,
+          staminaChange: result.staminaChange, // Get resource changes
+          manaChange: result.manaChange,
+          gainedSkill: result.gainedSkill, // Get gained skill
           timestamp: Date.now(),
       };
       dispatch({ type: "UPDATE_NARRATION", payload: logEntryForResult });
@@ -357,6 +358,10 @@ export function Gameplay() {
            dispatch({ type: "PROGRESS_SKILL_STAGE", payload: result.progressedToStage });
            toast({ title: "Skill Stage Increased!", description: `You've reached ${progressedStageName} (Stage ${result.progressedToStage}) of the ${character.class} path!`, duration: 4000 });
        }
+        // Handle gained skill notification
+        if (result.gainedSkill) {
+            toast({ title: "Skill Learned!", description: `You gained the skill: ${result.gainedSkill.name}!`, duration: 4000 });
+        }
 
         // Handle suggested class change - set state to trigger confirmation dialog
        if (result.suggestedClassChange && result.suggestedClassChange !== character.class) {
@@ -409,13 +414,13 @@ export function Gameplay() {
      toast({ title: "Ending Adventure", description: "Summarizing your tale..." });
      const finalContext = finalNarrationEntry ?? (storyLog.length > 0 ? storyLog[storyLog.length - 1] : null);
      let summary = "Your adventure has concluded.";
-     const fullStoryLog = [...storyLog];
+     const finalLogToSummarize = [...storyLog];
      if (finalNarrationEntry && (!storyLog.length || storyLog[storyLog.length - 1].narration !== finalNarrationEntry.narration)) {
-        fullStoryLog.push(finalNarrationEntry);
+        finalLogToSummarize.push(finalNarrationEntry);
      }
-     const hasLog = fullStoryLog.length > 0;
+     const hasLog = finalLogToSummarize.length > 0;
      if (hasLog) {
-         const fullStory = fullStoryLog.map((log, index) => `[Turn ${index + 1}]\n${log.narration}`).join("\n\n---\n\n");
+         const fullStory = finalLogToSummarize.map((log, index) => `[Turn ${index + 1}]\n${log.narration}`).join("\n\n---\n\n");
          if(fullStory.trim().length > 0) {
              try {
                  const summaryResult = await summarizeAdventure({ story: fullStory });
@@ -432,7 +437,7 @@ export function Gameplay() {
          summary = "Your adventure ended before it could be properly logged.";
      }
      dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationEntry } });
-   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, isGeneratingSkillTree, storyLog, currentNarration, dispatch, toast]);
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, isGeneratingSkillTree, storyLog, dispatch, toast]); // Removed currentNarration dep
 
 
    // --- Handle Save Game ---
@@ -486,7 +491,8 @@ export function Gameplay() {
           requestAnimationFrame(scrollToBottom);
      }
   // Trigger specifically when skill tree becomes available after generation in a new game
-  }, [state.status, character?.name, character?.class, character?.skillTree, state.currentAdventureId, storyLog.length, isLoading, isEnding, isSaving, isGeneratingSkillTree, triggerSkillTreeGeneration, handlePlayerAction, generateInventoryImages, inventory, state.savedAdventures, toast, scrollToBottom]);
+  // Also re-trigger initial action if skill tree becomes available later and story log is still empty
+   }, [state.status, character?.name, character?.class, character?.skillTree, state.currentAdventureId, storyLog.length, isLoading, isEnding, isSaving, isGeneratingSkillTree, triggerSkillTreeGeneration, handlePlayerAction, generateInventoryImages, inventory, state.savedAdventures, toast, scrollToBottom]);
 
 
    // Scroll to bottom effect
@@ -521,12 +527,17 @@ export function Gameplay() {
 
    // --- Suggest Action ---
    const handleSuggestAction = useCallback(() => {
-       if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree) return;
-        const suggestions = [ "Look around", "Examine surroundings", "Check inventory", "Check status", "Move north", "Move east", "Move south", "Move west", "Talk to [NPC Name]", "Ask about [Topic]", "Examine [Object]", "Pick up [Item]", "Use [Item]", "Drop [Item]", "Open [Door/Chest]", "Search the area", "Rest here", "Wait for a while", "Attack [Target]", "Defend yourself", "Flee", "Cast [Spell Name]", "Use skill: [Skill Name]", ];
+       if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree || !character) return;
+        // Include learned skills in suggestions
+       const learnedSkillNames = character.learnedSkills.map(s => s.name);
+        const baseSuggestions = [ "Look around", "Examine surroundings", "Check inventory", "Check status", "Move north", "Move east", "Move south", "Move west", "Talk to [NPC Name]", "Ask about [Topic]", "Examine [Object]", "Pick up [Item]", "Use [Item]", "Drop [Item]", "Open [Door/Chest]", "Search the area", "Rest here", "Wait for a while", "Attack [Target]", "Defend yourself", "Flee", ];
+        const skillSuggestions = learnedSkillNames.map(name => `Use skill: ${name}`);
+        const suggestions = [...baseSuggestions, ...skillSuggestions];
+
         const suggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
         setPlayerInput(suggestion);
         toast({ title: "Suggestion", description: `Try: "${suggestion}"`, duration: 3000 });
-   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, isGeneratingSkillTree, toast]);
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, isGeneratingSkillTree, character, toast]);
 
    if (!character) {
        return (
@@ -539,8 +550,8 @@ export function Gameplay() {
    }
 
     // Determine current stage name for mobile sheet
-    const currentStageName = character.skillTree && character.skillTreeStage > 0
-        ? character.skillTree.stages.find(s => s.stage === character.skillTreeStage)?.stageName ?? `Stage ${character.skillTreeStage}`
+     const currentStageName = character.skillTree && character.skillTreeStage >= 0 && character.skillTree.stages[character.skillTreeStage]
+        ? character.skillTree.stages[character.skillTreeStage]?.stageName ?? `Stage ${character.skillTreeStage}`
         : "Stage 0";
 
 
@@ -603,7 +614,11 @@ export function Gameplay() {
                 </TabsContent>
                 <TabsContent value="skills" className="flex-grow overflow-hidden mt-2">
                      {character.skillTree ? (
-                        <SkillTreeDisplay skillTree={character.skillTree} currentStage={character.skillTreeStage} />
+                        <SkillTreeDisplay
+                            skillTree={character.skillTree}
+                            currentStage={character.skillTreeStage}
+                            learnedSkills={character.learnedSkills} // Pass learned skills
+                        />
                      ) : isGeneratingSkillTree ? (
                         <div className="flex items-center justify-center h-full text-muted-foreground">
                              <Loader2 className="mr-2 h-4 w-4 animate-spin"/> Loading Skills...
@@ -668,7 +683,17 @@ export function Gameplay() {
                                 <SheetDescription>Current Stage: {currentStageName} ({character.skillTreeStage}/4)</SheetDescription>
                              </SheetHeader>
                              <div className="flex-grow overflow-hidden">
-                                 {character.skillTree ? <SkillTreeDisplay skillTree={character.skillTree} currentStage={character.skillTreeStage} /> : <p className="p-4 text-muted-foreground italic">No skill tree available.</p>}
+                                 {character.skillTree ? (
+                                     <SkillTreeDisplay
+                                        skillTree={character.skillTree}
+                                        currentStage={character.skillTreeStage}
+                                        learnedSkills={character.learnedSkills} // Pass learned skills
+                                    />
+                                 ) : (
+                                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                                         <Loader2 className="mr-2 h-4 w-4 animate-spin"/> Loading Skills...
+                                    </div>
+                                  )}
                              </div>
                          </SheetContent>
                      </Sheet>
@@ -746,7 +771,7 @@ export function Gameplay() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Class Change Suggested!</AlertDialogTitle>
                         <AlertDialogDescription>
-                             Your actions suggest a path closer to the <span className="font-semibold">{pendingClassChange}</span> class. Would you like to embrace this change? Your current class progress (<span className="font-semibold">{character.class} - {currentStageName} ({character.skillTreeStage}/4)</span>) will be reset, and you'll start fresh on the {pendingClassChange} skill tree.
+                             Your actions suggest a path closer to the <span className="font-semibold">{pendingClassChange}</span> class. Would you like to embrace this change? Your current class progress (<span className="font-semibold">{character.class} - {currentStageName} ({character.skillTreeStage}/4)</span>) will be reset, and you'll start fresh on the {pendingClassChange} skill tree at Stage 0. Your starter skills will remain.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

@@ -18,7 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { FolderClock, ArrowLeft, Trash2, Play, Info, BookOpenText, Package, ShieldQuestion, Star } from "lucide-react"; // Added Star
+import { FolderClock, ArrowLeft, Trash2, Play, Info, BookOpenText, Package, ShieldQuestion, Star, HeartPulse, Zap } from "lucide-react"; // Added HeartPulse, Zap
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 
@@ -66,24 +66,33 @@ export function SavedAdventuresList() {
                 {sortedAdventures.map((adventure) => {
                     // Find the current stage name from the saved skill tree
                     const currentStage = adventure.character?.skillTreeStage ?? 0;
-                    const stageName = currentStage > 0 && adventure.character?.skillTree
-                        ? adventure.character.skillTree.stages.find(s => s.stage === currentStage)?.stageName ?? `Stage ${currentStage}`
-                        : "Stage 0";
+                    const stageData = adventure.character?.skillTree?.stages[currentStage];
+                    const stageName = stageData?.stageName ?? `Stage ${currentStage}`;
 
                     return (
                       <CardboardCard key={adventure.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-card/60 border border-foreground/10">
                         <div className="flex-1 min-w-0">
                           <p className="text-lg font-semibold truncate" title={adventure.characterName}>{adventure.characterName}</p>
                           {/* Display Class and Skill Stage with Name */}
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                                <div className="flex items-center gap-1">
-                                    <ShieldQuestion className="w-3 h-3"/> {adventure.character?.class || 'Unknown Class'}
+                          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground mt-1">
+                                <div className="flex items-center gap-1" title="Class">
+                                    <ShieldQuestion className="w-3 h-3"/> {adventure.character?.class || 'Unknown'}
                                 </div>
-                                <div className="flex items-center gap-0.5" title={`Skill Stage ${currentStage}`}>
+                                <div className="flex items-center gap-0.5" title={`Skill Stage: ${stageName}`}>
                                     <Star className="w-3 h-3"/> {stageName} ({currentStage}/4)
                                 </div>
+                                 {/* Display Stamina */}
+                                <div className="flex items-center gap-1" title="Stamina">
+                                    <HeartPulse className="w-3 h-3 text-green-600" /> {adventure.character?.currentStamina ?? '?'}/{adventure.character?.maxStamina ?? '?'}
+                                </div>
+                                {/* Display Mana (if maxMana exists and > 0) */}
+                                {(adventure.character?.maxMana ?? 0) > 0 && (
+                                    <div className="flex items-center gap-1" title="Mana">
+                                        <Zap className="w-3 h-3 text-blue-500" /> {adventure.character?.currentMana ?? '?'}/{adventure.character?.maxMana ?? '?'}
+                                    </div>
+                                )}
                           </div>
-                           <p className="text-sm text-muted-foreground">
+                           <p className="text-sm text-muted-foreground mt-1">
                             Saved {formatDistanceToNow(new Date(adventure.saveTimestamp), { addSuffix: true })}
                           </p>
                            <p className="text-xs text-muted-foreground mt-1">
