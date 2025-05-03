@@ -4,7 +4,7 @@
 import { useGame } from "@/context/GameContext";
 import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons";
-import { User, ShieldQuestion, Star, Zap, HeartPulse } from "lucide-react"; // Added Zap, HeartPulse
+import { User, ShieldQuestion, Star, Zap, HeartPulse, Workflow } from "lucide-react"; // Added Zap, HeartPulse, Workflow
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress"; // Import Progress
@@ -26,17 +26,21 @@ export function CharacterDisplay() {
    // Find the current stage name
    const currentStageName = character.skillTree && character.skillTreeStage >= 0 && character.skillTree.stages[character.skillTreeStage]
        ? character.skillTree.stages[character.skillTreeStage]?.stageName ?? `Stage ${character.skillTreeStage}`
-       : "Stage 0"; // Display "Stage 0" if no tree or stage 0
-
+       : "Potential"; // Default to "Potential" for stage 0
 
   // Helper to render stars based on stage
   const renderStageStars = (stage: number) => {
     const stars = [];
-    for (let i = 0; i < 4; i++) {
+    // Stage 0 = 0 stars filled, Stage 1 = 1 star, ..., Stage 4 = 4 stars
+    const filledStars = Math.max(0, stage); // Ensure stage isn't negative
+    const totalStars = 4; // Max stages represented by stars
+
+    for (let i = 0; i < totalStars; i++) {
       stars.push(
         <Star
           key={i}
-          className={`w-3 h-3 ${i < stage ? 'fill-yellow-400 text-yellow-500' : 'text-muted-foreground/50'}`}
+          className={`w-3.5 h-3.5 ${i < filledStars ? 'fill-yellow-400 text-yellow-500' : 'text-muted-foreground/30'}`}
+          aria-label={i < filledStars ? "Stage achieved" : "Stage not achieved"}
         />
       );
     }
@@ -154,42 +158,68 @@ export function CharacterDisplay() {
         {/* Skill Tree Stage Display */}
         {character.skillTree && (
              <div className="mt-4 pt-4 border-t border-foreground/10">
-                 <p className="text-sm font-medium text-center mb-1">Skill Progression</p>
-                 <div className="flex justify-center items-center gap-1">
-                    {renderStageStars(character.skillTreeStage)}
-                 </div>
-                  <p className="text-xs text-muted-foreground text-center mt-1 font-semibold">
-                      {currentStageName} ({character.skillTreeStage}/4)
-                  </p>
-                  <p className="text-xs text-muted-foreground text-center mt-0.5">
-                      {character.skillTree.className} Tree
-                  </p>
-                 {/* Optionally list AVAILABLE skills for the current stage (from skillTree) */}
+                  <TooltipProvider delayDuration={100}>
+                    <Tooltip>
+                        <TooltipTrigger className="w-full text-center">
+                             <p className="text-sm font-medium mb-1 flex items-center justify-center gap-1.5">
+                                 <Workflow className="w-4 h-4 text-purple-600"/> Skill Progression
+                             </p>
+                             <div className="flex justify-center items-center gap-1">
+                                {renderStageStars(character.skillTreeStage)}
+                             </div>
+                              <p className="text-base font-semibold text-foreground mt-1">
+                                  {currentStageName}
+                              </p>
+                               <p className="text-xs text-muted-foreground">
+                                  ({character.skillTree.className} - Stage {character.skillTreeStage}/4)
+                              </p>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                            <p>Your current stage in the {character.skillTree.className} skill tree.</p>
+                            <p>Progress further to unlock new stages and skills.</p>
+                        </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+
+                 {/* List AVAILABLE skills for the current stage (from skillTree) */}
                  {character.skillTreeStage >= 0 && character.skillTree.stages[character.skillTreeStage]?.skills.length > 0 && (
-                    <div className="mt-2 text-center">
-                        <p className="text-xs font-semibold">Available Skills at this Stage:</p>
-                        <div className="flex flex-wrap justify-center gap-1 mt-1">
-                         {character.skillTree.stages[character.skillTreeStage].skills.map(skill => (
-                             <TooltipProvider key={skill.name} delayDuration={100}>
-                                 <Tooltip>
-                                     <TooltipTrigger>
-                                         <Badge
-                                            variant={character.learnedSkills.some(ls => ls.name === skill.name) ? "default" : "outline"}
-                                            className={`text-xs ${character.learnedSkills.some(ls => ls.name === skill.name) ? 'border-primary/50 bg-primary/10 text-primary' : 'border-dashed'}`}
-                                          >
-                                             {skill.name}
-                                          </Badge>
-                                     </TooltipTrigger>
-                                     <TooltipContent>
-                                         <p className="font-semibold">{skill.name}</p>
-                                         <p className="text-xs text-muted-foreground">{skill.description}</p>
-                                         {skill.staminaCost && <p className="text-xs text-green-600">Cost: {skill.staminaCost} Stamina</p>}
-                                         {skill.manaCost && <p className="text-xs text-blue-600">Cost: {skill.manaCost} Mana</p>}
-                                         {!character.learnedSkills.some(ls => ls.name === skill.name) && <p className="text-xs text-destructive italic">(Not Learned)</p>}
-                                     </TooltipContent>
-                                 </Tooltip>
-                             </TooltipProvider>
-                         ))}
+                    <div className="mt-3 pt-3 border-t border-dashed border-foreground/10 text-center">
+                        <p className="text-xs font-semibold mb-1.5">Skills Available at Stage {character.skillTreeStage}:</p>
+                        <div className="flex flex-wrap justify-center gap-1">
+                         {character.skillTree.stages[character.skillTreeStage].skills.map(skill => {
+                            const isLearned = character.learnedSkills.some(ls => ls.name === skill.name);
+                            return (
+                                <TooltipProvider key={skill.name} delayDuration={100}>
+                                    <Tooltip>
+                                        <TooltipTrigger>
+                                            <Badge
+                                               variant={isLearned ? "default" : "outline"}
+                                               className={`text-xs font-medium cursor-help ${
+                                                   isLearned
+                                                       ? 'bg-primary/80 text-primary-foreground border-primary' // Learned style
+                                                       : 'border-dashed border-muted-foreground/50 text-muted-foreground' // Not learned style
+                                               }`}
+                                             >
+                                                {skill.name}
+                                                {isLearned ? ' ✓' : ''}
+                                             </Badge>
+                                        </TooltipTrigger>
+                                        <TooltipContent>
+                                            <p className="font-semibold">{skill.name}</p>
+                                            <p className="text-xs text-muted-foreground">{skill.description}</p>
+                                            {(skill.staminaCost || skill.manaCost) && (
+                                                <p className="text-xs mt-1">
+                                                    Cost:
+                                                    {skill.staminaCost && <span className="text-green-600"> {skill.staminaCost} STA</span>}
+                                                    {skill.manaCost && <span className="text-blue-600"> {skill.manaCost} Mana</span>}
+                                                </p>
+                                            )}
+                                            {!isLearned && <p className="text-xs text-destructive italic mt-1">(Not Learned)</p>}
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </TooltipProvider>
+                            );
+                         })}
                         </div>
                     </div>
                  )}
