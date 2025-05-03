@@ -45,6 +45,9 @@ export interface CharacterStats {
 // Simple reputation structure: Faction name -> Score (-100 to 100)
 export type Reputation = Record<string, number>;
 
+// NPC Relationship structure: NPC Name -> Score (-100 to 100)
+export type NpcRelationships = Record<string, number>;
+
 export interface Character {
   name: string;
   description: string; // User's description or AI-generated one if they used the button
@@ -66,6 +69,7 @@ export interface Character {
   xp: number;
   xpToNextLevel: number;
   reputation: Reputation; // Faction reputation scores
+  npcRelationships: NpcRelationships; // Relationship scores with specific NPCs
 
   skillTree: SkillTree | null; // Holds the generated skill tree for the current class
   skillTreeStage: number; // Current progression stage (0-4, 0 means no stage achieved yet)
@@ -100,6 +104,13 @@ export interface ReputationChange {
     change: number; // Positive or negative change amount
 }
 
+// Structure for AI-driven NPC relationship changes
+export interface NpcRelationshipChange {
+    npcName: string;
+    change: number; // Positive or negative change amount
+}
+
+
 // Structure for crafting results (placeholder, might be expanded)
 export interface CraftedItemResult {
     success: boolean;
@@ -127,6 +138,7 @@ export interface StoryLogEntry {
   gainedSkill?: Skill; // Optional: If a new skill was learned/gained
   xpGained?: number; // Optional: XP awarded by AI for the action/event
   reputationChange?: ReputationChange; // Optional: Reputation change awarded by AI
+  npcRelationshipChange?: NpcRelationshipChange; // Optional: NPC Relationship change awarded by AI
   // Crafting-related fields can be added if needed, but outcome might be part of narration/gameState
   // craftedItem?: CraftedItemResult;
 }
@@ -135,7 +147,7 @@ export interface SavedAdventure {
     id: string;
     saveTimestamp: number;
     characterName: string;
-    character: Character; // Includes XP, Level, Reputation, stamina/mana, skill tree, stage, learned skills
+    character: Character; // Includes XP, Level, Reputation, stamina/mana, skill tree, stage, learned skills, NPC relationships
     adventureSettings: AdventureSettings; // Includes custom settings if applicable
     storyLog: StoryLogEntry[];
     currentGameStateString: string;
@@ -243,6 +255,7 @@ const initialCharacterState: Character = {
   xp: 0,
   xpToNextLevel: calculateXpToNextLevel(1),
   reputation: {}, // Starts with no reputation
+  npcRelationships: {}, // Starts with no NPC relationships
   skillTree: null, // Starts with no skill tree
   skillTreeStage: 0, // Starts at stage 0
   learnedSkills: getStarterSkillsForClass("Adventurer"), // Assign default starter skills initially
@@ -290,6 +303,7 @@ type Action =
   | { type: "GRANT_XP"; payload: number } // New action for granting XP
   | { type: "LEVEL_UP"; payload: { newLevel: number; newXpToNextLevel: number /* Add rewards here later */ } } // New action for leveling up
   | { type: "UPDATE_REPUTATION"; payload: ReputationChange } // New action for updating reputation
+  | { type: "UPDATE_NPC_RELATIONSHIP"; payload: NpcRelationshipChange } // New action for updating NPC relationship
   | { type: "END_ADVENTURE"; payload: { summary: string | null; finalNarration?: StoryLogEntry } }
   | { type: "RESET_GAME" }
   | { type: "LOAD_SAVED_ADVENTURES"; payload: SavedAdventure[] }
@@ -311,18 +325,6 @@ function generateAdventureId(): string {
 }
 
 // --- Reducer ---
-
-// Inventory update logic will now likely be handled by specific ADD/REMOVE/UPDATE actions,
-// triggered potentially by the AI response parsing or other game logic.
-// The handleInventoryUpdate helper might become obsolete or repurposed.
-/*
-function handleInventoryUpdate(currentState: GameState, updatedItemNames: string[]): InventoryItem[] {
-    // Basic implementation: just create items with names.
-    // TODO: Enhance to preserve descriptions if items already exist or fetch descriptions?
-    return updatedItemNames.map(name => ({ name, description: "An item found during your adventure." })); // Add default desc
-}
-*/
-
 
 function gameReducer(state: GameState, action: Action): GameState {
   console.log(`Reducer Action: ${action.type}`, action.payload ? JSON.stringify(action.payload).substring(0, 200) : '');
@@ -358,6 +360,7 @@ function gameReducer(state: GameState, action: Action): GameState {
         xp: 0, // Start with 0 XP
         xpToNextLevel: initialXpToNext, // XP needed for level 2
         reputation: {}, // Starts with no reputation
+        npcRelationships: {}, // Starts with no NPC relationships
         skillTree: null, // Starts with no skill tree
         skillTreeStage: 0, // Starts at stage 0
         learnedSkills: starterSkills, // Assign dynamic starter skills
@@ -402,6 +405,7 @@ function gameReducer(state: GameState, action: Action): GameState {
              xp: action.payload.xp ?? state.character.xp,
              xpToNextLevel: action.payload.xpToNextLevel ?? state.character.xpToNextLevel,
              reputation: action.payload.reputation ?? state.character.reputation,
+             npcRelationships: action.payload.npcRelationships ?? state.character.npcRelationships, // Add NPC relationships
          };
          return { ...state, character: updatedCharacter };
         }
@@ -429,6 +433,7 @@ function gameReducer(state: GameState, action: Action): GameState {
       const aiDescString = state.character.aiGeneratedDescription ? `\nAI Profile: ${state.character.aiGeneratedDescription}` : "";
       const progressionSummary = `Level: ${state.character.level} (${state.character.xp}/${state.character.xpToNextLevel} XP)`;
       const repSummary = Object.entries(state.character.reputation).map(([faction, score]) => `${faction}: ${score}`).join(', ') || 'None';
+      const npcRelSummary = Object.entries(state.character.npcRelationships).map(([npc, score]) => `${npc}: ${score}`).join(', ') || 'None'; // Add NPC relationship summary
       const inventoryString = startingItems.length > 0 ? startingItems.map(item => `${item.name}${item.quality ? ` (${item.quality})` : ''}`).join(', ') : 'Empty';
 
 
@@ -437,7 +442,7 @@ function gameReducer(state: GameState, action: Action): GameState {
           adventureDetails += `\nWorld: ${state.adventureSettings.worldType || '?'}\nQuest: ${state.adventureSettings.mainQuestline || '?'}\nDifficulty: ${state.adventureSettings.difficulty || '?'}`;
       }
 
-       const initialGameState = `Location: Starting Point\nInventory: ${inventoryString}\nStatus: Healthy (STA: ${state.character.currentStamina}/${state.character.maxStamina}, MANA: ${state.character.currentMana}/${state.character.maxMana})\nTime: Day 1, Morning\nQuest: None\nMilestones: None\nCharacter Name: ${state.character.name}\n${progressionSummary}\nReputation: ${repSummary}\nClass: ${state.character.class}\nTraits: ${state.character.traits.join(', ') || 'None'}\nKnowledge: ${state.character.knowledge.join(', ') || 'None'}\nBackground: ${state.character.background || 'None'}\nStats: STR ${state.character.stats.strength}, STA ${state.character.stats.stamina}, AGI ${state.character.stats.agility}\nDescription: ${charDesc}${aiDescString}\n${adventureDetails}\n${skillTreeSummary}\nLearned Skills: ${state.character.learnedSkills.map(s => s.name).join(', ') || 'None'}`;
+       const initialGameState = `Location: Starting Point\nInventory: ${inventoryString}\nStatus: Healthy (STA: ${state.character.currentStamina}/${state.character.maxStamina}, MANA: ${state.character.currentMana}/${state.character.maxMana})\nTime: Day 1, Morning\nQuest: None\nMilestones: None\nCharacter Name: ${state.character.name}\n${progressionSummary}\nReputation: ${repSummary}\nNPC Relationships: ${npcRelSummary}\nClass: ${state.character.class}\nTraits: ${state.character.traits.join(', ') || 'None'}\nKnowledge: ${state.character.knowledge.join(', ') || 'None'}\nBackground: ${state.character.background || 'None'}\nStats: STR ${state.character.stats.strength}, STA ${state.character.stats.stamina}, AGI ${state.character.stats.agility}\nDescription: ${charDesc}${aiDescString}\n${adventureDetails}\n${skillTreeSummary}\nLearned Skills: ${state.character.learnedSkills.map(s => s.name).join(', ') || 'None'}`;
 
       const adventureId = state.currentAdventureId || generateAdventureId();
 
@@ -464,6 +469,7 @@ function gameReducer(state: GameState, action: Action): GameState {
              xp: state.currentAdventureId ? state.character.xp : state.character.xp,
              xpToNextLevel: state.currentAdventureId ? state.character.xpToNextLevel : state.character.xpToNextLevel,
              reputation: state.currentAdventureId ? state.character.reputation : state.character.reputation,
+             npcRelationships: state.currentAdventureId ? state.character.npcRelationships : {}, // Load or initialize relationships
 
         }
       };
@@ -473,14 +479,6 @@ function gameReducer(state: GameState, action: Action): GameState {
         const newLog = [...state.storyLog, newLogEntry];
         let charAfterNarration = state.character;
         let inventoryAfterNarration = state.inventory; // Start with current inventory
-
-        // Note: Inventory updates are now expected to be handled by separate actions
-        // or inferred from the updatedGameState string. The `updatedInventory`
-        // field in StoryLogEntry might be deprecated or used differently.
-        // We will prioritize the ADD_ITEM/REMOVE_ITEM/UPDATE_INVENTORY actions.
-        // If the AI flow needs to directly manipulate inventory, it should ideally
-        // suggest actions that lead to these dispatches, or the parsing logic
-        // needs to be robust enough to trigger them based on the `updatedGameState`.
 
         if (state.character) {
             const updatedStats = newLogEntry.updatedStats ? { ...state.character.stats, ...newLogEntry.updatedStats } : state.character.stats;
@@ -515,6 +513,17 @@ function gameReducer(state: GameState, action: Action): GameState {
                  console.log(`Reputation changed for ${faction}: ${currentScore} -> ${newScore}`);
              }
 
+             // Process NPC relationship change
+             let updatedNpcRelationships = state.character.npcRelationships;
+             if (newLogEntry.npcRelationshipChange) {
+                const { npcName, change } = newLogEntry.npcRelationshipChange;
+                const currentScore = updatedNpcRelationships[npcName] ?? 0;
+                const newScore = Math.max(-100, Math.min(100, currentScore + change)); // Clamp
+                updatedNpcRelationships = { ...updatedNpcRelationships, [npcName]: newScore };
+                console.log(`Relationship changed with ${npcName}: ${currentScore} -> ${newScore}`);
+             }
+
+
             charAfterNarration = {
                 ...state.character,
                 stats: updatedStats,
@@ -527,14 +536,12 @@ function gameReducer(state: GameState, action: Action): GameState {
                 learnedSkills: newLearnedSkills,
                 xp: currentXp, // Update XP here
                 reputation: updatedReputation, // Update reputation
+                npcRelationships: updatedNpcRelationships, // Update relationships
                  // Class, level, xpToNextLevel are handled separately by other actions
             };
-            console.log("Character updated via narration:", { stats: newLogEntry.updatedStats, traits: newLogEntry.updatedTraits, knowledge: newLogEntry.updatedKnowledge, staminaChange, manaChange, gainedSkill: newLogEntry.gainedSkill?.name, xpGained, reputationChange: newLogEntry.reputationChange });
+            console.log("Character updated via narration:", { stats: newLogEntry.updatedStats, traits: newLogEntry.updatedTraits, knowledge: newLogEntry.updatedKnowledge, staminaChange, manaChange, gainedSkill: newLogEntry.gainedSkill?.name, xpGained, reputationChange: newLogEntry.reputationChange, npcRelationshipChange: newLogEntry.npcRelationshipChange });
         }
 
-        // Inventory handling: We rely on the updatedGameState or specific inventory actions now.
-        // The `updatedInventory` in the log entry might be used for verification or reconciliation if needed.
-        // For now, inventoryAfterNarration remains unchanged unless specific actions are dispatched.
         console.log("Narration updated. Inventory state relies on subsequent actions or gameState parsing.");
 
 
@@ -601,6 +608,23 @@ function gameReducer(state: GameState, action: Action): GameState {
              },
          };
         }
+     case "UPDATE_NPC_RELATIONSHIP": {
+         if (!state.character) return state;
+         const { npcName, change } = action.payload;
+         const currentScore = state.character.npcRelationships[npcName] ?? 0;
+         const newScore = Math.max(-100, Math.min(100, currentScore + change)); // Clamp
+         console.log(`Manual relationship update with ${npcName}: ${currentScore} -> ${newScore}`);
+         return {
+             ...state,
+             character: {
+                 ...state.character,
+                 npcRelationships: {
+                     ...state.character.npcRelationships,
+                     [npcName]: newScore,
+                 },
+             },
+         };
+     }
     case "END_ADVENTURE": {
         let finalLog = [...state.storyLog];
         let finalGameState = state.currentGameStateString;
@@ -638,6 +662,13 @@ function gameReducer(state: GameState, action: Action): GameState {
                      const newScore = Math.max(-100, Math.min(100, currentScore + change));
                      finalReputation = { ...finalReputation, [faction]: newScore };
                  }
+                 let finalNpcRelationships = state.character.npcRelationships;
+                  if (finalEntry.npcRelationshipChange) {
+                     const { npcName, change } = finalEntry.npcRelationshipChange;
+                     const currentScore = finalNpcRelationships[npcName] ?? 0;
+                     const newScore = Math.max(-100, Math.min(100, currentScore + change));
+                     finalNpcRelationships = { ...finalNpcRelationships, [npcName]: newScore };
+                  }
 
 
                 finalCharacterState = {
@@ -654,6 +685,7 @@ function gameReducer(state: GameState, action: Action): GameState {
                     learnedSkills: finalLearnedSkills,
                     xp: finalXp,
                     reputation: finalReputation,
+                    npcRelationships: finalNpcRelationships, // Include final relationships
                 };
             }
             console.log("Added final narration entry to log and applied final character updates.");
@@ -753,6 +785,7 @@ function gameReducer(state: GameState, action: Action): GameState {
            xp: typeof adventureToLoad.character?.xp === 'number' ? adventureToLoad.character.xp : 0,
            xpToNextLevel: typeof adventureToLoad.character?.xpToNextLevel === 'number' ? adventureToLoad.character.xpToNextLevel : calculateXpToNextLevel(adventureToLoad.character?.level ?? 1),
            reputation: typeof adventureToLoad.character?.reputation === 'object' && adventureToLoad.character.reputation !== null ? adventureToLoad.character.reputation : {},
+           npcRelationships: typeof adventureToLoad.character?.npcRelationships === 'object' && adventureToLoad.character.npcRelationships !== null ? adventureToLoad.character.npcRelationships : {}, // Load or default relationships
            // Skill tree and learned skills validation
            skillTree: adventureToLoad.character?.skillTree ? {
                ...adventureToLoad.character.skillTree,
@@ -1030,6 +1063,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
                              xp: typeof adv.character?.xp === 'number' ? adv.character.xp : 0,
                              xpToNextLevel: typeof adv.character?.xpToNextLevel === 'number' ? adv.character.xpToNextLevel : calculateXpToNextLevel(adv.character?.level ?? 1),
                              reputation: typeof adv.character?.reputation === 'object' && adv.character.reputation !== null ? adv.character.reputation : {},
+                             npcRelationships: typeof adv.character?.npcRelationships === 'object' && adv.character.npcRelationships !== null ? adv.character.npcRelationships : {}, // Validate relationships
                              // Skill tree and learned skills validation
                              skillTree: adv.character?.skillTree ? {
                                  ...adv.character.skillTree,
@@ -1116,6 +1150,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
           ? state.character.skillTree.stages[state.character.skillTreeStage]?.stageName ?? `Stage ${state.character.skillTreeStage}`
           : "Stage 0";
       const reputationString = state.character ? Object.entries(state.character.reputation).map(([f, s]) => `${f}: ${s}`).join(', ') || 'None' : 'N/A';
+      const relationshipString = state.character ? Object.entries(state.character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'None' : 'N/A'; // Log relationships
       const inventoryString = state.inventory.map(i => `${i.name}${i.quality ? ` (${i.quality})` : ''}`).join(', ') || 'Empty';
      console.log("Game State Updated:", {
         status: state.status,
@@ -1123,6 +1158,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         level: state.character?.level,
         xp: `${state.character?.xp}/${state.character?.xpToNextLevel}`,
         reputation: reputationString,
+        relationships: relationshipString, // Log relationships
         class: state.character?.class,
         stage: `${currentStageName} (${state.character?.skillTreeStage}/4)`,
         stamina: `${state.character?.currentStamina}/${state.character?.maxStamina}`,

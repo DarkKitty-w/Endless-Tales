@@ -2,7 +2,7 @@
 "use client";
 
 import React from "react";
-import { useGame, type SavedAdventure, type Character, type Reputation } from "@/context/GameContext"; // Import Character and Reputation
+import { useGame, type SavedAdventure, type Character, type Reputation, type NpcRelationships } from "@/context/GameContext"; // Import Character, Reputation, NpcRelationships
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
@@ -18,7 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { FolderClock, ArrowLeft, Trash2, Play, Info, BookOpenText, Package, ShieldQuestion, Star, HeartPulse, Zap, ThumbsUp, ThumbsDown, Award } from "lucide-react"; // Added Award, Thumbs icons
+import { FolderClock, ArrowLeft, Trash2, Play, Info, BookOpenText, Package, ShieldQuestion, Star, HeartPulse, Zap, ThumbsUp, ThumbsDown, Award, Users } from "lucide-react"; // Added Award, Thumbs icons, Users icon
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
 
@@ -30,6 +30,16 @@ const renderReputationSummary = (reputation: Reputation | undefined): string => 
     // Show first 2 factions for brevity
     return entries.slice(0, 2).map(([faction, score]) => `${faction}: ${score}`).join(', ') + (entries.length > 2 ? '...' : '');
 };
+
+// Helper to render NPC relationship summary
+const renderNpcRelationshipSummary = (relationships: NpcRelationships | undefined): string => {
+    if (!relationships) return 'None';
+    const entries = Object.entries(relationships);
+    if (entries.length === 0) return 'None';
+    // Show first 2 NPCs for brevity
+    return entries.slice(0, 2).map(([npc, score]) => `${npc}: ${score}`).join(', ') + (entries.length > 2 ? '...' : '');
+};
+
 
 export function SavedAdventuresList() {
   const { state, dispatch } = useGame();
@@ -105,13 +115,16 @@ export function SavedAdventuresList() {
                                 )}
                           </div>
 
-                          {/* XP and Reputation */}
+                          {/* XP, Reputation, and Relationships */}
                            <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1">
                                 <div className="flex items-center gap-1" title="Experience Points">
                                     <Award className="w-3 h-3 text-yellow-500" /> {char?.xp ?? '?'}/{char?.xpToNextLevel ?? '?'} XP
                                 </div>
                                  <div className="flex items-center gap-1" title="Reputation">
                                     <ThumbsUp className="w-3 h-3" /> Rep: {renderReputationSummary(char?.reputation)}
+                                </div>
+                                <div className="flex items-center gap-1" title="NPC Relationships">
+                                    <Users className="w-3 h-3" /> Rel: {renderNpcRelationshipSummary(char?.npcRelationships)}
                                 </div>
                             </div>
 

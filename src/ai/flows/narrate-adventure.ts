@@ -9,7 +9,7 @@
 
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
-import type { CharacterStats, SkillTree, Skill, ReputationChange } from '@/context/GameContext'; // Import Skill and ReputationChange types
+import type { CharacterStats, SkillTree, Skill, ReputationChange, NpcRelationshipChange } from '@/context/GameContext'; // Import Skill and Reputation/NPC Relationship Change types
 
 // --- Zod Schemas (Internal - Not Exported) ---
 const CharacterStatsSchema = z.object({
@@ -36,6 +36,12 @@ const ReputationChangeSchema = z.object({
     change: z.number().int().describe("The amount the reputation changed (positive or negative)."),
 });
 
+const NpcRelationshipChangeSchema = z.object({
+    npcName: z.string().describe("The name of the NPC whose relationship changed."),
+    change: z.number().int().describe("The amount the relationship score changed (positive or negative)."),
+});
+
+
 const NarrateAdventureInputSchema = z.object({
   character: z.object({
     name: z.string().describe('Character name.'),
@@ -53,24 +59,26 @@ const NarrateAdventureInputSchema = z.object({
     xp: z.number().describe("Character's current experience points."),
     xpToNextLevel: z.number().describe("Experience points needed for the next level."),
     reputation: z.record(z.number()).describe("Current reputation scores with various factions (e.g., {\"Town Guard\": 10, \"Thieves Guild\": -5})."),
+    npcRelationships: z.record(z.number()).describe("Current relationship scores with specific NPCs (e.g., {\"Elara\": 25, \"Guard Captain\": -10})."), // Add NPC relationships
     skillTreeSummary: SkillTreeSummarySchema.describe("A summary of the character's current class skill tree and available skills at their stage."), // Add skill tree summary
     skillTreeStage: z.number().min(0).max(4).describe("The character's current skill progression stage (0-4). Stage affects available actions/skill power."), // Add current stage
     learnedSkills: z.array(z.string()).describe("List of skill names the character has actually learned."), // Add learned skills list
     aiGeneratedDescription: z.string().optional().describe('Optional detailed AI-generated character profile.'),
   }).describe('The player character details.'),
   playerChoice: z.string().describe('The player\'s chosen action or command. May include dice roll result like "(Dice Roll Result: 4)". May be an attempt to use a learned skill by name.'),
-  gameState: z.string().describe('A string representing the current state of the game, including location, **current full inventory list**, ongoing events, character progression milestones achieved etc.'), // Emphasize inventory needed
+  gameState: z.string().describe('A string representing the current state of the game, including location, **current full inventory list**, ongoing events, character progression milestones achieved, **and known NPC states/relationships**.'), // Emphasize inventory and NPC relationships needed
   previousNarration: z.string().optional().describe('The narration text immediately preceding the player\'s current choice, for context.'),
 });
 
 const NarrateAdventureOutputSchema = z.object({
   narration: z.string().describe('The AI-generated narration describing the outcome of the action and the current situation.'),
-  updatedGameState: z.string().describe('The updated state of the game string after the player action and narration, reflecting changes in location, **inventory**, character status (including stamina/mana, level, XP, reputation), time, or achieved milestones. **Inventory changes MUST be reflected here.**'),
+  updatedGameState: z.string().describe('The updated state of the game string after the player action and narration, reflecting changes in location, **inventory**, character status (including stamina/mana, level, XP, reputation, **NPC relationships**), time, or achieved milestones. **Inventory changes MUST be reflected here.**'),
   updatedStats: CharacterStatsSchema.partial().optional().describe('Optional: Changes to character stats resulting from the narration (e.g., gained 1 strength). Only include changed stats.'),
   updatedTraits: z.array(z.string()).optional().describe('Optional: The complete new list of character traits if they changed.'),
   updatedKnowledge: z.array(z.string()).optional().describe('Optional: The complete new list of character knowledge areas if they changed.'),
   xpGained: z.number().int().min(0).optional().describe('Optional: The amount of XP gained from this action/event.'), // Add XP gained
   reputationChange: ReputationChangeSchema.optional().describe('Optional: Change in reputation with a specific faction.'), // Add reputation change
+  npcRelationshipChange: NpcRelationshipChangeSchema.optional().describe('Optional: Change in relationship score with a specific NPC.'), // Add NPC relationship change
   staminaChange: z.number().optional().describe('Optional: Change in current stamina (negative for cost, positive for gain).'),
   manaChange: z.number().optional().describe('Optional: Change in current mana (negative for cost, positive for gain).'),
   progressedToStage: z.number().min(1).max(4).optional().describe('Optional: If the character progressed to a new skill stage (1-4) based on achievements/actions.'),
@@ -92,11 +100,11 @@ const narrateAdventurePrompt = ai.definePrompt({
   name: 'narrateAdventurePrompt',
   input: { schema: NarrateAdventureInputSchema },
   output: { schema: NarrateAdventureOutputSchema },
-  prompt: `You are a dynamic and engaging AI narrator for the text-based adventure game, "Endless Tales". Your role is to weave a compelling story based on player choices, character attributes (stats, level, xp, reputation), resources (stamina/mana), skills, and the established game world, updating the character's progression (including XP and reputation) and potentially awarding new skills.
+  prompt: `You are a dynamic and engaging AI narrator for the text-based adventure game, "Endless Tales". Your role is to weave a compelling story based on player choices, character attributes (stats, level, xp, reputation, NPC relationships), resources (stamina/mana), skills, and the established game world, updating the character's progression (including XP, reputation, and NPC relationships) and potentially awarding new skills.
 
 **Game Context:**
 {{{gameState}}}
-*Note: The game state string above contains the character's current inventory, status, level, XP, reputation, and progress.*
+*Note: The game state string above contains the character's current inventory, status, level, XP, reputation, NPC relationships, and progress.*
 
 {{#if previousNarration}}
 **Previous Scene:**
@@ -108,6 +116,7 @@ Name: {{{character.name}}}
 Class: {{{character.class}}} (Level {{{character.level}}})
 XP: {{{character.xp}}}/{{{character.xpToNextLevel}}}
 Reputation: {{#if character.reputation}}{{#each character.reputation}} {{ @key }}: {{ this }}; {{/each}}{{else}}None{{/if}}
+NPC Relationships: {{#if character.npcRelationships}}{{#each character.npcRelationships}} {{ @key }}: {{ this }}; {{/each}}{{else}}None{{/if}}
 Stats: Strength {{{character.stats.strength}}}, Stamina {{{character.stats.stamina}}}, Agility {{{character.stats.agility}}}
 Resources: Stamina {{{character.currentStamina}}}/{{{character.maxStamina}}}, Mana {{{character.currentMana}}}/{{{character.maxMana}}}
 Traits: {{#if character.traits}}{{#each character.traits}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{else}}None{{/if}}
@@ -125,18 +134,19 @@ Description: {{{character.description}}}
 **Your Task:**
 Generate the next part of the story based on ALL the information above.
 
-1.  **React Dynamically:** Describe the outcome of the player's action. Consider their character's class, level, xp, reputation, stats, **current stamina and mana**, traits, knowledge, background, *current skill stage*, **learned skills**, inventory, and the current gameState (location, items, situation, milestones).
+1.  **React Dynamically:** Describe the outcome of the player's action. Consider their character's class, level, xp, reputation, **NPC relationships**, stats, **current stamina and mana**, traits, knowledge, background, *current skill stage*, **learned skills**, inventory, and the current gameState (location, items, situation, milestones, NPC states).
 2.  **Logical Progression, Resource Costs & Restrictions:**
     *   **Evaluate Feasibility:** Assess if the action is logically possible. *Actions tied to higher skill stages should only be possible if the character has reached that stage.*
     *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output 'staminaChange' or 'manaChange'.
     *   **Block Impossible Actions:** Prevent universe-breaking actions unless EXTREME justification exists in gameState AND skill stage is high.
-    *   **Narrate Failure Reason:** If blocked/failed, explain why (lack of skill, resources, item, stage, reputation, etc.).
+    *   **Narrate Failure Reason:** If blocked/failed, explain why (lack of skill, resources, item, stage, reputation, relationship, etc.).
     *   **Skill-based Progression:** Very powerful actions require high milestones AND skill stages.
-3.  **Incorporate Dice Rolls:** Interpret dice roll results (e.g., "(Difficulty: Hard, Dice Roll Result: 75/100)") contextually. Narrate the degree of success/failure. Success might grant more XP or better reputation changes. Failure might have negative consequences.
-4.  **Consequences, Resources, XP, Reputation & Character Progression:**
+3.  **Incorporate Dice Rolls:** Interpret dice roll results (e.g., "(Difficulty: Hard, Dice Roll Result: 75/100)") contextually. Narrate the degree of success/failure. Success might grant more XP or better reputation/relationship changes. Failure might have negative consequences.
+4.  **Consequences, Resources, XP, Reputation, Relationships & Character Progression:**
     *   **Resource Changes:** If current stamina or mana changed, include 'staminaChange' or 'manaChange'.
     *   **XP Awards:** If the action was significant (overcame challenge, clever solution, quest progress), award XP by including the 'xpGained' field (e.g., 10, 25, 50). Be reasonable; don't award XP for trivial actions like walking.
     *   **Reputation Changes:** If the action affects a faction's view (helping guards, stealing from merchants), include 'reputationChange' with the 'faction' name and the integer 'change' amount (positive or negative, e.g., {"faction": "Town Guard", "change": 5}).
+    *   **NPC Relationship Changes:** If the action directly affects an NPC's view of the character (giving a gift, insulting them, helping them), include 'npcRelationshipChange' with the 'npcName' and the integer 'change' amount (e.g., {"npcName": "Elara", "change": 15}).
     *   **Character Progression (Optional):** If events lead to development:
         *   Include 'updatedStats' for stat changes.
         *   Include 'updatedTraits' with the *complete new list*.
@@ -144,17 +154,18 @@ Generate the next part of the story based on ALL the information above.
         *   **Skill Stage Progression:** Consider if the character should advance to the next skill stage (1-4) based on significant achievements/milestones. If so, include 'progressedToStage'. Only one stage per narration.
         *   **Class Change Suggestion:** If actions consistently align with another class, MAYBE suggest it via 'suggestedClassChange'.
         *   **Gaining Skills:** If appropriate, award a new skill via 'gainedSkill' (name, description, costs). Do not award skills trivially.
-5.  **Update Game State:** Modify the 'gameState' string concisely to reflect ALL changes (location, **inventory**, NPC mood, time, quest progress, milestones, **status including resources, level, XP, and reputation**). **Ensure the inventory listed in the gameState string is the character's complete and accurate inventory after the action.** Include character class, level, stage, and learned skills summary.
+5.  **Update Game State:** Modify the 'gameState' string concisely to reflect ALL changes (location, **inventory**, NPC mood, **NPC relationships**, time, quest progress, milestones, **status including resources, level, XP, and reputation**). **Ensure the inventory listed in the gameState string is the character's complete and accurate inventory after the action.** Include character class, level, stage, and learned skills summary. **Reflect updated NPC relationships in the gameState string.**
 6.  **Tone:** Maintain a consistent fantasy text adventure tone. Be descriptive and engaging.
 
-**Output Format:** Respond ONLY with the JSON object matching the schema, including 'narration', 'updatedGameState', and optionally other fields like 'staminaChange', 'manaChange', 'xpGained', 'reputationChange', 'updatedStats', 'updatedTraits', 'updatedKnowledge', 'progressedToStage', 'suggestedClassChange', 'gainedSkill'. Ensure the JSON is valid. **Inventory changes must be reflected in the 'updatedGameState' string.**
+**Output Format:** Respond ONLY with the JSON object matching the schema, including 'narration', 'updatedGameState', and optionally other fields like 'staminaChange', 'manaChange', 'xpGained', 'reputationChange', 'npcRelationshipChange', 'updatedStats', 'updatedTraits', 'updatedKnowledge', 'progressedToStage', 'suggestedClassChange', 'gainedSkill'. Ensure the JSON is valid. **Inventory changes must be reflected in the 'updatedGameState' string.**
 
-Example Output with XP and Reputation Change:
+Example Output with XP, Reputation, and Relationship Change:
 {
-  "narration": "You successfully defended the merchant from the bandits! He gratefully offers you a pouch of coins and praises your bravery to the nearby Town Guard captain.",
-  "updatedGameState": "Location: Trade Road\\nInventory: Torch, Sword, Pouch of Coins\\nStatus: Healthy (STA: 80/100, MANA: 15/20)\\nTime: Midday\\nQuest: Escort Merchant (Complete)\\nMilestones: Defended Merchant\\nCharacter Class: Warrior (Level 2, 15/250 XP)\\nReputation: Town Guard: 15, Merchants Guild: 5\\nLearned Skills: Observe, Basic Strike, Shield Block, Toughen Up",
+  "narration": "You successfully defended the merchant from the bandits! He gratefully offers you a pouch of coins and praises your bravery to the nearby Town Guard captain, nodding in approval. Later, you share some of the reward with Elara, who smiles warmly.",
+  "updatedGameState": "Location: Trade Road\\nInventory: Torch, Sword, Pouch of Coins\\nStatus: Healthy (STA: 80/100, MANA: 15/20)\\nTime: Midday\\nQuest: Escort Merchant (Complete)\\nMilestones: Defended Merchant\\nCharacter Class: Warrior (Level 2, 15/250 XP)\\nReputation: Town Guard: 15, Merchants Guild: 5\\nNPC Relationships: Elara: 40, Guard Captain: 5\\nLearned Skills: Observe, Basic Strike, Shield Block, Toughen Up",
   "xpGained": 50,
-  "reputationChange": { "faction": "Town Guard", "change": 10 }
+  "reputationChange": { "faction": "Town Guard", "change": 10 },
+  "npcRelationshipChange": { "npcName": "Elara", "change": 15 }
 }
 `,
 });
@@ -196,6 +207,10 @@ const narrateAdventureFlow = ai.defineFlow<
              if (output.reputationChange && (!output.reputationChange.faction || !Number.isInteger(output.reputationChange.change))) {
                  console.warn("AI returned invalid reputationChange structure:", output.reputationChange);
                  output.reputationChange = undefined; // Discard invalid rep change
+             }
+             if (output.npcRelationshipChange && (!output.npcRelationshipChange.npcName || !Number.isInteger(output.npcRelationshipChange.change))) {
+                 console.warn("AI returned invalid npcRelationshipChange structure:", output.npcRelationshipChange);
+                 output.npcRelationshipChange = undefined; // Discard invalid NPC relationship change
              }
              if (output.progressedToStage && (output.progressedToStage < 1 || output.progressedToStage > 4)) {
                 console.warn("AI returned invalid progressedToStage value:", output.progressedToStage);
@@ -256,6 +271,7 @@ const narrateAdventureFlow = ai.defineFlow<
             // Keep potential progression/resource changes from the AI output even if state reverts
              xpGained: output.xpGained,
              reputationChange: output.reputationChange,
+             npcRelationshipChange: output.npcRelationshipChange,
              staminaChange: output.staminaChange,
              manaChange: output.manaChange,
              updatedStats: output.updatedStats,

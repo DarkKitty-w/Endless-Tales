@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useGame, type InventoryItem, type StoryLogEntry, type SkillTree, type Skill, type Character, type Reputation, calculateXpToNextLevel } from "@/context/GameContext"; // Added calculateXpToNextLevel
+import { useGame, type InventoryItem, type StoryLogEntry, type SkillTree, type Skill, type Character, type Reputation, type NpcRelationships, calculateXpToNextLevel } from "@/context/GameContext"; // Added NpcRelationships
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -15,7 +15,7 @@ import { assessActionDifficulty, type DifficultyLevel } from "@/ai/flows/assess-
 import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "@/ai/flows/attempt-crafting"; // Import crafting flow
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award, Hammer, CheckSquare, Square } from "lucide-react"; // Added Hammer, CheckSquare, Square
+import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award, Hammer, CheckSquare, Square, Users } from "lucide-react"; // Added Hammer, CheckSquare, Square, Users
 import { rollD6, rollD10, rollD20, rollD100 } from "@/services/dice-roller"; // Import specific rollers
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -175,7 +175,7 @@ export function Gameplay() {
 
     // --- 1. Assess Difficulty (unless passive/initial) ---
     const actionLower = action.trim().toLowerCase();
-    const isPassiveAction = ["look", "look around", "check inventory", "examine self", "status", "wait", "rest"].includes(actionLower);
+    const isPassiveAction = ["look", "look around", "check inventory", "check status", "wait", "rest", "check relationships", "check reputation"].includes(actionLower); // Added relationship/reputation checks
 
     if (!isInitialAction && !isPassiveAction) {
         setIsAssessingDifficulty(true);
@@ -183,14 +183,17 @@ export function Gameplay() {
         await new Promise(resolve => setTimeout(resolve, 400));
 
         try {
-             // Generate a string for reputation
+             // Generate strings for reputation and relationships
              const reputationString = Object.entries(character.reputation)
                  .map(([faction, score]) => `${faction}: ${score}`)
+                 .join(', ') || 'None';
+             const relationshipString = Object.entries(character.npcRelationships)
+                 .map(([npc, score]) => `${npc}: ${score}`)
                  .join(', ') || 'None';
 
              const assessmentInput = {
                 playerAction: action,
-                characterCapabilities: `Level: ${character.level}. Class: ${character.class}. Stage: ${character.skillTreeStage}. Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, AGI ${character.stats.agility}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}. Inventory: ${inventory.map(i => i.name).join(', ') || 'Empty'}. Stamina: ${character.currentStamina}/${character.maxStamina}. Mana: ${character.currentMana}/${character.maxMana}. Learned Skills: ${character.learnedSkills.map(s=>s.name).join(', ') || 'None'}. Reputation: ${reputationString}`,
+                characterCapabilities: `Level: ${character.level}. Class: ${character.class}. Stage: ${character.skillTreeStage}. Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, AGI ${character.stats.agility}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}. Inventory: ${inventory.map(i => i.name).join(', ') || 'Empty'}. Stamina: ${character.currentStamina}/${character.maxStamina}. Mana: ${character.currentMana}/${character.maxMana}. Learned Skills: ${character.learnedSkills.map(s=>s.name).join(', ') || 'None'}. Reputation: ${reputationString}. Relationships: ${relationshipString}`,
                 currentSituation: currentNarration?.narration || "At the beginning of the scene.",
                 gameStateSummary: currentGameStateString,
              };
@@ -300,6 +303,7 @@ export function Gameplay() {
         xp: character.xp,
         xpToNextLevel: character.xpToNextLevel,
         reputation: character.reputation,
+        npcRelationships: character.npcRelationships, // Pass NPC relationships
         skillTreeSummary: skillTreeSummaryForAI, // Pass summary
         skillTreeStage: character.skillTreeStage, // Pass current stage
         learnedSkills: character.learnedSkills.map(s => s.name), // Pass learned skill names
@@ -360,7 +364,6 @@ export function Gameplay() {
       const logEntryForResult: StoryLogEntry = {
           narration: narrationResult.narration,
           updatedGameState: narrationResult.updatedGameState,
-          // updatedInventory removed, handled by parsing or actions
           updatedStats: narrationResult.updatedStats,
           updatedTraits: narrationResult.updatedTraits,
           updatedKnowledge: narrationResult.updatedKnowledge,
@@ -371,12 +374,12 @@ export function Gameplay() {
           gainedSkill: narrationResult.gainedSkill, // Get gained skill
           xpGained: narrationResult.xpGained, // Get XP gained
           reputationChange: narrationResult.reputationChange, // Get reputation change
+          npcRelationshipChange: narrationResult.npcRelationshipChange, // Get NPC relationship change
           timestamp: Date.now(),
       };
       dispatch({ type: "UPDATE_NARRATION", payload: logEntryForResult });
 
         // --- Parse Game State for Inventory ---
-        // Attempt to parse the inventory from the *new* game state string
         const gameStateInventoryMatch = narrationResult.updatedGameState.match(/Inventory: (.*?)\n/);
         if (gameStateInventoryMatch && gameStateInventoryMatch[1]) {
             const itemsFromGameState = gameStateInventoryMatch[1]
@@ -404,18 +407,11 @@ export function Gameplay() {
       if (logEntryForResult.xpGained && logEntryForResult.xpGained > 0) {
           dispatch({ type: "GRANT_XP", payload: logEntryForResult.xpGained });
            toast({ title: `Gained ${logEntryForResult.xpGained} XP!`, duration: 3000 });
-          // Check for level up immediately after granting XP
-          // We need to access the potentially updated state AFTER the GRANT_XP dispatch.
-          // This is tricky without a state selector or waiting. A common pattern is to
-          // put the level up check inside the reducer itself or trigger it via useEffect.
-          // For simplicity here, we'll check against the state *before* potential level up.
-          // IMPORTANT: This check might be slightly delayed. Check reducer for LEVEL_UP for better logic.
-          if (character.xp + logEntryForResult.xpGained >= character.xpToNextLevel) {
+           if (character.xp + logEntryForResult.xpGained >= character.xpToNextLevel) {
                 const newLevel = character.level + 1;
                 const newXpToNext = calculateXpToNextLevel(newLevel);
                 dispatch({ type: "LEVEL_UP", payload: { newLevel, newXpToNextLevel } });
                 toast({ title: `Level Up! Reached Level ${newLevel}!`, description: "You feel stronger!", duration: 5000, variant: "default" });
-                // TODO: Handle level up rewards (skill points, stat points, etc.)
            }
       }
 
@@ -425,6 +421,14 @@ export function Gameplay() {
             const { faction, change } = logEntryForResult.reputationChange;
             const direction = change > 0 ? 'increased' : 'decreased';
             toast({ title: `Reputation with ${faction} ${direction} by ${Math.abs(change)}!`, duration: 3000 });
+       }
+
+       // Apply NPC relationship change (from the narration result)
+       if (logEntryForResult.npcRelationshipChange) {
+           dispatch({ type: 'UPDATE_NPC_RELATIONSHIP', payload: logEntryForResult.npcRelationshipChange });
+           const { npcName, change } = logEntryForResult.npcRelationshipChange;
+           const direction = change > 0 ? 'improved' : 'worsened';
+           toast({ title: `Relationship with ${npcName} ${direction} by ${Math.abs(change)}!`, duration: 3000 });
        }
 
 
@@ -689,7 +693,7 @@ export function Gameplay() {
        if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || !character) return;
         // Include learned skills in suggestions
        const learnedSkillNames = character.learnedSkills.map(s => s.name);
-        const baseSuggestions = [ "Look around", "Examine surroundings", "Check inventory", "Check status", "Move north", "Move east", "Move south", "Move west", "Talk to [NPC Name]", "Ask about [Topic]", "Examine [Object]", "Pick up [Item]", "Use [Item]", "Drop [Item]", "Open [Door/Chest]", "Search the area", "Rest here", "Wait for a while", "Attack [Target]", "Defend yourself", "Flee", ];
+        const baseSuggestions = [ "Look around", "Examine surroundings", "Check inventory", "Check status", "Check reputation", "Check relationships", "Move north", "Move east", "Move south", "Move west", "Talk to [NPC Name]", "Ask about [Topic]", "Examine [Object]", "Pick up [Item]", "Use [Item]", "Drop [Item]", "Open [Door/Chest]", "Search the area", "Rest here", "Wait for a while", "Attack [Target]", "Defend yourself", "Flee", ];
         const skillSuggestions = learnedSkillNames.map(name => `Use skill: ${name}`);
         const suggestions = [...baseSuggestions, ...skillSuggestions];
 
@@ -734,6 +738,32 @@ export function Gameplay() {
             </ul>
         );
     };
+
+   // Helper function to render NPC relationship list
+    const renderNpcRelationships = (relationships: NpcRelationships | undefined) => {
+        if (!relationships) {
+            return <p className="text-xs text-muted-foreground italic">No known relationships.</p>;
+        }
+        const entries = Object.entries(relationships);
+        if (entries.length === 0) {
+            return <p className="text-xs text-muted-foreground italic">No known relationships.</p>;
+        }
+        return (
+            <ul className="space-y-1">
+                {entries.map(([npcName, score]) => (
+                    <li key={npcName} className="flex justify-between items-center text-xs">
+                        <span>{npcName}:</span>
+                        <span className={`font-medium ${score > 20 ? 'text-green-600' : score < -20 ? 'text-destructive' : ''}`}>
+                            {score}
+                             {score > 50 && <HeartPulse className="inline ml-1 h-3 w-3 text-pink-500"/>}
+                             {score < -50 && <Skull className="inline ml-1 h-3 w-3 text-gray-500"/>}
+                        </span>
+                    </li>
+                ))}
+            </ul>
+        );
+    };
+
 
    // Helper function to render dynamic content at the end of the scroll area
    const renderDynamicContent = () => {
@@ -804,9 +834,14 @@ export function Gameplay() {
                       </div>
                       <Separator className="my-3"/>
 
-                      <div className="space-y-1">
+                      <div className="space-y-1 mb-3">
                           <p className="text-sm font-semibold">Reputation:</p>
                           {renderReputation(character.reputation)}
+                      </div>
+                       <Separator className="my-3"/>
+                      <div className="space-y-1">
+                          <p className="text-sm font-semibold">Relationships:</p>
+                          {renderNpcRelationships(character.npcRelationships)}
                       </div>
                    </CardContent>
               </CardboardCard>
@@ -884,6 +919,9 @@ export function Gameplay() {
                                       <Separator className="my-2"/>
                                       <p className="font-medium mb-1">Reputation:</p>
                                       {renderReputation(character.reputation)}
+                                      <Separator className="my-2"/>
+                                      <p className="font-medium mb-1">Relationships:</p>
+                                      {renderNpcRelationships(character.npcRelationships)}
                                   </CardContent>
                               </CardboardCard>
                          </ScrollArea>
