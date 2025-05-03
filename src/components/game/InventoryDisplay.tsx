@@ -11,19 +11,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-
-// Helper to get quality color
-const getQualityColor = (quality: ItemQuality | undefined): string => {
-    switch (quality) {
-        case "Poor": return "text-gray-500 dark:text-gray-400";
-        case "Common": return "text-foreground";
-        case "Uncommon": return "text-green-600 dark:text-green-400";
-        case "Rare": return "text-blue-600 dark:text-blue-400";
-        case "Epic": return "text-purple-600 dark:text-purple-400";
-        case "Legendary": return "text-orange-500 dark:text-orange-400";
-        default: return "text-muted-foreground";
-    }
-};
+import { getQualityColor } from "@/lib/utils"; // Import from utils
 
 
 export function InventoryDisplay() {

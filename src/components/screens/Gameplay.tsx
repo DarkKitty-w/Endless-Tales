@@ -5,7 +5,6 @@ import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useGame, type InventoryItem, type StoryLogEntry, type SkillTree, type Skill, type Character, type Reputation, calculateXpToNextLevel } from "@/context/GameContext"; // Added calculateXpToNextLevel
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea"; // Import Textarea
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
 import { CharacterDisplay } from "@/components/game/CharacterDisplay";
@@ -16,7 +15,7 @@ import { assessActionDifficulty, type DifficultyLevel } from "@/ai/flows/assess-
 import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "@/ai/flows/attempt-crafting"; // Import crafting flow
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award, Hammer } from "lucide-react"; // Added Hammer for crafting
+import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award, Hammer, CheckSquare, Square } from "lucide-react"; // Added Hammer, CheckSquare, Square
 import { rollD6, rollD10, rollD20, rollD100 } from "@/services/dice-roller"; // Import specific rollers
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -54,6 +53,8 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "../ui/progress"; // Import Progress
 import { Skeleton } from "../ui/skeleton";
 import { Label } from "../ui/label"; // Import Label
+import { Badge } from "../ui/badge"; // Import Badge for item selection
+import { getQualityColor } from "@/lib/utils"; // Import quality color helper
 
 // Helper function to map difficulty dice string to roller function
 const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null => {
@@ -86,7 +87,7 @@ export function Gameplay() {
   // Crafting state
   const [isCraftingDialogOpen, setIsCraftingDialogOpen] = useState(false);
   const [craftingGoal, setCraftingGoal] = useState("");
-  const [craftingIngredients, setCraftingIngredients] = useState("");
+  const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]); // Changed to string array
   const [isCraftingLoading, setIsCraftingLoading] = useState(false);
   const [craftingError, setCraftingError] = useState<string | null>(null);
 
@@ -529,8 +530,8 @@ export function Gameplay() {
 
     // --- Handle Crafting Attempt ---
     const handleCrafting = useCallback(async () => {
-        if (!character || isLoading || isCraftingLoading || !craftingGoal.trim() || !craftingIngredients.trim()) {
-            setCraftingError("Please specify a crafting goal and the ingredients you want to use.");
+        if (!character || isLoading || isCraftingLoading || !craftingGoal.trim() || selectedIngredients.length === 0) {
+            setCraftingError("Please specify a crafting goal and select at least one ingredient.");
             return;
         }
 
@@ -540,7 +541,8 @@ export function Gameplay() {
 
         // Prepare inventory list for the AI
         const inventoryList = inventory.map(item => `${item.name}${item.description ? ` (${item.description.substring(0,30)}...)` : ''}`).join(', ');
-        const ingredientsUsed = craftingIngredients.split(',').map(s => s.trim()).filter(Boolean);
+        // Use selectedIngredients directly as it's now an array of names
+        const ingredientsUsed = selectedIngredients;
 
         const craftingInput: AttemptCraftingInput = {
             characterKnowledge: character.knowledge,
@@ -587,7 +589,7 @@ export function Gameplay() {
 
             setIsCraftingDialogOpen(false); // Close dialog on success/handled failure
             setCraftingGoal("");
-            setCraftingIngredients("");
+            setSelectedIngredients([]); // Clear selected items
 
         } catch (err: any) {
             console.error("Crafting AI call failed:", err);
@@ -596,7 +598,28 @@ export function Gameplay() {
         } finally {
             setIsCraftingLoading(false);
         }
-    }, [character, inventory, craftingGoal, craftingIngredients, dispatch, toast, isLoading, isCraftingLoading, currentGameStateString]);
+    }, [character, inventory, craftingGoal, selectedIngredients, dispatch, toast, isLoading, isCraftingLoading, currentGameStateString]);
+
+
+     // Handle ingredient selection toggle
+     const handleIngredientToggle = (itemName: string) => {
+        setSelectedIngredients(prev =>
+            prev.includes(itemName)
+                ? prev.filter(name => name !== itemName)
+                : [...prev, itemName]
+        );
+     };
+
+
+     // Reset crafting state when dialog closes
+     useEffect(() => {
+       if (!isCraftingDialogOpen) {
+         setCraftingGoal("");
+         setSelectedIngredients([]);
+         setCraftingError(null);
+         setIsCraftingLoading(false);
+       }
+     }, [isCraftingDialogOpen]);
 
 
   // --- Initial Narration & Skill Tree Trigger ---
@@ -688,7 +711,7 @@ export function Gameplay() {
     // Determine current stage name for mobile sheet
      const currentStageName = character.skillTree && character.skillTreeStage >= 0 && character.skillTree.stages[character.skillTreeStage]
         ? character.skillTree.stages[character.skillTreeStage]?.stageName ?? `Stage ${character.skillTreeStage}`
-        : "Stage 0";
+        : "Potential"; // Default to "Potential" for stage 0
 
    // Helper to render reputation list
     const renderReputation = (rep: Record<string, number>) => {
@@ -810,10 +833,10 @@ export function Gameplay() {
                 </TabsContent>
                 <TabsContent value="skills" className="flex-grow overflow-hidden">
                      {character.skillTree && !isGeneratingSkillTree ? (
-                          <SkillTreeDisplay
+                           <SkillTreeDisplay
                                 skillTree={character.skillTree}
                                 currentStage={character.skillTreeStage}
-                                learnedSkills={character.learnedSkills}
+                                learnedSkills={character.learnedSkills} // Pass learned skills
                            />
                      ) : (
                         <CardboardCard className="m-4 flex flex-col items-center justify-center h-full">
@@ -993,11 +1016,11 @@ export function Gameplay() {
                            <Hammer className="mr-1 h-4 w-4" /> Craft
                          </Button>
                        </DialogTrigger>
-                       <DialogContent className="sm:max-w-[425px]">
+                       <DialogContent className="sm:max-w-md flex flex-col max-h-[80vh]"> {/* Adjust size and height */}
                          <DialogHeader>
                            <DialogTitle>Attempt Crafting</DialogTitle>
                            <DialogDescription>
-                             Describe what you want to craft and the items you'll use from your inventory (comma-separated). The AI will determine the outcome.
+                             Describe what you want to craft and select ingredients from your inventory. The AI will determine the outcome.
                            </DialogDescription>
                          </DialogHeader>
                          <div className="grid gap-4 py-4">
@@ -1008,42 +1031,58 @@ export function Gameplay() {
                                <AlertDescription>{craftingError}</AlertDescription>
                              </Alert>
                            )}
-                           <div className="grid grid-cols-4 items-center gap-4">
-                             <Label htmlFor="crafting-goal" className="text-right">
-                               Goal
+                           <div className="space-y-2">
+                             <Label htmlFor="crafting-goal">
+                               Crafting Goal
                              </Label>
                              <Input
                                id="crafting-goal"
                                value={craftingGoal}
                                onChange={(e) => setCraftingGoal(e.target.value)}
                                placeholder="e.g., Healing Salve, Sharpened Sword"
-                               className="col-span-3"
                                disabled={isCraftingLoading}
                              />
                            </div>
-                           <div className="grid grid-cols-4 items-center gap-4">
-                             <Label htmlFor="crafting-ingredients" className="text-right">
-                               Ingredients
-                             </Label>
-                             <Textarea
-                               id="crafting-ingredients"
-                               value={craftingIngredients}
-                               onChange={(e) => setCraftingIngredients(e.target.value)}
-                               placeholder="e.g., Herb, Bandage, Whetstone, Iron Shard"
-                               className="col-span-3"
-                               rows={3}
-                               disabled={isCraftingLoading}
-                             />
-                           </div>
-                           <div className="col-span-4 text-xs text-muted-foreground px-1">
-                             Enter exact inventory item names, separated by commas.
+                           <div className="space-y-2 flex-grow overflow-hidden flex flex-col"> {/* Make ingredient list scrollable */}
+                             <Label>Select Ingredients</Label>
+                             <ScrollArea className="flex-grow border rounded-md p-2 max-h-48"> {/* Limit height and add scroll */}
+                               {inventory.length > 0 ? (
+                                <div className="space-y-2">
+                                   {inventory.map((item, index) => (
+                                     <button
+                                       key={`${item.name}-${index}`}
+                                       type="button"
+                                       onClick={() => handleIngredientToggle(item.name)}
+                                       disabled={isCraftingLoading}
+                                       className={`w-full text-left p-2 rounded-md flex items-center justify-between text-sm transition-colors ${selectedIngredients.includes(item.name) ? 'bg-accent text-accent-foreground' : 'hover:bg-muted/50'}`}
+                                     >
+                                       <span className="flex items-center gap-2">
+                                         {selectedIngredients.includes(item.name) ? <CheckSquare className="h-4 w-4"/> : <Square className="h-4 w-4 text-muted-foreground"/>}
+                                         <span className={getQualityColor(item.quality)}>{item.name}</span>
+                                         {item.quality && item.quality !== "Common" && (
+                                             <Badge variant="outline" className={`text-xs ml-1 py-0 px-1 h-4 border-0 ${getQualityColor(item.quality)} bg-transparent`}>
+                                                {item.quality}
+                                             </Badge>
+                                         )}
+                                       </span>
+                                     </button>
+                                   ))}
+                                </div>
+                               ) : (
+                                 <p className="text-sm text-muted-foreground italic text-center py-4">Inventory is empty.</p>
+                               )}
+                             </ScrollArea>
                            </div>
                          </div>
                          <DialogFooter>
                            <DialogClose asChild>
                                <Button type="button" variant="secondary" disabled={isCraftingLoading}>Cancel</Button>
                            </DialogClose>
-                           <Button type="button" onClick={handleCrafting} disabled={isCraftingLoading || !craftingGoal.trim() || !craftingIngredients.trim()}>
+                           <Button
+                                type="button"
+                                onClick={handleCrafting}
+                                disabled={isCraftingLoading || !craftingGoal.trim() || selectedIngredients.length === 0}
+                            >
                              {isCraftingLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Hammer className="mr-2 h-4 w-4" />}
                              {isCraftingLoading ? "Crafting..." : "Attempt Craft"}
                            </Button>
