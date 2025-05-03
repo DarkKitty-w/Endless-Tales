@@ -4,10 +4,10 @@
 import { useGame } from "@/context/GameContext";
 import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons";
-import { User, ShieldQuestion, Star, Zap, HeartPulse, Workflow } from "lucide-react"; // Added Zap, HeartPulse, Workflow
+import { User, ShieldQuestion, Star, Zap, HeartPulse, Workflow, BarChartBig, Award } from "lucide-react"; // Added BarChartBig, Award
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Progress } from "@/components/ui/progress"; // Import Progress
+import { Progress } from "@/components/ui/progress";
 import {
   Tooltip,
   TooltipContent,
@@ -53,6 +53,10 @@ export function CharacterDisplay() {
       <CardHeader className="pb-2 pt-4 border-b border-foreground/10">
         <CardTitle className="text-xl font-semibold flex items-center gap-2">
           <User className="w-5 h-5 text-primary"/> {character.name || "Unnamed Adventurer"}
+           {/* Display Level */}
+           <Badge variant="secondary" className="text-sm ml-auto font-bold">
+             Lvl {character.level}
+           </Badge>
         </CardTitle>
          {/* Display class, background, traits, and knowledge using Badges */}
          <div className="flex flex-wrap gap-1 mt-2">
@@ -73,6 +77,30 @@ export function CharacterDisplay() {
          </div>
       </CardHeader>
       <CardContent className="pt-4 pb-4">
+        {/* XP Bar */}
+         <div className="space-y-1 mb-4">
+            <TooltipProvider delayDuration={100}>
+              <Tooltip>
+                <TooltipTrigger className="w-full">
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-medium text-yellow-600 dark:text-yellow-400 flex items-center gap-1"> <Award className="w-3.5 h-3.5"/> XP</span>
+                      <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
+                    </div>
+                    <Progress
+                        value={(character.xp / character.xpToNextLevel) * 100}
+                        className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"
+                        aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`}
+                    />
+                </TooltipTrigger>
+                <TooltipContent>
+                    <p>Experience Points</p>
+                    <p className="text-xs text-muted-foreground">({character.xpToNextLevel - character.xp} needed for next level)</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+         </div>
+         <Separator className="my-3"/>
+
         {/* Stats Display */}
         <div className="grid grid-cols-3 gap-2 text-center mb-4">
           <div className="flex flex-col items-center">

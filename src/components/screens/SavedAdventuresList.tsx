@@ -2,7 +2,7 @@
 "use client";
 
 import React from "react";
-import { useGame, type SavedAdventure } from "@/context/GameContext";
+import { useGame, type SavedAdventure, type Character, type Reputation } from "@/context/GameContext"; // Import Character and Reputation
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
@@ -18,9 +18,18 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { FolderClock, ArrowLeft, Trash2, Play, Info, BookOpenText, Package, ShieldQuestion, Star, HeartPulse, Zap } from "lucide-react"; // Added HeartPulse, Zap
+import { FolderClock, ArrowLeft, Trash2, Play, Info, BookOpenText, Package, ShieldQuestion, Star, HeartPulse, Zap, ThumbsUp, ThumbsDown, Award } from "lucide-react"; // Added Award, Thumbs icons
 import { formatDistanceToNow } from 'date-fns';
 import { useToast } from "@/hooks/use-toast";
+
+// Helper to render reputation summary
+const renderReputationSummary = (reputation: Reputation | undefined): string => {
+    if (!reputation) return 'None';
+    const entries = Object.entries(reputation);
+    if (entries.length === 0) return 'None';
+    // Show first 2 factions for brevity
+    return entries.slice(0, 2).map(([faction, score]) => `${faction}: ${score}`).join(', ') + (entries.length > 2 ? '...' : '');
+};
 
 export function SavedAdventuresList() {
   const { state, dispatch } = useGame();
@@ -64,47 +73,60 @@ export function SavedAdventuresList() {
             <ScrollArea className="h-[60vh] pr-3"> {/* Adjust height as needed */}
               <div className="space-y-4">
                 {sortedAdventures.map((adventure) => {
-                    // Find the current stage name from the saved skill tree
-                    const currentStage = adventure.character?.skillTreeStage ?? 0;
-                    const stageData = adventure.character?.skillTree?.stages[currentStage];
+                    const char: Character | undefined = adventure.character; // Ensure character exists
+                    const currentStage = char?.skillTreeStage ?? 0;
+                    const stageData = char?.skillTree?.stages[currentStage];
                     const stageName = stageData?.stageName ?? `Stage ${currentStage}`;
 
                     return (
                       <CardboardCard key={adventure.id} className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-card/60 border border-foreground/10">
                         <div className="flex-1 min-w-0">
-                          <p className="text-lg font-semibold truncate" title={adventure.characterName}>{adventure.characterName}</p>
-                          {/* Display Class and Skill Stage with Name */}
+                           {/* Character Name and Level */}
+                           <div className="flex items-center justify-between">
+                              <p className="text-lg font-semibold truncate" title={adventure.characterName}>{adventure.characterName}</p>
+                              <span className="text-sm font-bold text-primary ml-2 flex-shrink-0">Lvl {char?.level ?? '?'}</span>
+                           </div>
+
+                          {/* Class, Skill Stage, Resources */}
                           <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-sm text-muted-foreground mt-1">
                                 <div className="flex items-center gap-1" title="Class">
-                                    <ShieldQuestion className="w-3 h-3"/> {adventure.character?.class || 'Unknown'}
+                                    <ShieldQuestion className="w-3 h-3"/> {char?.class || 'Unknown'}
                                 </div>
                                 <div className="flex items-center gap-0.5" title={`Skill Stage: ${stageName}`}>
                                     <Star className="w-3 h-3"/> {stageName} ({currentStage}/4)
                                 </div>
-                                 {/* Display Stamina */}
                                 <div className="flex items-center gap-1" title="Stamina">
-                                    <HeartPulse className="w-3 h-3 text-green-600" /> {adventure.character?.currentStamina ?? '?'}/{adventure.character?.maxStamina ?? '?'}
+                                    <HeartPulse className="w-3 h-3 text-green-600" /> {char?.currentStamina ?? '?'}/{char?.maxStamina ?? '?'}
                                 </div>
-                                {/* Display Mana (if maxMana exists and > 0) */}
-                                {(adventure.character?.maxMana ?? 0) > 0 && (
+                                {(char?.maxMana ?? 0) > 0 && (
                                     <div className="flex items-center gap-1" title="Mana">
-                                        <Zap className="w-3 h-3 text-blue-500" /> {adventure.character?.currentMana ?? '?'}/{adventure.character?.maxMana ?? '?'}
+                                        <Zap className="w-3 h-3 text-blue-500" /> {char?.currentMana ?? '?'}/{char?.maxMana ?? '?'}
                                     </div>
                                 )}
                           </div>
+
+                          {/* XP and Reputation */}
+                           <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1">
+                                <div className="flex items-center gap-1" title="Experience Points">
+                                    <Award className="w-3 h-3 text-yellow-500" /> {char?.xp ?? '?'}/{char?.xpToNextLevel ?? '?'} XP
+                                </div>
+                                 <div className="flex items-center gap-1" title="Reputation">
+                                    <ThumbsUp className="w-3 h-3" /> Rep: {renderReputationSummary(char?.reputation)}
+                                </div>
+                            </div>
+
+                           {/* Save Info */}
                            <p className="text-sm text-muted-foreground mt-1">
                             Saved {formatDistanceToNow(new Date(adventure.saveTimestamp), { addSuffix: true })}
                           </p>
                            <p className="text-xs text-muted-foreground mt-1">
                             {adventure.statusBeforeSave === 'AdventureSummary' ? 'Finished' : 'In Progress'} | {adventure.adventureSettings.adventureType} ({adventure.adventureSettings.permanentDeath ? 'Permadeath' : 'Respawn'})
                           </p>
-                           {/* Display inventory count */}
                             {adventure.inventory && (
                                 <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                                     <Package className="w-3 h-3"/> {adventure.inventory.length} item(s)
                                 </p>
                             )}
-                           {/* Display summary snippet if finished */}
                             {adventure.statusBeforeSave === 'AdventureSummary' && adventure.adventureSummary && (
                                 <p className="text-xs text-muted-foreground italic mt-1 border-t pt-1 line-clamp-2">
                                     Summary: {adventure.adventureSummary}

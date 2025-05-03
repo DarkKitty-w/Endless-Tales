@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useGame, type InventoryItem, type StoryLogEntry, type SkillTree, type Skill } from "@/context/GameContext"; // Added Skill
+import { useGame, type InventoryItem, type StoryLogEntry, type SkillTree, type Skill, type Character, calculateXpToNextLevel } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -14,7 +14,7 @@ import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
 import { assessActionDifficulty, type DifficultyLevel } from "@/ai/flows/assess-action-difficulty";
 import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User } from "lucide-react"; // Added User icon
+import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown } from "lucide-react"; // Added Star, ThumbsUp, ThumbsDown
 import { rollD6, rollD10, rollD20, rollD100 } from "@/services/dice-roller"; // Import specific rollers
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -39,7 +39,8 @@ import {
 import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "../ui/skeleton"; // Added Skeleton import
+import { Progress } from "@/components/ui/progress"; // Import Progress
+import { Skeleton } from "../ui/skeleton";
 
 // Helper function to map difficulty dice string to roller function
 const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null => {
@@ -67,9 +68,7 @@ export function Gameplay() {
   const [diceResult, setDiceResult] = useState<number | null>(null);
   const [diceType, setDiceType] = useState<string>("None");
   const scrollEndRef = useRef<HTMLDivElement>(null);
-  const [isGeneratingInventoryImages, setIsGeneratingInventoryImages] = useState(false); // Track image generation state locally if needed for UI feedback
   const [pendingClassChange, setPendingClassChange] = useState<string | null>(null); // State for pending class change confirmation
-
 
   // Function to scroll to bottom
   const scrollToBottom = useCallback(() => {
@@ -78,21 +77,6 @@ export function Gameplay() {
        scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
      }, 100);
   }, []);
-
-   // --- Handle Inventory Image Generation (now relies on context/reducer) ---
-   // Removed generateInventoryImages function from component state.
-   // The context reducer now handles async image generation and updates the state.
-   // We might still need the local isGeneratingInventoryImages state for UI feedback.
-
-   useEffect(() => {
-     // Check if any inventory items are missing images and set local loading state
-     const needsImages = inventory.some(item => !item.imageDataUri);
-     setIsGeneratingInventoryImages(needsImages);
-     if (needsImages) {
-        // Optional: Show a generic loading toast, but avoid spamming it.
-        // toast({ title: "Loading Item Images...", description: `Fetching visuals...`, duration: 1500 });
-     }
-   }, [inventory]);
 
 
   // --- Trigger Skill Tree Generation ---
@@ -115,7 +99,7 @@ export function Gameplay() {
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false }); // Ensure loading stops
         }
         // No finally needed for setting generating false, reducer handles it on SET_SKILL_TREE or explicitly above on error
-   }, [dispatch, toast, isGeneratingSkillTree]); // Removed character dependency
+   }, [dispatch, toast, isGeneratingSkillTree]);
 
 
    // --- Confirm and Handle Class Change ---
@@ -140,8 +124,8 @@ export function Gameplay() {
 
   // --- Handle Player Action Submission ---
   const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
-     if (!character || isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree) {
-       console.log("Action blocked: No character or already busy.", { isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, isGeneratingSkillTree });
+     if (!character || isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree) {
+       console.log("Action blocked: No character or already busy.", { isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree });
        let reason = "Please wait for the current action to complete.";
        if (isGeneratingSkillTree) reason = "Please wait for skill tree generation to finish.";
        toast({ description: reason, variant: "default", duration: 1500 });
@@ -178,9 +162,14 @@ export function Gameplay() {
         await new Promise(resolve => setTimeout(resolve, 400));
 
         try {
+             // Generate a string for reputation
+             const reputationString = Object.entries(character.reputation)
+                 .map(([faction, score]) => `${faction}: ${score}`)
+                 .join(', ') || 'None';
+
              const assessmentInput = {
                 playerAction: action,
-                characterCapabilities: `Class: ${character.class}. Stage: ${character.skillTreeStage}. Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, AGI ${character.stats.agility}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}. Inventory: ${inventory.map(i => i.name).join(', ') || 'Empty'}. Stamina: ${character.currentStamina}/${character.maxStamina}. Mana: ${character.currentMana}/${character.maxMana}. Learned Skills: ${character.learnedSkills.map(s=>s.name).join(', ') || 'None'}.`,
+                characterCapabilities: `Level: ${character.level}. Class: ${character.class}. Stage: ${character.skillTreeStage}. Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, AGI ${character.stats.agility}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}. Inventory: ${inventory.map(i => i.name).join(', ') || 'Empty'}. Stamina: ${character.currentStamina}/${character.maxStamina}. Mana: ${character.currentMana}/${character.maxMana}. Learned Skills: ${character.learnedSkills.map(s=>s.name).join(', ') || 'None'}. Reputation: ${reputationString}`,
                 currentSituation: currentNarration?.narration || "At the beginning of the scene.",
                 gameStateSummary: currentGameStateString,
              };
@@ -232,6 +221,9 @@ export function Gameplay() {
             actionWithDice += ` (Difficulty: ${assessedDifficulty}, Dice Roll Result: ${roll}/${diceType.substring(1)})`;
             console.log(`Dice rolled ${diceType}: ${roll}`);
             const numericDiceType = parseInt(diceType.substring(1), 10);
+            if (isNaN(numericDiceType)) { // Check if dice type is numeric (handles 'None')
+                throw new Error(`Invalid dice type: ${diceType}`);
+            }
             // Simple outcome logic: > 60% is success, < 30% is challenging/partial fail, rest is average
             const successThreshold = Math.ceil(numericDiceType * 0.6);
             const failThreshold = Math.floor(numericDiceType * 0.3);
@@ -277,6 +269,10 @@ export function Gameplay() {
         maxStamina: character.maxStamina,
         currentMana: character.currentMana,
         maxMana: character.maxMana,
+        level: character.level,
+        xp: character.xp,
+        xpToNextLevel: character.xpToNextLevel,
+        reputation: character.reputation,
         skillTreeSummary: skillTreeSummaryForAI, // Pass summary
         skillTreeStage: character.skillTreeStage, // Pass current stage
         learnedSkills: character.learnedSkills.map(s => s.name), // Pass learned skill names
@@ -335,21 +331,49 @@ export function Gameplay() {
           updatedStats: narrationResult.updatedStats,
           updatedTraits: narrationResult.updatedTraits,
           updatedKnowledge: narrationResult.updatedKnowledge,
-          updatedClass: narrationResult.updatedClass, // Can be directly updated by AI (though prompt discourages it)
+          //updatedClass: narrationResult.updatedClass, // Deprecated
           progressedToStage: narrationResult.progressedToStage,
           suggestedClassChange: narrationResult.suggestedClassChange,
           staminaChange: narrationResult.staminaChange, // Get resource changes
           manaChange: narrationResult.manaChange,
           gainedSkill: narrationResult.gainedSkill, // Get gained skill
+          xpGained: narrationResult.xpGained, // Get XP gained
+          reputationChange: narrationResult.reputationChange, // Get reputation change
           timestamp: Date.now(),
       };
       dispatch({ type: "UPDATE_NARRATION", payload: logEntryForResult });
 
+      // --- Handle Progression AFTER state update from narration ---
 
-      // Inventory image generation is now handled by the context reducer triggered by UPDATE_NARRATION.
-      // No need to call generateInventoryImages here.
+      // Apply XP gain (from the narration result)
+      if (logEntryForResult.xpGained && logEntryForResult.xpGained > 0) {
+          dispatch({ type: "GRANT_XP", payload: logEntryForResult.xpGained });
+           toast({ title: `Gained ${logEntryForResult.xpGained} XP!`, duration: 3000 });
+          // Check for level up immediately after granting XP
+          // We need to access the potentially updated state AFTER the GRANT_XP dispatch.
+          // This is tricky without a state selector or waiting. A common pattern is to
+          // put the level up check inside the reducer itself or trigger it via useEffect.
+          // For simplicity here, we'll check against the state *before* potential level up.
+          // IMPORTANT: This check might be slightly delayed. Check reducer for LEVEL_UP for better logic.
+          if (character.xp + logEntryForResult.xpGained >= character.xpToNextLevel) {
+                const newLevel = character.level + 1;
+                const newXpToNext = calculateXpToNextLevel(newLevel);
+                dispatch({ type: "LEVEL_UP", payload: { newLevel, newXpToNextLevel } });
+                toast({ title: `Level Up! Reached Level ${newLevel}!`, description: "You feel stronger!", duration: 5000, variant: "default" });
+                // TODO: Handle level up rewards (skill points, stat points, etc.)
+           }
+      }
 
-      // Handle AI-driven progression AFTER updating narration/state
+       // Apply reputation change (from the narration result)
+       if (logEntryForResult.reputationChange) {
+            dispatch({ type: 'UPDATE_REPUTATION', payload: logEntryForResult.reputationChange });
+            const { faction, change } = logEntryForResult.reputationChange;
+            const direction = change > 0 ? 'increased' : 'decreased';
+            toast({ title: `Reputation with ${faction} ${direction} by ${Math.abs(change)}!`, duration: 3000 });
+       }
+
+
+      // Handle AI-driven skill stage progression
        if (narrationResult.progressedToStage && narrationResult.progressedToStage > character.skillTreeStage) {
             const progressedStageName = character.skillTree?.stages.find(s => s.stage === narrationResult!.progressedToStage)?.stageName || `Stage ${narrationResult.progressedToStage}`;
            dispatch({ type: "PROGRESS_SKILL_STAGE", payload: narrationResult.progressedToStage });
@@ -391,16 +415,16 @@ export function Gameplay() {
     scrollToBottom(); // Scroll after processing is complete
 
   }, [
-      character, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages,
+      character, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice,
       isGeneratingSkillTree, // Include skill tree generation state
       currentGameStateString, currentNarration, storyLog, adventureSettings, dispatch, toast, scrollToBottom,
       triggerSkillTreeGeneration // Add trigger function dependency
   ]);
 
 
-  // --- End Adventure ---
-  const handleEndAdventure = useCallback(async (finalNarrationEntry?: StoryLogEntry) => {
-     if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree) return;
+   // --- End Adventure ---
+   const handleEndAdventure = useCallback(async (finalNarrationEntry?: StoryLogEntry) => {
+     if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree) return;
      setIsEnding(true);
      setError(null);
      toast({ title: "Ending Adventure", description: "Summarizing your tale..." });
@@ -429,12 +453,12 @@ export function Gameplay() {
          summary = "Your adventure ended before it could be properly logged.";
      }
      dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationEntry } });
-   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, isGeneratingSkillTree, storyLog, dispatch, toast]); // Removed currentNarration dep
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, storyLog, dispatch, toast]); // Removed currentNarration dep
 
 
    // --- Handle Save Game ---
    const handleSaveGame = useCallback(async () => {
-        if (isLoading || isEnding || isSaving || !currentAdventureId || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree) return;
+        if (isLoading || isEnding || isSaving || !currentAdventureId || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree) return;
         setIsSaving(true);
         toast({ title: "Saving Progress..." });
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -447,7 +471,7 @@ export function Gameplay() {
         } finally {
             setIsSaving(false);
         }
-   }, [dispatch, toast, isLoading, isEnding, isSaving, currentAdventureId, character, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, isGeneratingSkillTree]);
+   }, [dispatch, toast, isLoading, isEnding, isSaving, currentAdventureId, character, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree]);
 
 
   // --- Initial Narration & Skill Tree Trigger ---
@@ -464,13 +488,9 @@ export function Gameplay() {
              console.log("Gameplay: Triggering initial skill tree generation.");
              triggerSkillTreeGeneration(character.class);
              // Don't trigger initial narration yet, wait for skill tree
-          } else if (!isLoading && !isGeneratingSkillTree) { // Only trigger narration if tree exists and not loading
+          } else if (!isLoading && !isGeneratingSkillTree && storyLog.length === 0) { // Only trigger initial narration if skill tree exists, not loading, and no logs yet
              console.log("Gameplay: Triggering initial narration (skill tree exists).");
              handlePlayerAction("Begin the adventure by looking around.", true);
-             // Trigger inventory image update in context if needed
-             if (inventory.length > 0) {
-                dispatch({ type: "UPDATE_NARRATION", payload: { updatedInventory: inventory.map(i => i.name), narration: '', updatedGameState: currentGameStateString, timestamp: Date.now() } });
-             }
           }
      } else if (isLoadedGame) {
          console.log("Gameplay: Resumed loaded game.");
@@ -480,15 +500,10 @@ export function Gameplay() {
               console.log("Gameplay (Load): Triggering skill tree generation for loaded character.");
               triggerSkillTreeGeneration(character.class);
           }
-           // Trigger inventory image update in context if needed
-           if (inventory.length > 0) {
-                dispatch({ type: "UPDATE_NARRATION", payload: { updatedInventory: inventory.map(i => i.name), narration: '', updatedGameState: currentGameStateString, timestamp: Date.now() } });
-           }
           requestAnimationFrame(scrollToBottom);
      }
-  // Trigger specifically when skill tree becomes available after generation in a new game
-  // Also re-trigger initial action if skill tree becomes available later and story log is still empty
-   }, [state.status, character?.name, character?.class, character?.skillTree, state.currentAdventureId, storyLog.length, isLoading, isEnding, isSaving, isGeneratingSkillTree, triggerSkillTreeGeneration, handlePlayerAction, inventory, state.savedAdventures, toast, scrollToBottom, dispatch, currentGameStateString]);
+  // Re-trigger initial action if skill tree becomes available later and story log is still empty
+  }, [state.status, character?.name, character?.class, character?.skillTree, state.currentAdventureId, storyLog.length, isLoading, isEnding, isSaving, isGeneratingSkillTree, triggerSkillTreeGeneration, handlePlayerAction, state.savedAdventures, toast, scrollToBottom, dispatch, currentGameStateString]); // Added storyLog.length dependency
 
 
    // Scroll to bottom effect
@@ -500,7 +515,7 @@ export function Gameplay() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedInput = playerInput.trim();
-     const busy = isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || isGeneratingInventoryImages || isGeneratingSkillTree;
+     const busy = isLoading || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree;
     if (trimmedInput && !busy) {
        handlePlayerAction(trimmedInput);
     } else if (!trimmedInput) {
@@ -515,15 +530,15 @@ export function Gameplay() {
 
    // --- Go Back (Abandon Adventure) ---
    const handleGoBack = useCallback(() => {
-        if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree) return;
+        if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree) return;
         toast({ title: "Returning to Main Menu...", description: "Abandoning current adventure." });
         dispatch({ type: "RESET_GAME" });
-   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, isGeneratingSkillTree, dispatch, toast]);
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, dispatch, toast]);
 
 
    // --- Suggest Action ---
    const handleSuggestAction = useCallback(() => {
-       if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree || !character) return;
+       if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || !character) return;
         // Include learned skills in suggestions
        const learnedSkillNames = character.learnedSkills.map(s => s.name);
         const baseSuggestions = [ "Look around", "Examine surroundings", "Check inventory", "Check status", "Move north", "Move east", "Move south", "Move west", "Talk to [NPC Name]", "Ask about [Topic]", "Examine [Object]", "Pick up [Item]", "Use [Item]", "Drop [Item]", "Open [Door/Chest]", "Search the area", "Rest here", "Wait for a while", "Attack [Target]", "Defend yourself", "Flee", ];
@@ -533,7 +548,7 @@ export function Gameplay() {
         const suggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
         setPlayerInput(suggestion);
         toast({ title: "Suggestion", description: `Try: "${suggestion}"`, duration: 3000 });
-   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages, isGeneratingSkillTree, character, toast]);
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, character, toast]);
 
    if (!character) {
        return (
@@ -550,10 +565,31 @@ export function Gameplay() {
         ? character.skillTree.stages[character.skillTreeStage]?.stageName ?? `Stage ${character.skillTreeStage}`
         : "Stage 0";
 
+   // Helper to render reputation list
+    const renderReputation = (rep: Record<string, number>) => {
+        const entries = Object.entries(rep);
+        if (entries.length === 0) {
+            return <p className="text-xs text-muted-foreground italic">No faction reputations yet.</p>;
+        }
+        return (
+            <ul className="space-y-1">
+                {entries.map(([faction, score]) => (
+                    <li key={faction} className="flex justify-between items-center text-xs">
+                        <span>{faction}:</span>
+                        <span className={`font-medium ${score > 10 ? 'text-green-600' : score < -10 ? 'text-destructive' : ''}`}>
+                            {score}
+                             {score > 50 && <ThumbsUp className="inline ml-1 h-3 w-3 text-green-500"/>}
+                             {score < -50 && <ThumbsDown className="inline ml-1 h-3 w-3 text-red-500"/>}
+                        </span>
+                    </li>
+                ))}
+            </ul>
+        );
+    };
 
    // Helper function to render dynamic content at the end of the scroll area
    const renderDynamicContent = () => {
-     const busy = isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree;
+     const busy = isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree;
      if (isGeneratingSkillTree) {
          return (
              <div className="flex items-center justify-center py-4 text-muted-foreground animate-pulse">
@@ -561,9 +597,6 @@ export function Gameplay() {
                  <span>Generating skill tree...</span>
              </div>
          );
-     }
-     if (isGeneratingInventoryImages && !isLoading) {
-        return ( <div className="flex items-center justify-center py-4 text-muted-foreground animate-pulse"> <Loader2 className="h-5 w-5 mr-2 animate-spin"/> <span>Loading item images...</span> </div> );
      }
     if (isSaving) {
         return ( <div className="flex items-center justify-center py-4 text-muted-foreground animate-pulse"> <Save className="h-5 w-5 mr-2 animate-ping" /> <span>Saving progress...</span> </div> );
@@ -598,8 +631,34 @@ export function Gameplay() {
         <div className="hidden md:flex flex-col w-80 lg:w-96 p-4 border-r border-foreground/10 overflow-y-auto bg-card/50 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
              <CharacterDisplay />
 
+              {/* Progression Info */}
+              <CardboardCard className="my-4">
+                  <CardHeader className="p-3 border-b">
+                      <CardTitle className="text-base font-semibold flex items-center gap-1.5">
+                          <Star className="w-4 h-4 text-yellow-500"/> Progression
+                      </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-3 space-y-3 text-sm">
+                      <div className="flex justify-between items-center">
+                          <span>Level:</span>
+                          <span className="font-bold">{character.level}</span>
+                      </div>
+                      <div>
+                          <div className="flex justify-between items-center mb-1 text-xs text-muted-foreground">
+                              <span>XP:</span>
+                              <span>{character.xp} / {character.xpToNextLevel}</span>
+                          </div>
+                          <Progress value={(character.xp / character.xpToNextLevel) * 100} className="h-2 [&>div]:bg-yellow-400" />
+                      </div>
+                      <div>
+                          <p className="mb-1 font-medium">Reputation:</p>
+                          {renderReputation(character.reputation)}
+                      </div>
+                  </CardContent>
+              </CardboardCard>
+
              {/* Tabs for Inventory and Skill Tree */}
-             <Tabs defaultValue="inventory" className="flex-grow flex flex-col mt-4">
+             <Tabs defaultValue="inventory" className="flex-grow flex flex-col">
                 <TabsList className="grid w-full grid-cols-2">
                     <TabsTrigger value="inventory"><Backpack className="mr-1 h-4 w-4"/> Inventory</TabsTrigger>
                     <TabsTrigger value="skills" disabled={isGeneratingSkillTree || !character.skillTree}>
@@ -629,12 +688,12 @@ export function Gameplay() {
 
              {/* Actions at the bottom */}
              <div className="mt-auto space-y-2 pt-4 sticky bottom-0 bg-card/50 pb-4">
-                 <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
+                 <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
                       {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" /> } {isSaving ? "Saving..." : "Save Game"}
                  </Button>
                  <AlertDialog>
                      <AlertDialogTrigger asChild>
-                         <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
+                          <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
                              <ArrowLeft className="mr-2 h-4 w-4" /> Abandon Adventure
                          </Button>
                      </AlertDialogTrigger>
@@ -649,7 +708,7 @@ export function Gameplay() {
                          </AlertDialogFooter>
                      </AlertDialogContent>
                  </AlertDialog>
-                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
+                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
                      {isEnding ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BookCopy className="mr-2 h-4 w-4" /> } {isEnding ? "Summarizing..." : "End & Summarize"}
                  </Button>
              </div>
@@ -665,13 +724,38 @@ export function Gameplay() {
                  <Sheet>
                      <SheetTrigger asChild>
                          <Button variant="ghost" className="text-lg font-semibold px-2 py-1 h-auto truncate">
-                             <User className="mr-2 h-4 w-4 flex-shrink-0"/> {character.name}
+                             <User className="mr-2 h-4 w-4 flex-shrink-0"/> {character.name} (Lvl {character.level})
                          </Button>
                      </SheetTrigger>
                      <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
-                         <SheetHeader className="p-4 border-b"> <SheetTitle>Character Info</SheetTitle> </SheetHeader>
+                         <SheetHeader className="p-4 border-b"> <SheetTitle>Character Info (Level {character.level})</SheetTitle> </SheetHeader>
                          <ScrollArea className="flex-grow overflow-y-auto p-4">
                              <CharacterDisplay />
+                             {/* Mobile Progression Info */}
+                              <CardboardCard className="my-4">
+                                 <CardHeader className="p-3 border-b">
+                                     <CardTitle className="text-base font-semibold flex items-center gap-1.5">
+                                         <Star className="w-4 h-4 text-yellow-500"/> Progression
+                                     </CardTitle>
+                                 </CardHeader>
+                                 <CardContent className="p-3 space-y-3 text-sm">
+                                      <div className="flex justify-between items-center">
+                                          <span>Level:</span>
+                                          <span className="font-bold">{character.level}</span>
+                                      </div>
+                                     <div>
+                                         <div className="flex justify-between items-center mb-1 text-xs text-muted-foreground">
+                                             <span>XP:</span>
+                                             <span>{character.xp} / {character.xpToNextLevel}</span>
+                                         </div>
+                                         <Progress value={(character.xp / character.xpToNextLevel) * 100} className="h-2 [&>div]:bg-yellow-400" />
+                                     </div>
+                                     <div>
+                                         <p className="mb-1 font-medium">Reputation:</p>
+                                         {renderReputation(character.reputation)}
+                                     </div>
+                                 </CardContent>
+                             </CardboardCard>
                          </ScrollArea>
                      </SheetContent>
                  </Sheet>
@@ -724,7 +808,6 @@ export function Gameplay() {
             <CardboardCard className="flex-1 flex flex-col overflow-hidden mb-4 border-2 border-foreground/20 shadow-inner min-h-0">
                  <CardHeader className="py-3 px-4 border-b border-foreground/10 flex-shrink-0"> <CardTitle className="text-lg font-semibold">Story Log</CardTitle> </CardHeader>
                  {/* Scroll area now takes the full height of the content area */}
-                 <CardContent className="flex-1 p-0 overflow-hidden">
                     <ScrollArea className="h-full">
                         <div className="p-4 space-y-4">
                              {storyLog.map((log, index) => (
@@ -746,40 +829,37 @@ export function Gameplay() {
 
              {/* Input Area - Remains at the bottom */}
              <form onSubmit={handleSubmit} className="flex gap-2 items-center mt-auto flex-shrink-0">
-                <Button type="button" variant="ghost" size="icon" onClick={handleSuggestAction} disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || isGeneratingInventoryImages || isGeneratingSkillTree} aria-label="Suggest an action" className="text-muted-foreground hover:text-accent flex-shrink-0" title="Suggest Action">
+                <Button type="button" variant="ghost" size="icon" onClick={handleSuggestAction} disabled={isLoading || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree} aria-label="Suggest an action" className="text-muted-foreground hover:text-accent flex-shrink-0" title="Suggest Action">
                     <Sparkles className="h-5 w-5" />
                 </Button>
-                <Input type="text" value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder="What do you do next?" disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || isGeneratingInventoryImages || isGeneratingSkillTree} className="flex-grow text-base h-11 min-w-0" aria-label="Player action input" autoComplete="off" />
-                <Button type="submit" disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || isGeneratingInventoryImages || isGeneratingSkillTree || !playerInput.trim()} className="bg-accent hover:bg-accent/90 text-accent-foreground h-11 px-5 flex-shrink-0" aria-label="Submit action">
-                   {(isLoading || isGeneratingInventoryImages || isGeneratingSkillTree) ? <Loader2 className="h-5 w-5 animate-spin"/> : <Send className="h-5 w-5" />}
+                <Input type="text" value={playerInput} onChange={(e) => setPlayerInput(e.target.value)} placeholder="What do you do next?" disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || isGeneratingSkillTree} className="flex-grow text-base h-11 min-w-0" aria-label="Player action input" autoComplete="off" />
+                <Button type="submit" disabled={isLoading || isAssessingDifficulty || isRollingDice || isEnding || isSaving || isGeneratingSkillTree || !playerInput.trim()} className="bg-accent hover:bg-accent/90 text-accent-foreground h-11 px-5 flex-shrink-0" aria-label="Submit action">
+                   {(isLoading || isGeneratingSkillTree) ? <Loader2 className="h-5 w-5 animate-spin"/> : <Send className="h-5 w-5" />}
                 </Button>
              </form>
 
              {/* Buttons for smaller screens (Mobile View) - Added below input */}
               <div className="md:hidden flex flex-col gap-2 mt-4 border-t pt-4 flex-shrink-0">
-                   {/* Mobile Character Display (optional, could be in header) */}
-                   {/* <CharacterDisplay /> */}
-                   <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
+                   <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
                         {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" /> } {isSaving ? "Saving..." : "Save Game"}
                    </Button>
                   <AlertDialog>
                      <AlertDialogTrigger asChild>
-                         <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
-                             <ArrowLeft className="mr-2 h-4 w-4" /> Abandon
+                          <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
+                             <ArrowLeft className="mr-2 h-4 w-4" /> Abandon Adventure
                          </Button>
                      </AlertDialogTrigger>
                      <AlertDialogContent>
                          <AlertDialogHeader>
                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                             <AlertDialogDescription> Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu. </AlertDialogDescription>
-                         </AlertDialogHeader>
+                             <AlertDialogDescription> Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu. </AlertDialogDescription> </AlertDialogHeader>
                          <AlertDialogFooter>
                              <AlertDialogCancel>Cancel</AlertDialogCancel>
                              <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction>
                          </AlertDialogFooter>
                      </AlertDialogContent>
                  </AlertDialog>
-                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
+                 <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree}>
                     {isEnding ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BookCopy className="mr-2 h-4 w-4" /> } {isEnding ? "Summarizing..." : "End Adventure"}
                  </Button>
              </div>
