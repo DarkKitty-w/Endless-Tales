@@ -14,7 +14,7 @@ import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
 import { assessActionDifficulty, type DifficultyLevel } from "@/ai/flows/assess-action-difficulty";
 import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow } from "lucide-react";
+import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User } from "lucide-react"; // Added User icon
 import { rollD6, rollD10, rollD20, rollD100 } from "@/services/dice-roller"; // Import specific rollers
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -232,6 +232,7 @@ export function Gameplay() {
             actionWithDice += ` (Difficulty: ${assessedDifficulty}, Dice Roll Result: ${roll}/${diceType.substring(1)})`;
             console.log(`Dice rolled ${diceType}: ${roll}`);
             const numericDiceType = parseInt(diceType.substring(1), 10);
+            // Simple outcome logic: > 60% is success, < 30% is challenging/partial fail, rest is average
             const successThreshold = Math.ceil(numericDiceType * 0.6);
             const failThreshold = Math.floor(numericDiceType * 0.3);
             let outcomeDesc = "Average outcome.";
@@ -286,53 +287,89 @@ export function Gameplay() {
       previousNarration: storyLog.length > 0 ? storyLog[storyLog.length - 1].narration : undefined,
     };
 
-    try {
-      console.log("Sending to narrateAdventure flow:", JSON.stringify(inputForAI, null, 2));
-      const result: NarrateAdventureOutput = await narrateAdventure(inputForAI);
-      console.log("Received from narrateAdventure flow:", result);
+    let retryCount = 0;
+    const maxRetries = 2;
+    let narrationResult: NarrateAdventureOutput | null = null;
 
+    while (retryCount <= maxRetries && !narrationResult) {
+        try {
+          console.log(`Sending to narrateAdventure flow (Attempt ${retryCount + 1}):`, JSON.stringify(inputForAI, null, 2));
+          const result = await narrateAdventure(inputForAI);
+          console.log("Received from narrateAdventure flow:", result);
+
+          // Basic validation of critical fields
+           if (!result || !result.narration || !result.updatedGameState) {
+               throw new Error("AI response missing critical narration or game state.");
+           }
+
+          narrationResult = result; // Success
+          setError(null); // Clear previous errors on success
+
+        } catch (err: any) {
+          console.error(`Narration error (Attempt ${retryCount + 1}):`, err);
+          const errorMessage = err.message || "The story encountered an unexpected snag.";
+          setError(`${errorMessage} (Attempt ${retryCount + 1}/${maxRetries + 1}). Retrying...`);
+          toast({ title: "Story Error", description: `${errorMessage.substring(0, 60)}... Retrying...`, variant: "destructive"});
+
+          if (retryCount >= maxRetries) {
+            // Final failure after retries
+            setError(`Narration failed after ${maxRetries + 1} attempts: ${errorMessage}. Try a different action or wait a moment.`);
+            toast({ title: "Narration Failed", description: "Please try a different action.", variant: "destructive", duration: 5000 });
+            setIsLoading(false);
+            setPlayerInput("");
+            scrollToBottom();
+            return; // Stop execution
+          }
+
+          retryCount++;
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount)); // Wait before retrying
+        }
+    }
+
+    // Proceed if narrationResult is valid
+    if (narrationResult) {
       const logEntryForResult: StoryLogEntry = {
-          narration: result.narration,
-          updatedGameState: result.updatedGameState,
-          updatedInventory: result.updatedInventory,
-          updatedStats: result.updatedStats,
-          updatedTraits: result.updatedTraits,
-          updatedKnowledge: result.updatedKnowledge,
-          updatedClass: result.updatedClass, // Can be directly updated by AI (though prompt discourages it)
-          progressedToStage: result.progressedToStage,
-          suggestedClassChange: result.suggestedClassChange,
-          staminaChange: result.staminaChange, // Get resource changes
-          manaChange: result.manaChange,
-          gainedSkill: result.gainedSkill, // Get gained skill
+          narration: narrationResult.narration,
+          updatedGameState: narrationResult.updatedGameState,
+          updatedInventory: narrationResult.updatedInventory,
+          updatedStats: narrationResult.updatedStats,
+          updatedTraits: narrationResult.updatedTraits,
+          updatedKnowledge: narrationResult.updatedKnowledge,
+          updatedClass: narrationResult.updatedClass, // Can be directly updated by AI (though prompt discourages it)
+          progressedToStage: narrationResult.progressedToStage,
+          suggestedClassChange: narrationResult.suggestedClassChange,
+          staminaChange: narrationResult.staminaChange, // Get resource changes
+          manaChange: narrationResult.manaChange,
+          gainedSkill: narrationResult.gainedSkill, // Get gained skill
           timestamp: Date.now(),
       };
       dispatch({ type: "UPDATE_NARRATION", payload: logEntryForResult });
-      setError(null);
+
 
       // Inventory image generation is now handled by the context reducer triggered by UPDATE_NARRATION.
       // No need to call generateInventoryImages here.
 
       // Handle AI-driven progression AFTER updating narration/state
-       if (result.progressedToStage && result.progressedToStage > character.skillTreeStage) {
-            const progressedStageName = character.skillTree?.stages.find(s => s.stage === result.progressedToStage)?.stageName || `Stage ${result.progressedToStage}`;
-           dispatch({ type: "PROGRESS_SKILL_STAGE", payload: result.progressedToStage });
-           toast({ title: "Skill Stage Increased!", description: `You've reached ${progressedStageName} (Stage ${result.progressedToStage}) of the ${character.class} path!`, duration: 4000 });
+       if (narrationResult.progressedToStage && narrationResult.progressedToStage > character.skillTreeStage) {
+            const progressedStageName = character.skillTree?.stages.find(s => s.stage === narrationResult!.progressedToStage)?.stageName || `Stage ${narrationResult.progressedToStage}`;
+           dispatch({ type: "PROGRESS_SKILL_STAGE", payload: narrationResult.progressedToStage });
+           toast({ title: "Skill Stage Increased!", description: `You've reached ${progressedStageName} (Stage ${narrationResult.progressedToStage}) of the ${character.class} path!`, duration: 4000 });
        }
         // Handle gained skill notification
-        if (result.gainedSkill) {
-            toast({ title: "Skill Learned!", description: `You gained the skill: ${result.gainedSkill.name}!`, duration: 4000 });
+        if (narrationResult.gainedSkill) {
+            toast({ title: "Skill Learned!", description: `You gained the skill: ${narrationResult.gainedSkill.name}!`, duration: 4000 });
         }
 
         // Handle suggested class change - set state to trigger confirmation dialog
-       if (result.suggestedClassChange && result.suggestedClassChange !== character.class) {
-            console.log(`AI suggested class change to: ${result.suggestedClassChange}`);
-            setPendingClassChange(result.suggestedClassChange); // Trigger dialog
+       if (narrationResult.suggestedClassChange && narrationResult.suggestedClassChange !== character.class) {
+            console.log(`AI suggested class change to: ${narrationResult.suggestedClassChange}`);
+            setPendingClassChange(narrationResult.suggestedClassChange); // Trigger dialog
        }
 
 
        // --- Check for End Game Condition ---
-       const lowerNarration = result.narration?.toLowerCase() || "";
-       const lowerGameState = result.updatedGameState?.toLowerCase() || "";
+       const lowerNarration = narrationResult.narration?.toLowerCase() || "";
+       const lowerGameState = narrationResult.updatedGameState?.toLowerCase() || "";
        const isGameOver = lowerGameState.includes("game over") || lowerNarration.includes("your adventure ends") || lowerNarration.includes("you have died") || lowerNarration.includes("you achieved victory");
 
        if (isGameOver) {
@@ -347,17 +384,12 @@ export function Gameplay() {
                  await handleEndAdventure(logEntryForResult);
             }
        }
+    } // End if(narrationResult)
 
-    } catch (err: any) {
-      console.error("Narration error:", err);
-      const errorMessage = err.message || "The story encountered an unexpected snag.";
-      setError(`${errorMessage} Perhaps try a different approach?`);
-      toast({ title: "Story Error", description: errorMessage.substring(0, 100), variant: "destructive"});
-    } finally {
-      setIsLoading(false);
-      if (!isInitialAction) setPlayerInput("");
-      scrollToBottom(); // Scroll after processing is complete
-    }
+    setIsLoading(false);
+    if (!isInitialAction) setPlayerInput("");
+    scrollToBottom(); // Scroll after processing is complete
+
   }, [
       character, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingInventoryImages,
       isGeneratingSkillTree, // Include skill tree generation state
@@ -600,15 +632,23 @@ export function Gameplay() {
                  <Button variant="secondary" onClick={handleSaveGame} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
                       {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Save className="mr-2 h-4 w-4" /> } {isSaving ? "Saving..." : "Save Game"}
                  </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}> <ArrowLeft className="mr-2 h-4 w-4" /> Abandon Adventure </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader> <AlertDialogTitle>Are you sure?</AlertDialogTitle> <AlertDialogDescription> Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu. </AlertDialogDescription> </AlertDialogHeader>
-                    <AlertDialogFooter> <AlertDialogCancel>Cancel</AlertDialogCancel> <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction> </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                 <AlertDialog>
+                     <AlertDialogTrigger asChild>
+                         <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
+                             <ArrowLeft className="mr-2 h-4 w-4" /> Abandon Adventure
+                         </Button>
+                     </AlertDialogTrigger>
+                     <AlertDialogContent>
+                         <AlertDialogHeader>
+                             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                             <AlertDialogDescription> Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu. </AlertDialogDescription>
+                         </AlertDialogHeader>
+                         <AlertDialogFooter>
+                             <AlertDialogCancel>Cancel</AlertDialogCancel>
+                             <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction>
+                         </AlertDialogFooter>
+                     </AlertDialogContent>
+                 </AlertDialog>
                  <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
                      {isEnding ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <BookCopy className="mr-2 h-4 w-4" /> } {isEnding ? "Summarizing..." : "End & Summarize"}
                  </Button>
@@ -620,15 +660,29 @@ export function Gameplay() {
         <div className="flex-1 flex flex-col p-4 overflow-hidden h-screen md:h-auto">
 
             {/* Mobile Header - Displays Character Name and Action Buttons */}
-            <div className="md:hidden flex justify-between items-center mb-2 pb-2 border-b border-foreground/10 flex-shrink-0">
-                 <h2 className="text-lg font-semibold truncate">{character.name}</h2>
+             <div className="md:hidden flex justify-between items-center mb-2 pb-2 border-b border-foreground/10 flex-shrink-0">
+                 {/* Character Info Trigger */}
+                 <Sheet>
+                     <SheetTrigger asChild>
+                         <Button variant="ghost" className="text-lg font-semibold px-2 py-1 h-auto truncate">
+                             <User className="mr-2 h-4 w-4 flex-shrink-0"/> {character.name}
+                         </Button>
+                     </SheetTrigger>
+                     <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
+                         <SheetHeader className="p-4 border-b"> <SheetTitle>Character Info</SheetTitle> </SheetHeader>
+                         <ScrollArea className="flex-grow overflow-y-auto p-4">
+                             <CharacterDisplay />
+                         </ScrollArea>
+                     </SheetContent>
+                 </Sheet>
+
                  <div className="flex items-center gap-1">
                       {/* Mobile Inventory Trigger */}
-                     <Sheet>
-                        <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon" aria-label="Open Inventory">
-                                <Backpack className="h-5 w-5" />
-                            </Button>
+                      <Sheet>
+                         <SheetTrigger asChild>
+                              <Button variant="ghost" size="icon" aria-label="Open Inventory">
+                                 <Backpack className="h-5 w-5" />
+                             </Button>
                          </SheetTrigger>
                          <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
                              <SheetHeader className="p-4 border-b"> <SheetTitle>Inventory</SheetTitle> </SheetHeader>
@@ -710,7 +764,9 @@ export function Gameplay() {
                    </Button>
                   <AlertDialog>
                      <AlertDialogTrigger asChild>
-                         <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}> <ArrowLeft className="mr-2 h-4 w-4" /> Abandon </Button>
+                         <Button variant="outline" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingInventoryImages || isGeneratingSkillTree}>
+                             <ArrowLeft className="mr-2 h-4 w-4" /> Abandon
+                         </Button>
                      </AlertDialogTrigger>
                      <AlertDialogContent>
                          <AlertDialogHeader>
