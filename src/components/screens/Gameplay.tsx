@@ -15,7 +15,7 @@ import { assessActionDifficulty, type DifficultyLevel } from "@/ai/flows/assess-
 import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "@/ai/flows/attempt-crafting"; // Import crafting flow
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award, Hammer, CheckSquare, Square, Users } from "lucide-react"; // Added Hammer, CheckSquare, Square, Users
+import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award, Hammer, CheckSquare, Square, Users, Milestone, CalendarClock } from "lucide-react"; // Added Milestone, CalendarClock
 import { rollD6, rollD10, rollD20, rollD100 } from "@/services/dice-roller"; // Import specific rollers
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -70,8 +70,7 @@ const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null =
 
 export function Gameplay() {
   const { state, dispatch } = useGame();
-  const { toast } = useToast();
-  const { character, currentNarration, currentGameStateString, storyLog, adventureSettings, inventory, currentAdventureId, isGeneratingSkillTree } = state;
+  const { character, currentNarration, currentGameStateString, storyLog, adventureSettings, inventory, currentAdventureId, isGeneratingSkillTree, turnCount } = state; // Add turnCount
   const [playerInput, setPlayerInput] = useState("");
   const [isLoading, setIsLoading] = useState(false); // General loading for narration/assessment
   const [isEnding, setIsEnding] = useState(false);
@@ -83,6 +82,7 @@ export function Gameplay() {
   const [diceType, setDiceType] = useState<string>("None");
   const scrollEndRef = useRef<HTMLDivElement>(null);
   const [pendingClassChange, setPendingClassChange] = useState<string | null>(null); // State for pending class change confirmation
+  const [branchingChoices, setBranchingChoices] = useState<NarrateAdventureOutput['branchingChoices']>([]); // State for branching choices
 
   // Crafting state
   const [isCraftingDialogOpen, setIsCraftingDialogOpen] = useState(false);
@@ -166,6 +166,7 @@ export function Gameplay() {
     setError(null);
     setDiceResult(null);
     setDiceType("None");
+    setBranchingChoices([]); // Clear previous branching choices
 
     let actionWithDice = action;
     let assessedDifficulty: DifficultyLevel = "Normal";
@@ -175,7 +176,7 @@ export function Gameplay() {
 
     // --- 1. Assess Difficulty (unless passive/initial) ---
     const actionLower = action.trim().toLowerCase();
-    const isPassiveAction = ["look", "look around", "check inventory", "check status", "wait", "rest", "check relationships", "check reputation"].includes(actionLower); // Added relationship/reputation checks
+    const isPassiveAction = ["look", "look around", "check inventory", "check status", "check relationships", "check reputation"].includes(actionLower); // Added relationship/reputation checks
 
     if (!isInitialAction && !isPassiveAction) {
         setIsAssessingDifficulty(true);
@@ -196,6 +197,8 @@ export function Gameplay() {
                 characterCapabilities: `Level: ${character.level}. Class: ${character.class}. Stage: ${character.skillTreeStage}. Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, AGI ${character.stats.agility}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}. Inventory: ${inventory.map(i => i.name).join(', ') || 'Empty'}. Stamina: ${character.currentStamina}/${character.maxStamina}. Mana: ${character.currentMana}/${character.maxMana}. Learned Skills: ${character.learnedSkills.map(s=>s.name).join(', ') || 'None'}. Reputation: ${reputationString}. Relationships: ${relationshipString}`,
                 currentSituation: currentNarration?.narration || "At the beginning of the scene.",
                 gameStateSummary: currentGameStateString,
+                gameDifficulty: adventureSettings.difficulty, // Pass game difficulty
+                turnCount: turnCount, // Pass turn count
              };
             const assessmentResult = await assessActionDifficulty(assessmentInput);
             assessedDifficulty = assessmentResult.difficulty;
@@ -218,7 +221,7 @@ export function Gameplay() {
             }
         } catch (assessError: any) {
             console.error("Difficulty assessment failed:", assessError);
-            setError("Failed to assess difficulty. Assuming 'Normal'.");
+            setError(`Failed to assess difficulty (${assessError.message}). Assuming 'Normal'.`);
             toast({ title: "Assessment Error", description: "Assuming normal difficulty.", variant: "destructive" });
             assessedDifficulty = "Normal";
             setDiceType("d10"); // Default to d10 on error
@@ -255,7 +258,6 @@ export function Gameplay() {
                 if (roll <= failThreshold) outcomeDesc = "Challenging...";
                 toast({ title: `Rolled ${roll} on ${diceType}!`, description: outcomeDesc, duration: 2000 });
             } else {
-                // Handle cases where diceType was invalid or None (should not happen if rollFunction is valid)
                 console.warn(`Dice roll successful (${roll}), but dice type '${diceType}' was unexpected. Not adding roll details to action string.`);
                 actionWithDice += ` (Difficulty: ${assessedDifficulty}, Roll: ${roll})`; // Indicate roll happened but type was off
                 toast({ title: `Rolled ${roll} (Dice Type: ${diceType})`, description: "Outcome determined...", duration: 2000 });
@@ -312,6 +314,12 @@ export function Gameplay() {
       playerChoice: actionWithDice,
       gameState: currentGameStateString,
       previousNarration: storyLog.length > 0 ? storyLog[storyLog.length - 1].narration : undefined,
+      adventureSettings: { // Pass adventure settings
+        difficulty: adventureSettings.difficulty,
+        permanentDeath: adventureSettings.permanentDeath,
+        adventureType: adventureSettings.adventureType,
+      },
+      turnCount: turnCount, // Pass current turn count
     };
 
     let retryCount = 0;
@@ -328,6 +336,10 @@ export function Gameplay() {
            if (!result || !result.narration || !result.updatedGameState) {
                throw new Error("AI response missing critical narration or game state.");
            }
+           // Validate game state includes turn count
+           if (!result.updatedGameState.toLowerCase().includes('turn:')) {
+                throw new Error("AI response missing Turn count in updated game state.");
+           }
 
           narrationResult = result; // Success
           setError(null); // Clear previous errors on success
@@ -338,6 +350,9 @@ export function Gameplay() {
            if (err.message?.includes('503') || err.message?.includes('overloaded')) {
                setError(`AI Service Overloaded (Attempt ${retryCount + 1}/${maxRetries + 1}). Please try again shortly. Retrying...`);
                toast({ title: "AI Busy", description: `Service overloaded. Retrying...`, variant: "default"});
+           } else if (err.message?.includes('Error fetching') || err.message?.includes('400 Bad Request')) {
+               setError(`AI Error: Could not process request (${errorMessage.substring(0, 50)}...). Retrying... (Attempt ${retryCount + 1}/${maxRetries + 1})`);
+               toast({ title: "AI Error", description: `${errorMessage.substring(0, 60)}... Retrying...`, variant: "destructive"});
            } else {
                setError(`${errorMessage} (Attempt ${retryCount + 1}/${maxRetries + 1}). Retrying...`);
                toast({ title: "Story Error", description: `${errorMessage.substring(0, 60)}... Retrying...`, variant: "destructive"});
@@ -379,20 +394,35 @@ export function Gameplay() {
       };
       dispatch({ type: "UPDATE_NARRATION", payload: logEntryForResult });
 
+      // Handle branching choices and dynamic events
+      setBranchingChoices(narrationResult.branchingChoices || []);
+      if (narrationResult.dynamicEventTriggered) {
+          toast({
+              title: "Dynamic Event!",
+              description: narrationResult.dynamicEventTriggered,
+              duration: 4000,
+          });
+      }
+
+
         // --- Parse Game State for Inventory ---
         const gameStateInventoryMatch = narrationResult.updatedGameState.match(/Inventory: (.*?)\n/);
         if (gameStateInventoryMatch && gameStateInventoryMatch[1]) {
             const itemsFromGameState = gameStateInventoryMatch[1]
                 .split(',')
-                .map(name => name.trim())
+                 // Remove quality indicators like (Poor), (Common) before comparison
+                .map(name => name.trim().replace(/\s*\((Poor|Common|Uncommon|Rare|Epic|Legendary)\)$/i, ''))
                 .filter(Boolean);
 
-            // Compare with current inventory and dispatch updates if needed
+            // Compare with current inventory names
             const currentInvNames = inventory.map(i => i.name);
             const addedItems = itemsFromGameState.filter(name => !currentInvNames.includes(name));
             const removedItems = currentInvNames.filter(name => !itemsFromGameState.includes(name));
 
-            addedItems.forEach(name => dispatch({ type: "ADD_ITEM", payload: { name, description: "Acquired during adventure" } }));
+            // Dispatch updates - NOTE: This assumes the AI correctly added/removed items
+            // and provided basic details. A more robust system might need AI to return
+            // explicit item changes.
+            addedItems.forEach(name => dispatch({ type: "ADD_ITEM", payload: { name, description: "Acquired during adventure", quality: "Common" } })); // Add default details
             removedItems.forEach(name => dispatch({ type: "REMOVE_ITEM", payload: { itemName: name } }));
 
             if (addedItems.length > 0 || removedItems.length > 0) {
@@ -407,8 +437,10 @@ export function Gameplay() {
       if (logEntryForResult.xpGained && logEntryForResult.xpGained > 0) {
           dispatch({ type: "GRANT_XP", payload: logEntryForResult.xpGained });
            toast({ title: `Gained ${logEntryForResult.xpGained} XP!`, duration: 3000 });
-           if (character.xp + logEntryForResult.xpGained >= character.xpToNextLevel) {
-                const newLevel = character.level + 1;
+           // Check for level up AFTER dispatching GRANT_XP
+           const charAfterXp = { ...character, xp: character.xp + logEntryForResult.xpGained }; // Simulate state after XP grant
+           if (charAfterXp.xp >= charAfterXp.xpToNextLevel) {
+                const newLevel = charAfterXp.level + 1;
                 const newXpToNext = calculateXpToNextLevel(newLevel);
                 dispatch({ type: "LEVEL_UP", payload: { newLevel, newXpToNextLevel } });
                 toast({ title: `Level Up! Reached Level ${newLevel}!`, description: "You feel stronger!", duration: 5000, variant: "default" });
@@ -460,8 +492,8 @@ export function Gameplay() {
                 toast({title: "Game Over!", description: "Your journey has reached its final, permanent end.", variant: "destructive", duration: 5000});
                 await handleEndAdventure(logEntryForResult);
             } else if (lowerNarration.includes("you have died")) {
-                toast({title: "Defeat!", description: "You were overcome, but perhaps fate offers another chance (Respawn not implemented).", variant: "destructive", duration: 5000});
-                 await handleEndAdventure(logEntryForResult);
+                toast({title: "Defeat!", description: "You were overcome, but perhaps fate offers another chance (Respawn enabled).", variant: "destructive", duration: 5000});
+                 await handleEndAdventure(logEntryForResult); // Still end, but message differs
             } else {
                  toast({title: "Adventure Concluded!", description: "Your tale reaches its current conclusion.", duration: 5000});
                  await handleEndAdventure(logEntryForResult);
@@ -476,7 +508,8 @@ export function Gameplay() {
   }, [
       character, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice,
       isGeneratingSkillTree, // Include skill tree generation state
-      currentGameStateString, currentNarration, storyLog, adventureSettings, dispatch, toast, scrollToBottom,
+      currentGameStateString, currentNarration, storyLog, adventureSettings, turnCount, // Add turnCount dependency
+      dispatch, toast, scrollToBottom,
       triggerSkillTreeGeneration // Add trigger function dependency
   ]);
 
@@ -569,7 +602,7 @@ export function Gameplay() {
             if (result.success && result.craftedItem) {
                 // Add the crafted item
                 dispatch({ type: "ADD_ITEM", payload: result.craftedItem });
-                // Remove used ingredients (handle quantity later if needed)
+                // Remove used ingredients
                 result.consumedItems.forEach(itemName => {
                     dispatch({ type: "REMOVE_ITEM", payload: { itemName: itemName } });
                 });
@@ -661,7 +694,7 @@ export function Gameplay() {
    // Scroll to bottom effect
    useEffect(() => {
        scrollToBottom();
-   }, [storyLog, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, diceResult, error, scrollToBottom]);
+   }, [storyLog, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, diceResult, error, scrollToBottom, branchingChoices]); // Added branchingChoices dependency
 
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -740,11 +773,11 @@ export function Gameplay() {
     };
 
    // Helper function to render NPC relationship list
-    const renderNpcRelationships = (relationships: NpcRelationships | undefined) => {
-        if (!relationships) {
+    const renderNpcRelationships = (NpcRelationships | undefined) => {
+        if (!NpcRelationships) {
             return <p className="text-xs text-muted-foreground italic">No known relationships.</p>;
         }
-        const entries = Object.entries(relationships);
+        const entries = Object.entries(NpcRelationships);
         if (entries.length === 0) {
             return <p className="text-xs text-muted-foreground italic">No known relationships.</p>;
         }
@@ -792,6 +825,31 @@ export function Gameplay() {
     if (diceResult !== null && diceType !== "None") {
       return ( <div key={`dice-${Date.now()}`} className="flex items-center justify-center py-2 text-accent font-semibold italic animate-fade-in-out"> <Dices className="h-5 w-5 mr-2" /> Rolled {diceResult} on {diceType}! </div> );
     }
+    // Show branching choices if available
+    if (branchingChoices && branchingChoices.length > 0) {
+        return (
+            <div className="mt-4 pt-4 border-t border-foreground/10">
+                 <p className="text-center font-semibold mb-2">Choose your path:</p>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                     {branchingChoices.map((choice, index) => (
+                        <Button
+                            key={index}
+                            variant="outline"
+                            className="text-left h-auto py-2 justify-start"
+                            onClick={() => handlePlayerAction(choice.text)}
+                            disabled={isLoading || isEnding || isSaving}
+                        >
+                            <div>
+                                <p>{choice.text}</p>
+                                {choice.consequenceHint && <p className="text-xs text-muted-foreground italic mt-1">{choice.consequenceHint}</p>}
+                            </div>
+                        </Button>
+                     ))}
+                 </div>
+            </div>
+        );
+    }
+
     if (error) {
       return ( <Alert variant="destructive" className="my-4"> <Info className="h-4 w-4" /> <AlertTitle>Story Hiccup</AlertTitle> <AlertDescription>{error}</AlertDescription> </Alert> );
     }
@@ -843,6 +901,11 @@ export function Gameplay() {
                           <p className="text-sm font-semibold">Relationships:</p>
                           {renderNpcRelationships(character.npcRelationships)}
                       </div>
+                       <Separator className="my-3"/>
+                       <div className="space-y-1">
+                         <p className="text-sm font-semibold">Turn:</p>
+                         <p className="text-lg font-bold text-center">{turnCount}</p>
+                       </div>
                    </CardContent>
               </CardboardCard>
 
@@ -922,6 +985,8 @@ export function Gameplay() {
                                       <Separator className="my-2"/>
                                       <p className="font-medium mb-1">Relationships:</p>
                                       {renderNpcRelationships(character.npcRelationships)}
+                                      <Separator className="my-2"/>
+                                      <div className="flex items-center justify-between"><span>Turn:</span> <span className="font-bold">{turnCount}</span></div>
                                   </CardContent>
                               </CardboardCard>
                          </ScrollArea>
@@ -975,8 +1040,9 @@ export function Gameplay() {
             {/* Narration Area */}
             <CardboardCard className="shadow-md rounded-sm bg-card flex-1 flex flex-col overflow-hidden mb-4 border-2 border-foreground/20 shadow-inner min-h-0">
                 <CardHeader className="hidden md:block pb-2 pt-4 border-b border-foreground/10">
-                    <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                        Story Log
+                    <CardTitle className="text-xl font-semibold flex items-center justify-between gap-2">
+                        <span>Story Log</span>
+                        <span className="text-sm font-normal text-muted-foreground flex items-center gap-1"> <CalendarClock className="w-4 h-4"/> Turn: {turnCount} </span>
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="flex-1 overflow-y-auto relative scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent p-4 md:p-6">
@@ -996,36 +1062,43 @@ export function Gameplay() {
                 </CardContent>
             </CardboardCard>
 
-            {/* Action Input */}
-            <CardboardCard className="border-2 border-foreground/20 shadow-inner flex-shrink-0">
-                <CardContent className="p-3 md:p-4">
-                    <form onSubmit={handleSubmit} className="flex items-center space-x-2">
-                        <Input
-                            type="text"
-                            value={playerInput}
-                            onChange={(e) => setPlayerInput(e.target.value)}
-                            placeholder="Enter your action..."
-                            className="flex-1 text-sm"
-                            disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}
-                        />
-                         {/* Suggest Action Button */}
-                         <Button
-                            type="button"
-                            onClick={handleSuggestAction}
-                            variant="secondary"
-                            size="sm"
-                            disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}
-                            aria-label="Suggest Action"
-                         >
-                             <Sparkles className="mr-1 md:mr-2 h-4 w-4" />
-                             <span className="hidden md:inline">Suggest</span>
-                         </Button>
-                        <Button type="submit" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading} aria-label="Submit Action" size="icon">
-                            <Send className="h-4 w-4" />
-                        </Button>
-                    </form>
-                </CardContent>
-            </CardboardCard>
+            {/* Action Input - Show only if no branching choices are active */}
+            {!branchingChoices || branchingChoices.length === 0 ? (
+                <CardboardCard className="border-2 border-foreground/20 shadow-inner flex-shrink-0">
+                    <CardContent className="p-3 md:p-4">
+                        <form onSubmit={handleSubmit} className="flex items-center space-x-2">
+                            <Input
+                                type="text"
+                                value={playerInput}
+                                onChange={(e) => setPlayerInput(e.target.value)}
+                                placeholder="Enter your action..."
+                                className="flex-1 text-sm"
+                                disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}
+                            />
+                            {/* Suggest Action Button */}
+                            <Button
+                                type="button"
+                                onClick={handleSuggestAction}
+                                variant="secondary"
+                                size="sm"
+                                disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}
+                                aria-label="Suggest Action"
+                            >
+                                <Sparkles className="mr-1 md:mr-2 h-4 w-4" />
+                                <span className="hidden md:inline">Suggest</span>
+                            </Button>
+                            <Button type="submit" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading} aria-label="Submit Action" size="icon">
+                                <Send className="h-4 w-4" />
+                            </Button>
+                        </form>
+                    </CardContent>
+                </CardboardCard>
+             ) : (
+                // Placeholder or instruction when branching choices are active
+                <div className="text-center text-muted-foreground italic p-4">
+                    Select one of the choices above to continue...
+                </div>
+             )}
 
              {/* Bottom Buttons for Mobile and Desktop */}
             <div className="flex justify-between items-center mt-4 flex-shrink-0 gap-2">

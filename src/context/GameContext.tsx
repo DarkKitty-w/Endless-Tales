@@ -79,10 +79,10 @@ export interface Character {
 export interface AdventureSettings {
   adventureType: "Randomized" | "Custom" | null;
   permanentDeath: boolean;
+  difficulty: string; // Now mandatory, used for challenge modes
   // Fields for Custom Adventure
   worldType?: string;
   mainQuestline?: string;
-  difficulty?: string;
 }
 
 // Updated InventoryItem type
@@ -123,7 +123,6 @@ export interface StoryLogEntry {
   narration: string;
   updatedGameState: string;
   // Inventory changes are now inferred from gameState or handled by specific actions
-  // updatedInventory?: InventoryItem[]; // Use full items instead of just names if needed
   // Character progression updates from AI
   updatedStats?: Partial<CharacterStats>;
   updatedTraits?: string[];
@@ -140,7 +139,6 @@ export interface StoryLogEntry {
   reputationChange?: ReputationChange; // Optional: Reputation change awarded by AI
   npcRelationshipChange?: NpcRelationshipChange; // Optional: NPC Relationship change awarded by AI
   // Crafting-related fields can be added if needed, but outcome might be part of narration/gameState
-  // craftedItem?: CraftedItemResult;
 }
 
 export interface SavedAdventure {
@@ -148,12 +146,13 @@ export interface SavedAdventure {
     saveTimestamp: number;
     characterName: string;
     character: Character; // Includes XP, Level, Reputation, stamina/mana, skill tree, stage, learned skills, NPC relationships
-    adventureSettings: AdventureSettings; // Includes custom settings if applicable
+    adventureSettings: AdventureSettings; // Includes custom settings and difficulty
     storyLog: StoryLogEntry[];
     currentGameStateString: string;
     inventory: InventoryItem[]; // Store full item objects
     statusBeforeSave?: GameStatus;
     adventureSummary?: string | null;
+    turnCount?: number; // Added turn count for potential dynamic events
 }
 
 
@@ -169,6 +168,7 @@ export interface GameState {
   savedAdventures: SavedAdventure[];
   currentAdventureId: string | null;
   isGeneratingSkillTree: boolean; // Track skill tree generation
+  turnCount: number; // Track turns for potential dynamic events
 }
 
 // --- Initial State Calculation Helpers ---
@@ -266,17 +266,18 @@ const initialInventory: InventoryItem[] = [
     { name: "Crusty Bread", description: "A piece of somewhat stale bread.", quality: "Poor", weight: 0.5 }
 ];
 
+const initialAdventureSettings: AdventureSettings = {
+    adventureType: null,
+    permanentDeath: true,
+    difficulty: "Normal", // Default difficulty
+    worldType: "",
+    mainQuestline: "",
+};
+
 const initialState: GameState = {
   status: "MainMenu",
   character: null,
-  adventureSettings: {
-    adventureType: null,
-    permanentDeath: true,
-    // Default custom settings to empty strings
-    worldType: "",
-    mainQuestline: "",
-    difficulty: "Normal", // Default difficulty
-  },
+  adventureSettings: initialAdventureSettings,
   currentNarration: null,
   storyLog: [],
   adventureSummary: null,
@@ -285,6 +286,7 @@ const initialState: GameState = {
   savedAdventures: [],
   currentAdventureId: null,
   isGeneratingSkillTree: false, // Initially not generating
+  turnCount: 0, // Start turn count at 0
 };
 
 // --- LocalStorage Keys ---
@@ -304,6 +306,7 @@ type Action =
   | { type: "LEVEL_UP"; payload: { newLevel: number; newXpToNextLevel: number /* Add rewards here later */ } } // New action for leveling up
   | { type: "UPDATE_REPUTATION"; payload: ReputationChange } // New action for updating reputation
   | { type: "UPDATE_NPC_RELATIONSHIP"; payload: NpcRelationshipChange } // New action for updating NPC relationship
+  | { type: "INCREMENT_TURN" } // New action to increment turn count
   | { type: "END_ADVENTURE"; payload: { summary: string | null; finalNarration?: StoryLogEntry } }
   | { type: "RESET_GAME" }
   | { type: "LOAD_SAVED_ADVENTURES"; payload: SavedAdventure[] }
@@ -369,13 +372,14 @@ function gameReducer(state: GameState, action: Action): GameState {
         ...state,
         character: newCharacter,
         status: "AdventureSetup",
-        adventureSettings: { ...initialState.adventureSettings }, // Reset adventure settings
+        adventureSettings: { ...initialAdventureSettings }, // Reset adventure settings
         currentAdventureId: null,
         storyLog: [],
         currentNarration: null,
         adventureSummary: null,
         inventory: [], // Start new character with empty inventory (will be populated in START_GAMEPLAY)
         isGeneratingSkillTree: false,
+        turnCount: 0, // Reset turn count
       };
     }
      case "UPDATE_CHARACTER": {
@@ -435,14 +439,15 @@ function gameReducer(state: GameState, action: Action): GameState {
       const repSummary = Object.entries(state.character.reputation).map(([faction, score]) => `${faction}: ${score}`).join(', ') || 'None';
       const npcRelSummary = Object.entries(state.character.npcRelationships).map(([npc, score]) => `${npc}: ${score}`).join(', ') || 'None'; // Add NPC relationship summary
       const inventoryString = startingItems.length > 0 ? startingItems.map(item => `${item.name}${item.quality ? ` (${item.quality})` : ''}`).join(', ') : 'Empty';
+      const turnCount = state.currentAdventureId ? state.turnCount : 0; // Load or reset turn count
 
 
-      let adventureDetails = `Adventure Mode: ${state.adventureSettings.adventureType}, ${state.adventureSettings.permanentDeath ? 'Permadeath' : 'Respawn'}`;
+      let adventureDetails = `Adventure Mode: ${state.adventureSettings.adventureType}, Difficulty: ${state.adventureSettings.difficulty}, ${state.adventureSettings.permanentDeath ? 'Permadeath' : 'Respawn'}`;
       if (state.adventureSettings.adventureType === "Custom") {
-          adventureDetails += `\nWorld: ${state.adventureSettings.worldType || '?'}\nQuest: ${state.adventureSettings.mainQuestline || '?'}\nDifficulty: ${state.adventureSettings.difficulty || '?'}`;
+          adventureDetails += `\nWorld: ${state.adventureSettings.worldType || '?'}\nQuest: ${state.adventureSettings.mainQuestline || '?'}`;
       }
 
-       const initialGameState = `Location: Starting Point\nInventory: ${inventoryString}\nStatus: Healthy (STA: ${state.character.currentStamina}/${state.character.maxStamina}, MANA: ${state.character.currentMana}/${state.character.maxMana})\nTime: Day 1, Morning\nQuest: None\nMilestones: None\nCharacter Name: ${state.character.name}\n${progressionSummary}\nReputation: ${repSummary}\nNPC Relationships: ${npcRelSummary}\nClass: ${state.character.class}\nTraits: ${state.character.traits.join(', ') || 'None'}\nKnowledge: ${state.character.knowledge.join(', ') || 'None'}\nBackground: ${state.character.background || 'None'}\nStats: STR ${state.character.stats.strength}, STA ${state.character.stats.stamina}, AGI ${state.character.stats.agility}\nDescription: ${charDesc}${aiDescString}\n${adventureDetails}\n${skillTreeSummary}\nLearned Skills: ${state.character.learnedSkills.map(s => s.name).join(', ') || 'None'}`;
+       const initialGameState = `Turn: ${turnCount}\nLocation: Starting Point\nInventory: ${inventoryString}\nStatus: Healthy (STA: ${state.character.currentStamina}/${state.character.maxStamina}, MANA: ${state.character.currentMana}/${state.character.maxMana})\nTime: Day 1, Morning\nQuest: None\nMilestones: None\nCharacter Name: ${state.character.name}\n${progressionSummary}\nReputation: ${repSummary}\nNPC Relationships: ${npcRelSummary}\nClass: ${state.character.class}\nTraits: ${state.character.traits.join(', ') || 'None'}\nKnowledge: ${state.character.knowledge.join(', ') || 'None'}\nBackground: ${state.character.background || 'None'}\nStats: STR ${state.character.stats.strength}, STA ${state.character.stats.stamina}, AGI ${state.character.stats.agility}\nDescription: ${charDesc}${aiDescString}\n${adventureDetails}\n${skillTreeSummary}\nLearned Skills: ${state.character.learnedSkills.map(s => s.name).join(', ') || 'None'}`;
 
       const adventureId = state.currentAdventureId || generateAdventureId();
 
@@ -456,6 +461,7 @@ function gameReducer(state: GameState, action: Action): GameState {
         currentGameStateString: state.currentAdventureId ? state.currentGameStateString : initialGameState,
         currentAdventureId: adventureId,
         isGeneratingSkillTree: state.currentAdventureId ? state.isGeneratingSkillTree : false,
+        turnCount: turnCount, // Set turn count
         character: {
             ...state.character,
             skillTree: state.currentAdventureId ? state.character.skillTree : state.character.skillTree,
@@ -552,8 +558,11 @@ function gameReducer(state: GameState, action: Action): GameState {
             storyLog: newLog,
             inventory: inventoryAfterNarration, // Keep current inventory unless explicitly changed
             currentGameStateString: action.payload.updatedGameState,
+            turnCount: state.turnCount + 1, // Increment turn count after processing narration
         };
     }
+     case "INCREMENT_TURN":
+        return { ...state, turnCount: state.turnCount + 1 };
      case "GRANT_XP": {
          if (!state.character) return state;
          const newXp = state.character.xp + action.payload;
@@ -628,16 +637,16 @@ function gameReducer(state: GameState, action: Action): GameState {
     case "END_ADVENTURE": {
         let finalLog = [...state.storyLog];
         let finalGameState = state.currentGameStateString;
-        // let finalInventoryNames = state.inventory.map(i => i.name); // Not needed anymore
         let finalCharacterState = state.character;
         let finalInventoryState = state.inventory; // Keep the full inventory objects
+        let finalTurnCount = state.turnCount;
 
         // Apply updates from the very last narration step if provided
         if (action.payload.finalNarration && (!state.currentNarration || action.payload.finalNarration.narration !== state.currentNarration.narration)) {
             const finalEntry: StoryLogEntry = { ...action.payload.finalNarration, timestamp: action.payload.finalNarration.timestamp || Date.now() };
             finalLog.push(finalEntry);
             finalGameState = action.payload.finalNarration.updatedGameState;
-            // Inventory updates are handled via specific actions, not directly from final narration payload usually
+            finalTurnCount += 1; // Increment turn count for the final action
 
             if (state.character) {
                  // Apply final character updates from the last narration step
@@ -693,7 +702,6 @@ function gameReducer(state: GameState, action: Action): GameState {
             console.log("Final narration not added or same as current.");
         }
 
-        // finalInventoryState is the inventory *before* the end is processed
         let updatedSavedAdventures = state.savedAdventures;
         // Automatically save the ended adventure
         if (finalCharacterState && state.currentAdventureId) {
@@ -708,6 +716,7 @@ function gameReducer(state: GameState, action: Action): GameState {
                 inventory: finalInventoryState, // Save the inventory as it was at the end
                 statusBeforeSave: "AdventureSummary", // Mark as ended
                 adventureSummary: action.payload.summary,
+                turnCount: finalTurnCount, // Save the final turn count
             };
             updatedSavedAdventures = state.savedAdventures.filter(adv => adv.id !== endedAdventure.id);
             updatedSavedAdventures.push(endedAdventure);
@@ -722,6 +731,7 @@ function gameReducer(state: GameState, action: Action): GameState {
             adventureSummary: action.payload.summary,
             storyLog: finalLog, // Keep the log for the summary screen
             inventory: finalInventoryState, // Keep final inventory for summary
+            turnCount: finalTurnCount, // Keep final turn count for summary
             currentNarration: null, // Clear current narration
             savedAdventures: updatedSavedAdventures,
             isGeneratingSkillTree: false,
@@ -752,6 +762,7 @@ function gameReducer(state: GameState, action: Action): GameState {
         inventory: state.inventory, // Save full inventory objects
         statusBeforeSave: state.status, // Save the status before saving (should be Gameplay)
         adventureSummary: state.adventureSummary, // Usually null when saving during gameplay
+        turnCount: state.turnCount, // Save current turn count
       };
       const savesWithoutCurrent = state.savedAdventures.filter(adv => adv.id !== currentSave.id);
       const newSaves = [...savesWithoutCurrent, currentSave];
@@ -825,6 +836,8 @@ function gameReducer(state: GameState, action: Action): GameState {
            magicalEffect: item.magicalEffect || undefined,
        }));
 
+        const loadedTurnCount = typeof adventureToLoad.turnCount === 'number' ? adventureToLoad.turnCount : 0; // Load turn count or default to 0
+
 
       // If loading an adventure that was previously finished (on summary screen)
       if (adventureToLoad.statusBeforeSave === "AdventureSummary") {
@@ -836,6 +849,7 @@ function gameReducer(state: GameState, action: Action): GameState {
               adventureSummary: adventureToLoad.adventureSummary,
               storyLog: adventureToLoad.storyLog, // Show the full log
               inventory: validatedInventory, // Show final inventory
+              turnCount: loadedTurnCount, // Load turn count for summary view
               currentAdventureId: adventureToLoad.id,
               adventureSettings: adventureToLoad.adventureSettings, // Load settings for context
               isGeneratingSkillTree: false,
@@ -850,6 +864,7 @@ function gameReducer(state: GameState, action: Action): GameState {
               adventureSettings: adventureToLoad.adventureSettings, // Load settings
               storyLog: adventureToLoad.storyLog,
               inventory: validatedInventory, // Load inventory
+              turnCount: loadedTurnCount, // Load turn count
               currentGameStateString: adventureToLoad.currentGameStateString,
               currentNarration: adventureToLoad.storyLog.length > 0 ? adventureToLoad.storyLog[adventureToLoad.storyLog.length - 1] : null, // Set current narration
               adventureSummary: null, // No summary for ongoing game
@@ -970,7 +985,6 @@ function gameReducer(state: GameState, action: Action): GameState {
         }
     // --- Inventory Actions ---
     case "ADD_ITEM": {
-        // Simple add, assuming quantity 1 for now
         const newItem = {
             description: "An item acquired during your journey.", // Default description
             quality: "Common" as ItemQuality, // Default quality
@@ -1103,6 +1117,8 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
                               magicalEffect: item.magicalEffect || undefined,
                           }));
 
+                         const validatedTurnCount = typeof adv.turnCount === 'number' ? adv.turnCount : 0; // Validate turn count
+
 
                          return {
                            ...adv,
@@ -1114,12 +1130,14 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
                                ...initialState.adventureSettings,
                                ...(adv.adventureSettings || {}),
                                adventureType: adv.adventureSettings?.adventureType || null, // Ensure adventureType is valid or null
+                               difficulty: adv.adventureSettings?.difficulty || 'Normal', // Default difficulty if missing
                            },
                            storyLog: Array.isArray(adv.storyLog) ? adv.storyLog : [],
                            currentGameStateString: adv.currentGameStateString || "",
                            inventory: validatedAdvInventory, // Use validated inventory
                            statusBeforeSave: adv.statusBeforeSave || "Gameplay",
                            adventureSummary: adv.adventureSummary || null,
+                           turnCount: validatedTurnCount, // Use validated turn count
                          };
                      }).filter(adv => adv.character.name && adv.character.class); // Ensure character has name and class
 
@@ -1154,6 +1172,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
       const inventoryString = state.inventory.map(i => `${i.name}${i.quality ? ` (${i.quality})` : ''}`).join(', ') || 'Empty';
      console.log("Game State Updated:", {
         status: state.status,
+        turn: state.turnCount, // Log turn count
         character: state.character?.name,
         level: state.character?.level,
         xp: `${state.character?.xp}/${state.character?.xpToNextLevel}`,
@@ -1186,3 +1205,4 @@ export const useGame = () => {
   }
   return context;
 };
+

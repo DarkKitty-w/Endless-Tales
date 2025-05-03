@@ -9,9 +9,16 @@ import { Input } from "@/components/ui/input"; // Import Input
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings, Globe, ScrollText, BarChart } from "lucide-react"; // Added icons
+import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings, Globe, ScrollText, BarChart, ShieldAlert } from "lucide-react"; // Added icons
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert"; // Import Alert
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+  } from "@/components/ui/select" // Import Select components
 
 export function AdventureSetup() {
   const { state, dispatch } = useGame();
@@ -21,7 +28,7 @@ export function AdventureSetup() {
   // State for custom adventure parameters
   const [worldType, setWorldType] = useState<string>(state.adventureSettings.worldType ?? "");
   const [mainQuestline, setMainQuestline] = useState<string>(state.adventureSettings.mainQuestline ?? "");
-  const [difficulty, setDifficulty] = useState<string>(state.adventureSettings.difficulty ?? "Normal");
+  const [difficulty, setDifficulty] = useState<string>(state.adventureSettings.difficulty ?? "Normal"); // Use difficulty from context
   const [customError, setCustomError] = useState<string | null>(null);
 
   const validateCustomSettings = (): boolean => {
@@ -34,11 +41,8 @@ export function AdventureSetup() {
              setCustomError("Please specify a Main Questline.");
              return false;
         }
-        if (!difficulty.trim()) {
-             setCustomError("Please specify a Difficulty.");
-             return false;
-        }
      }
+     // Difficulty is now always selected via dropdown, no need for trim validation
      setCustomError(null); // Clear error if validation passes
      return true;
   };
@@ -66,10 +70,12 @@ export function AdventureSetup() {
          return;
      }
 
+     // Difficulty is now always part of the settings
     const settingsPayload = {
       adventureType,
       permanentDeath,
-      ...(adventureType === "Custom" && { worldType, mainQuestline, difficulty }),
+      difficulty, // Include difficulty always
+      ...(adventureType === "Custom" && { worldType, mainQuestline }),
     };
 
     dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload });
@@ -77,7 +83,7 @@ export function AdventureSetup() {
 
     const description = adventureType === "Custom"
       ? `Get ready for a custom journey in ${worldType} with quest "${mainQuestline}" (${difficulty}).`
-      : `Get ready for a randomized journey.`;
+      : `Get ready for a randomized ${difficulty} journey.`;
 
     toast({
         title: "Adventure Starting!",
@@ -125,7 +131,7 @@ export function AdventureSetup() {
                  <RadioGroupItem value="Custom" id="custom" className="sr-only" aria-label="Custom Adventure" />
                  <Swords className="w-8 h-8 mb-2 text-primary" />
                  <span className="font-medium">Custom</span>
-                 <p className="text-sm text-muted-foreground text-center mt-1">Define world type, main quest, and difficulty.</p>
+                 <p className="text-sm text-muted-foreground text-center mt-1">Define world type and main quest.</p>
               </Label>
             </RadioGroup>
 
@@ -158,19 +164,28 @@ export function AdventureSetup() {
                             className={customError && !mainQuestline.trim() ? 'border-destructive' : ''}
                        />
                     </div>
-                   <div className="space-y-2">
-                       <Label htmlFor="difficulty" className="flex items-center gap-1"><BarChart className="w-4 h-4"/> Difficulty</Label>
-                       <Input
-                           id="difficulty"
-                           value={difficulty}
-                           onChange={(e) => setDifficulty(e.target.value)}
-                           placeholder="e.g., Easy, Normal, Hard, Nightmare"
-                           className={customError && !difficulty.trim() ? 'border-destructive' : ''}
-                       />
-                    </div>
+                   {/* Difficulty is now selected below, outside this conditional block */}
                 </div>
             )}
           </div>
+
+           {/* Difficulty Selection - Always visible */}
+           <div className="space-y-4 border-t border-foreground/10 pt-6">
+                <Label htmlFor="difficulty-select" className="text-xl font-semibold flex items-center gap-2"><ShieldAlert className="w-5 h-5"/>Select Difficulty</Label>
+                <Select value={difficulty} onValueChange={setDifficulty}>
+                    <SelectTrigger id="difficulty-select" className="w-full">
+                        <SelectValue placeholder="Select difficulty..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Easy">Easy - Fewer challenges, more forgiving.</SelectItem>
+                        <SelectItem value="Normal">Normal - A balanced experience.</SelectItem>
+                        <SelectItem value="Hard">Hard - Tougher encounters, requires strategy.</SelectItem>
+                        <SelectItem value="Nightmare">Nightmare - Extreme challenge, for veterans.</SelectItem>
+                        {/* Add more difficulties if desired */}
+                    </SelectContent>
+                </Select>
+                <p className="text-sm text-muted-foreground">Difficulty affects challenge level, AI behavior, and potential events.</p>
+            </div>
 
           {/* Permanent Death Option */}
           <div className="space-y-4 border-t border-foreground/10 pt-6">

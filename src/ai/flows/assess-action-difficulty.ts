@@ -26,6 +26,8 @@ const AssessActionDifficultyInputSchema = z.object({
     characterCapabilities: z.string().describe('A summary of the character\'s relevant stats, skills, traits, knowledge, and equipment.'),
     currentSituation: z.string().describe('A brief description of the immediate environment, ongoing events, and any relevant obstacles or NPCs.'),
     gameStateSummary: z.string().describe('Broader context including location, major quest progress, significant items, and achieved milestones.'),
+    gameDifficulty: z.string().describe("The overall game difficulty setting (e.g., Easy, Normal, Hard, Nightmare). This should influence the baseline difficulty."),
+    turnCount: z.number().describe("The current turn number. Higher turn counts might imply more complex situations or fatigued characters."),
 });
 
 const AssessActionDifficultyOutputSchema = z.object({
@@ -49,7 +51,10 @@ const assessActionDifficultyPrompt = ai.definePrompt({
   name: 'assessActionDifficultyPrompt',
   input: { schema: AssessActionDifficultyInputSchema },
   output: { schema: AssessActionDifficultyOutputSchema },
-  prompt: `You are an expert Game Master AI for the text adventure "Endless Tales". Your task is to assess the difficulty of a player's intended action based on their capabilities and the current game situation.
+  prompt: `You are an expert Game Master AI for the text adventure "Endless Tales". Your task is to assess the difficulty of a player's intended action based on their capabilities, the current game situation, and overall game settings.
+
+**Overall Game Difficulty:** {{{gameDifficulty}}} (Adjust baseline difficulty: Harder settings make actions generally tougher, Easier settings make them simpler).
+**Current Turn:** {{{turnCount}}} (Consider fatigue or escalating complexity in later turns).
 
 Consider the following factors:
 1.  **Player Action:** What is the player *specifically* trying to achieve?
@@ -62,15 +67,15 @@ Consider the following factors:
 {{{playerAction}}}
 
 **Assessment Task:**
-Determine the difficulty of this action using **ONLY** the following levels: Trivial, Easy, Normal, Hard, Very Hard, Impossible. Provide a brief reasoning based on the factors above. Suggest an appropriate dice type (d6, d10, d20, d100, None) corresponding to the difficulty (None for Trivial/Impossible).
+Determine the difficulty of this action using **ONLY** the following levels: Trivial, Easy, Normal, Hard, Very Hard, Impossible. Provide a brief reasoning based on the factors above, INCLUDING the game difficulty setting. Suggest an appropriate dice type (d6, d10, d20, d100, None) corresponding to the difficulty (None for Trivial/Impossible). Remember that higher game difficulty increases the chance of 'Hard' or 'Very Hard' assessments for non-trivial actions.
 
 **Difficulty Guidelines & Dice:**
-*   **Trivial:** Obvious success, mundane action (e.g., walk across an empty room, look at own hands). Dice: None.
-*   **Easy:** Minor challenge, likely success (e.g., climb a low wall, simple persuasion). Dice: d6 or d10.
-*   **Normal:** Standard challenge, requires competence (e.g., fight a common enemy, pick a simple lock, cross a tricky path). Dice: d10 or d20.
-*   **Hard:** Significant challenge, requires skill/luck (e.g., fight a tough opponent, decipher complex text, persuade a hostile guard). Dice: d20 or d100.
-*   **Very Hard:** Borderline possible, requires exceptional skill/luck (e.g., fight a boss monster, cast a very complex spell, achieve a major political coup). Dice: d100.
-*   **Impossible:** The action cannot succeed as described, given the character's current state and the game world's rules (e.g., violate fundamental laws of physics/magic without justification, achieve god-like power instantly). Dice: None.
+*   **Trivial:** Obvious success, mundane action. Dice: None.
+*   **Easy:** Minor challenge, likely success. Dice: d6 or d10.
+*   **Normal:** Standard challenge, requires competence. Dice: d10 or d20.
+*   **Hard:** Significant challenge, requires skill/luck. Dice: d20 or d100.
+*   **Very Hard:** Borderline possible, requires exceptional skill/luck. Dice: d100.
+*   **Impossible:** The action cannot succeed as described. Dice: None.
 
 **Output Format:** Respond ONLY with the JSON object containing 'difficulty', 'reasoning', and 'suggestedDice'. Ensure the JSON is valid.
 `,
@@ -91,11 +96,27 @@ const assessActionDifficultyFlow = ai.defineFlow<
 
      if (!output || !output.difficulty || !output.reasoning || !output.suggestedDice) {
         console.error("AI difficulty assessment output missing or invalid:", output);
-        // Fallback to a default 'Normal' difficulty if AI fails
+        // Fallback based on game difficulty if AI fails
+        let fallbackDifficulty: DifficultyLevel = "Normal";
+        let fallbackDice: "d6" | "d10" | "d20" | "d100" | "None" = "d10";
+        switch(input.gameDifficulty?.toLowerCase()) {
+            case 'easy':
+                fallbackDifficulty = "Easy";
+                fallbackDice = "d6";
+                break;
+            case 'hard':
+            case 'nightmare':
+                fallbackDifficulty = "Hard";
+                fallbackDice = "d20";
+                break;
+            default: // Normal or unknown
+                fallbackDifficulty = "Normal";
+                fallbackDice = "d10";
+        }
         return {
-            difficulty: "Normal",
-            reasoning: "AI assessment failed, assuming normal difficulty.",
-            suggestedDice: "d10",
+            difficulty: fallbackDifficulty,
+            reasoning: "AI assessment failed, assuming difficulty based on game settings.",
+            suggestedDice: fallbackDice,
         };
      }
 
@@ -103,3 +124,4 @@ const assessActionDifficultyFlow = ai.defineFlow<
      return output;
   }
 );
+
