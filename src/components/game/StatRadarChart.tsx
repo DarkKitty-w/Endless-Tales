@@ -1,4 +1,3 @@
-// src/components/game/StatRadarChart.tsx
 "use client";
 
 import * as React from "react";
