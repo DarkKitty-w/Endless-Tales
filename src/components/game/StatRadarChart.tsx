@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useState, useCallback, useEffect } from "react";
 import { Label, PolarGrid, PolarRadiusAxis, Radar, RadarChart, PolarAngleAxis, Text } from "recharts"; // Added Text
-import type { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/game/CardboardCard";
+import type { CardContent, CardHeader, CardTitle, CardDescription } from "@/components/game/CardboardCard";
 import type { CharacterStats } from "@/types/game-types"; // Import CharacterStats type
 import { cn } from "@/lib/utils"; // Utility function
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon, HandDrawnMagicIcon, HandDrawnHistoryIcon } from "@/components/icons/HandDrawnIcons"; // Import icons
@@ -95,12 +95,12 @@ const StatRadarChart: React.FC<StatRadarChartProps> = ({ stats, setStats, remain
     const Icon = statIcons[payload.dataKey as keyof typeof statIcons] || null; // Find icon or default
 
     return (
-      
+        <g>
           {Icon ? <Icon className="inline mr-1.5 h-4 w-4" /> : null}
           <Text x={labelX} y={labelY} textAnchor={textAnchor} verticalAnchor="middle" className="text-sm fill-muted-foreground">
             {payload.name} ({value}) {/* Show stat and the allocated value */}
           </Text>
-        
+        </g>
     );
   };
 
