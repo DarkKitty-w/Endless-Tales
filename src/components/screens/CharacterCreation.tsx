@@ -21,6 +21,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
+import { Separator } from "../ui/separator"; // Import Separator
 
 // --- Zod Schema for Validation ---
 const baseCharacterSchema = z.object({
@@ -513,7 +514,8 @@ export function CharacterCreation() {
                     </Tabs>
 
                     {/* --- Stat Allocation --- */}
-                     <div className="space-y-6 border-t border-foreground/10 pt-6">
+                    <Separator />
+                     <div className="space-y-4">
                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
                              <h3 className="text-xl font-semibold">Allocate Stats ({TOTAL_STAT_POINTS} Total Points)</h3>
                              <div className="flex items-center gap-4">
@@ -532,55 +534,55 @@ export function CharacterCreation() {
                              </div>
                          </div>
 
-                         {/* Stat Sliders */}
-                         <div className="space-y-4">
-                            {/* Strength Slider */}
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <Label htmlFor="strength" className="flex items-center gap-1">
-                                        <HandDrawnStrengthIcon className="w-4 h-4 text-destructive" /> Strength
+                         {/* Stat Sliders in a Grid Layout */}
+                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
+                             {/* Strength Card */}
+                             <CardboardCard className="p-4 border border-foreground/10 bg-muted/20">
+                                <div className="flex justify-between items-center mb-2">
+                                    <Label htmlFor="strength" className="flex items-center gap-1 font-medium">
+                                        <HandDrawnStrengthIcon className="w-5 h-5 text-destructive" /> Strength
                                     </Label>
-                                    <span className="text-sm font-bold">{stats.strength}</span>
+                                    <span className="text-lg font-bold">{stats.strength}</span>
                                 </div>
                                 <Slider
                                     id="strength"
                                     min={MIN_STAT_VALUE}
-                                    max={getMaxSliderValue('strength')} // Use dynamic max
+                                    max={getMaxSliderValue('strength')}
                                     step={1}
                                     value={[stats.strength]}
                                     onValueChange={(value) => handleStatChange('strength', value[0])}
                                     aria-label="Strength slider"
                                 />
-                                <p className="text-xs text-muted-foreground text-center">Min: {MIN_STAT_VALUE} / Max: {MAX_STAT_VALUE}</p>
-                            </div>
+                                <p className="text-xs text-muted-foreground text-center mt-2">Min: {MIN_STAT_VALUE} / Max: {MAX_STAT_VALUE}</p>
+                             </CardboardCard>
 
-                            {/* Stamina Slider */}
-                             <div className="space-y-2">
-                                 <div className="flex justify-between items-center">
-                                     <Label htmlFor="stamina" className="flex items-center gap-1">
-                                         <HandDrawnStaminaIcon className="w-4 h-4 text-green-600" /> Stamina
-                                     </Label>
-                                     <span className="text-sm font-bold">{stats.stamina}</span>
-                                 </div>
-                                 <Slider
-                                     id="stamina"
-                                     min={MIN_STAT_VALUE}
-                                     max={getMaxSliderValue('stamina')}
-                                     step={1}
-                                     value={[stats.stamina]}
-                                     onValueChange={(value) => handleStatChange('stamina', value[0])}
-                                     aria-label="Stamina slider"
-                                 />
-                                 <p className="text-xs text-muted-foreground text-center">Min: {MIN_STAT_VALUE} / Max: {MAX_STAT_VALUE}</p>
-                             </div>
+                             {/* Stamina Card */}
+                             <CardboardCard className="p-4 border border-foreground/10 bg-muted/20">
+                                <div className="flex justify-between items-center mb-2">
+                                    <Label htmlFor="stamina" className="flex items-center gap-1 font-medium">
+                                        <HandDrawnStaminaIcon className="w-5 h-5 text-green-600" /> Stamina
+                                    </Label>
+                                    <span className="text-lg font-bold">{stats.stamina}</span>
+                                </div>
+                                <Slider
+                                    id="stamina"
+                                    min={MIN_STAT_VALUE}
+                                    max={getMaxSliderValue('stamina')}
+                                    step={1}
+                                    value={[stats.stamina]}
+                                    onValueChange={(value) => handleStatChange('stamina', value[0])}
+                                    aria-label="Stamina slider"
+                                />
+                                <p className="text-xs text-muted-foreground text-center mt-2">Min: {MIN_STAT_VALUE} / Max: {MAX_STAT_VALUE}</p>
+                             </CardboardCard>
 
-                            {/* Agility Slider */}
-                             <div className="space-y-2">
-                                 <div className="flex justify-between items-center">
-                                     <Label htmlFor="agility" className="flex items-center gap-1">
-                                         <HandDrawnAgilityIcon className="w-4 h-4 text-blue-500" /> Agility
+                             {/* Agility Card */}
+                            <CardboardCard className="p-4 border border-foreground/10 bg-muted/20">
+                                 <div className="flex justify-between items-center mb-2">
+                                     <Label htmlFor="agility" className="flex items-center gap-1 font-medium">
+                                         <HandDrawnAgilityIcon className="w-5 h-5 text-blue-500" /> Agility
                                      </Label>
-                                     <span className="text-sm font-bold">{stats.agility}</span>
+                                     <span className="text-lg font-bold">{stats.agility}</span>
                                  </div>
                                  <Slider
                                      id="agility"
@@ -591,9 +593,8 @@ export function CharacterCreation() {
                                      onValueChange={(value) => handleStatChange('agility', value[0])}
                                      aria-label="Agility slider"
                                  />
-                                 <p className="text-xs text-muted-foreground text-center">Min: {MIN_STAT_VALUE} / Max: {MAX_STAT_VALUE}</p>
-                             </div>
-
+                                <p className="text-xs text-muted-foreground text-center mt-2">Min: {MIN_STAT_VALUE} / Max: {MAX_STAT_VALUE}</p>
+                             </CardboardCard>
                          </div>
 
                         <p className={`text-sm font-medium text-center mt-4 ${remainingPoints < 0 ? 'text-destructive animate-pulse' : remainingPoints > 0 ? 'text-orange-500 dark:text-orange-400' : 'text-primary'}`}>
