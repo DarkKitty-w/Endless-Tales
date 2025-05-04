@@ -21,8 +21,8 @@ import { generateCharacterDescription, type GenerateCharacterDescriptionOutput }
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import { Separator } from "@/components/ui/separator"; // Import Separator
-import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
+import { Separator } from "@/components/ui/separator";
+import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants";
 
 
 // --- Zod Schema for Validation ---
@@ -104,20 +104,14 @@ export function CharacterCreation() {
             setRemainingPoints(TOTAL_STAT_POINTS - currentTotal);
             return tentativeStats;
         } else {
-            // Don't show toast if the value hasn't actually changed due to clamping or reaching max
-             if (clampedValue !== prevStats[statName] && currentTotal > TOTAL_STAT_POINTS) {
-               toast({
-                 title: "Stat Limit Reached",
-                 description: `Cannot exceed ${TOTAL_STAT_POINTS} total stat points.`,
-                 variant: "destructive",
-               });
-             }
-            // Return previous state if allocation exceeds total points
+            // If the allocation exceeds total points, don't update the state
+            // and visually indicate the error via the remaining points display.
+            // No need for a toast notification anymore.
             setRemainingPoints(TOTAL_STAT_POINTS - (prevStats.strength + prevStats.stamina + prevStats.agility));
             return prevStats;
         }
     });
- }, [toast]);
+ }, [setStats, setRemainingPoints]); // Removed toast
 
 
  const randomizeStats = useCallback(() => {
@@ -390,6 +384,12 @@ export function CharacterCreation() {
        trigger(); // Re-validate everything after schema change
    }, [creationType, reset, watch, setValue, trigger]);
 
+  // Update slider initial position when component mounts or character data changes
+  useEffect(() => {
+    setStats(initialStats);
+    setRemainingPoints(initialPoints);
+  }, [initialStats, initialPoints]);
+
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
@@ -610,6 +610,7 @@ export function CharacterCreation() {
                              </CardboardCard>
                          </div>
 
+                         {/* Remaining Points Indicator */}
                         <p className={`text-sm font-medium text-center mt-4 ${remainingPoints < 0 ? 'text-destructive animate-pulse' : remainingPoints > 0 ? 'text-orange-500 dark:text-orange-400' : 'text-primary'}`}>
                            {remainingPoints < 0 ? `Overallocated by ${Math.abs(remainingPoints)} points!` : `${remainingPoints} points remaining.`}
                         </p>
