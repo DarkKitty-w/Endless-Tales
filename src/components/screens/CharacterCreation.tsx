@@ -1,8 +1,9 @@
+
 // src/components/screens/CharacterCreation.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useGame } from "@/context/GameContext";
@@ -20,8 +21,9 @@ import { generateCharacterDescription, type GenerateCharacterDescriptionOutput }
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
+import { Separator } from "@/components/ui/separator"; // Import Separator
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
-import { Separator } from "../ui/separator"; // Import Separator
+
 
 // --- Zod Schema for Validation ---
 const baseCharacterSchema = z.object({
@@ -75,7 +77,7 @@ export function CharacterCreation() {
   // Determine the current schema based on the selected tab
   const currentSchema = creationType === "basic" ? basicCreationSchema : textCreationSchema;
 
-  const { register, handleSubmit, control, formState: { errors }, reset, watch, setValue, trigger } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors }, reset, watch, setValue, trigger } = useForm<FormData>({
      resolver: zodResolver(currentSchema),
      mode: "onChange",
      defaultValues: { // Populate with existing character data if available, otherwise defaults
@@ -102,14 +104,15 @@ export function CharacterCreation() {
             setRemainingPoints(TOTAL_STAT_POINTS - currentTotal);
             return tentativeStats;
         } else {
-            // Don't show toast if the value hasn't actually changed due to clamping
-            if (tentativeStats[statName] !== prevStats[statName]) {
+            // Don't show toast if the value hasn't actually changed due to clamping or reaching max
+             if (clampedValue !== prevStats[statName] && currentTotal > TOTAL_STAT_POINTS) {
                toast({
                  title: "Stat Limit Reached",
                  description: `Cannot exceed ${TOTAL_STAT_POINTS} total stat points.`,
                  variant: "destructive",
                });
              }
+            // Return previous state if allocation exceeds total points
             setRemainingPoints(TOTAL_STAT_POINTS - (prevStats.strength + prevStats.stamina + prevStats.agility));
             return prevStats;
         }
@@ -140,10 +143,21 @@ export function CharacterCreation() {
     // Final check to ensure correctness - adjust if somehow total is wrong
     const finalTotal = newStats.strength + newStats.stamina + newStats.agility;
     if (finalTotal !== TOTAL_STAT_POINTS) {
-        console.error("Stat randomization resulted in an incorrect total:", finalTotal, newStats, "Resetting to 5/5/5.");
-        // Simple reset if error occurs, could implement a correction logic instead
-        newStats = { strength: 5, stamina: 5, agility: 5 };
-        setRemainingPoints(0);
+        console.error("Stat randomization resulted in an incorrect total:", finalTotal, newStats, "Resetting to default.");
+        // Simple reset if error occurs
+        const defaultPoints = Math.floor(TOTAL_STAT_POINTS / 3);
+        const remainder = TOTAL_STAT_POINTS % 3;
+        newStats = {
+            strength: defaultPoints + (remainder > 0 ? 1 : 0),
+            stamina: defaultPoints + (remainder > 1 ? 1 : 0),
+            agility: defaultPoints
+        };
+        // Ensure min/max bounds are still respected after reset
+        newStats.strength = Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, newStats.strength));
+        newStats.stamina = Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, newStats.stamina));
+        newStats.agility = Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, newStats.agility));
+        // Recalculate remaining points after reset/correction
+        setRemainingPoints(TOTAL_STAT_POINTS - (newStats.strength + newStats.stamina + newStats.agility));
     } else {
        setRemainingPoints(0);
     }
@@ -157,11 +171,11 @@ export function CharacterCreation() {
   const randomizeAll = useCallback(() => {
     setRandomizedAllComplete(false); // Start animation
 
-    const randomNames = ["Anya", "Borin", "Carys", "Darian", "Elara", "Fendrel", "Gorok"];
+    const randomNames = ["Anya", "Borin", "Carys", "Darian", "Elara", "Fendrel", "Gorok", "Silas", "Lyra", "Roric"];
     const randomClasses = ["Warrior", "Rogue", "Mage", "Scout", "Scholar", "Wanderer", "Guard", "Tinkerer", "Healer", "Bard", "Adventurer"]; // Added Adventurer
-    const randomTraitsPool = ["Brave", "Curious", "Cautious", "Impulsive", "Loyal", "Clever", "Resourceful", "Quiet", "Stern", "Generous", "Optimistic", "Pessimistic"];
-    const randomKnowledgePool = ["Herbalism", "Local Lore", "Survival", "Trading", "Ancient Runes", "Beasts", "Smithing", "First Aid", "Storytelling", "Navigation", "History", "Magic"];
-    const randomBackgrounds = ["Farmer", "Orphan", "Noble Exile", "Street Urchin", "Acolyte", "Guard", "Merchant's Child", "Hermit", "Former Soldier", "Wanderer"];
+    const randomTraitsPool = ["Brave", "Curious", "Cautious", "Impulsive", "Loyal", "Clever", "Resourceful", "Quiet", "Stern", "Generous", "Optimistic", "Pessimistic", "Sarcastic", "Gruff"];
+    const randomKnowledgePool = ["Herbalism", "Local Lore", "Survival", "Trading", "Ancient Runes", "Beasts", "Smithing", "First Aid", "Storytelling", "Navigation", "History", "Magic", "Alchemy", "Lockpicking"];
+    const randomBackgrounds = ["Farmer", "Orphan", "Noble Exile", "Street Urchin", "Acolyte", "Guard", "Merchant's Child", "Hermit", "Former Soldier", "Wanderer", "Blacksmith Apprentice", "Scribe"];
     const randomDescriptions = [
       "A weary traveler with keen eyes and a rough, patched cloak, seeking forgotten paths.",
       "A cheerful youth from a small village, always eager for adventure, perhaps a bit naively.",
@@ -206,15 +220,16 @@ export function CharacterCreation() {
     }
 
     randomizeStats(); // Randomize stats as well
-    trigger(); // Trigger validation after setting values
+
 
     // Show completed animation after a short delay
     setTimeout(() => {
         setRandomizedAllComplete(true);
+         trigger(); // Trigger validation after setting values AND animation delay
     }, 700); // Delay matches animation duration
 
 
-  }, [creationType, reset, setValue, randomizeStats, trigger, watch]); // Removed toast from dependencies
+  }, [creationType, reset, setValue, randomizeStats, trigger, watch]); // Removed toast dependency
 
 
   // Watch form values for dynamic checks
@@ -254,12 +269,18 @@ export function CharacterCreation() {
         }
         if (result.inferredTraits && result.inferredTraits.length > 0) {
             setValue("traits", result.inferredTraits.join(', '), { shouldValidate: true, shouldDirty: true });
+        } else {
+            setValue("traits", "", { shouldValidate: true, shouldDirty: true }); // Clear if AI didn't provide
         }
         if (result.inferredKnowledge && result.inferredKnowledge.length > 0) {
             setValue("knowledge", result.inferredKnowledge.join(', '), { shouldValidate: true, shouldDirty: true });
+        } else {
+            setValue("knowledge", "", { shouldValidate: true, shouldDirty: true }); // Clear if AI didn't provide
         }
         if (result.inferredBackground) {
             setValue("background", result.inferredBackground, { shouldValidate: true, shouldDirty: true });
+        } else {
+            setValue("background", "", { shouldValidate: true, shouldDirty: true }); // Clear if AI didn't provide
         }
 
         // Store the raw AI-generated description separately in context if needed for display elsewhere
@@ -304,41 +325,43 @@ export function CharacterCreation() {
 
     if (data.creationType === 'text') {
       // Even in text mode, use the potentially AI-populated basic fields if available
-      const currentClass = watch("class");
+      const currentClass = watch("class") || "Adventurer"; // Use inferred/edited or default
       const currentTraits = watch("traits")?.split(',').map(t => t.trim()).filter(Boolean) ?? [];
       const currentKnowledge = watch("knowledge")?.split(',').map(k => k.trim()).filter(Boolean) ?? [];
-      const currentBackground = watch("background");
+      const currentBackground = watch("background") || "";
       const currentDescription = watch("description"); // Get the potentially AI-updated description
 
       characterData = {
         name: data.name,
         description: currentDescription, // Use the value from the form field
-        class: currentClass || "Adventurer", // Use inferred/edited or default
+        class: currentClass,
         traits: currentTraits,
         knowledge: currentKnowledge,
-        background: currentBackground || "",
+        background: currentBackground,
         stats: stats,
         // aiGeneratedDescription is set via dispatch and read from context state later if needed
       };
     } else { // Basic creation (data.creationType === 'basic')
         const traitsArray = data.traits?.split(',').map(t => t.trim()).filter(Boolean) ?? [];
         const knowledgeArray = data.knowledge?.split(',').map(k => k.trim()).filter(Boolean) ?? [];
+        const currentClass = data.class?.trim() ?? "Adventurer";
+        const currentBackground = data.background?.trim() ?? "";
 
         // Construct a simple description string from basic fields *only if description field is empty*
         // If the user switched from text -> basic after AI gen, keep the description
         let finalDescription = watch("description");
         if (!finalDescription) {
-             finalDescription = `A ${data.class || 'Adventurer'} ${data.background ? `with a background as a ${data.background}` : ''}, possessing traits like ${traitsArray.join(', ') || 'none'} and knowledge of ${knowledgeArray.join(', ') || 'nothing specific'}.`;
+             finalDescription = `A ${currentClass} ${currentBackground ? `with a background as a ${currentBackground}` : ''}, possessing traits like ${traitsArray.join(', ') || 'none'} and knowledge of ${knowledgeArray.join(', ') || 'nothing specific'}.`;
         }
 
 
         characterData = {
             name: data.name,
-            class: data.class?.trim() ?? "Adventurer",
+            class: currentClass,
             description: finalDescription, // Use existing description or the constructed one
             traits: traitsArray,
             knowledge: knowledgeArray,
-            background: data.background?.trim() ?? "",
+            background: currentBackground,
             stats: stats,
         };
     }
@@ -366,16 +389,6 @@ export function CharacterCreation() {
        setValue("creationType", creationType);
        trigger(); // Re-validate everything after schema change
    }, [creationType, reset, watch, setValue, trigger]);
-
-
-  // Update slider max values dynamically based on remaining points
-   const getMaxSliderValue = useCallback((statName: keyof CharacterStats) => {
-     const otherStatsTotal = Object.entries(stats)
-       .filter(([key]) => key !== statName)
-       .reduce((sum, [, value]) => sum + (value || MIN_STAT_VALUE), 0);
-     const maxAllowed = TOTAL_STAT_POINTS - otherStatsTotal;
-     return Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, maxAllowed));
-   }, [stats]);
 
 
   return (
@@ -547,7 +560,7 @@ export function CharacterCreation() {
                                 <Slider
                                     id="strength"
                                     min={MIN_STAT_VALUE}
-                                    max={getMaxSliderValue('strength')}
+                                    max={MAX_STAT_VALUE} // Keep slider visually consistent (1-10)
                                     step={1}
                                     value={[stats.strength]}
                                     onValueChange={(value) => handleStatChange('strength', value[0])}
@@ -567,7 +580,7 @@ export function CharacterCreation() {
                                 <Slider
                                     id="stamina"
                                     min={MIN_STAT_VALUE}
-                                    max={getMaxSliderValue('stamina')}
+                                    max={MAX_STAT_VALUE} // Keep slider visually consistent (1-10)
                                     step={1}
                                     value={[stats.stamina]}
                                     onValueChange={(value) => handleStatChange('stamina', value[0])}
@@ -587,7 +600,7 @@ export function CharacterCreation() {
                                  <Slider
                                      id="agility"
                                      min={MIN_STAT_VALUE}
-                                     max={getMaxSliderValue('agility')}
+                                     max={MAX_STAT_VALUE} // Keep slider visually consistent (1-10)
                                      step={1}
                                      value={[stats.agility]}
                                      onValueChange={(value) => handleStatChange('agility', value[0])}
@@ -613,10 +626,14 @@ export function CharacterCreation() {
                                    onClick={randomizeAll}
                                    variant="secondary"
                                    aria-label="Randomize All Character Fields and Stats"
+                                   className="relative overflow-hidden" // Needed for positioning the checkmark
                                 >
-                                    <RotateCcw className={`mr-2 h-4 w-4 ${!randomizedAllComplete ? 'animate-spin duration-700' : ''}`} /> {/* Slower animation */}
+                                    <RotateCcw className={`mr-2 h-4 w-4 ${!randomizedAllComplete ? 'animate-spin duration-700' : ''}`} />
                                     Randomize Everything
-                                     {randomizedAllComplete && <CheckCircle className="ml-2 h-4 w-4 text-green-500 transition-opacity duration-500 opacity-100" />} {/* Show checkmark */}
+                                    {/* Conditional rendering for checkmark with transition */}
+                                     <span className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${randomizedAllComplete ? 'opacity-100' : 'opacity-0'}`}>
+                                        <CheckCircle className="h-5 w-5 text-green-500" />
+                                     </span>
                                 </Button>
                              </TooltipTrigger>
                              <TooltipContent>
@@ -639,3 +656,4 @@ export function CharacterCreation() {
     </div>
   );
 }
+
