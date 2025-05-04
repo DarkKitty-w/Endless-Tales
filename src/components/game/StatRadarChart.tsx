@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useState, useCallback, useEffect } from "react";
 import { Label, PolarGrid, PolarRadiusAxis, Radar, RadarChart, PolarAngleAxis, Text } from "recharts"; // Added Text
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/game/CardboardCard";
+import type { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/game/CardboardCard";
 import type { CharacterStats } from "@/types/game-types"; // Import CharacterStats type
 import { cn } from "@/lib/utils"; // Utility function
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon, HandDrawnMagicIcon, HandDrawnHistoryIcon } from "@/components/icons/HandDrawnIcons"; // Import icons
@@ -95,23 +95,24 @@ const StatRadarChart: React.FC<StatRadarChartProps> = ({ stats, setStats, remain
     const Icon = statIcons[payload.dataKey as keyof typeof statIcons] || null; // Find icon or default
 
     return (
-        
-            {Icon ? <Icon className="inline mr-1.5 h-4 w-4" /> : null}
-            <Text x={labelX} y={labelY} textAnchor={textAnchor} verticalAnchor="middle" className="text-sm fill-muted-foreground">
-              {payload.name} ({value}) {/* Show stat and the allocated value */}
-            </Text>
+      
+          {Icon ? <Icon className="inline mr-1.5 h-4 w-4" /> : null}
+          <Text x={labelX} y={labelY} textAnchor={textAnchor} verticalAnchor="middle" className="text-sm fill-muted-foreground">
+            {payload.name} ({value}) {/* Show stat and the allocated value */}
+          </Text>
         
     );
   };
 
 
   return (
-    
-       Skill Allocation
-          Click and drag the dots to allocate your stats.
+    <>
+       
+            Skill Allocation
+            Click and drag the dots to allocate your stats.
         
        {isClient ? ( // Only render chart content on the client
-          
+          <>
             <RadarChart
               cx="50%"
               cy="50%"
@@ -185,21 +186,23 @@ const StatRadarChart: React.FC<StatRadarChartProps> = ({ stats, setStats, remain
               ))}
               {/* Define gradients for each stat (for Radar fill) */}
               {dataKeys.map((key, index) => (
-                <defs key={`gradient${index}`}>
+                
                   <linearGradient id={`color${index}`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={`hsl(var(--chart-${index + 1}))`} stopOpacity={0.8} />
                     <stop offset="95%" stopColor={`hsl(var(--chart-${index + 1}))`} stopOpacity={0} />
                   </linearGradient>
-                </defs>
+                
               ))}
             </RadarChart>
-          
+          </>
         ) : (
           
-            "Loading chart..."
+            Loading chart...
           
         )}
-       You have {remainingPoints} points remaining.
+       
+            You have {remainingPoints} points remaining.
+        
     
   );
 };
