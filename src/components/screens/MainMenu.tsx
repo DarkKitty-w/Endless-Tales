@@ -1,15 +1,18 @@
 // src/components/screens/MainMenu.tsx
 "use client";
 
-import React, { useState, useEffect } from 'react'; // Import useEffect
+import React, { useState, useEffect } from 'react';
 import { useGame } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Play, FolderClock, Settings } from "lucide-react"; // Added Settings icon
-import { SettingsPanel } from './SettingsPanel'; // Import the new SettingsPanel
+import { Play, FolderClock, Settings } from "lucide-react";
+import { SettingsPanel } from '@/components/screens/SettingsPanel'; // Re-added import
 import {
   Sheet,
   SheetTrigger,
+  SheetContent, // Added SheetContent back
+  SheetHeader, // Added SheetHeader back
+  SheetTitle, // Added SheetTitle back
 } from "@/components/ui/sheet";
 
 export function MainMenu() {
@@ -45,8 +48,9 @@ export function MainMenu() {
               <span className="sr-only">Open Settings</span>
            </Button>
         </SheetTrigger>
-         <SettingsPanel isOpen={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
-      </Sheet>
+        {/* Render SettingsPanel inside SheetContent */}
+        <SettingsPanel isOpen={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
+       </Sheet>
 
 
       <CardboardCard className="w-full max-w-md text-center shadow-xl border-2 border-foreground/20">
