@@ -20,7 +20,6 @@ import { generateCharacterDescription, type GenerateCharacterDescriptionOutput }
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import StatRadarChart from "@/components/game/StatRadarChart"; // Import StatRadarChart as default
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
 
 // --- Zod Schema for Validation ---
@@ -45,7 +44,7 @@ const basicCreationSchema = baseCharacterSchema.extend({
 
 const textCreationSchema = baseCharacterSchema.extend({
   creationType: z.literal("text"),
-  description: z.string().min(10, "Please provide a brief description (at least 10 characters)."), // Removed max limit
+  description: z.string().min(10, "Please provide a brief description (at least 10 characters)."),
 });
 
 const combinedSchema = z.discriminatedUnion("creationType", [
@@ -514,32 +513,94 @@ export function CharacterCreation() {
                     </Tabs>
 
                     {/* --- Stat Allocation --- */}
-                    <div className="space-y-6 border-t border-foreground/10 pt-6">
-                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
-                            <h3 className="text-xl font-semibold">Allocate Stats ({TOTAL_STAT_POINTS} Total Points)</h3>
+                     <div className="space-y-6 border-t border-foreground/10 pt-6">
+                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
+                             <h3 className="text-xl font-semibold">Allocate Stats ({TOTAL_STAT_POINTS} Total Points)</h3>
                              <div className="flex items-center gap-4">
-                                <TooltipProvider>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <Button type="button" onClick={randomizeStats} variant="outline" size="sm" aria-label="Randomize Stat Distribution">
-                                                <Dices className="mr-2 h-4 w-4" /> Randomize
-                                            </Button>
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Randomly distribute the {TOTAL_STAT_POINTS} points (min {MIN_STAT_VALUE}, max {MAX_STAT_VALUE} each).</p>
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </TooltipProvider>
+                                 <TooltipProvider>
+                                     <Tooltip>
+                                         <TooltipTrigger asChild>
+                                             <Button type="button" onClick={randomizeStats} variant="outline" size="sm" aria-label="Randomize Stat Distribution">
+                                                 <Dices className="mr-2 h-4 w-4" /> Randomize
+                                             </Button>
+                                         </TooltipTrigger>
+                                         <TooltipContent>
+                                             <p>Randomly distribute the {TOTAL_STAT_POINTS} points (min {MIN_STAT_VALUE}, max {MAX_STAT_VALUE} each).</p>
+                                         </TooltipContent>
+                                     </Tooltip>
+                                 </TooltipProvider>
                              </div>
-                        </div>
+                         </div>
 
-                        <StatRadarChart
-                           stats={stats}
-                           setStats={setStats}
-                           remainingPoints={remainingPoints}
-                           setRemainingPoints={setRemainingPoints}
-                        />
+                         {/* Stat Sliders */}
+                         <div className="space-y-4">
+                            {/* Strength Slider */}
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <Label htmlFor="strength" className="flex items-center gap-1">
+                                        <HandDrawnStrengthIcon className="w-4 h-4 text-destructive" /> Strength
+                                    </Label>
+                                    <span className="text-sm font-bold">{stats.strength}</span>
+                                </div>
+                                <Slider
+                                    id="strength"
+                                    min={MIN_STAT_VALUE}
+                                    max={getMaxSliderValue('strength')} // Use dynamic max
+                                    step={1}
+                                    value={[stats.strength]}
+                                    onValueChange={(value) => handleStatChange('strength', value[0])}
+                                    aria-label="Strength slider"
+                                />
+                                <p className="text-xs text-muted-foreground text-center">Min: {MIN_STAT_VALUE} / Max: {MAX_STAT_VALUE}</p>
+                            </div>
+
+                            {/* Stamina Slider */}
+                             <div className="space-y-2">
+                                 <div className="flex justify-between items-center">
+                                     <Label htmlFor="stamina" className="flex items-center gap-1">
+                                         <HandDrawnStaminaIcon className="w-4 h-4 text-green-600" /> Stamina
+                                     </Label>
+                                     <span className="text-sm font-bold">{stats.stamina}</span>
+                                 </div>
+                                 <Slider
+                                     id="stamina"
+                                     min={MIN_STAT_VALUE}
+                                     max={getMaxSliderValue('stamina')}
+                                     step={1}
+                                     value={[stats.stamina]}
+                                     onValueChange={(value) => handleStatChange('stamina', value[0])}
+                                     aria-label="Stamina slider"
+                                 />
+                                 <p className="text-xs text-muted-foreground text-center">Min: {MIN_STAT_VALUE} / Max: {MAX_STAT_VALUE}</p>
+                             </div>
+
+                            {/* Agility Slider */}
+                             <div className="space-y-2">
+                                 <div className="flex justify-between items-center">
+                                     <Label htmlFor="agility" className="flex items-center gap-1">
+                                         <HandDrawnAgilityIcon className="w-4 h-4 text-blue-500" /> Agility
+                                     </Label>
+                                     <span className="text-sm font-bold">{stats.agility}</span>
+                                 </div>
+                                 <Slider
+                                     id="agility"
+                                     min={MIN_STAT_VALUE}
+                                     max={getMaxSliderValue('agility')}
+                                     step={1}
+                                     value={[stats.agility]}
+                                     onValueChange={(value) => handleStatChange('agility', value[0])}
+                                     aria-label="Agility slider"
+                                 />
+                                 <p className="text-xs text-muted-foreground text-center">Min: {MIN_STAT_VALUE} / Max: {MAX_STAT_VALUE}</p>
+                             </div>
+
+                         </div>
+
+                        <p className={`text-sm font-medium text-center mt-4 ${remainingPoints < 0 ? 'text-destructive animate-pulse' : remainingPoints > 0 ? 'text-orange-500 dark:text-orange-400' : 'text-primary'}`}>
+                           {remainingPoints < 0 ? `Overallocated by ${Math.abs(remainingPoints)} points!` : `${remainingPoints} points remaining.`}
+                        </p>
                     </div>
+
 
                 </CardContent>
                 <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t border-foreground/10">
