@@ -1,3 +1,4 @@
+// src/components/game/StatRadarChart.tsx
 "use client";
 
 import * as React from "react";
@@ -8,7 +9,7 @@ import type { CharacterStats } from "@/types/game-types"; // Import CharacterSta
 import { cn } from "@/lib/utils"; // Utility function
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon, HandDrawnMagicIcon, HandDrawnHistoryIcon } from "@/components/icons/HandDrawnIcons"; // Import icons
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/components/screens/CharacterCreation"; // Import consts
-
+import { useToast } from "@/hooks/use-toast"; // Import toast
 
 interface StatRadarChartProps {
   stats: CharacterStats;
@@ -32,18 +33,19 @@ const dataKeys = ["Strength", "Agility", "Stamina", "Intellect", "Wisdom", "Char
 
 const StatRadarChart: React.FC<StatRadarChartProps> = ({ stats, setStats, remainingPoints, setRemainingPoints }) => {
   const [isClient, setIsClient] = useState(false); // State to track client-side rendering
+    const { toast } = useToast();
 
   useEffect(() => {
     setIsClient(true); // Set to true once component mounts on client
   }, []);
 
   const statArray = [
-    { stat: "Strength", value: stats.strength },
-    { stat: "Agility", value: stats.agility },
-    { stat: "Stamina", value: stats.stamina },
-    { stat: "Intellect", value: 1, }, // Replace with actual intellect later
-    { stat: "Wisdom", value: 1, }, // Replace with actual wisdom later
-    { stat: "Charisma", value: 1, }, // Replace with actual charisma later
+    { stat: "Strength", value: stats.strength, allocated: stats.strength },
+    { stat: "Agility", value: stats.agility, allocated: stats.agility },
+    { stat: "Stamina", value: stats.stamina, allocated: stats.stamina },
+    { stat: "Intellect", value: 1, allocated: 1 }, // Replace with actual intellect later
+    { stat: "Wisdom", value: 1, allocated: 1 }, // Replace with actual wisdom later
+    { stat: "Charisma", value: 1, allocated: 1 }, // Replace with actual charisma later
   ];
 
    const handleStatChange = useCallback((statName: string, value: number) => {
@@ -58,16 +60,16 @@ const StatRadarChart: React.FC<StatRadarChartProps> = ({ stats, setStats, remain
                 setRemainingPoints(TOTAL_STAT_POINTS - currentTotal);
                 return tentativeStats;
             } else {
-                //  toast({
-                //    title: "Stat Limit Reached",
-                //    description: `Cannot exceed ${TOTAL_STAT_POINTS} total stat points.`,
-                //    variant: "destructive",
-                //  });
+                toast({
+                  title: "Stat Limit Reached",
+                  description: `Cannot exceed ${TOTAL_STAT_POINTS} total stat points.`,
+                  variant: "destructive",
+                });
                 setRemainingPoints(TOTAL_STAT_POINTS - (prevStats.strength + prevStats.stamina + prevStats.agility));
                 return prevStats;
             }
         });
-    }, [setStats, setRemainingPoints]);
+    }, [setStats, setRemainingPoints, toast]);
 
 
 
@@ -94,12 +96,12 @@ const StatRadarChart: React.FC<StatRadarChartProps> = ({ stats, setStats, remain
     const Icon = statIcons[payload.dataKey as keyof typeof statIcons] || null; // Find icon or default
 
     return (
-      
-        {Icon && <Icon className="inline mr-1.5 h-4 w-4" />}
-        <Text x={labelX} y={labelY} textAnchor={textAnchor} verticalAnchor="middle" className="text-sm fill-muted-foreground">
-          {payload.name} ({value}) {/* Show stat and the allocated value */}
-        </Text>
-      
+        
+            {Icon ? <Icon className="inline mr-1.5 h-4 w-4" /> : null}
+            <Text x={labelX} y={labelY} textAnchor={textAnchor} verticalAnchor="middle" className="text-sm fill-muted-foreground">
+              {payload.name} ({value}) {/* Show stat and the allocated value */}
+            </Text>
+        
     );
   };
 
