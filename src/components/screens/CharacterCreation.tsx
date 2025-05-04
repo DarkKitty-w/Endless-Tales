@@ -1,4 +1,3 @@
-// src/components/screens/CharacterCreation.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -14,13 +13,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
 import { Slider } from "@/components/ui/slider";
-import { Wand2, Dices, User, Save, RotateCcw, Info, ShieldQuestion } from "lucide-react";
+import { Wand2, Dices, User, Save, RotateCcw, Info, ShieldQuestion, CheckCircle } from "lucide-react"; // Added checkCircle
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons";
 import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-
+import { StatRadarChart } from "@/components/game/StatRadarChart"; // Import StatRadarChart
 
 const TOTAL_STAT_POINTS = 15;
 const MIN_STAT_VALUE = 1;
@@ -69,6 +68,8 @@ export function CharacterCreation() {
   const [remainingPoints, setRemainingPoints] = useState(initialPoints);
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [randomizedAllComplete, setRandomizedAllComplete] = useState(false); // Track randomize all animation state
+
 
   // Determine the current schema based on the selected tab
   const currentSchema = creationType === "basic" ? basicCreationSchema : textCreationSchema;
@@ -138,12 +139,13 @@ export function CharacterCreation() {
 
     setStats(newStats);
     setRemainingPoints(0);
-    toast({ title: "Stats Randomized", description: `Distributed ${TOTAL_STAT_POINTS} points.` });
- }, [toast]);
+ }, []);
 
 
   // --- Randomize All ---
   const randomizeAll = useCallback(() => {
+    setRandomizedAllComplete(false); // Start animation
+
     const randomNames = ["Anya", "Borin", "Carys", "Darian", "Elara", "Fendrel", "Gorok"];
     const randomClasses = ["Warrior", "Rogue", "Mage", "Scout", "Scholar", "Wanderer", "Guard", "Tinkerer", "Healer", "Bard"];
     const randomTraitsPool = ["Brave", "Curious", "Cautious", "Impulsive", "Loyal", "Clever", "Resourceful", "Quiet", "Stern", "Generous"];
@@ -190,9 +192,15 @@ export function CharacterCreation() {
     }
 
     randomizeStats(); // Randomize stats as well
-    toast({ title: "Character Randomized!", description: `Created a new character: ${name}` });
     trigger(); // Trigger validation after setting values
-  }, [creationType, reset, setValue, randomizeStats, toast, trigger, watch]);
+
+    // Show completed animation after a short delay
+    setTimeout(() => {
+        setRandomizedAllComplete(true);
+    }, 700);
+
+
+  }, [creationType, reset, setValue, randomizeStats, trigger, watch]);
 
 
   // Watch form values for dynamic checks
@@ -509,30 +517,8 @@ export function CharacterCreation() {
                                 </TooltipProvider>
                              </div>
                         </div>
-                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {(['strength', 'stamina', 'agility'] as const).map((statName) => (
-                                <div key={statName} className="space-y-3">
-                                    <Label htmlFor={statName} className="flex items-center gap-2 capitalize text-lg font-medium">
-                                         {statName === 'strength' && <HandDrawnStrengthIcon className="w-5 h-5 text-destructive" />}
-                                         {statName === 'stamina' && <HandDrawnStaminaIcon className="w-5 h-5 text-green-600" />}
-                                         {statName === 'agility' && <HandDrawnAgilityIcon className="w-5 h-5 text-blue-500" />}
-                                         {statName} <span className="text-foreground font-bold">({stats[statName]})</span>
-                                    </Label>
-                                    <Slider
-                                        id={statName}
-                                        min={MIN_STAT_VALUE}
-                                        max={MAX_STAT_VALUE}
-                                        step={1}
-                                        value={[stats[statName]]}
-                                        onValueChange={(value) => handleStatChange(statName, value[0])}
-                                        aria-label={`${statName} allocation slider`}
-                                        className="w-full"
-                                        disabled={isGenerating}
-                                    />
-                                     <p className="text-xs text-muted-foreground text-center">Min: {MIN_STAT_VALUE} / Max: {MAX_STAT_VALUE}</p>
-                                </div>
-                            ))}
-                        </div>
+                        
+                        <StatRadarChart stats={stats} setStats={setStats} remainingPoints={remainingPoints} setRemainingPoints={setRemainingPoints} />
 
                     </div>
 
@@ -541,8 +527,12 @@ export function CharacterCreation() {
                      <TooltipProvider>
                         <Tooltip>
                              <TooltipTrigger asChild>
-                                <Button type="button" onClick={randomizeAll} variant="secondary" aria-label="Randomize All Character Fields and Stats">
-                                    <RotateCcw className="mr-2 h-4 w-4" /> Randomize Everything
+                                <Button type="button" onClick={() => {
+                                    randomizeAll();
+                                    setRandomizedAllComplete(false);
+                                }} variant="secondary" aria-label="Randomize All Character Fields and Stats" disabled={randomizedAllComplete}>
+                                    <RotateCcw className={`mr-2 h-4 w-4 ${randomizedAllComplete ? '' : 'animate-spin'}`} />{/* Animate unless complete */} Randomize Everything
+                                     {randomizedAllComplete && <CheckCircle className="ml-2 h-4 w-4 text-green-500" />} {/* Show check on completion */}
                                 </Button>
                              </TooltipTrigger>
                              <TooltipContent>
@@ -565,3 +555,4 @@ export function CharacterCreation() {
     </div>
   );
 }
+
