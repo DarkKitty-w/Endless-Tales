@@ -12,13 +12,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Wand2, RotateCcw, User, Save, Info, ShieldQuestion, CheckCircle, AlertCircle } from "lucide-react"; // Simplified icons, added AlertCircle
+import { Wand2, RotateCcw, User, Save, Info, ShieldQuestion, CheckCircle, AlertCircle } from "lucide-react";
 import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
-import { StatAllocationInput } from "@/components/game/StatAllocationInput"; // Import the new input component
+import { StatAllocationInput } from "@/components/game/StatAllocationInput"; // Corrected import path
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
 import type { CharacterStats } from "@/types/character-types"; // Import from specific types file
 import { initialCharacterState } from "@/context/game-initial-state"; // Import initialCharacterState
@@ -117,10 +117,8 @@ export function CharacterCreation() {
           setRemainingPoints(newRemaining); // Always update remaining points display
 
           if (newRemaining < 0) {
-             setStatError(`Cannot exceed ${TOTAL_STAT_POINTS} total points for allocated stats.`);
-             // Optionally prevent the update if over budget, or allow it and show error
-             // To prevent update: return prevStats;
-              return tentativeStats; // Allow the state update to show the invalid allocation temporarily
+             setStatError(`1 point over the limit.`); // Updated error message
+             return tentativeStats; // Allow the state update to show the invalid allocation temporarily
           } else {
              setStatError(null); // Clear stat error if valid
              return tentativeStats; // Return the valid updated stats
@@ -229,9 +227,11 @@ export function CharacterCreation() {
      // Hide checkmark after a delay
      setTimeout(() => setRandomizationComplete(false), 1000);
 
+     // Don't show the "Randomized" toast anymore
+     // toast({ title: "Character Randomized!", description: `Created a new character: ${name}` });
      trigger(); // Trigger validation after setting values
 
- }, [creationType, reset, setValue, randomizeStats, trigger]);
+ }, [creationType, reset, setValue, randomizeStats, trigger]); // Removed toast from dependencies
 
 
   // Watch form values for dynamic checks
@@ -240,16 +240,17 @@ export function CharacterCreation() {
 
 
   // --- AI Description Generation ---
-  const handleGenerateDescription = async () => {
+  const handleGenerateDescription = useCallback(async () => {
      // Trigger validation for the description field specifically
      await trigger("description");
      // Get the potentially updated description value and error state
      const currentDescValue = watch("description");
+     const currentName = watch("name");
      const descError = errors.description;
 
-     if (!watchedName || descError || !currentDescValue || currentDescValue.length < 10) {
+     if (!currentName || descError || !currentDescValue || currentDescValue.length < 10) {
        setError("Please provide a valid name and description (min 10 chars) before generating.");
-       toast({ title: "Input Required", description: "Valid name and description (min 10 chars) needed.", variant: "destructive"});
+      // toast({ title: "Input Required", description: "Valid name and description (min 10 chars) needed.", variant: "destructive"});
        return;
      }
 
@@ -279,12 +280,7 @@ export function CharacterCreation() {
          // Store the raw AI-generated description separately in context if needed for display elsewhere
          dispatch({ type: "SET_AI_DESCRIPTION", payload: result.detailedDescription });
 
-         toast({
-           title: "AI Profile Generated!",
-           description: "Description updated and basic fields inferred.",
-         });
-
-         // Ensure validation is triggered for newly populated fields AFTER setting values
+         //Ensure validation is triggered for newly populated fields AFTER setting values
          setTimeout(() => {
            trigger(["class", "traits", "knowledge", "background", "description"]);
          }, 0);
@@ -292,11 +288,11 @@ export function CharacterCreation() {
      } catch (err) {
        console.error("AI generation failed:", err);
        setError("Failed to generate description or infer details. The AI might be busy or encountered an error. Please try again later.");
-       toast({ title: "AI Error", description: "Could not generate profile.", variant: "destructive"});
+       //toast({ title: "AI Error", description: "Could not generate profile.", variant: "destructive"});
      } finally {
        setIsGenerating(false);
      }
-   };
+   }, [watch, trigger, errors.description, setValue, dispatch, toast]);
 
 
   // --- Form Submission ---
@@ -306,8 +302,8 @@ export function CharacterCreation() {
 
     // Check remaining points exactly equals 0
      if (remainingPoints !== 0) {
-        setStatError(`You must allocate exactly ${TOTAL_STAT_POINTS} stat points. ${remainingPoints > 0 ? `${remainingPoints} remaining.` : `${Math.abs(remainingPoints)} over allocated.`}`);
-        toast({ title: "Stat Allocation Error", description: `You have ${remainingPoints > 0 ? `${remainingPoints} points` : `${Math.abs(remainingPoints)} too many points`} allocated. Total must be ${TOTAL_STAT_POINTS}.`, variant: "destructive" });
+        setStatError(`${remainingPoints > 0 ? `${remainingPoints} points remaining.` : `${Math.abs(remainingPoints)} ${Math.abs(remainingPoints) === 1 ? 'point' : 'points'} over limit.`}`);
+        // Do not show toast here, rely on the visual indicator
         return;
      }
      // Individual stat bounds check (redundant if slider is used, but good safety)
@@ -394,7 +390,7 @@ export function CharacterCreation() {
        setRemainingPoints(newRemaining);
        // Clear or set stat error based on the recalculated points
        if (newRemaining !== 0) {
-           setStatError(`You must allocate exactly ${TOTAL_STAT_POINTS} points. ${newRemaining > 0 ? `${newRemaining} remaining.` : `${Math.abs(newRemaining)} over allocated.`}`);
+           setStatError(`${newRemaining > 0 ? `${newRemaining} points remaining.` : `${Math.abs(newRemaining)} ${Math.abs(newRemaining) === 1 ? 'point' : 'points'} over limit.`}`);
        } else {
            setStatError(null);
        }
@@ -403,8 +399,12 @@ export function CharacterCreation() {
 
   // Clear statError when remaining points become 0
   useEffect(() => {
-    if (remainingPoints === 0 && statError) { // Only clear if there *is* an error
-        setStatError(null);
+    if (remainingPoints === 0 && statError && statError.includes('over limit')) {
+        // Only clear if it's an 'over limit' error and points are now 0
+         setStatError(null);
+    } else if (remainingPoints > 0 && statError?.includes('over limit')) {
+        // If points are remaining, update the error message
+        setStatError(`${remainingPoints} points remaining.`);
     }
   }, [remainingPoints, statError]); // Depend on both
 
@@ -551,14 +551,6 @@ export function CharacterCreation() {
                              <h3 className="text-xl font-semibold">Allocate Stats ({TOTAL_STAT_POINTS} Total Points)</h3>
                          </div>
 
-                         {/* Display Stat Error */}
-                         {statError && (
-                             <Alert variant="destructive" className="mt-2 py-2 px-3 text-sm">
-                                 <AlertCircle className="h-4 w-4" /> {/* Use AlertCircle */}
-                                 <AlertDescription>{statError}</AlertDescription>
-                             </Alert>
-                         )}
-
                          {/* Stat Inputs (Grid) */}
                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                               <StatAllocationInput
@@ -588,10 +580,10 @@ export function CharacterCreation() {
                          </div>
 
 
-                         {/* Remaining Points Indicator - moved into its own div for clarity */}
+                         {/* Remaining Points Indicator */}
                          <div className="text-center pt-2 min-h-[2.5rem]">
                               <p className={`text-sm font-medium ${remainingPoints > 0 ? 'text-primary' : remainingPoints < 0 ? 'text-destructive' : 'text-green-600'}`}>
-                                 {remainingPoints === 0 ? "All points allocated!" : `${remainingPoints} points remaining.`}
+                                 {statError ? statError : (remainingPoints === 0 ? "All points allocated!" : `${remainingPoints} points remaining.`)}
                              </p>
                          </div>
 
@@ -613,7 +605,7 @@ export function CharacterCreation() {
                                 >
                                     <RotateCcw className={`mr-2 h-4 w-4 ${isRandomizing ? 'animate-spin' : ''}`} />
                                     {isRandomizing ? 'Randomizing...' : 'Randomize Everything'}
-                                    {/* Checkmark appears briefly after randomizing */}
+                                     {/* Checkmark appears briefly after randomizing */}
                                      <CheckCircle className={`absolute right-2 h-4 w-4 text-green-500 transition-opacity duration-500 ${randomizationComplete ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: randomizationComplete ? '300ms' : '0ms' }} />
                                 </Button>
                             </TooltipTrigger>
@@ -637,3 +629,4 @@ export function CharacterCreation() {
     </div>
   );
 }
+

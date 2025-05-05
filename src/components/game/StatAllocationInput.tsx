@@ -1,4 +1,3 @@
-// src/components/game/StatAllocationInput.tsx
 "use client";
 
 import * as React from "react";
@@ -51,3 +50,4 @@ export function StatAllocationInput({
     </div>
   );
 }
+
