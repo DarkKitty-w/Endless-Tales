@@ -1,4 +1,3 @@
-
 // src/components/screens/CharacterCreation.tsx
 "use client";
 
@@ -13,16 +12,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Slider } from "@/components/ui/slider";
-import { Wand2, Dices, User, Save, RotateCcw, Info, ShieldQuestion, CheckCircle } from "lucide-react"; // Added checkCircle
-import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons";
+import { CardboardCard, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/game/CardboardCard";
+import { Wand2, Dices, User, Save, RotateCcw, Info, ShieldQuestion, CheckCircle, Brain, BookOpen, UsersRound, Dumbbell, HeartPulse, Footprints } from "lucide-react";
 import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
-import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants";
+import { StatAllocationInput } from "@/components/game/StatAllocationInput"; // Correct import path
+import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
 
 
 // --- Zod Schema for Validation ---
@@ -32,7 +30,9 @@ const baseCharacterSchema = z.object({
 
 const commaSeparatedMaxItems = (max: number, message: string) =>
   z.string()
-   .refine(val => val === undefined || val === "" || val.split(',').map(s => s.trim()).filter(Boolean).length <= max, { message })
+   .transform(val => val === undefined || val === "" ? [] : val.split(',').map(s => s.trim()).filter(Boolean)) // Transform to array first
+   .refine(arr => arr.length <= max, { message }) // Validate array length
+   .transform(arr => arr.join(', ')) // Transform back to string for form state if needed
    .optional()
    .transform(val => val || "");
 
@@ -47,6 +47,7 @@ const basicCreationSchema = baseCharacterSchema.extend({
 
 const textCreationSchema = baseCharacterSchema.extend({
   creationType: z.literal("text"),
+  // Removed max limit from description
   description: z.string().min(10, "Please provide a brief description (at least 10 characters)."),
 });
 
@@ -102,16 +103,17 @@ export function CharacterCreation() {
 
         if (currentTotal <= TOTAL_STAT_POINTS) {
             setRemainingPoints(TOTAL_STAT_POINTS - currentTotal);
+            setError(null); // Clear error if allocation is valid
             return tentativeStats;
         } else {
-            // If the allocation exceeds total points, don't update the state
-            // and visually indicate the error via the remaining points display.
-            // No need for a toast notification anymore.
+            // If the allocation exceeds total points, revert the change visually
+            // and display an error message near the points indicator.
             setRemainingPoints(TOTAL_STAT_POINTS - (prevStats.strength + prevStats.stamina + prevStats.agility));
-            return prevStats;
+            setError(`Cannot exceed ${TOTAL_STAT_POINTS} total points.`); // Set error message
+            return prevStats; // Revert to previous stats
         }
     });
- }, [setStats, setRemainingPoints]); // Removed toast
+ }, [setStats, setRemainingPoints]);
 
 
  const randomizeStats = useCallback(() => {
@@ -146,7 +148,7 @@ export function CharacterCreation() {
             stamina: defaultPoints + (remainder > 1 ? 1 : 0),
             agility: defaultPoints
         };
-        // Ensure min/max bounds are still respected after reset
+        // Ensure min/max bounds are still respected after reset/correction
         newStats.strength = Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, newStats.strength));
         newStats.stamina = Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, newStats.stamina));
         newStats.agility = Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, newStats.agility));
@@ -156,7 +158,7 @@ export function CharacterCreation() {
        setRemainingPoints(0);
     }
 
-
+    setError(null); // Clear error after randomizing
     setStats(newStats);
  }, [setStats, setRemainingPoints]);
 
@@ -184,7 +186,6 @@ export function CharacterCreation() {
     ];
 
     // Get current values before reset if needed, or just reset fully
-    const currentValues = watch();
     reset(); // Clear form fields first
 
     // Pick random elements
@@ -223,7 +224,7 @@ export function CharacterCreation() {
     }, 700); // Delay matches animation duration
 
 
-  }, [creationType, reset, setValue, randomizeStats, trigger, watch]); // Removed toast dependency
+  }, [creationType, reset, setValue, randomizeStats, trigger]); // Removed watch and toast from dependencies
 
 
   // Watch form values for dynamic checks
@@ -258,24 +259,16 @@ export function CharacterCreation() {
         setValue("description", result.detailedDescription || currentDescValue, { shouldValidate: true, shouldDirty: true });
 
         // Update the BASIC fields based on AI inference, ONLY if AI provided values
-        if (result.inferredClass) {
-            setValue("class", result.inferredClass, { shouldValidate: true, shouldDirty: true });
-        }
-        if (result.inferredTraits && result.inferredTraits.length > 0) {
-            setValue("traits", result.inferredTraits.join(', '), { shouldValidate: true, shouldDirty: true });
-        } else {
-            setValue("traits", "", { shouldValidate: true, shouldDirty: true }); // Clear if AI didn't provide
-        }
-        if (result.inferredKnowledge && result.inferredKnowledge.length > 0) {
-            setValue("knowledge", result.inferredKnowledge.join(', '), { shouldValidate: true, shouldDirty: true });
-        } else {
-            setValue("knowledge", "", { shouldValidate: true, shouldDirty: true }); // Clear if AI didn't provide
-        }
-        if (result.inferredBackground) {
-            setValue("background", result.inferredBackground, { shouldValidate: true, shouldDirty: true });
-        } else {
-            setValue("background", "", { shouldValidate: true, shouldDirty: true }); // Clear if AI didn't provide
-        }
+        // Ensure AI values are valid or use defaults
+        const inferredClass = result.inferredClass || "Adventurer";
+        const inferredTraits = (result.inferredTraits && result.inferredTraits.length > 0) ? result.inferredTraits.join(', ') : "";
+        const inferredKnowledge = (result.inferredKnowledge && result.inferredKnowledge.length > 0) ? result.inferredKnowledge.join(', ') : "";
+        const inferredBackground = result.inferredBackground || "";
+
+        setValue("class", inferredClass, { shouldValidate: true, shouldDirty: true });
+        setValue("traits", inferredTraits, { shouldValidate: true, shouldDirty: true });
+        setValue("knowledge", inferredKnowledge, { shouldValidate: true, shouldDirty: true });
+        setValue("background", inferredBackground, { shouldValidate: true, shouldDirty: true });
 
         // Store the raw AI-generated description separately in context if needed for display elsewhere
         dispatch({ type: "SET_AI_DESCRIPTION", payload: result.detailedDescription });
@@ -305,13 +298,12 @@ export function CharacterCreation() {
 
      if (remainingPoints !== 0) {
         setError(`You must allocate all ${TOTAL_STAT_POINTS} stat points. ${remainingPoints} remaining.`);
-        toast({ title: "Stat Allocation Incomplete", description: `Allocate the remaining ${remainingPoints} points.`, variant: "destructive"});
+        // No toast here, error message is displayed directly
         return;
      }
      if (stats.strength < MIN_STAT_VALUE || stats.stamina < MIN_STAT_VALUE || stats.agility < MIN_STAT_VALUE ||
          stats.strength > MAX_STAT_VALUE || stats.stamina > MAX_STAT_VALUE || stats.agility > MAX_STAT_VALUE) {
          setError(`Stats must be between ${MIN_STAT_VALUE} and ${MAX_STAT_VALUE}.`);
-         toast({ title: "Invalid Stat Value", description: `Ensure all stats are between ${MIN_STAT_VALUE} and ${MAX_STAT_VALUE}.`, variant: "destructive"});
          return;
      }
 
@@ -401,7 +393,7 @@ export function CharacterCreation() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6 pt-6">
-                    {error && (
+                    {error && !error.includes("Cannot exceed") && ( // Don't show the general error if it's the stat error
                         <Alert variant="destructive" className="mb-4">
                             <Info className="h-4 w-4" />
                             <AlertTitle>Hold On!</AlertTitle>
@@ -547,73 +539,42 @@ export function CharacterCreation() {
                              </div>
                          </div>
 
-                         {/* Stat Sliders in a Grid Layout */}
-                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
-                             {/* Strength Card */}
-                             <CardboardCard className="p-4 border border-foreground/10 bg-muted/20">
-                                <div className="flex justify-between items-center mb-2">
-                                    <Label htmlFor="strength" className="flex items-center gap-1 font-medium">
-                                        <HandDrawnStrengthIcon className="w-5 h-5 text-destructive" /> Strength
-                                    </Label>
-                                    <span className="text-lg font-bold">{stats.strength}</span>
-                                </div>
-                                <Slider
-                                    id="strength"
-                                    min={MIN_STAT_VALUE}
-                                    max={MAX_STAT_VALUE} // Keep slider visually consistent (1-10)
-                                    step={1}
-                                    value={[stats.strength]}
-                                    onValueChange={(value) => handleStatChange('strength', value[0])}
-                                    aria-label="Strength slider"
-                                />
-                                <p className="text-xs text-muted-foreground text-center mt-2">Min: {MIN_STAT_VALUE} / Max: {MAX_STAT_VALUE}</p>
-                             </CardboardCard>
-
-                             {/* Stamina Card */}
-                             <CardboardCard className="p-4 border border-foreground/10 bg-muted/20">
-                                <div className="flex justify-between items-center mb-2">
-                                    <Label htmlFor="stamina" className="flex items-center gap-1 font-medium">
-                                        <HandDrawnStaminaIcon className="w-5 h-5 text-green-600" /> Stamina
-                                    </Label>
-                                    <span className="text-lg font-bold">{stats.stamina}</span>
-                                </div>
-                                <Slider
-                                    id="stamina"
-                                    min={MIN_STAT_VALUE}
-                                    max={MAX_STAT_VALUE} // Keep slider visually consistent (1-10)
-                                    step={1}
-                                    value={[stats.stamina]}
-                                    onValueChange={(value) => handleStatChange('stamina', value[0])}
-                                    aria-label="Stamina slider"
-                                />
-                                <p className="text-xs text-muted-foreground text-center mt-2">Min: {MIN_STAT_VALUE} / Max: {MAX_STAT_VALUE}</p>
-                             </CardboardCard>
-
-                             {/* Agility Card */}
-                            <CardboardCard className="p-4 border border-foreground/10 bg-muted/20">
-                                 <div className="flex justify-between items-center mb-2">
-                                     <Label htmlFor="agility" className="flex items-center gap-1 font-medium">
-                                         <HandDrawnAgilityIcon className="w-5 h-5 text-blue-500" /> Agility
-                                     </Label>
-                                     <span className="text-lg font-bold">{stats.agility}</span>
-                                 </div>
-                                 <Slider
-                                     id="agility"
-                                     min={MIN_STAT_VALUE}
-                                     max={MAX_STAT_VALUE} // Keep slider visually consistent (1-10)
-                                     step={1}
-                                     value={[stats.agility]}
-                                     onValueChange={(value) => handleStatChange('agility', value[0])}
-                                     aria-label="Agility slider"
-                                 />
-                                <p className="text-xs text-muted-foreground text-center mt-2">Min: {MIN_STAT_VALUE} / Max: {MAX_STAT_VALUE}</p>
-                             </CardboardCard>
+                         {/* Stat Inputs (Grid) */}
+                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                              <StatAllocationInput
+                                  label="Strength"
+                                  statKey="strength"
+                                  value={stats.strength}
+                                  onChange={handleStatChange}
+                                  Icon={Dumbbell}
+                                  iconColor="text-destructive"
+                              />
+                              <StatAllocationInput
+                                  label="Stamina"
+                                  statKey="stamina"
+                                  value={stats.stamina}
+                                  onChange={handleStatChange}
+                                  Icon={HeartPulse}
+                                  iconColor="text-green-600"
+                              />
+                              <StatAllocationInput
+                                  label="Agility"
+                                  statKey="agility"
+                                  value={stats.agility}
+                                  onChange={handleStatChange}
+                                  Icon={Footprints}
+                                  iconColor="text-blue-500"
+                              />
                          </div>
 
+
                          {/* Remaining Points Indicator */}
-                        <p className={`text-sm font-medium text-center mt-4 ${remainingPoints < 0 ? 'text-destructive animate-pulse' : remainingPoints > 0 ? 'text-orange-500 dark:text-orange-400' : 'text-primary'}`}>
-                           {remainingPoints < 0 ? `Overallocated by ${Math.abs(remainingPoints)} points!` : `${remainingPoints} points remaining.`}
-                        </p>
+                         <p className={`text-sm font-medium text-center pt-2 ${remainingPoints !== 0 ? 'text-orange-500 dark:text-orange-400' : 'text-primary'}`}>
+                            {remainingPoints} points remaining.
+                         </p>
+                         {/* Display specific error for overallocation */}
+                         {error?.includes("Cannot exceed") && <p className="text-sm font-medium text-center text-destructive">{error}</p>}
+
                     </div>
 
 
@@ -657,4 +618,3 @@ export function CharacterCreation() {
     </div>
   );
 }
-
