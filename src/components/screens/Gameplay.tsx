@@ -399,8 +399,9 @@ export function Gameplay() {
 
             addedItems.forEach(name => dispatch({ type: "ADD_ITEM", payload: { name, description: "Acquired during adventure", quality: "Common" } }));
             removedItems.forEach(name => dispatch({ type: "REMOVE_ITEM", payload: { itemName: name } }));
-            const updatedGameState = `${inputForAI.gameState}\nEvent: ${addedItems.length} items added. ${removedItems.length} items removed.}`;
-            dispatch({ type: 'UPDATE_NARRATION', payload: { narration: `Inventory updated.`, updatedGameState, timestamp: Date.now() } });
+            // Don't dispatch an extra narration here, the main narration already covers it
+            // const updatedGameStateForInventoryLog = `${inputForAI.gameState}\nEvent: ${addedItems.length} items added. ${removedItems.length} items removed.`;
+            // dispatch({ type: 'UPDATE_NARRATION', payload: { narration: `Inventory updated.`, updatedGameState: updatedGameStateForInventoryLog, timestamp: Date.now() } });
 
             if (addedItems.length > 0 || removedItems.length > 0) {
                 console.log("Inventory updated via game state parsing:", { added: addedItems, removed: removedItems });
@@ -472,7 +473,7 @@ export function Gameplay() {
   }, [
       character, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice,
       isGeneratingSkillTree, currentGameStateString, currentNarration, storyLog, adventureSettings, turnCount,
-      dispatch, toast, scrollToBottom, triggerSkillTreeGeneration
+      dispatch, toast, scrollToBottom, triggerSkillTreeGeneration, handleEndAdventure
   ]);
 
 
@@ -530,29 +531,47 @@ export function Gameplay() {
 
     // --- Handle Crafting Attempt ---
     const handleCrafting = useCallback(async () => {
-        if (!character || isLoading || isCraftingLoading || !craftingGoal.trim() || selectedIngredients.length === 0) {
-            setCraftingError("Please specify a crafting goal and select at least one ingredient.");
-            return;
-        }
+        // Validate input early
+        if (!character) {
+             setCraftingError("Character data is missing. Cannot craft.");
+             return;
+         }
+         if (isLoading || isCraftingLoading || isEnding || isSaving) {
+             setCraftingError("Cannot craft while another action is in progress.");
+             return;
+         }
+         if (!craftingGoal.trim()) {
+             setCraftingError("Please specify what you want to craft.");
+             return;
+         }
+         if (selectedIngredients.length === 0) {
+              setCraftingError("Please select at least one ingredient.");
+              return;
+         }
 
         setIsCraftingLoading(true);
         setCraftingError(null);
         toast({ title: "Attempting to craft...", description: `Trying to make: ${craftingGoal}` });
+        console.log("Crafting initiated with:", { goal: craftingGoal, ingredients: selectedIngredients });
 
+        // Prepare input for the AI flow
         const inventoryListNames = inventory.map(item => item.name);
-        const ingredientsUsed = selectedIngredients;
+        const skills = character.learnedSkills.map(s => s.name);
 
         const craftingInput: AttemptCraftingInput = {
             characterKnowledge: character.knowledge,
-            characterSkills: character.learnedSkills.map(s => s.name),
+            characterSkills: skills,
             inventoryItems: inventoryListNames,
             desiredItem: craftingGoal,
-            usedIngredients: ingredientsUsed,
+            usedIngredients: selectedIngredients,
         };
 
         try {
+            console.log("Sending data to attemptCrafting flow:", JSON.stringify(craftingInput, null, 2));
             const result: AttemptCraftingOutput = await attemptCrafting(craftingInput);
-            console.log("Crafting Result:", result);
+            console.log("Crafting AI Result:", JSON.stringify(result, null, 2));
+
+            // Handle the result
             toast({
                 title: result.success ? "Crafting Successful!" : "Crafting Failed!",
                 description: result.message,
@@ -560,37 +579,59 @@ export function Gameplay() {
                 duration: 5000,
             });
 
-            if (result.success && result.craftedItem) {
-                dispatch({ type: "ADD_ITEM", payload: result.craftedItem });
-                result.consumedItems.forEach(itemName => {
-                    dispatch({ type: "REMOVE_ITEM", payload: { itemName: itemName } });
-                });
-                const updatedGameState = `${currentGameStateString}\nEvent: Crafted ${result.craftedItem.name}. Consumed: ${result.consumedItems.join(', ')}.`;
-                dispatch({ type: 'UPDATE_NARRATION', payload: { narration: `You successfully crafted ${result.craftedItem.name}! (${result.message})`, updatedGameState, timestamp: Date.now() } });
+             // Create a narration log entry for the crafting attempt
+             let narrationText = `You attempted to craft ${craftingGoal} using ${selectedIngredients.join(', ')}. ${result.message}`;
+             if (result.success && result.craftedItem) {
+                 narrationText = `You successfully crafted a ${result.craftedItem.quality ? result.craftedItem.quality + ' ' : ''}${result.craftedItem.name}! ${result.message}`;
+             }
 
-            } else if (!result.success && result.consumedItems.length > 0) {
-                result.consumedItems.forEach(itemName => {
-                    dispatch({ type: "REMOVE_ITEM", payload: { itemName: itemName } });
-                });
-                 const updatedGameState = `${currentGameStateString}\nEvent: Crafting failed. Consumed: ${result.consumedItems.join(', ')}. ${result.message}`;
-                 dispatch({ type: 'UPDATE_NARRATION', payload: { narration: `Crafting failed! ${result.message}`, updatedGameState, timestamp: Date.now() } });
-            } else {
-                 const updatedGameState = `${currentGameStateString}\nEvent: Crafting failed. ${result.message}`;
-                 dispatch({ type: 'UPDATE_NARRATION', payload: { narration: `Crafting failed! ${result.message}`, updatedGameState, timestamp: Date.now() } });
-            }
+             // Update inventory based on consumed items and crafted item
+              let inventoryAfterCrafting = [...inventory];
+              if (result.consumedItems.length > 0) {
+                   result.consumedItems.forEach(itemName => {
+                        const itemIndex = inventoryAfterCrafting.findIndex(invItem => invItem.name === itemName);
+                        if (itemIndex > -1) {
+                             inventoryAfterCrafting.splice(itemIndex, 1); // Remove one instance
+                             console.log(`Consumed item: ${itemName}`);
+                        } else {
+                            console.warn(`Tried to consume ${itemName}, but it wasn't found in inventory after crafting.`);
+                        }
+                   });
+              }
+              if (result.success && result.craftedItem) {
+                   inventoryAfterCrafting.push(result.craftedItem);
+                   console.log(`Added crafted item: ${result.craftedItem.name}`);
+              }
 
+              // Update game state string (important for AI context)
+               const newInventoryString = inventoryAfterCrafting.map(item => `${item.name}${item.quality ? ` (${item.quality})` : ''}`).join(', ') || 'Empty';
+               const gameStateWithUpdatedInventory = currentGameStateString.replace(/Inventory:.*?\n/, `Inventory: ${newInventoryString}\n`);
+
+              // Dispatch inventory and narration updates
+              dispatch({ type: 'UPDATE_INVENTORY', payload: inventoryAfterCrafting });
+              dispatch({ type: 'UPDATE_NARRATION', payload: { narration: narrationText, updatedGameState: gameStateWithUpdatedInventory, timestamp: Date.now() } });
+
+            // Close dialog and reset state
             setIsCraftingDialogOpen(false);
             setCraftingGoal("");
             setSelectedIngredients([]);
 
         } catch (err: any) {
             console.error("Crafting AI call failed:", err);
-            setCraftingError(`Crafting attempt failed: ${err.message}. Please try again later.`);
-            toast({ title: "Crafting Error", description: "The AI failed to process the crafting attempt.", variant: "destructive" });
+             let userFriendlyError = `Crafting attempt failed. Please try again later.`;
+             if (err.message?.includes('400 Bad Request')) {
+                 userFriendlyError = "Crafting failed: Invalid materials or combination? Check the recipe.";
+             } else if (err.message?.includes('503')) {
+                 userFriendlyError = "Crafting failed: The crafting spirits are busy. Please try again later.";
+             } else if (err.message) {
+                  userFriendlyError = `Crafting Error: ${err.message}`;
+             }
+            setCraftingError(userFriendlyError);
+            toast({ title: "Crafting Error", description: userFriendlyError.substring(0,100), variant: "destructive" });
         } finally {
             setIsCraftingLoading(false);
         }
-    }, [character, inventory, craftingGoal, selectedIngredients, dispatch, toast, isLoading, isCraftingLoading, currentGameStateString]);
+    }, [character, inventory, craftingGoal, selectedIngredients, dispatch, toast, isLoading, isCraftingLoading, currentGameStateString, isEnding, isSaving]);
 
 
      // Handle ingredient selection toggle
@@ -659,6 +700,7 @@ export function Gameplay() {
      const busy = isLoading || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isEnding || isSaving || isCraftingLoading;
     if (trimmedInput && !busy) {
        handlePlayerAction(trimmedInput);
+       setPlayerInput(""); // Clear input after submission
     } else if (!trimmedInput) {
         toast({ description: "Please enter an action.", variant: "destructive"});
     } else if (busy) {
@@ -783,7 +825,7 @@ export function Gameplay() {
     // Error Display
     if (error) {
       return (
-        <Alert variant="destructive">
+        <Alert variant="destructive" className="my-2">
           <AlertTitle>Error</AlertTitle>
           <AlertDescription>
             {error}
@@ -1068,6 +1110,9 @@ export function Gameplay() {
                                       )}
                                  </TabsContent>
                            </Tabs>
+                            <SheetFooter className="p-4 border-t bg-background mt-auto">
+                               {/* Add relevant mobile actions here if needed */}
+                           </SheetFooter>
                        </SheetContent>
                    </Sheet>
 
@@ -1248,3 +1293,5 @@ export function Gameplay() {
     </div>
   );
 }
+
+        
