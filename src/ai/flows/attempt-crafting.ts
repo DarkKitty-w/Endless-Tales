@@ -55,22 +55,22 @@ const attemptCraftingPrompt = ai.definePrompt({
   name: 'attemptCraftingPrompt',
   input: { schema: AttemptCraftingInputSchema },
   output: { schema: AttemptCraftingOutputSchema },
-  // Simplified prompt for debugging - remove {{#if}} around arrays
+  // Updated prompt to explicitly handle empty arrays
   prompt: `You are a Master Crafter AI for the text adventure "Endless Tales". Evaluate a player's crafting attempt based on their knowledge, skills, available inventory, desired item, and the ingredients they chose to use.
 
 **Character Capabilities:**
 *   Knowledge:
-{{#each characterKnowledge}}    - {{{this}}}\n{{/each}}
+{{#if characterKnowledge}}{{#each characterKnowledge}}    - {{{this}}}\n{{/each}}{{else}}    - None\n{{/if}}
 *   Skills:
-{{#each characterSkills}}    - {{{this}}}\n{{/each}}
+{{#if characterSkills}}{{#each characterSkills}}    - {{{this}}}\n{{/each}}{{else}}    - None\n{{/if}}
 
 **Full Inventory:**
-{{#each inventoryItems}}    - {{{this}}}\n{{/each}}
+{{#if inventoryItems}}{{#each inventoryItems}}    - {{{this}}}\n{{/each}}{{else}}    - Empty\n{{/if}}
 
 **Crafting Attempt:**
 *   Goal: {{{desiredItem}}}
 *   Ingredients Used:
-{{#each usedIngredients}}    - {{{this}}}\n{{/each}}
+{{#if usedIngredients}}{{#each usedIngredients}}    - {{{this}}}\n{{/each}}{{else}}    - None specified\n{{/if}}
 
 **Evaluation Task:**
 Determine if the crafting attempt is possible and likely to succeed. Consider:
@@ -121,16 +121,16 @@ const attemptCraftingFlow = ai.defineFlow<
          attempt++;
          console.log(`Crafting AI call attempt ${attempt}...`);
          try {
-             const result = await attemptCraftingPrompt(input);
+             const result = await attemptCraftingPrompt(input); // Consider adding { temperature: 0.7 } or other config if needed
              output = result.output;
 
              // ---- Start Detailed Validation ----
              if (!output) {
                  throw new Error(`AI returned undefined output (attempt ${attempt}).`);
              }
-              if (typeof output.success !== 'boolean') {
-                   throw new Error(`AI returned invalid 'success' field (not boolean, attempt ${attempt}). Got: ${typeof output.success}`);
-              }
+             if (typeof output.success !== 'boolean') {
+                  throw new Error(`AI returned invalid 'success' field (not boolean, attempt ${attempt}). Got: ${typeof output.success}`);
+             }
              if (typeof output.message !== 'string' || !output.message.trim()) {
                  throw new Error(`AI returned invalid or empty 'message' field (attempt ${attempt}).`);
              }
@@ -148,12 +148,15 @@ const attemptCraftingFlow = ai.defineFlow<
                  if (typeof output.craftedItem.name !== 'string' || !output.craftedItem.name.trim()) {
                      throw new Error(`AI returned invalid craftedItem (missing or empty name, attempt ${attempt}).`);
                  }
-                  if (typeof output.craftedItem.description !== 'string' || !output.craftedItem.description.trim()) {
-                     throw new Error(`AI returned invalid craftedItem (missing or empty description, attempt ${attempt}).`);
+                 if (typeof output.craftedItem.description !== 'string' || !output.craftedItem.description.trim()) {
+                    throw new Error(`AI returned invalid craftedItem (missing or empty description, attempt ${attempt}).`);
                  }
                  // Optional fields validation (if present, must be correct type)
                   if (output.craftedItem.quality !== undefined && output.craftedItem.quality !== null && typeof output.craftedItem.quality !== 'string') {
                      console.warn(`AI returned potentially invalid craftedItem quality type (attempt ${attempt}).`);
+                     // Attempt to parse or discard if not matching enum
+                     const qualityParse = ItemQualitySchema.safeParse(output.craftedItem.quality);
+                     output.craftedItem.quality = qualityParse.success ? qualityParse.data : undefined;
                   }
                   if (output.craftedItem.weight !== undefined && output.craftedItem.weight !== null && typeof output.craftedItem.weight !== 'number') {
                        console.warn(`AI returned potentially invalid craftedItem weight type (attempt ${attempt}).`);
@@ -181,16 +184,16 @@ const attemptCraftingFlow = ai.defineFlow<
 
          } catch (err: any) {
              console.error(`Crafting AI attempt ${attempt} error:`, err);
-             errorOccurred = true;
              lastError = err; // Store the last error encountered
              output = undefined; // Reset output on error to force retry
 
              if (attempt >= maxAttempts) {
-                 // Final failure after retries - throw the last known error
-                 console.error(`Final crafting attempt failed after ${maxAttempts} attempts.`);
-                 throw lastError; // Throw the actual error from the last attempt
+                  // Final failure after retries - throw a more specific error including details if possible
+                 const errorMessage = `Failed to get valid crafting result after ${maxAttempts} attempts. Last error: ${lastError?.message || 'Unknown failure during flow execution.'}`;
+                 console.error(errorMessage);
+                 throw new Error(errorMessage);
              }
-             // Wait with exponential backoff before retrying
+              // Wait with exponential backoff before retrying
              const waitTime = 500 * Math.pow(2, attempt -1); // 500ms, 1000ms, 2000ms...
              console.log(`Waiting ${waitTime}ms before next crafting attempt...`);
              await new Promise(resolve => setTimeout(resolve, waitTime));
@@ -199,13 +202,12 @@ const attemptCraftingFlow = ai.defineFlow<
 
      // If after all retries, output is still undefined, something went fundamentally wrong
      if (!output) {
-         console.error("Crafting failed: Could not obtain a valid response from AI after all retries.");
-          throw new Error(`Crafting generation failed for goal "${input.desiredItem}" after ${maxAttempts} attempts. Last error: ${lastError?.message || 'Unknown failure during flow execution.'}`);
+         const finalErrorMessage = `Crafting failed: Could not obtain a valid response from AI after all retries. Last error: ${lastError?.message || 'Unknown failure during flow execution.'}`;
+         console.error(finalErrorMessage);
+         throw new Error(finalErrorMessage);
      }
 
      console.log("Received valid crafting result:", JSON.stringify(output, null, 2));
      return output;
   }
 );
-
-        
