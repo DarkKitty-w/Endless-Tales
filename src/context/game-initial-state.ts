@@ -5,7 +5,9 @@ import type {
     Character,
     AdventureSettings,
     InventoryItem,
-    ItemQuality
+    ItemQuality,
+    CharacterStats, // Import CharacterStats
+    DifficultyLevel,
 } from "@/types/game-types";
 import {
     calculateMaxStamina,
@@ -13,6 +15,16 @@ import {
     calculateXpToNextLevel,
     getStarterSkillsForClass
 } from "@/lib/gameUtils";
+
+/** Initial stats for a new character. */
+export const initialStats: CharacterStats = {
+    strength: 5,
+    stamina: 5,
+    agility: 5,
+    intellect: 5, // Added
+    wisdom: 5,    // Added
+    charisma: 5,  // Added
+};
 
 /** Initial state for a new character. */
 export const initialCharacterState: Character = {
@@ -22,12 +34,12 @@ export const initialCharacterState: Character = {
   traits: [],
   knowledge: [],
   background: "",
-  stats: { strength: 5, stamina: 5, agility: 5 },
+  stats: initialStats, // Use initialStats object
   aiGeneratedDescription: undefined,
-  maxStamina: calculateMaxStamina({ strength: 5, stamina: 5, agility: 5 }),
-  currentStamina: calculateMaxStamina({ strength: 5, stamina: 5, agility: 5 }),
-  maxMana: calculateMaxMana({ strength: 5, stamina: 5, agility: 5 }, []),
-  currentMana: calculateMaxMana({ strength: 5, stamina: 5, agility: 5 }, []),
+  maxStamina: calculateMaxStamina(initialStats),
+  currentStamina: calculateMaxStamina(initialStats),
+  maxMana: calculateMaxMana(initialStats, []),
+  currentMana: calculateMaxMana(initialStats, []),
   level: 1,
   xp: 0,
   xpToNextLevel: calculateXpToNextLevel(1),
@@ -48,7 +60,7 @@ export const initialInventory: InventoryItem[] = [
 export const initialAdventureSettings: AdventureSettings = {
     adventureType: null,
     permanentDeath: true,
-    difficulty: "Normal", // Default difficulty
+    difficulty: "Normal" as DifficultyLevel, // Use DifficultyLevel type
     worldType: "",
     mainQuestline: "",
 };
@@ -67,4 +79,6 @@ export const initialState: GameState = {
   currentAdventureId: null,
   isGeneratingSkillTree: false,
   turnCount: 0,
+  selectedThemeId: 'cardboard', // Default theme
+  isDarkMode: false, // Default mode (will be checked against system pref on load)
 };

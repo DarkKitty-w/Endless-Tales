@@ -1,6 +1,7 @@
 // src/types/game-types.ts
 
 import type { GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
+import type { CharacterStats } from "./character-types"; // Import CharacterStats
 
 /** Defines the possible states the game can be in. */
 export type GameStatus =
@@ -9,7 +10,10 @@ export type GameStatus =
   | "AdventureSetup"
   | "Gameplay"
   | "AdventureSummary"
-  | "ViewSavedAdventures";
+  | "ViewSavedAdventures"; // Keep this for saved games list
+
+/** Defines the possible difficulty levels. */
+export type DifficultyLevel = "Trivial" | "Easy" | "Normal" | "Hard" | "Very Hard" | "Impossible";
 
 /** Represents a single skill a character can possess or learn. */
 export interface Skill {
@@ -33,13 +37,6 @@ export interface SkillTree {
     stages: SkillTreeStage[]; // Array containing 5 stages (0-4)
 }
 
-/** Holds the core statistical attributes of a character. */
-export interface CharacterStats {
-  strength: number;
-  stamina: number; // Base stamina stat affecting max stamina
-  agility: number;
-}
-
 /** Tracks reputation scores with various factions. */
 export type Reputation = Record<string, number>; // Faction name -> Score (-100 to 100)
 
@@ -54,7 +51,7 @@ export interface Character {
   traits: string[];
   knowledge: string[];
   background: string;
-  stats: CharacterStats;
+  stats: CharacterStats; // Use imported CharacterStats type
   aiGeneratedDescription?: GenerateCharacterDescriptionOutput['detailedDescription']; // Separate storage for AI's expansion
 
   // Resource Pools
@@ -79,7 +76,7 @@ export interface Character {
 export interface AdventureSettings {
   adventureType: "Randomized" | "Custom" | null;
   permanentDeath: boolean;
-  difficulty: string; // Now mandatory, used for challenge modes
+  difficulty: DifficultyLevel; // Use DifficultyLevel type
   // Fields for Custom Adventure
   worldType?: string;
   mainQuestline?: string;
@@ -166,4 +163,7 @@ export interface GameState {
   currentAdventureId: string | null;
   isGeneratingSkillTree: boolean; // Track skill tree generation
   turnCount: number; // Track turns for potential dynamic events
+  // Theme state
+  selectedThemeId: string;
+  isDarkMode: boolean;
 }

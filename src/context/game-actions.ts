@@ -10,7 +10,8 @@ import type {
     InventoryItem,
     ReputationChange,
     NpcRelationshipChange,
-    Skill
+    Skill,
+    DifficultyLevel, // Add DifficultyLevel type
 } from "@/types/game-types";
 
 /** Defines all possible actions that can be dispatched to the game reducer. */
@@ -40,4 +41,6 @@ export type Action =
   | { type: "ADD_ITEM"; payload: InventoryItem }
   | { type: "REMOVE_ITEM"; payload: { itemName: string; quantity?: number } }
   | { type: "UPDATE_ITEM"; payload: { itemName: string; updates: Partial<InventoryItem> } }
-  | { type: "UPDATE_INVENTORY"; payload: InventoryItem[] };
+  | { type: "UPDATE_INVENTORY"; payload: InventoryItem[] }
+  | { type: "SET_THEME_ID"; payload: string } // New action for theme
+  | { type: "SET_DARK_MODE"; payload: boolean }; // New action for dark mode
