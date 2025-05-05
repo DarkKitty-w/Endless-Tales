@@ -93,7 +93,7 @@ export function CharacterCreation() {
    });
 
 
-  // --- Stat Allocation Logic ---
+   // --- Stat Allocation Logic ---
  const handleStatChange = useCallback((statName: keyof CharacterStats, value: number) => {
     const clampedValue = Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, value));
 
@@ -160,12 +160,13 @@ export function CharacterCreation() {
 
     setStatError(null); // Clear stat error after randomizing
     setStats(newStats);
-    toast({ title: "Stats Randomized", description: `Distributed ${TOTAL_STAT_POINTS} points.` });
- }, [setStats, setRemainingPoints, toast]);
+    // Removed toast to simplify for debugging
+    // toast({ title: "Stats Randomized", description: `Distributed ${TOTAL_STAT_POINTS} points.` });
+ }, [setStats, setRemainingPoints]); // Removed toast from dependencies
 
 
   // --- Randomize All ---
- const randomizeAll = useCallback(() => {
+ const randomizeAll = useCallback(() => { // Make synchronous for simplicity during debugging
     // Reset general error state
     setError(null);
     setStatError(null);
@@ -218,12 +219,11 @@ export function CharacterCreation() {
 
     randomizeStats(); // Randomize stats as well
 
-    toast({ title: "Character Randomized!", description: `Created a new character: ${name}` });
+    // Removed toast to simplify for debugging
+    // toast({ title: "Character Randomized!", description: `Created a new character: ${name}` });
     trigger(); // Trigger validation after setting values
 
-  // Simplify dependencies: remove toast, trigger, watch. Functions like reset/setValue don't need to be deps usually.
-  // Only include variables that, if changed, should recreate the randomizeAll function.
- }, [creationType, reset, setValue, randomizeStats]);
+  }, [creationType, reset, setValue, randomizeStats, trigger]);
 
 
   // Watch form values for dynamic checks
@@ -563,7 +563,7 @@ export function CharacterCreation() {
 
                          {/* Remaining Points Indicator and Stat Error */}
                          <div className="text-center pt-2">
-                             <p className={`text-sm font-medium ${remainingPoints !== 0 || statError ? 'text-orange-500 dark:text-orange-400' : 'text-primary'}`}>
+                             <p className={`text-sm font-medium ${remainingPoints !== 0 || statError ? 'text-destructive' : 'text-primary'}`}>
                                 {remainingPoints} points remaining.
                              </p>
                              {/* Display specific error for overallocation or invalid stats */}
@@ -578,14 +578,14 @@ export function CharacterCreation() {
                      <TooltipProvider>
                         <Tooltip>
                              <TooltipTrigger asChild>
+                                {/* Removed isRandomizing state for simplicity */}
                                 <Button
                                    type="button"
                                    onClick={randomizeAll}
                                    variant="secondary"
                                    aria-label="Randomize All Character Fields and Stats"
-                                   className="relative overflow-hidden" // Needed for positioning the checkmark
+                                   className="relative overflow-hidden"
                                 >
-                                     {/* Simplified button content */}
                                     <RotateCcw className="mr-2 h-4 w-4" />
                                     Randomize Everything
                                 </Button>
