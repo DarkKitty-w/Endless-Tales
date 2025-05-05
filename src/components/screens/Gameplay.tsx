@@ -1,24 +1,24 @@
 // src/components/screens/Gameplay.tsx
 "use client";
 
-import type { ComponentProps, SVGProps } from "react"; // Needed for SVG component type
+import type { SVGProps } from "react";
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import type { GameState, SavedAdventure, StoryLogEntry, Character, SkillTree, Skill, InventoryItem, Reputation, NpcRelationships, ItemQuality, AdventureSettings, DifficultyLevel } from '@/types/game-types'; // Import centralized types
+import type { GameState, SavedAdventure, StoryLogEntry, Character, SkillTree, Skill, InventoryItem, Reputation, NpcRelationships, ItemQuality, AdventureSettings, DifficultyLevel as AssessedDifficultyLevel } from '@/types/game-types'; // Import types from central location
 import { useGame } from "@/context/GameContext"; // Import main context hook
 import { useToast } from "@/hooks/use-toast";
 import { calculateXpToNextLevel } from "@/lib/gameUtils"; // Import specific game utils
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { CardboardCard, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/game/CardboardCard"; // Added CardFooter import
-import { CharacterDisplay } from "@/components/game/CharacterDisplay";
+import { ScrollArea } from "@/components/ui/scroll-area"; // Keep ScrollArea
+import { CardboardCard, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/game/CardboardCard";
+import { CharacterDisplay } from "@/components/game/CharacterDisplay"; // Keep for mobile sheet
 import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay"; // Import SkillTreeDisplay
 import { InventoryDisplay } from "@/components/game/InventoryDisplay"; // Import InventoryDisplay
 import { narrateAdventure, type NarrateAdventureInput, type NarrateAdventureOutput } from "@/ai/flows/narrate-adventure";
 import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
-import { assessActionDifficulty, type AssessActionDifficultyInput, type DifficultyLevel as AssessedDifficultyLevel } from "@/ai/flows/assess-action-difficulty"; // Import AssessActionDifficultyInput and its DifficultyLevel
+import { assessActionDifficulty, type AssessActionDifficultyInput } from "@/ai/flows/assess-action-difficulty";
 import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
-import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "@/ai/flows/attempt-crafting"; // Import crafting flow
+import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "@/ai/flows/attempt-crafting";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award, Hammer, CheckSquare, Square, Users, Milestone, CalendarClock, Skull, HeartPulse, GitBranch, ShieldAlert, Zap, Settings, CheckCircle } from "lucide-react"; // Added CheckCircle
 import {
@@ -50,14 +50,14 @@ import {
    DialogTrigger,
    DialogClose, // Import DialogClose
    DialogFooter, // Import DialogFooter
-} from "@/components/ui/dialog"; // Import Dialog components
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+} from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Keep Tabs
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress"; // Import Progress
 import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton
-import { Label } from "@/components/ui/label"; // Import Label
-import { Badge } from "@/components/ui/badge"; // Import Badge for item selection
-import { getQualityColor } from "@/lib/utils"; // Import quality color helper
+import { Label } from "../ui/label"; // Import Label
+import { Badge } from "../ui/badge"; // Import Badge for item selection
+import { getQualityColor, cn } from "@/lib/utils"; // Import utils
 import { SettingsPanel } from "@/components/screens/SettingsPanel"; // Corrected import path for SettingsPanel
 import {
     Tooltip,
@@ -65,18 +65,29 @@ import {
     TooltipProvider, // Import TooltipProvider
     TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils"; // Import cn utility
-import { LeftPanel } from "@/components/game/LeftPanel"; // Import the new LeftPanel
+import { LeftPanel } from "@/components/game/LeftPanel"; // Import the LeftPanel component
 
 
 // Helper function to map difficulty dice string to roller function
+// NOTE: Ensure rollD6, rollD10, rollD20, rollD100 are imported or defined if used elsewhere
+// For now, assuming they exist globally or are imported where needed.
+// Example: import { rollD6, rollD10, rollD20, rollD100 } from '@/services/dice-roller';
+
+declare global {
+  function rollD6(): Promise<number>;
+  function rollD10(): Promise<number>;
+  function rollD20(): Promise<number>;
+  function rollD100(): Promise<number>;
+}
+
+
 const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null => {
-  switch (diceType) {
-    case 'd6': return rollD6;
-    case 'd10': return rollD10;
-    case 'd20': return rollD20;
-    case 'd100': return rollD100;
-    case 'None': default: return null;
+  switch (diceType?.toLowerCase()) { // Added null check and toLowerCase
+    case 'd6': return typeof rollD6 === 'function' ? rollD6 : null;
+    case 'd10': return typeof rollD10 === 'function' ? rollD10 : null;
+    case 'd20': return typeof rollD20 === 'function' ? rollD20 : null;
+    case 'd100': return typeof rollD100 === 'function' ? rollD100 : null;
+    case 'none': default: return null;
   }
 };
 
@@ -857,7 +868,7 @@ export function Gameplay() {
        );
    }
 
-    // Helper Functions for Progression Card
+    // Helper Functions for Progression Card (used in mobile sheet)
     const renderReputation = (rep: Reputation | undefined) => {
         if (!rep || Object.keys(rep).length === 0) return <p className="text-xs text-muted-foreground italic">No faction reputations yet.</p>;
         return (
@@ -1082,9 +1093,10 @@ export function Gameplay() {
    // --- Render Main Component ---
   return (
     <TooltipProvider>
+        {/* Adjusted root div: added min-h-screen, kept flex structure */}
         <div className="flex flex-col md:flex-row min-h-screen overflow-hidden bg-gradient-to-br from-background to-muted/30">
 
-            {/* Left Panel */}
+            {/* Left Panel - Now imported */}
              <LeftPanel
                  character={character}
                  inventory={inventory}
@@ -1099,50 +1111,47 @@ export function Gameplay() {
             <div className="flex-1 flex flex-col p-4 overflow-hidden"> {/* Use flex-col and overflow */}
                 {/* Top Bar - Mobile Only */}
                 <div className="md:hidden flex justify-between items-center mb-2 border-b pb-2">
+                     {/* Mobile Profile Trigger (Character + Progression) */}
                     <Sheet>
                         <SheetTrigger asChild>
                             <Button variant="ghost" size="sm"><User className="w-4 h-4 mr-1.5"/> Profile</Button>
                         </SheetTrigger>
                         <SheetContent side="left" className="w-[85vw] p-0 flex flex-col">
                              <SheetHeader className="p-4 border-b">
-                                <SheetTitle>Character Profile</SheetTitle>
+                                <SheetTitle>Character & Progression</SheetTitle>
                             </SheetHeader>
                             <ScrollArea className="flex-grow p-4">
+                                {/* Display Character Info */}
                                 <CharacterDisplay />
-                                {/* Mobile Progression Card */}
-                                <CardboardCard className="mb-4">
-                                    <CardHeader className="pb-2 pt-4">
-                                        <CardTitle className="text-lg font-semibold flex items-center gap-2"><Milestone className="w-4 h-4"/> Progression</CardTitle>
-                                    </CardHeader>
-                                     <CardContent className="pt-4 pb-4 text-sm space-y-3">
-                                        <Tooltip>
-                                            <TooltipTrigger className="w-full cursor-help">
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <span className="text-sm font-medium flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Level:</span>
-                                                    <span className="font-bold text-base">{character.level}</span>
-                                                    <span className="ml-auto font-medium text-muted-foreground">XP:</span>
-                                                    <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
-                                                </div>
-                                                <Progress value={(character.xp / character.xpToNextLevel) * 100} className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"/>
-                                            </TooltipTrigger>
-                                            <TooltipContent><p>Experience Points</p><p className="text-xs text-muted-foreground">({character.xpToNextLevel - character.xp} needed)</p></TooltipContent>
-                                        </Tooltip>
-                                        <Separator />
-                                        <div className="space-y-1"><Label className="text-sm font-medium flex items-center gap-1 mb-1"><Users className="w-3.5 h-3.5"/> Reputation:</Label>{renderReputation(character.reputation)}</div>
-                                        <Separator />
-                                        <div className="space-y-1"><Label className="text-sm font-medium flex items-center gap-1 mb-1"><HeartPulse className="w-3.5 h-3.5"/> Relationships:</Label>{renderNpcRelationships(character.npcRelationships)}</div>
-                                        <Separator />
-                                         <div className="flex justify-between items-center"><Label className="text-sm font-medium flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5"/> Turn:</Label><span className="font-bold text-base">{turnCount}</span></div>
-                                    </CardContent>
-                                </CardboardCard>
+                                <Separator className="my-4"/>
+                                {/* Display Progression Info */}
+                                <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><Milestone className="w-4 h-4"/> Progression</h3>
+                                <div className="space-y-3 text-sm">
+                                      <Tooltip>
+                                          <TooltipTrigger className="w-full cursor-help text-left">
+                                              <div className="flex items-center justify-between mb-1">
+                                                  <span className="text-sm font-medium flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Level:</span>
+                                                  <span className="font-bold text-base">{character.level}</span>
+                                                  <span className="ml-auto font-medium text-muted-foreground">XP:</span>
+                                                  <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
+                                              </div>
+                                              <Progress value={(character.xp / character.xpToNextLevel) * 100} className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"/>
+                                          </TooltipTrigger>
+                                          <TooltipContent><p>Experience Points</p><p className="text-xs text-muted-foreground">({character.xpToNextLevel - character.xp} needed)</p></TooltipContent>
+                                      </Tooltip>
+                                      <Separator />
+                                      <div className="space-y-1"><Label className="text-sm font-medium flex items-center gap-1 mb-1"><Users className="w-3.5 h-3.5"/> Reputation:</Label>{renderReputation(character.reputation)}</div>
+                                      <Separator />
+                                      <div className="space-y-1"><Label className="text-sm font-medium flex items-center gap-1 mb-1"><HeartPulse className="w-3.5 h-3.5"/> Relationships:</Label>{renderNpcRelationships(character.npcRelationships)}</div>
+                                      <Separator />
+                                       <div className="flex justify-between items-center"><Label className="text-sm font-medium flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5"/> Turn:</Label><span className="font-bold text-base">{turnCount}</span></div>
+                                  </div>
                             </ScrollArea>
-                            <SheetFooter className="p-4 border-t bg-background mt-auto">
-                                {/* Add relevant mobile actions here if needed */}
-                           </SheetFooter>
+                             {/* Removed SheetFooter as it's not typically needed here */}
                         </SheetContent>
                     </Sheet>
                     <div className="flex gap-1">
-                        {/* Mobile Inventory/Skills Trigger */}
+                         {/* Mobile Inventory/Skills Trigger */}
                         <Sheet>
                             <SheetTrigger asChild>
                                 <Button variant="ghost" size="icon"><Backpack className="w-5 h-5" /></Button>
@@ -1154,12 +1163,13 @@ export function Gameplay() {
                                         <TabsTrigger value="skills" className="flex-1"><Workflow className="w-4 h-4 mr-1.5"/> Skills</TabsTrigger>
                                     </TabsList>
                                     <div className="flex-grow overflow-hidden">
-                                        <TabsContent value="inventory" className="h-full"><InventoryDisplay /></TabsContent>
-                                        <TabsContent value="skills" className="h-full">
+                                        <TabsContent value="inventory" className="h-full m-0"><InventoryDisplay /></TabsContent>
+                                        <TabsContent value="skills" className="h-full m-0">
+                                            {/* SkillTreeDisplay handles its own scrolling */}
                                             {character.skillTree && !isGeneratingSkillTree ? (
                                                 <SkillTreeDisplay skillTree={character.skillTree} learnedSkills={character.learnedSkills} currentStage={character.skillTreeStage} />
                                              ) : (
-                                                <div className="flex items-center justify-center h-full">
+                                                <div className="flex items-center justify-center h-full text-muted-foreground italic p-4">
                                                     {isGeneratingSkillTree ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : ""}
                                                     {isGeneratingSkillTree ? "Generating skill tree..." : "No skill tree available."}
                                                 </div>
