@@ -2,9 +2,9 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useGame } from "@/context/GameContext";
+import type { GameState, SavedAdventure, StoryLogEntry, Character, SkillTree, Skill, InventoryItem, Reputation, NpcRelationships, ItemQuality, AdventureSettings } from "@/types/game-types"; // Import centralized types
+import { useGame } from "@/context/GameContext"; // Import main context hook
 import { useToast } from "@/hooks/use-toast";
-import type { InventoryItem, StoryLogEntry, SkillTree, Skill, Character, Reputation, NpcRelationships } from "@/types/game-types"; // Import types
 import { calculateXpToNextLevel } from "@/lib/gameUtils"; // Import specific game utils
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,7 +39,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-  SheetFooter
+  SheetFooter // Added SheetFooter
 } from "@/components/ui/sheet";
 import {
    Dialog,
@@ -147,6 +147,39 @@ export function Gameplay() {
         }
    }, [character, dispatch, toast, isGeneratingSkillTree]);
 
+    // --- End Adventure (Define before handlePlayerAction) ---
+   const handleEndAdventure = useCallback(async (finalNarrationEntry?: StoryLogEntry) => {
+     if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree) return;
+     setIsEnding(true);
+     setError(null);
+     toast({ title: "Ending Adventure", description: "Summarizing your tale..." });
+     const finalContext = finalNarrationEntry ?? (storyLog.length > 0 ? storyLog[storyLog.length - 1] : null);
+     let summary = "Your adventure has concluded.";
+     const finalLogToSummarize = [...storyLog];
+     if (finalNarrationEntry && (!storyLog.length || storyLog[storyLog.length - 1].narration !== finalNarrationEntry.narration)) {
+        finalLogToSummarize.push(finalNarrationEntry);
+     }
+     const hasLog = finalLogToSummarize.length > 0;
+     if (hasLog) {
+         const fullStory = finalLogToSummarize.map((log, index) => `[Turn ${index + 1}]\n${log.narration}`).join("\n\n---\n\n");
+         if(fullStory.trim().length > 0) {
+             try {
+                 const summaryResult = await summarizeAdventure({ story: fullStory });
+                 summary = summaryResult.summary;
+                 toast({ title: "Summary Generated", description: "View your adventure outcome." });
+             } catch (summaryError: any) {
+                 summary = `Could not generate a summary due to an error: ${summaryError.message || 'Unknown error'}. The adventure ended.`;
+                 toast({ title: "Summary Error", description: "Failed to generate summary.", variant: "destructive" });
+             }
+         } else {
+             summary = "The story was too brief to summarize, but your adventure has concluded.";
+         }
+     } else {
+         summary = "Your adventure ended before it could be properly logged.";
+     }
+     dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationEntry } });
+     setIsEnding(false); // Ensure ending state is reset
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, storyLog, dispatch, toast]);
 
   // --- Handle Player Action Submission ---
   const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
@@ -399,13 +432,15 @@ export function Gameplay() {
 
             addedItems.forEach(name => dispatch({ type: "ADD_ITEM", payload: { name, description: "Acquired during adventure", quality: "Common" } }));
             removedItems.forEach(name => dispatch({ type: "REMOVE_ITEM", payload: { itemName: name } }));
-            // Don't dispatch an extra narration here, the main narration already covers it
-            // const updatedGameStateForInventoryLog = `${inputForAI.gameState}\nEvent: ${addedItems.length} items added. ${removedItems.length} items removed.`;
-            // dispatch({ type: 'UPDATE_NARRATION', payload: { narration: `Inventory updated.`, updatedGameState: updatedGameStateForInventoryLog, timestamp: Date.now() } });
 
             if (addedItems.length > 0 || removedItems.length > 0) {
                 console.log("Inventory updated via game state parsing:", { added: addedItems, removed: removedItems });
                 toast({ title: "Inventory Updated", description: `${addedItems.length > 0 ? 'Added: ' + addedItems.join(', ') : ''}${removedItems.length > 0 ? ' Removed: ' + removedItems.join(', ') : ''}`, duration: 3000 });
+                // Create separate log entry for inventory change for clarity
+                const inventoryNarration = `Inventory updated. ${addedItems.length > 0 ? 'Gained: ' + addedItems.join(', ') : ''}${removedItems.length > 0 ? ' Lost: ' + removedItems.join(', ') : ''}`;
+                 // Don't increment turn count for this meta-log
+                 const updatedGameStateForInventoryLog = narrationResult.updatedGameState; // Use the state AFTER the main action
+                dispatch({ type: 'UPDATE_NARRATION', payload: { narration: inventoryNarration, updatedGameState: updatedGameStateForInventoryLog, timestamp: Date.now()+1 } }); // Add 1ms to timestamp to ensure order
             }
         }
 
@@ -475,41 +510,6 @@ export function Gameplay() {
       isGeneratingSkillTree, currentGameStateString, currentNarration, storyLog, adventureSettings, turnCount,
       dispatch, toast, scrollToBottom, triggerSkillTreeGeneration, handleEndAdventure
   ]);
-
-
-   // --- End Adventure ---
-   const handleEndAdventure = useCallback(async (finalNarrationEntry?: StoryLogEntry) => {
-     if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree) return;
-     setIsEnding(true);
-     setError(null);
-     toast({ title: "Ending Adventure", description: "Summarizing your tale..." });
-     const finalContext = finalNarrationEntry ?? (storyLog.length > 0 ? storyLog[storyLog.length - 1] : null);
-     let summary = "Your adventure has concluded.";
-     const finalLogToSummarize = [...storyLog];
-     if (finalNarrationEntry && (!storyLog.length || storyLog[storyLog.length - 1].narration !== finalNarrationEntry.narration)) {
-        finalLogToSummarize.push(finalNarrationEntry);
-     }
-     const hasLog = finalLogToSummarize.length > 0;
-     if (hasLog) {
-         const fullStory = finalLogToSummarize.map((log, index) => `[Turn ${index + 1}]\n${log.narration}`).join("\n\n---\n\n");
-         if(fullStory.trim().length > 0) {
-             try {
-                 const summaryResult = await summarizeAdventure({ story: fullStory });
-                 summary = summaryResult.summary;
-                 toast({ title: "Summary Generated", description: "View your adventure outcome." });
-             } catch (summaryError: any) {
-                 summary = `Could not generate a summary due to an error: ${summaryError.message || 'Unknown error'}. The adventure ended.`;
-                 toast({ title: "Summary Error", description: "Failed to generate summary.", variant: "destructive" });
-             }
-         } else {
-             summary = "The story was too brief to summarize, but your adventure has concluded.";
-         }
-     } else {
-         summary = "Your adventure ended before it could be properly logged.";
-     }
-     dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationEntry } });
-     setIsEnding(false); // Ensure ending state is reset
-   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, storyLog, dispatch, toast]);
 
 
    // --- Handle Save Game ---
@@ -1110,7 +1110,7 @@ export function Gameplay() {
                                       )}
                                  </TabsContent>
                            </Tabs>
-                            <SheetFooter className="p-4 border-t bg-background mt-auto">
+                           <SheetFooter className="p-4 border-t bg-background mt-auto">
                                {/* Add relevant mobile actions here if needed */}
                            </SheetFooter>
                        </SheetContent>
@@ -1293,5 +1293,3 @@ export function Gameplay() {
     </div>
   );
 }
-
-        
