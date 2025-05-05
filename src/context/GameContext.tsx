@@ -2,18 +2,18 @@
 "use client";
 
 import type { ReactNode } from "react";
-import React, { createContext, useContext, useReducer, Dispatch, useEffect, useCallback, useState } from "react";
-import type { GameState, SavedAdventure } from "@/types/game-types";
+import React, { createContext, useContext, useReducer, Dispatch, useEffect, useCallback } from "react";
+import type { GameState } from "@/types/game-types";
 import type { Action } from "./game-actions";
 import { initialState } from "./game-initial-state";
 import { gameReducer } from "./game-reducer";
-import { THEMES } from "@/lib/themes"; // Import themes
+import { THEMES } from "@/lib/themes";
+import type { SavedAdventure } from "@/types/adventure-types"; // Import SavedAdventure type
 
-// --- LocalStorage Key ---
+// --- LocalStorage Keys ---
 const SAVED_ADVENTURES_KEY = "endlessTalesSavedAdventures";
 const THEME_ID_KEY = "colorTheme";
 const THEME_MODE_KEY = "themeMode";
-
 
 // --- Context Definition ---
 const GameContext = createContext<{ state: GameState; dispatch: Dispatch<Action> } | undefined>(undefined);
@@ -22,29 +22,27 @@ const GameContext = createContext<{ state: GameState; dispatch: Dispatch<Action>
 export const GameProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
 
-   // --- Apply Theme Logic (Moved from SettingsPanel) ---
+   // --- Apply Theme Logic ---
    const applyTheme = useCallback((themeId: string, isDark: boolean) => {
-        const theme = THEMES.find(t => t.id === themeId) || THEMES[0]; // Fallback to default
+        const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
         const colors = isDark ? theme.dark : theme.light;
         const root = document.documentElement;
 
-        if (!root) return; // Ensure document is ready
+        if (!root) return;
 
         console.log(`Applying theme: ${themeId}, Mode: ${isDark ? 'Dark' : 'Light'}`);
 
-        // Apply CSS variables
         Object.entries(colors).forEach(([property, value]) => {
             root.style.setProperty(property, value);
         });
 
-        // Apply dark/light class
         if (isDark) {
             root.classList.add('dark');
         } else {
             root.classList.remove('dark');
         }
 
-        // Save preferences (moved from reducer to avoid direct localStorage access in reducer)
+        // Save preferences (moved from reducer)
         localStorage.setItem(THEME_ID_KEY, themeId);
         localStorage.setItem(THEME_MODE_KEY, isDark ? 'dark' : 'light');
    }, []);
@@ -87,13 +85,22 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
          // Apply the loaded theme directly here
          applyTheme(savedThemeId, initialDarkMode);
 
-    }, [applyTheme]); // applyTheme is stable due to useCallback
+    }, [applyTheme]);
 
     // --- Apply theme whenever state changes ---
      useEffect(() => {
          // Only apply if state has been initialized (avoids initial double-application)
+         // Check if the theme values in the state *differ* from the initial state defaults
+         // before applying. This prevents unnecessary reapplications on initial load.
          if (state.selectedThemeId !== initialState.selectedThemeId || state.isDarkMode !== initialState.isDarkMode) {
-              applyTheme(state.selectedThemeId, state.isDarkMode);
+             // Check if localStorage already matches the state to avoid redundant saves/applications
+             const storedThemeId = localStorage.getItem(THEME_ID_KEY);
+             const storedMode = localStorage.getItem(THEME_MODE_KEY);
+             const isStoredDark = storedMode === 'dark';
+
+             if (storedThemeId !== state.selectedThemeId || isStoredDark !== state.isDarkMode) {
+                 applyTheme(state.selectedThemeId, state.isDarkMode);
+             }
          }
      }, [state.selectedThemeId, state.isDarkMode, applyTheme]);
 
@@ -104,7 +111,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
           ? state.character.skillTree.stages[state.character.skillTreeStage]?.stageName ?? `Stage ${state.character.skillTreeStage}`
           : "Stage 0";
       const reputationString = state.character ? Object.entries(state.character.reputation).map(([f, s]) => `${f}: ${s}`).join(', ') || 'None' : 'N/A';
-      const relationshipString = state.character ? Object.entries(state.character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'N/A' : 'N/A';
+      const relationshipString = state.character ? Object.entries(state.character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'None' : 'N/A'; // Log relationships
       const inventoryString = state.inventory.map(i => `${i.name}${i.quality ? ` (${i.quality})` : ''}`).join(', ') || 'Empty';
      // console.log("Game State Updated:", { // Temporarily disable verbose logging
      //    status: state.status,

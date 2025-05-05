@@ -1,21 +1,16 @@
 // src/context/game-initial-state.ts
 
-import type {
-    GameState,
-    Character,
-    AdventureSettings,
-    InventoryItem,
-    ItemQuality,
-    CharacterStats, // Import CharacterStats
-    DifficultyLevel,
-} from "@/types/game-types";
+import type { GameState } from "@/types/game-types";
+import type { Character, CharacterStats } from "@/types/character-types";
+import type { InventoryItem, ItemQuality } from "@/types/inventory-types";
+import type { AdventureSettings, DifficultyLevel } from "@/types/adventure-types";
 import {
     calculateMaxStamina,
     calculateMaxMana,
     calculateXpToNextLevel,
     getStarterSkillsForClass
 } from "@/lib/gameUtils";
-import { TOTAL_STAT_POINTS, MIN_STAT_VALUE } from "@/lib/constants"; // Import constants
+import { TOTAL_STAT_POINTS, MIN_STAT_VALUE } from "@/lib/constants";
 
 /** Initial stats for a new character, ensuring they respect the total points. */
 const baseValue = Math.floor(TOTAL_STAT_POINTS / 3); // Divide points among STR, STA, AGI
@@ -38,7 +33,7 @@ export const initialCharacterState: Character = {
   traits: [],
   knowledge: [],
   background: "",
-  stats: initialStats, // Use initialStats object
+  stats: { ...initialStats }, // Use a copy of initialStats object
   aiGeneratedDescription: undefined,
   maxStamina: calculateMaxStamina(initialStats),
   currentStamina: calculateMaxStamina(initialStats),
@@ -73,7 +68,7 @@ export const initialAdventureSettings: AdventureSettings = {
 export const initialState: GameState = {
   status: "MainMenu",
   character: null,
-  adventureSettings: initialAdventureSettings,
+  adventureSettings: { ...initialAdventureSettings }, // Use a copy
   currentNarration: null,
   storyLog: [],
   adventureSummary: null,

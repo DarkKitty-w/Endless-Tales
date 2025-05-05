@@ -1,6 +1,6 @@
 // src/lib/gameUtils.ts
 
-import type { CharacterStats, Skill } from "@/types/game-types";
+import type { CharacterStats, Skill } from "@/types/character-types"; // Import from character types
 
 /**
  * Calculates the maximum stamina based on character stats.
@@ -61,7 +61,7 @@ export const CLASS_STARTER_SKILLS: Record<string, Skill[]> = {
         { name: "Jury-Rig", description: "Attempt a temporary fix on a broken item.", type: 'Starter', staminaCost: 5 },
         { name: "Identify Device", description: "Try to understand the function of a mechanism.", type: 'Starter' }
     ],
-    "Default": [ // Fallback for Adventurer or unknown classes
+     "Adventurer": [ // Fallback for Adventurer or unknown classes
         { name: "Basic Strike", description: "A simple physical attack.", type: 'Starter', staminaCost: 5 },
         { name: "First Aid", description: "Attempt to patch up minor wounds.", type: 'Starter', staminaCost: 10 }
     ],
@@ -73,8 +73,10 @@ export const CLASS_STARTER_SKILLS: Record<string, Skill[]> = {
  * @returns An array of Skill objects, including the common 'Observe' skill.
  */
 export function getStarterSkillsForClass(className: string): Skill[] {
-    const classSkills = CLASS_STARTER_SKILLS[className] || CLASS_STARTER_SKILLS["Default"];
-    return [COMMON_STARTER_SKILL, ...classSkills];
+    const classSkills = CLASS_STARTER_SKILLS[className] || CLASS_STARTER_SKILLS["Adventurer"]; // Use Adventurer as default
+    // Ensure Observe is always included and prevent duplicates if class already has it
+    const skills = [COMMON_STARTER_SKILL, ...classSkills];
+    return Array.from(new Map(skills.map(skill => [skill.name, skill])).values());
 }
 
 /**

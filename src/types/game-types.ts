@@ -1,153 +1,17 @@
 // src/types/game-types.ts
 
-import type { GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
-import type { CharacterStats } from "./character-types"; // Import CharacterStats
+import type { Character } from "./character-types";
+import type { InventoryItem } from "./inventory-types";
+import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel } from "./adventure-types";
 
-/** Defines the possible states the game can be in. */
+// Keep general game status type here or move to its own file if it grows
 export type GameStatus =
   | "MainMenu"
   | "CharacterCreation"
   | "AdventureSetup"
   | "Gameplay"
   | "AdventureSummary"
-  | "ViewSavedAdventures"; // Keep this for saved games list
-
-/** Defines the possible difficulty levels. */
-export type DifficultyLevel = "Trivial" | "Easy" | "Normal" | "Hard" | "Very Hard" | "Impossible";
-
-/** Represents a single skill a character can possess or learn. */
-export interface Skill {
-    name: string;
-    description: string;
-    type?: 'Starter' | 'Learned'; // Indicate if it's a starter skill or learned
-    manaCost?: number; // Optional mana cost
-    staminaCost?: number; // Optional stamina cost
-}
-
-/** Represents a single stage within a skill tree. */
-export interface SkillTreeStage {
-    stage: number; // 0-4
-    stageName: string; // e.g., "Potential", "Apprentice", "Knight", "Initiate", "Master", "Grandmaster"
-    skills: Skill[]; // Skills *available* at this stage (not necessarily learned yet)
-}
-
-/** Represents the entire skill tree for a character class. */
-export interface SkillTree {
-    className: string; // The class this tree belongs to
-    stages: SkillTreeStage[]; // Array containing 5 stages (0-4)
-}
-
-/** Tracks reputation scores with various factions. */
-export type Reputation = Record<string, number>; // Faction name -> Score (-100 to 100)
-
-/** Tracks relationship scores with specific NPCs. */
-export type NpcRelationships = Record<string, number>; // NPC Name -> Score (-100 to 100)
-
-/** Represents the player character. */
-export interface Character {
-  name: string;
-  description: string; // User's description or AI-generated one if they used the button
-  class: string; // Character class (e.g., Warrior, Mage) - Now mandatory
-  traits: string[];
-  knowledge: string[];
-  background: string;
-  stats: CharacterStats; // Use imported CharacterStats type
-  aiGeneratedDescription?: GenerateCharacterDescriptionOutput['detailedDescription']; // Separate storage for AI's expansion
-
-  // Resource Pools
-  maxStamina: number;
-  currentStamina: number;
-  maxMana: number;
-  currentMana: number;
-
-  // Progression
-  level: number;
-  xp: number;
-  xpToNextLevel: number;
-  reputation: Reputation; // Faction reputation scores
-  npcRelationships: NpcRelationships; // Relationship scores with specific NPCs
-
-  skillTree: SkillTree | null; // Holds the generated skill tree for the current class
-  skillTreeStage: number; // Current progression stage (0-4, 0 means no stage achieved yet)
-  learnedSkills: Skill[]; // List of skills the character has actually learned/acquired
-}
-
-/** Settings for the current adventure. */
-export interface AdventureSettings {
-  adventureType: "Randomized" | "Custom" | null;
-  permanentDeath: boolean;
-  difficulty: DifficultyLevel; // Use DifficultyLevel type
-  // Fields for Custom Adventure
-  worldType?: string;
-  mainQuestline?: string;
-}
-
-/** Defines the possible quality levels for items. */
-export type ItemQuality = "Poor" | "Common" | "Uncommon" | "Rare" | "Epic" | "Legendary";
-
-/** Represents an item in the character's inventory. */
-export interface InventoryItem {
-    name: string;
-    description: string; // Make description mandatory
-    weight?: number; // Optional weight
-    durability?: number; // Optional durability (e.g., 0-100)
-    magicalEffect?: string; // Optional description of magical effects
-    quality?: ItemQuality; // Optional quality level
-}
-
-/** Represents a change in reputation with a faction. */
-export interface ReputationChange {
-    faction: string;
-    change: number; // Positive or negative change amount
-}
-
-/** Represents a change in relationship score with an NPC. */
-export interface NpcRelationshipChange {
-    npcName: string;
-    change: number; // Positive or negative change amount
-}
-
-/** Represents the outcome of a crafting attempt. */
-export interface CraftedItemResult {
-    success: boolean;
-    item?: InventoryItem; // The crafted item if successful
-    message: string; // Message about the crafting attempt
-}
-
-/** Represents a single entry in the adventure's story log. */
-export interface StoryLogEntry {
-  narration: string;
-  updatedGameState: string;
-  // Character progression updates from AI
-  updatedStats?: Partial<CharacterStats>;
-  updatedTraits?: string[];
-  updatedKnowledge?: string[];
-  progressedToStage?: number; // Optional: AI indicates skill stage progression
-  suggestedClassChange?: string; // Optional: AI suggests a class change
-  timestamp: number;
-  // Resource changes from AI
-  staminaChange?: number; // Negative for cost, positive for gain
-  manaChange?: number; // Negative for cost, positive for gain
-  gainedSkill?: Skill; // Optional: If a new skill was learned/gained
-  xpGained?: number; // Optional: XP awarded by AI for the action/event
-  reputationChange?: ReputationChange; // Optional: Reputation change awarded by AI
-  npcRelationshipChange?: NpcRelationshipChange; // Optional: NPC Relationship change awarded by AI
-}
-
-/** Represents a saved adventure state. */
-export interface SavedAdventure {
-    id: string;
-    saveTimestamp: number;
-    characterName: string;
-    character: Character; // Includes XP, Level, Reputation, stamina/mana, skill tree, stage, learned skills, NPC relationships
-    adventureSettings: AdventureSettings; // Includes custom settings and difficulty
-    storyLog: StoryLogEntry[];
-    currentGameStateString: string;
-    inventory: InventoryItem[]; // Store full item objects
-    statusBeforeSave?: GameStatus;
-    adventureSummary?: string | null;
-    turnCount?: number; // Added turn count for potential dynamic events
-}
+  | "ViewSavedAdventures";
 
 /** Represents the overall state of the game application. */
 export interface GameState {
@@ -158,12 +22,37 @@ export interface GameState {
   storyLog: StoryLogEntry[];
   adventureSummary: string | null;
   currentGameStateString: string;
-  inventory: InventoryItem[]; // Use the updated type
+  inventory: InventoryItem[];
   savedAdventures: SavedAdventure[];
   currentAdventureId: string | null;
-  isGeneratingSkillTree: boolean; // Track skill tree generation
-  turnCount: number; // Track turns for potential dynamic events
+  isGeneratingSkillTree: boolean;
+  turnCount: number;
   // Theme state
   selectedThemeId: string;
   isDarkMode: boolean;
 }
+
+// Re-export frequently used sub-types for convenience in other files if needed
+// Or encourage importing directly from the specific type files
+export type {
+    Character,
+    AdventureSettings,
+    StoryLogEntry,
+    SavedAdventure,
+    InventoryItem,
+    ItemQuality,
+    CharacterStats,
+    Skill,
+    SkillTree,
+    SkillTreeStage,
+    Reputation,
+    NpcRelationships,
+    ReputationChange,
+    NpcRelationshipChange,
+    DifficultyLevel,
+} from "./character-types";
+
+export type { InventoryItem as GameInventoryItem, ItemQuality as GameItemQuality } from "./inventory-types"; // Example re-export with alias
+
+export type { AdventureSettings as GameAdventureSettings, StoryLogEntry as GameStoryLogEntry, SavedAdventure as GameSavedAdventure, DifficultyLevel as GameDifficultyLevel } from "./adventure-types";
+

@@ -1,18 +1,15 @@
 // src/context/game-actions.ts
 
+import type { GameStatus, GameState } from "@/types/game-types"; // Import GameStatus from main game types
 import type {
-    GameStatus,
     Character,
-    AdventureSettings,
-    StoryLogEntry,
-    SavedAdventure,
     SkillTree,
-    InventoryItem,
+    Skill,
     ReputationChange,
     NpcRelationshipChange,
-    Skill,
-    DifficultyLevel, // Add DifficultyLevel type
-} from "@/types/game-types";
+} from "@/types/character-types"; // Import character-related types
+import type { InventoryItem } from "@/types/inventory-types"; // Import inventory types
+import type { AdventureSettings, StoryLogEntry, SavedAdventure } from "@/types/adventure-types"; // Import adventure types
 
 /** Defines all possible actions that can be dispatched to the game reducer. */
 export type Action =
@@ -42,5 +39,6 @@ export type Action =
   | { type: "REMOVE_ITEM"; payload: { itemName: string; quantity?: number } }
   | { type: "UPDATE_ITEM"; payload: { itemName: string; updates: Partial<InventoryItem> } }
   | { type: "UPDATE_INVENTORY"; payload: InventoryItem[] }
-  | { type: "SET_THEME_ID"; payload: string } // New action for theme
-  | { type: "SET_DARK_MODE"; payload: boolean }; // New action for dark mode
+  | { type: "SET_THEME_ID"; payload: string }
+  | { type: "SET_DARK_MODE"; payload: boolean }
+  | { type: "UPDATE_CRAFTING_RESULT"; payload: { narration: string; consumedItems: string[]; craftedItem: InventoryItem | null; newGameStateString: string } }; // Keep crafting here or move if grows

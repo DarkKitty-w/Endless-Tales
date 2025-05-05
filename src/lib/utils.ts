@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import type { ItemQuality } from "@/types/game-types"; // Import ItemQuality type
+import type { ItemQuality } from "@/types/inventory-types"; // Import ItemQuality type
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -18,5 +18,3 @@ export const getQualityColor = (quality: ItemQuality | undefined): string => {
         default: return "text-muted-foreground";
     }
 };
-
-// Function to calculate XP needed for the next level is now in lib/gameUtils.ts
