@@ -9,7 +9,7 @@
 
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
-import type { CharacterStats, SkillTree, Skill, ReputationChange, NpcRelationshipChange } from '@/types/game-types'; // Import types from central location
+import type { CharacterStats, SkillTree, Skill, ReputationChange, NpcRelationshipChange, InventoryItem } from '@/types/game-types'; // Import types from central location
 import { toast } from '@/hooks/use-toast'; // Import toast for user feedback
 
 // --- Zod Schemas (Internal - Not Exported) ---
@@ -17,6 +17,9 @@ const CharacterStatsSchema = z.object({
   strength: z.number().describe('Character strength attribute (1-10 range).'),
   stamina: z.number().describe('Character stamina attribute (1-10 range).'),
   agility: z.number().describe('Character agility attribute (1-10 range).'),
+  intellect: z.number().describe('Character intellect attribute (1-10 range).'),
+  wisdom: z.number().describe('Character wisdom attribute (1-10 range).'),
+  charisma: z.number().describe('Character charisma attribute (1-10 range).'),
 });
 
 const SkillSchema = z.object({
@@ -53,7 +56,7 @@ const BranchingChoiceSchema = z.object({
 const NarrateAdventureInputSchema = z.object({
   character: z.object({
     name: z.string().describe('Character name.'),
-    class: z.string().describe('Character class (e.g., Warrior, Mage, Rogue).'),
+    class: z.string().describe('Character class (e.g., Warrior, Mage, Rogue). **Handle "admin000" as a special developer mode.**'), // Highlight dev mode
     description: z.string().describe('A brief description of the character (appearance, personality, backstory snippet).'),
     traits: z.array(z.string()).describe('List of character traits (e.g., Brave, Curious).'),
     knowledge: z.array(z.string()).describe('List of character knowledge areas (e.g., Magic, History).'),
@@ -109,6 +112,19 @@ export type NarrateAdventureOutput = z.infer<typeof NarrateAdventureOutputSchema
 
 // --- Exported Async Function ---
 export async function narrateAdventure(input: NarrateAdventureInput): Promise<NarrateAdventureOutput> {
+  // Check for Developer Mode
+  if (input.character.class === 'admin000') {
+    console.log("Developer Mode detected in narrateAdventure. Skipping standard AI narration.");
+    // Basic success narration, bypassing costs and restrictions
+    const devNarration = `(Developer Mode) Action "${input.playerChoice}" performed successfully. Restrictions bypassed.`;
+    // Update game state minimally, just increment turn. Modify as needed.
+    const devGameState = `Turn: ${input.turnCount + 1}\n${input.gameState.replace(/Turn: \d+\n/, '')}\nDEV MODE ACTIVE`;
+    return {
+      narration: devNarration,
+      updatedGameState: devGameState,
+      // No costs, no XP gain, no other automatic changes unless specifically implemented for dev mode
+    };
+  }
   return narrateAdventureFlow(input);
 }
 
@@ -137,7 +153,7 @@ Class: {{{character.class}}} (Level {{{character.level}}})
 XP: {{{character.xp}}}/{{{character.xpToNextLevel}}}
 Reputation: {{#if character.reputation}}{{#each character.reputation}} {{ @key }}: {{ this }}; {{/each}}{{else}}None{{/if}}
 Relationships: {{#if character.npcRelationships}}{{#each character.npcRelationships}} {{ @key }}: {{ this }}; {{/each}}{{else}}None{{/if}}
-Stats: Strength {{{character.stats.strength}}}, Stamina {{{character.stats.stamina}}}, Agility {{{character.stats.agility}}}
+Stats: Strength {{{character.stats.strength}}}, Stamina {{{character.stats.stamina}}}, Agility {{{character.stats.agility}}}, Intellect {{{character.stats.intellect}}}, Wisdom {{{character.stats.wisdom}}}, Charisma {{{character.stats.charisma}}}
 Resources: Stamina {{{character.currentStamina}}}/{{{character.maxStamina}}}, Mana {{{character.currentMana}}}/{{{character.maxMana}}}
 Traits: {{#if character.traits}}{{#each character.traits}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{else}}None{{/if}}
 Knowledge: {{#if character.knowledge}}{{#each character.knowledge}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{else}}None{{/if}}
@@ -158,7 +174,7 @@ Generate the next part of the story based on ALL the information above.
 2.  **Logical Progression, Resource Costs & Restrictions:**
     *   **Evaluate Feasibility:** Assess if the action is logically possible. *Actions tied to higher skill stages should only be possible if the character has reached that stage.* Harder difficulties might make certain actions less feasible initially.
     *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output \`staminaChange\`, \`manaChange\` **only if they changed**.
-    *   **Block Impossible Actions:** Prevent universe-breaking actions unless EXTREME justification exists in gameState AND skill stage is high.
+    *   **Block Impossible Actions:** Prevent universe-breaking actions (e.g., "destroy the universe", "teleport to another dimension") unless EXTREME justification exists in gameState AND skill stage is high. Simple reality-bending ("become king", "control time") is also typically Impossible without justification.
     *   **Narrate Failure Reason:** If blocked/failed, explain why (lack of skill, resources, item, stage, reputation, **NPC relationships**, difficulty, etc.).
     *   **Skill-based Progression:** Very powerful actions require high milestones AND skill stages.
 3.  **Incorporate Dice Rolls:** Interpret dice roll results (e.g., "(Difficulty: Hard, Dice Roll Result: 75/100)") contextually. High rolls succeed, low rolls fail, adjusted by **game difficulty**. Narrate the degree of success/failure. Success might grant more XP or better reputation/relationship changes. Failure might have negative consequences, potentially more severe on higher difficulties.
@@ -214,7 +230,7 @@ const narrateAdventureFlow = ai.defineFlow<
     outputSchema: NarrateAdventureOutputSchema,
   },
   async (input) => {
-     // --- AI Call ---
+     // Developer mode check is now handled in the exported wrapper function
      console.log("Sending to narrateAdventurePrompt:", JSON.stringify(input, null, 2));
      let output: NarrateAdventureOutput | undefined;
      let errorOccurred = false;
@@ -286,7 +302,7 @@ const narrateAdventureFlow = ai.defineFlow<
             console.error(`AI narration attempt ${attempt} error:`, err);
             errorOccurred = true;
              if (err.message?.includes('503') || err.message?.includes('overloaded')) {
-                errorMessage = `AI Service Overloaded (Attempt ${attempt}/${maxAttempts}). Please try again shortly. Retrying...`;
+                errorMessage = `AI Service Overloaded (Attempt ${attempt}/${maxAttempts + 1}). Please try again shortly. Retrying...`;
                 // No toast on server-side
                 // toast({ title: "AI Busy", description: `Service overloaded. Retrying...`, variant: "default"});
                 // Optional: Wait longer before retrying on overload
@@ -298,12 +314,12 @@ const narrateAdventureFlow = ai.defineFlow<
                  if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 500 * attempt));
              }
               else if (err.message?.includes('Error fetching')) {
-                  errorMessage = `AI Error: Could not reach or process request with the story generation service (Attempt ${attempt}/${maxAttempts}). Check network or try again. (${err.message})`;
+                  errorMessage = `AI Error: Could not reach or process request with the story generation service (Attempt ${attempt}/${maxAttempts + 1}). Check network or try again. (${err.message})`;
                   // No toast on server-side
                   // toast({ title: "Network Error", description: "Could not reach AI service. Retrying...", variant: "destructive"});
                   if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 500 * attempt));
               } else {
-                 errorMessage = `AI Error: ${err.message?.substring(0, 150) || 'Unknown error'} (Attempt ${attempt}/${maxAttempts})`;
+                 errorMessage = `AI Error: ${err.message?.substring(0, 150) || 'Unknown error'} (Attempt ${attempt}/${maxAttempts + 1})`;
                  // No toast on server-side
                  // toast({ title: "Story Error", description: `${errorMessage.substring(0, 60)}... Retrying...`, variant: "destructive"});
                  if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 500 * attempt));
@@ -380,3 +396,5 @@ const narrateAdventureFlow = ai.defineFlow<
     };
   }
 );
+
+    

@@ -10,20 +10,24 @@
 
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
+import type { DifficultyLevel } from '@/types/game-types'; // Import type
 
 // --- Zod Schemas (Internal - Not Exported) ---
+// Using the enum from game-types for consistency
 const DifficultyLevelSchema = z.enum([
-    "Trivial", // Requires almost no effort or skill. (No roll needed typically)
-    "Easy",    // Requires minimal effort or skill. (Low DC roll, maybe d6/d10)
-    "Normal",  // Standard level of challenge. (Medium DC roll, d10/d20)
-    "Hard",    // Requires significant skill or effort. (High DC roll, d20/d100)
-    "Very Hard", // Borderline possible, requires great skill/luck. (Very high DC roll, d100)
-    "Impossible", // Cannot be done given the current context/character abilities. (No roll possible)
+    "Trivial",
+    "Easy",
+    "Normal",
+    "Hard",
+    "Very Hard",
+    "Impossible",
 ]);
+
 
 const AssessActionDifficultyInputSchema = z.object({
     playerAction: z.string().describe('The action the player wants to perform.'),
     characterCapabilities: z.string().describe("A summary of the character's relevant stats, skills, traits, knowledge, and equipment."),
+    characterClass: z.string().optional().describe("The character's class. Used for special checks like developer mode."), // Added character class
     currentSituation: z.string().describe('A brief description of the immediate environment, ongoing events, and any relevant obstacles or NPCs.'),
     gameStateSummary: z.string().describe('Broader context including location, major quest progress, significant items, and achieved milestones.'),
     gameDifficulty: z.string().describe("The overall game difficulty setting (e.g., Easy, Normal, Hard, Nightmare). This should influence the baseline difficulty."),
@@ -37,12 +41,22 @@ const AssessActionDifficultyOutputSchema = z.object({
 });
 
 // --- Exported Types (Derived from internal schemas) ---
-export type DifficultyLevel = z.infer<typeof DifficultyLevelSchema>;
+// Re-exporting DifficultyLevel from game-types for external use if needed elsewhere
+export type { DifficultyLevel };
 export type AssessActionDifficultyInput = z.infer<typeof AssessActionDifficultyInputSchema>;
 export type AssessActionDifficultyOutput = z.infer<typeof AssessActionDifficultyOutputSchema>;
 
 // --- Exported Async Function ---
 export async function assessActionDifficulty(input: AssessActionDifficultyInput): Promise<AssessActionDifficultyOutput> {
+  // Check for Developer Mode
+  if (input.characterClass === 'admin000') {
+    console.log("Developer Mode detected in assessActionDifficulty. Skipping AI assessment.");
+    return {
+      difficulty: "Trivial",
+      reasoning: "Developer Mode active. Action automatically succeeds.",
+      suggestedDice: "None",
+    };
+  }
   return assessActionDifficultyFlow(input);
 }
 
@@ -91,6 +105,7 @@ const assessActionDifficultyFlow = ai.defineFlow<
     outputSchema: AssessActionDifficultyOutputSchema,
   },
   async (input) => {
+     // Developer mode check is now handled in the exported wrapper function
      console.log("Sending to assessActionDifficultyPrompt:", JSON.stringify(input, null, 2));
      const {output} = await assessActionDifficultyPrompt(input);
 
@@ -125,5 +140,4 @@ const assessActionDifficultyFlow = ai.defineFlow<
   }
 );
 
-    
     

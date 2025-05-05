@@ -1,8 +1,9 @@
 // src/components/screens/Gameplay.tsx
 "use client";
 
+import type { ComponentProps, SVGProps } from "react"; // Needed for SVG component type
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import type { GameState, SavedAdventure, StoryLogEntry, Character, SkillTree, Skill, InventoryItem, Reputation, NpcRelationships, ItemQuality, AdventureSettings } from "@/types/game-types"; // Import centralized types
+import type { GameState, SavedAdventure, StoryLogEntry, Character, SkillTree, Skill, InventoryItem, Reputation, NpcRelationships, ItemQuality, AdventureSettings, DifficultyLevel } from "@/types/game-types"; // Import centralized types
 import { useGame } from "@/context/GameContext"; // Import main context hook
 import { useToast } from "@/hooks/use-toast";
 import { calculateXpToNextLevel } from "@/lib/gameUtils"; // Import specific game utils
@@ -15,11 +16,11 @@ import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay"; // Import
 import { InventoryDisplay } from "@/components/game/InventoryDisplay"; // Import InventoryDisplay
 import { narrateAdventure, type NarrateAdventureInput, type NarrateAdventureOutput } from "@/ai/flows/narrate-adventure";
 import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
-import { assessActionDifficulty, type DifficultyLevel } from "@/ai/flows/assess-action-difficulty";
+import { assessActionDifficulty, type AssessActionDifficultyInput } from "@/ai/flows/assess-action-difficulty"; // Import AssessActionDifficultyInput
 import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "@/ai/flows/attempt-crafting"; // Import crafting flow
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award, Hammer, CheckSquare, Square, Users, Milestone, CalendarClock, Skull, HeartPulse, GitBranch, ShieldAlert } from "lucide-react"; // Added icons
+import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award, Hammer, CheckSquare, Square, Users, Milestone, CalendarClock, Skull, HeartPulse, GitBranch, ShieldAlert, Zap } from "lucide-react"; // Added Zap icon
 import { rollD6, rollD10, rollD20, rollD100 } from "@/services/dice-roller"; // Import specific rollers
 import {
   AlertDialog,
@@ -98,13 +99,46 @@ export function Gameplay() {
   // State for initial loading/narration
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
-
   // Function to scroll to bottom
   const scrollToBottom = useCallback(() => {
      setTimeout(() => {
        scrollEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
      }, 100);
   }, []);
+
+   // --- End Adventure (Define before handlePlayerAction) ---
+   const handleEndAdventure = useCallback(async (finalNarrationEntry?: StoryLogEntry) => {
+     if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree) return;
+     setIsEnding(true);
+     setError(null);
+     toast({ title: "Ending Adventure", description: "Summarizing your tale..." });
+     const finalContext = finalNarrationEntry ?? (storyLog.length > 0 ? storyLog[storyLog.length - 1] : null);
+     let summary = "Your adventure has concluded.";
+     const finalLogToSummarize = [...storyLog];
+     if (finalNarrationEntry && (!storyLog.length || storyLog[storyLog.length - 1].narration !== finalNarrationEntry.narration)) {
+        finalLogToSummarize.push(finalNarrationEntry);
+     }
+     const hasLog = finalLogToSummarize.length > 0;
+     if (hasLog) {
+         const fullStory = finalLogToSummarize.map((log, index) => `[Turn ${index + 1}]\n${log.narration}`).join("\n\n---\n\n");
+         if(fullStory.trim().length > 0) {
+             try {
+                 const summaryResult = await summarizeAdventure({ story: fullStory });
+                 summary = summaryResult.summary;
+                 toast({ title: "Summary Generated", description: "View your adventure outcome." });
+             } catch (summaryError: any) {
+                 summary = `Could not generate a summary due to an error: ${summaryError.message || 'Unknown error'}. The adventure ended.`;
+                 toast({ title: "Summary Error", description: "Failed to generate summary.", variant: "destructive" });
+             }
+         } else {
+             summary = "The story was too brief to summarize, but your adventure has concluded.";
+         }
+     } else {
+         summary = "Your adventure ended before it could be properly logged.";
+     }
+     dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationEntry } });
+     setIsEnding(false); // Ensure ending state is reset
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, storyLog, dispatch, toast]);
 
 
   // --- Trigger Skill Tree Generation ---
@@ -147,40 +181,6 @@ export function Gameplay() {
         }
    }, [character, dispatch, toast, isGeneratingSkillTree]);
 
-    // --- End Adventure (Define before handlePlayerAction) ---
-   const handleEndAdventure = useCallback(async (finalNarrationEntry?: StoryLogEntry) => {
-     if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree) return;
-     setIsEnding(true);
-     setError(null);
-     toast({ title: "Ending Adventure", description: "Summarizing your tale..." });
-     const finalContext = finalNarrationEntry ?? (storyLog.length > 0 ? storyLog[storyLog.length - 1] : null);
-     let summary = "Your adventure has concluded.";
-     const finalLogToSummarize = [...storyLog];
-     if (finalNarrationEntry && (!storyLog.length || storyLog[storyLog.length - 1].narration !== finalNarrationEntry.narration)) {
-        finalLogToSummarize.push(finalNarrationEntry);
-     }
-     const hasLog = finalLogToSummarize.length > 0;
-     if (hasLog) {
-         const fullStory = finalLogToSummarize.map((log, index) => `[Turn ${index + 1}]\n${log.narration}`).join("\n\n---\n\n");
-         if(fullStory.trim().length > 0) {
-             try {
-                 const summaryResult = await summarizeAdventure({ story: fullStory });
-                 summary = summaryResult.summary;
-                 toast({ title: "Summary Generated", description: "View your adventure outcome." });
-             } catch (summaryError: any) {
-                 summary = `Could not generate a summary due to an error: ${summaryError.message || 'Unknown error'}. The adventure ended.`;
-                 toast({ title: "Summary Error", description: "Failed to generate summary.", variant: "destructive" });
-             }
-         } else {
-             summary = "The story was too brief to summarize, but your adventure has concluded.";
-         }
-     } else {
-         summary = "Your adventure ended before it could be properly logged.";
-     }
-     dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationEntry } });
-     setIsEnding(false); // Ensure ending state is reset
-   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, storyLog, dispatch, toast]);
-
   // --- Handle Player Action Submission ---
   const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
      if (!character || isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree) {
@@ -191,6 +191,86 @@ export function Gameplay() {
        return;
      }
 
+    // Developer Mode Check (Early Exit)
+    if (character.class === 'admin000') {
+        console.log("Developer Mode: Bypassing difficulty assessment and costs for action:", action);
+        // Directly proceed to AI narration, skipping assessment/rolls
+        setIsLoading(true); // Still show loading for narration
+        setError(null);
+        setDiceResult(null);
+        setDiceType("None");
+        setBranchingChoices([]);
+
+        const actionWithDevTag = `(Developer Mode) ${action}`;
+
+        let skillTreeSummaryForAI = null;
+        if (character.skillTree && character.skillTreeStage >= 0) {
+            const currentStageData = character.skillTree.stages.find(s => s.stage === character.skillTreeStage);
+            skillTreeSummaryForAI = {
+                className: character.skillTree.className,
+                stageCount: character.skillTree.stages.length,
+                availableSkillsAtCurrentStage: currentStageData ? currentStageData.skills.map(s => s.name) : [],
+            };
+        }
+
+        const inputForDevAI: NarrateAdventureInput = {
+          character: {
+             ...character, // Pass the full character object
+             learnedSkills: character.learnedSkills.map(s => s.name), // Pass skill names
+          },
+          playerChoice: actionWithDevTag,
+          gameState: currentGameStateString,
+          previousNarration: storyLog.length > 0 ? storyLog[storyLog.length - 1].narration : undefined,
+          adventureSettings: {
+            difficulty: adventureSettings.difficulty,
+            permanentDeath: adventureSettings.permanentDeath,
+            adventureType: adventureSettings.adventureType,
+          },
+          turnCount: turnCount,
+        };
+
+         try {
+             const result = await narrateAdventure(inputForDevAI); // Directly call the narrate flow
+             if (!result || !result.narration || !result.updatedGameState) {
+                 throw new Error("AI response missing critical narration or game state.");
+             }
+             if (!result.updatedGameState.toLowerCase().includes('turn:')) {
+                 throw new Error("AI response missing Turn count in updated game state.");
+             }
+
+             const devLogEntry: StoryLogEntry = {
+                narration: result.narration,
+                updatedGameState: result.updatedGameState,
+                // No costs applied in dev mode
+                xpGained: result.xpGained, // Still allow XP gain if desired for testing
+                timestamp: Date.now(),
+                // Potentially other effects could be mocked/forced here too
+             };
+             dispatch({ type: "UPDATE_NARRATION", payload: devLogEntry });
+             setBranchingChoices(result.branchingChoices ?? []);
+
+             // Handle game over condition even in dev mode
+             const lowerNarration = result.narration?.toLowerCase() || "";
+             const lowerGameState = result.updatedGameState?.toLowerCase() || "";
+             const isGameOver = lowerGameState.includes("game over") || lowerNarration.includes("your adventure ends") || lowerNarration.includes("you have died") || lowerNarration.includes("you achieved victory");
+
+             if (isGameOver) {
+                toast({title: "Adventure Concluded (Dev Mode)!", description: "The tale reaches its end.", duration: 5000});
+                await handleEndAdventure(devLogEntry); // Use the devLogEntry
+             }
+
+         } catch (err: any) {
+             console.error("Narration error (Developer Mode):", err);
+             setError(`Narration failed (Dev Mode): ${err.message || 'Unknown error'}`);
+             toast({ title: "Narration Failed (Dev Mode)", description: "Please check the AI flow or input.", variant: "destructive", duration: 5000 });
+         } finally {
+             setIsLoading(false);
+             scrollToBottom();
+         }
+        return; // Exit early for developer mode
+    }
+
+    // --- Standard Action Handling (Non-Dev Mode) ---
     if (!character.skillTree && !isGeneratingSkillTree) {
         triggerSkillTreeGeneration(character.class);
         toast({ description: "Initializing skill tree before proceeding...", duration: 1500 });
@@ -222,9 +302,10 @@ export function Gameplay() {
              const reputationString = Object.entries(character.reputation).map(([faction, score]) => `${faction}: ${score}`).join(', ') || 'None';
              const relationshipString = Object.entries(character.npcRelationships).map(([npc, score]) => `${npc}: ${score}`).join(', ') || 'None';
 
-             const assessmentInput = {
+             const assessmentInput: AssessActionDifficultyInput = { // Use the imported type
                 playerAction: action,
                 characterCapabilities: `Level: ${character.level}. Class: ${character.class}. Stage: ${character.skillTreeStage}. Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, AGI ${character.stats.agility}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}. Inventory: ${inventory.map(i => i.name).join(', ') || 'Empty'}. Stamina: ${character.currentStamina}/${character.maxStamina}. Mana: ${character.currentMana}/${character.maxMana}. Learned Skills: ${character.learnedSkills.map(s=>s.name).join(', ') || 'None'}. Reputation: ${reputationString}. Relationships: ${relationshipString}`,
+                characterClass: character.class, // Pass the class here
                 currentSituation: currentNarration?.narration || "At the beginning of the scene.",
                 gameStateSummary: currentGameStateString,
                 gameDifficulty: adventureSettings.difficulty,
@@ -432,6 +513,7 @@ export function Gameplay() {
 
             addedItems.forEach(name => dispatch({ type: "ADD_ITEM", payload: { name, description: "Acquired during adventure", quality: "Common" } }));
             removedItems.forEach(name => dispatch({ type: "REMOVE_ITEM", payload: { itemName: name } }));
+
 
             if (addedItems.length > 0 || removedItems.length > 0) {
                 console.log("Inventory updated via game state parsing:", { added: addedItems, removed: removedItems });
@@ -937,7 +1019,77 @@ export function Gameplay() {
                      <TabsTrigger value="skills"><Workflow className="w-4 h-4 mr-1.5"/>Skills</TabsTrigger>
                  </TabsList>
                  <TabsContent value="inventory" className="flex-1 overflow-hidden m-0 ring-offset-0 focus-visible:ring-0 focus-visible:outline-none">
-                      <InventoryDisplay />
+                     <div className="h-full flex flex-col"> {/* Use flex column */}
+                         <div className="flex-grow overflow-hidden"> {/* Inner div for scroll */}
+                            <InventoryDisplay />
+                         </div>
+                          {/* Crafting Button - Moves to bottom */}
+                          <Dialog open={isCraftingDialogOpen} onOpenChange={setIsCraftingDialogOpen}>
+                             <DialogTrigger asChild>
+                               <Button variant="outline" className="m-4 mt-auto flex-shrink-0" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
+                                    <Hammer className="mr-2 h-4 w-4" /> Craft Item
+                               </Button>
+                             </DialogTrigger>
+                            <DialogContent className="sm:max-w-[425px]">
+                                <DialogHeader>
+                                    <DialogTitle className="flex items-center gap-2"><Hammer className="w-5 h-5"/> Attempt Crafting</DialogTitle>
+                                    <DialogDescription>Combine items from your inventory. Success depends on your knowledge, skills, and the materials used.</DialogDescription>
+                                </DialogHeader>
+                                <div className="grid gap-4 py-4">
+                                    {craftingError && <Alert variant="destructive"><AlertDescription>{craftingError}</AlertDescription></Alert>}
+                                    <div className="grid grid-cols-4 items-center gap-4">
+                                        <Label htmlFor="crafting-goal" className="text-right col-span-1">Goal</Label>
+                                        <Input
+                                            id="crafting-goal"
+                                            value={craftingGoal}
+                                            onChange={(e) => setCraftingGoal(e.target.value)}
+                                            placeholder="e.g., Healing Salve, Sharpened Dagger"
+                                            className="col-span-3"
+                                            disabled={isCraftingLoading}
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-4 items-start gap-4">
+                                        <Label className="text-right col-span-1 pt-1">Ingredients</Label>
+                                        <div className="col-span-3 space-y-1 max-h-40 overflow-y-auto border rounded-md p-2 bg-muted/30 scrollbar-thin">
+                                            {inventory.length > 0 ? inventory.map(item => (
+                                                 <div key={item.name} className="flex items-center justify-between text-sm">
+                                                      <Label
+                                                         htmlFor={`ingredient-${item.name.replace(/\s+/g, '-')}`}
+                                                         className={`flex items-center gap-1.5 cursor-pointer ${getQualityColor(item.quality)}`}
+                                                      >
+                                                          <Square className={`w-4 h-4 ${selectedIngredients.includes(item.name) ? 'hidden' : 'block'} text-muted-foreground`} />
+                                                          <CheckSquare className={`w-4 h-4 ${selectedIngredients.includes(item.name) ? 'block' : 'hidden'} text-primary`} />
+                                                          {item.name} {item.quality && item.quality !== "Common" && `(${item.quality})`}
+                                                      </Label>
+                                                       <input
+                                                           type="checkbox"
+                                                           id={`ingredient-${item.name.replace(/\s+/g, '-')}`}
+                                                           checked={selectedIngredients.includes(item.name)}
+                                                           onChange={() => handleIngredientToggle(item.name)}
+                                                           className="sr-only" // Visually hide checkbox, use label interaction
+                                                           disabled={isCraftingLoading}
+                                                       />
+                                                 </div>
+                                             )) : <p className="text-xs text-muted-foreground italic">Inventory is empty.</p>}
+                                        </div>
+                                    </div>
+                                </div>
+                                <DialogFooter>
+                                    <DialogClose asChild>
+                                        <Button type="button" variant="outline" disabled={isCraftingLoading}>Cancel</Button>
+                                    </DialogClose>
+                                    <Button
+                                        type="button"
+                                        onClick={handleCrafting}
+                                        disabled={isLoading || isCraftingLoading || !craftingGoal.trim() || selectedIngredients.length === 0}
+                                    >
+                                        {isCraftingLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                        Attempt Craft
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                           </Dialog>
+                     </div>
                  </TabsContent>
                  <TabsContent value="skills" className="flex-1 overflow-hidden m-0 ring-offset-0 focus-visible:ring-0 focus-visible:outline-none">
                       {character.skillTree && !isGeneratingSkillTree ? (
@@ -1184,7 +1336,7 @@ export function Gameplay() {
                 </form>
 
                 {/* Action Buttons - Moved below input */}
-                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                 <div className="hidden sm:grid grid-cols-2 sm:grid-cols-4 gap-2"> {/* Hidden on small screens */}
                      {/* Abandon Button */}
                      <AlertDialog>
                        <AlertDialogTrigger asChild>
@@ -1293,3 +1445,5 @@ export function Gameplay() {
     </div>
   );
 }
+
+    
