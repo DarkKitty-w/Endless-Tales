@@ -13,13 +13,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/game/CardboardCard";
-import { Wand2, Dices, User, Save, RotateCcw, Info, ShieldQuestion, CheckCircle, Brain, BookOpen, UsersRound, Dumbbell, HeartPulse, Footprints } from "lucide-react";
+import { Wand2, Dices, User, Save, RotateCcw, Info, ShieldQuestion, CheckCircle, Dumbbell, HeartPulse, Footprints } from "lucide-react"; // Simplified icons
 import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
-import { StatAllocationInput } from "@/components/game/StatAllocationInput"; // Correct import path
+import { StatAllocationInput } from "@/components/game/StatAllocationInput"; // Import the new input component
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
 
 
@@ -47,7 +47,6 @@ const basicCreationSchema = baseCharacterSchema.extend({
 
 const textCreationSchema = baseCharacterSchema.extend({
   creationType: z.literal("text"),
-  // Removed max limit from description
   description: z.string().min(10, "Please provide a brief description (at least 10 characters)."),
 });
 
@@ -64,10 +63,10 @@ export function CharacterCreation() {
   const { toast } = useToast();
   const [creationType, setCreationType] = useState<"basic" | "text">("basic");
   // Initialize stats correctly based on context or defaults
-   const initialStats = state.character?.stats ?? { strength: 5, stamina: 5, agility: 5 };
-   const [stats, setStats] = useState<CharacterStats>(initialStats);
+  const initialStats = state.character?.stats ?? { strength: 5, stamina: 5, agility: 5 };
+  const [stats, setStats] = useState<CharacterStats>(initialStats);
   // Calculate initial remaining points based on the initialized stats
-   const initialPoints = TOTAL_STAT_POINTS - (initialStats.strength + initialStats.stamina + initialStats.agility);
+  const initialPoints = TOTAL_STAT_POINTS - (initialStats.strength + initialStats.stamina + initialStats.agility);
   const [remainingPoints, setRemainingPoints] = useState(initialPoints);
 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -224,7 +223,8 @@ export function CharacterCreation() {
     }, 700); // Delay matches animation duration
 
 
-  }, [creationType, reset, setValue, randomizeStats, trigger]); // Removed watch and toast from dependencies
+  // Remove `watch` from dependencies - it can cause infinite loops if the watched value changes frequently during the randomization process
+  }, [creationType, reset, setValue, randomizeStats, trigger]);
 
 
   // Watch form values for dynamic checks
@@ -298,7 +298,7 @@ export function CharacterCreation() {
 
      if (remainingPoints !== 0) {
         setError(`You must allocate all ${TOTAL_STAT_POINTS} stat points. ${remainingPoints} remaining.`);
-        // No toast here, error message is displayed directly
+        // Error message is displayed directly
         return;
      }
      if (stats.strength < MIN_STAT_VALUE || stats.stamina < MIN_STAT_VALUE || stats.agility < MIN_STAT_VALUE ||
