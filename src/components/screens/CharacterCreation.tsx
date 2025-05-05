@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useGame } from "@/context/GameContext";
-import type { Character, CharacterStats } from "@/types/game-types"; // Import centralized types
+import type { Character } from "@/types/game-types"; // Import centralized types
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,9 +19,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
-import { StatAllocationInput } from "@/components/game/StatAllocationInput"; // Import the new input component
+import { StatAllocationInput } from "@/components/game/StatAllocationInput"; // Corrected import path
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
-
+import type { CharacterStats } from "@/types/character-types"; // Import from specific types file
+import { initialCharacterState } from "@/context/game-initial-state"; // Import initialStats
 
 // --- Zod Schema for Validation ---
 const baseCharacterSchema = z.object({
@@ -48,7 +49,7 @@ const basicCreationSchema = baseCharacterSchema.extend({
 
 const textCreationSchema = baseCharacterSchema.extend({
   creationType: z.literal("text"),
-  description: z.string().min(10, "Please provide a brief description (at least 10 characters)."),
+  description: z.string().min(10, "Please provide a brief description (at least 10 characters)."), // Removed max length
 });
 
 const combinedSchema = z.discriminatedUnion("creationType", [
@@ -64,11 +65,13 @@ export function CharacterCreation() {
   const { toast } = useToast();
   const [creationType, setCreationType] = useState<"basic" | "text">("basic");
   // Initialize stats correctly based on context or defaults
-  const initialStats = state.character?.stats ?? { strength: 5, stamina: 5, agility: 5 };
-  const [stats, setStats] = useState<CharacterStats>(initialStats);
+  const defaultStats = state.character?.stats ?? initialCharacterState.stats;
+  const [stats, setStats] = useState<CharacterStats>(defaultStats);
   // Calculate initial remaining points based on the initialized stats
-  const initialPoints = TOTAL_STAT_POINTS - (initialStats.strength + initialStats.stamina + initialStats.agility);
+  const initialPoints = TOTAL_STAT_POINTS - (defaultStats.strength + defaultStats.stamina + defaultStats.agility);
   const [remainingPoints, setRemainingPoints] = useState(initialPoints);
+  const [isRandomizing, setIsRandomizing] = useState(false); // State for randomization animation
+
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,13 +113,15 @@ export function CharacterCreation() {
             // and display an error message near the points indicator.
             setRemainingPoints(TOTAL_STAT_POINTS - (prevStats.strength + prevStats.stamina + prevStats.agility));
             setStatError(`Cannot exceed ${TOTAL_STAT_POINTS} total points.`); // Set specific stat error message
-            return prevStats; // Revert to previous stats
+             return prevStats; // Revert to previous stats
         }
     });
  }, [setStats, setRemainingPoints]);
 
 
+ // --- Randomize Stats ---
  const randomizeStats = useCallback(() => {
+    setStatError(null); // Clear previous stat error
     let pointsLeft = TOTAL_STAT_POINTS;
     let newStats: CharacterStats = { strength: 0, stamina: 0, agility: 0 };
     const statKeys: (keyof CharacterStats)[] = ['strength', 'stamina', 'agility'];
@@ -130,100 +135,98 @@ export function CharacterCreation() {
     // Distribute remaining points randomly
     while (pointsLeft > 0) {
         const availableKeys = statKeys.filter(key => newStats[key] < MAX_STAT_VALUE);
-        if (availableKeys.length === 0) break; // Should not happen if MAX_STAT_VALUE * 3 > TOTAL_STAT_POINTS
+        if (availableKeys.length === 0) break;
         const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
         newStats[randomKey]++;
         pointsLeft--;
     }
 
-    // Final check to ensure correctness - adjust if somehow total is wrong
-    const finalTotal = newStats.strength + newStats.stamina + newStats.agility;
-    if (finalTotal !== TOTAL_STAT_POINTS) {
-        console.error("Stat randomization resulted in an incorrect total:", finalTotal, newStats, "Resetting to default.");
-        // Simple reset if error occurs
-        const defaultPoints = Math.floor(TOTAL_STAT_POINTS / 3);
-        const remainder = TOTAL_STAT_POINTS % 3;
-        newStats = {
-            strength: defaultPoints + (remainder > 0 ? 1 : 0),
-            stamina: defaultPoints + (remainder > 1 ? 1 : 0),
-            agility: defaultPoints
-        };
-        // Ensure min/max bounds are still respected after reset/correction
-        newStats.strength = Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, newStats.strength));
-        newStats.stamina = Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, newStats.stamina));
-        newStats.agility = Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, newStats.agility));
-        // Recalculate remaining points after reset/correction
-        setRemainingPoints(TOTAL_STAT_POINTS - (newStats.strength + newStats.stamina + newStats.agility));
-    } else {
-       setRemainingPoints(0);
+    // Final correctness check and adjustment if necessary
+    let finalTotal = newStats.strength + newStats.stamina + newStats.agility;
+    while (finalTotal > TOTAL_STAT_POINTS) {
+       // If total exceeds, decrement a random stat that's above min
+       const decrementableKeys = statKeys.filter(key => newStats[key] > MIN_STAT_VALUE);
+       if (decrementableKeys.length === 0) break; // Should not happen with proper min/max logic, but safety check
+       const randomKey = decrementableKeys[Math.floor(Math.random() * decrementableKeys.length)];
+       newStats[randomKey]--;
+       finalTotal--;
     }
+     while (finalTotal < TOTAL_STAT_POINTS) {
+        // If total is less, increment a random stat that's below max
+        const incrementableKeys = statKeys.filter(key => newStats[key] < MAX_STAT_VALUE);
+         if (incrementableKeys.length === 0) break;
+         const randomKey = incrementableKeys[Math.floor(Math.random() * incrementableKeys.length)];
+         newStats[randomKey]++;
+         finalTotal++;
+     }
 
-    setStatError(null); // Clear stat error after randomizing
     setStats(newStats);
-    // Removed toast to simplify for debugging
-    // toast({ title: "Stats Randomized", description: `Distributed ${TOTAL_STAT_POINTS} points.` });
- }, [setStats, setRemainingPoints]); // Removed toast from dependencies
+    setRemainingPoints(TOTAL_STAT_POINTS - (newStats.strength + newStats.stamina + newStats.agility));
+
+ }, [setStats, setRemainingPoints]);
 
 
-  // --- Randomize All ---
- const randomizeAll = useCallback(() => { // Make synchronous for simplicity during debugging
-    // Reset general error state
-    setError(null);
-    setStatError(null);
+ // --- Randomize All ---
+ const randomizeAll = useCallback(async () => {
+     setIsRandomizing(true); // Start animation
+     await new Promise(res => setTimeout(res, 300)); // Wait for visual effect
 
-    const randomNames = ["Anya", "Borin", "Carys", "Darian", "Elara", "Fendrel", "Gorok", "Silas", "Lyra", "Roric"];
-    const randomClasses = ["Warrior", "Rogue", "Mage", "Scout", "Scholar", "Wanderer", "Guard", "Tinkerer", "Healer", "Bard", "Adventurer"];
-    const randomTraitsPool = ["Brave", "Curious", "Cautious", "Impulsive", "Loyal", "Clever", "Resourceful", "Quiet", "Stern", "Generous", "Optimistic", "Pessimistic", "Sarcastic", "Gruff"];
-    const randomKnowledgePool = ["Herbalism", "Local Lore", "Survival", "Trading", "Ancient Runes", "Beasts", "Smithing", "First Aid", "Storytelling", "Navigation", "History", "Magic", "Alchemy", "Lockpicking"];
-    const randomBackgrounds = ["Farmer", "Orphan", "Noble Exile", "Street Urchin", "Acolyte", "Guard", "Merchant's Child", "Hermit", "Former Soldier", "Wanderer", "Blacksmith Apprentice", "Scribe"];
-    const randomDescriptions = [
-        "A weary traveler with keen eyes and a rough, patched cloak, seeking forgotten paths.",
-        "A cheerful youth from a small village, always eager for adventure, perhaps a bit naively.",
-        "A stern-faced individual, marked by a faded scar across their brow, rarely speaking of their past.",
-        "A bookish scholar, more comfortable with dusty tomes than drawn swords, muttering about forgotten lore.",
-        "A nimble rogue with quick fingers and even quicker wit, always looking for an opportunity.",
-        "A wandering healer, carrying herbs and bandages, offering aid to those in need.",
-        "A charismatic bard, quick with a song or a story, always seeking an audience.",
-        "A stoic warrior, their well-maintained gear hinting at past battles.",
-        "A resourceful inventor, always tinkering with strange contraptions.",
-        "A quiet hunter, adept at tracking and moving unseen through the wilds.",
-    ];
+     // Reset errors
+     setError(null);
+     setStatError(null);
 
-    // Get current values before reset if needed, or just reset fully
-    reset(); // Clear form fields first
+     const randomNames = ["Anya", "Borin", "Carys", "Darian", "Elara", "Fendrel", "Gorok", "Silas", "Lyra", "Roric"];
+     const randomClasses = ["Warrior", "Rogue", "Mage", "Scout", "Scholar", "Wanderer", "Guard", "Tinkerer", "Healer", "Bard", "Adventurer"];
+     const randomTraitsPool = ["Brave", "Curious", "Cautious", "Impulsive", "Loyal", "Clever", "Resourceful", "Quiet", "Stern", "Generous", "Optimistic", "Pessimistic", "Sarcastic", "Gruff"];
+     const randomKnowledgePool = ["Herbalism", "Local Lore", "Survival", "Trading", "Ancient Runes", "Beasts", "Smithing", "First Aid", "Storytelling", "Navigation", "History", "Magic", "Alchemy", "Lockpicking"];
+     const randomBackgrounds = ["Farmer", "Orphan", "Noble Exile", "Street Urchin", "Acolyte", "Guard", "Merchant's Child", "Hermit", "Former Soldier", "Wanderer", "Blacksmith Apprentice", "Scribe"];
+     const randomDescriptions = [
+         "A weary traveler with keen eyes and a rough, patched cloak, seeking forgotten paths.",
+         "A cheerful youth from a small village, always eager for adventure, perhaps a bit naively.",
+         "A stern-faced individual, marked by a faded scar across their brow, rarely speaking of their past.",
+         "A bookish scholar, more comfortable with dusty tomes than drawn swords, muttering about forgotten lore.",
+         "A nimble rogue with quick fingers and even quicker wit, always looking for an opportunity.",
+         "A wandering healer, carrying herbs and bandages, offering aid to those in need.",
+         "A charismatic bard, quick with a song or a story, always seeking an audience.",
+         "A stoic warrior, their well-maintained gear hinting at past battles.",
+         "A resourceful inventor, always tinkering with strange contraptions.",
+         "A quiet hunter, adept at tracking and moving unseen through the wilds.",
+     ];
 
-    // Pick random elements
-    const name = randomNames[Math.floor(Math.random() * randomNames.length)];
-    setValue("name", name);
+     reset(); // Clear form fields
 
-    if (creationType === 'basic') {
-        const charClass = randomClasses[Math.floor(Math.random() * randomClasses.length)];
-        const traits = randomTraitsPool.sort(() => 0.5 - Math.random()).slice(0, Math.floor(Math.random() * 4) + 1).join(', ');
-        const knowledge = randomKnowledgePool.sort(() => 0.5 - Math.random()).slice(0, Math.floor(Math.random() * 4) + 1).join(', ');
-        const background = randomBackgrounds[Math.floor(Math.random() * randomBackgrounds.length)];
-        setValue("creationType", "basic");
-        setValue("class", charClass);
-        setValue("traits", traits);
-        setValue("knowledge", knowledge);
-        setValue("background", background);
-        setValue("description", "");
-    } else {
-        const description = randomDescriptions[Math.floor(Math.random() * randomDescriptions.length)];
-        setValue("creationType", "text");
-        setValue("description", description);
-        setValue("class", "Adventurer");
-        setValue("traits", "");
-        setValue("knowledge", "");
-        setValue("background", "");
-    }
+     const name = randomNames[Math.floor(Math.random() * randomNames.length)];
+     setValue("name", name);
 
-    randomizeStats(); // Randomize stats as well
+     if (creationType === 'basic') {
+         const charClass = randomClasses[Math.floor(Math.random() * randomClasses.length)];
+         const traits = randomTraitsPool.sort(() => 0.5 - Math.random()).slice(0, Math.floor(Math.random() * 4) + 1).join(', ');
+         const knowledge = randomKnowledgePool.sort(() => 0.5 - Math.random()).slice(0, Math.floor(Math.random() * 4) + 1).join(', ');
+         const background = randomBackgrounds[Math.floor(Math.random() * randomBackgrounds.length)];
+         setValue("creationType", "basic");
+         setValue("class", charClass);
+         setValue("traits", traits);
+         setValue("knowledge", knowledge);
+         setValue("background", background);
+         setValue("description", "");
+     } else {
+         const description = randomDescriptions[Math.floor(Math.random() * randomDescriptions.length)];
+         setValue("creationType", "text");
+         setValue("description", description);
+         setValue("class", "Adventurer");
+         setValue("traits", "");
+         setValue("knowledge", "");
+         setValue("background", "");
+     }
 
-    // Removed toast to simplify for debugging
-    // toast({ title: "Character Randomized!", description: `Created a new character: ${name}` });
-    trigger(); // Trigger validation after setting values
+     randomizeStats(); // Randomize stats
 
-  }, [creationType, reset, setValue, randomizeStats, trigger]);
+     await new Promise(res => setTimeout(res, 200)); // Allow state to update visually
+     setIsRandomizing(false); // End animation
+     // Do not show toast here anymore
+     trigger(); // Trigger validation after setting values
+
+ }, [creationType, reset, setValue, randomizeStats, trigger]); // Removed toast from deps
 
 
   // Watch form values for dynamic checks
@@ -377,9 +380,9 @@ export function CharacterCreation() {
 
   // Update slider initial position when component mounts or character data changes
   useEffect(() => {
-    setStats(initialStats);
+    setStats(defaultStats);
     setRemainingPoints(initialPoints);
-  }, [initialStats, initialPoints]);
+  }, [defaultStats, initialPoints]); // Depend on initialStats and initialPoints
 
 
   return (
@@ -522,20 +525,6 @@ export function CharacterCreation() {
                      <div className="space-y-4">
                          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
                              <h3 className="text-xl font-semibold">Allocate Stats ({TOTAL_STAT_POINTS} Total Points)</h3>
-                             <div className="flex items-center gap-4">
-                                 <TooltipProvider>
-                                     <Tooltip>
-                                         <TooltipTrigger asChild>
-                                             <Button type="button" onClick={randomizeStats} variant="outline" size="sm" aria-label="Randomize Stat Distribution">
-                                                 <Dices className="mr-2 h-4 w-4" /> Randomize
-                                             </Button>
-                                         </TooltipTrigger>
-                                         <TooltipContent>
-                                             <p>Randomly distribute the {TOTAL_STAT_POINTS} points (min {MIN_STAT_VALUE}, max {MAX_STAT_VALUE} each).</p>
-                                         </TooltipContent>
-                                     </Tooltip>
-                                 </TooltipProvider>
-                             </div>
                          </div>
 
                          {/* Stat Inputs (Grid) */}
@@ -567,7 +556,7 @@ export function CharacterCreation() {
                                 {remainingPoints} points remaining.
                              </p>
                              {/* Display specific error for overallocation or invalid stats */}
-                             {statError && <p className="text-sm font-medium text-destructive">{statError}</p>}
+                              {statError && <p className="text-sm font-medium text-destructive">{statError}</p>}
                          </div>
 
                     </div>
@@ -577,28 +566,30 @@ export function CharacterCreation() {
                 <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t border-foreground/10">
                      <TooltipProvider>
                         <Tooltip>
-                             <TooltipTrigger asChild>
-                                {/* Removed isRandomizing state for simplicity */}
+                            <TooltipTrigger asChild>
                                 <Button
-                                   type="button"
-                                   onClick={randomizeAll}
-                                   variant="secondary"
-                                   aria-label="Randomize All Character Fields and Stats"
-                                   className="relative overflow-hidden"
+                                    type="button"
+                                    onClick={randomizeAll}
+                                    variant="secondary"
+                                    aria-label="Randomize All Character Fields and Stats"
+                                    className="relative overflow-hidden w-full sm:w-auto" // Adjusted width
+                                    disabled={isRandomizing}
                                 >
-                                    <RotateCcw className="mr-2 h-4 w-4" />
-                                    Randomize Everything
+                                    <RotateCcw className={`mr-2 h-4 w-4 ${isRandomizing ? 'animate-spin' : ''}`} />
+                                    {isRandomizing ? 'Randomizing...' : 'Randomize Everything'}
+                                    {/* Checkmark appears briefly after randomizing */}
+                                    <CheckCircle className={`absolute right-2 h-4 w-4 text-green-500 transition-opacity duration-500 ${!isRandomizing ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: !isRandomizing ? '300ms' : '0ms' }} />
                                 </Button>
-                             </TooltipTrigger>
-                             <TooltipContent>
+                            </TooltipTrigger>
+                            <TooltipContent>
                                 <p>Generate a completely random character based on the selected creation type.</p>
-                             </TooltipContent>
+                            </TooltipContent>
                         </Tooltip>
                      </TooltipProvider>
                      <Button
                          type="submit"
                          className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
-                         disabled={isGenerating || !!statError} // Disable if stat error exists
+                         disabled={isGenerating || !!statError || remainingPoints !== 0 || isRandomizing} // Disable if stat error, points remain, or randomizing
                          aria-label="Save character and proceed to adventure setup"
                       >
                         <Save className="mr-2 h-4 w-4" />
