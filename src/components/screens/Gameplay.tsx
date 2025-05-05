@@ -65,6 +65,7 @@ import {
     TooltipProvider, // Import TooltipProvider
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils"; // Import cn utility
 
 // Helper function to map difficulty dice string to roller function
 const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null => {
@@ -1364,3 +1365,5 @@ export function Gameplay() {
     </TooltipProvider>
   );
 }
+
+    
