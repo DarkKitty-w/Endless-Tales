@@ -19,10 +19,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
-import { StatAllocationInput } from "@/components/game/StatAllocationInput"; // Corrected import path
+import { StatAllocationInput } from "@/components/game/StatAllocationInput"; // Import the new input component
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
 import type { CharacterStats } from "@/types/character-types"; // Import from specific types file
-import { initialCharacterState } from "@/context/game-initial-state"; // Import initialStats
+import { initialCharacterState } from "@/context/game-initial-state"; // Import initialCharacterState
 
 // --- Zod Schema for Validation ---
 const baseCharacterSchema = z.object({
@@ -71,6 +71,7 @@ export function CharacterCreation() {
   const initialPoints = TOTAL_STAT_POINTS - (defaultStats.strength + defaultStats.stamina + defaultStats.agility);
   const [remainingPoints, setRemainingPoints] = useState(initialPoints);
   const [isRandomizing, setIsRandomizing] = useState(false); // State for randomization animation
+  const [randomizationComplete, setRandomizationComplete] = useState(false); // State for checkmark
 
 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -169,6 +170,7 @@ export function CharacterCreation() {
  // --- Randomize All ---
  const randomizeAll = useCallback(async () => {
      setIsRandomizing(true); // Start animation
+     setRandomizationComplete(false); // Hide checkmark initially
      await new Promise(res => setTimeout(res, 300)); // Wait for visual effect
 
      // Reset errors
@@ -223,7 +225,9 @@ export function CharacterCreation() {
 
      await new Promise(res => setTimeout(res, 200)); // Allow state to update visually
      setIsRandomizing(false); // End animation
-     // Do not show toast here anymore
+     setRandomizationComplete(true); // Show checkmark
+     // Hide checkmark after a delay
+     setTimeout(() => setRandomizationComplete(false), 1000);
      trigger(); // Trigger validation after setting values
 
  }, [creationType, reset, setValue, randomizeStats, trigger]); // Removed toast from deps
@@ -578,7 +582,7 @@ export function CharacterCreation() {
                                     <RotateCcw className={`mr-2 h-4 w-4 ${isRandomizing ? 'animate-spin' : ''}`} />
                                     {isRandomizing ? 'Randomizing...' : 'Randomize Everything'}
                                     {/* Checkmark appears briefly after randomizing */}
-                                    <CheckCircle className={`absolute right-2 h-4 w-4 text-green-500 transition-opacity duration-500 ${!isRandomizing ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: !isRandomizing ? '300ms' : '0ms' }} />
+                                    <CheckCircle className={`absolute right-2 h-4 w-4 text-green-500 transition-opacity duration-500 ${randomizationComplete ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: randomizationComplete ? '300ms' : '0ms' }} />
                                 </Button>
                             </TooltipTrigger>
                             <TooltipContent>
@@ -601,3 +605,4 @@ export function CharacterCreation() {
     </div>
   );
 }
+
