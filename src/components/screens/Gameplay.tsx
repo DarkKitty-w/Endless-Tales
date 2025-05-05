@@ -13,7 +13,7 @@ import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
 import { assessActionDifficulty, type AssessActionDifficultyInput } from "@/ai/flows/assess-action-difficulty";
 import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "@/ai/flows/attempt-crafting";
-import { Loader2 } from "lucide-react";
+import { Loader2, Settings, ArrowLeft, Skull, Save } from "lucide-react";
 import { SettingsPanel } from "@/components/screens/SettingsPanel";
 import { LeftPanel } from "@/components/game/LeftPanel";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -24,6 +24,8 @@ import { CraftingDialog } from '@/components/gameplay/CraftingDialog';
 import { ClassChangeDialog } from '@/components/gameplay/ClassChangeDialog';
 import { MobileSheet } from '@/components/gameplay/MobileSheet'; // Import MobileSheet
 import { useIsMobile } from "@/hooks/use-mobile"; // Import useIsMobile hook
+import { Button } from '@/components/ui/button'; // Import Button
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'; // Import Sheet components
 
 // Helper function to map difficulty dice string to roller function
 declare global {
@@ -67,13 +69,11 @@ export function Gameplay() {
     const [diceType, setDiceType] = useState<string>("None");
     const [pendingClassChange, setPendingClassChange] = useState<string | null>(null); // State for pending class change confirmation
     const [branchingChoices, setBranchingChoices] = useState<NarrateAdventureOutput['branchingChoices']>([]); // State for branching choices
-    const [isSettingsPanelOpen, setIsSettingsPanelOpen] = useState(false); // State for settings panel
     const [isCraftingDialogOpen, setIsCraftingDialogOpen] = useState(false);
     const [isCraftingLoading, setIsCraftingLoading] = useState(false); // Separate loading for crafting
     const [isInitialLoading, setIsInitialLoading] = useState(true);
 
     const isMobile = useIsMobile(); // Hook to check screen size
-
 
     // --- Trigger Skill Tree Generation ---
     const triggerSkillTreeGeneration = useCallback(async (charClass: string) => {
@@ -202,7 +202,6 @@ export function Gameplay() {
             }
 
              // Dispatch standard narration update AFTER potential state changes
-             // The reducer now handles updating the game state string
              const devLogEntry = {
                  narration: devNarration,
                  updatedGameState: "", // Reducer will calculate this
@@ -225,7 +224,6 @@ export function Gameplay() {
              }, 10); // Short delay
 
             setIsLoading(false);
-            // scrollToBottom(); // Handled by NarrationDisplay useEffect
             return; // Exit early for developer mode
         }
 
@@ -284,7 +282,6 @@ export function Gameplay() {
                     toast({ title: "Action Impossible", description: assessmentResult.reasoning, variant: "destructive", duration: 4000 });
                     setIsLoading(false);
                     setIsAssessingDifficulty(false);
-                    // scrollToBottom(); // Handled by NarrationDisplay useEffect
                     return;
                 }
             } catch (assessError: any) {
@@ -412,7 +409,6 @@ export function Gameplay() {
                     setError(`Narration failed after ${maxRetries + 1} attempts: ${errorMessage}. Try a different action or wait a moment.`);
                     toast({ title: "Narration Failed", description: "Please try a different action.", variant: "destructive", duration: 5000 });
                     setIsLoading(false);
-                    // scrollToBottom(); // Handled by NarrationDisplay useEffect
                     return;
                 }
                 retryCount++;
@@ -474,7 +470,6 @@ export function Gameplay() {
         }
 
         setIsLoading(false);
-        // scrollToBottom(); // Handled by NarrationDisplay useEffect
 
     }, [
         character, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice,
@@ -619,7 +614,6 @@ export function Gameplay() {
                  console.log("Gameplay (Load): Triggering skill tree generation for loaded character.");
                  triggerSkillTreeGeneration(character.class);
              }
-             // scrollToBottom(); // Handled by NarrationDisplay useEffect
              setIsInitialLoading(false); // Mark initial load complete for loaded games
         } else if (isInitialLoading && character.skillTree && !isLoading && !isGeneratingSkillTree && storyLog.length === 0) {
             // Handle case where skill tree finished generating for a new game
@@ -667,6 +661,9 @@ export function Gameplay() {
         );
     };
 
+    // State for desktop settings panel
+    const [isDesktopSettingsOpen, setIsDesktopSettingsOpen] = useState(false);
+
 
     return (
         <TooltipProvider>
@@ -693,7 +690,7 @@ export function Gameplay() {
                         turnCount={turnCount}
                         renderReputation={renderReputation}
                         renderNpcRelationships={renderNpcRelationships}
-                        onSettingsOpen={() => setIsSettingsPanelOpen(true)}
+                        onSettingsOpen={() => setIsDesktopSettingsOpen(true)} // Use the same state setter
                      />
 
 
@@ -727,8 +724,8 @@ export function Gameplay() {
                     <GameplayActions
                         onSave={handleSaveGame}
                         onAbandon={handleGoBack}
-                        onEnd={handleEndAdventure}
-                        onSettings={() => setIsSettingsPanelOpen(true)}
+                        onEnd={() => handleEndAdventure()}
+                        onSettings={() => setIsDesktopSettingsOpen(true)} // Trigger desktop settings panel
                         disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}
                         isMobile={isMobile}
                         currentAdventureId={currentAdventureId}
@@ -751,10 +748,15 @@ export function Gameplay() {
                         onCraft={handleCrafting}
                     />
 
-                     {/* Settings Panel */}
-                     <SettingsPanel isOpen={isSettingsPanelOpen} onOpenChange={setIsSettingsPanelOpen} />
+                     {/* Settings Panel (for both mobile and desktop triggers) */}
+                    <Sheet open={isDesktopSettingsOpen} onOpenChange={setIsDesktopSettingsOpen}>
+                       {/* SheetContent needs to be rendered conditionally or moved into SettingsPanel */}
+                       <SettingsPanel isOpen={isDesktopSettingsOpen} onOpenChange={setIsDesktopSettingsOpen} />
+                    </Sheet>
                 </div>
             </div>
         </TooltipProvider>
     );
 }
+
+    

@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { THEMES } from "@/lib/themes"; // Import themes from the new location
 
 interface SettingsPanelProps {
-    isOpen: boolean;
+    isOpen: boolean; // Keep props if needed internally, but Sheet manages open state
     onOpenChange: (open: boolean) => void;
 }
 
@@ -35,8 +35,9 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
         dispatch({ type: 'SET_THEME_ID', payload: themeId });
     };
 
-    // Theme application logic is now handled in GameProvider via useEffect
+    // Theme application logic is handled in GameProvider via useEffect
 
+    // The parent component (Gameplay) will wrap this in <SheetContent>
     return (
         <SheetContent side="right" className="w-[90vw] sm:w-[400px] flex flex-col">
             <SheetHeader className="border-b pb-4">
@@ -104,3 +105,5 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
         </SheetContent>
     );
 }
+
+    
