@@ -1,3 +1,4 @@
+// src/components/screens/Gameplay.tsx
 "use client";
 
 import type { ComponentProps, SVGProps } from "react"; // Needed for SVG component type
@@ -9,7 +10,7 @@ import { calculateXpToNextLevel } from "@/lib/gameUtils"; // Import specific gam
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { CardboardCard, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/game/CardboardCard";
+import { CardboardCard, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/game/CardboardCard"; // Added CardFooter import
 import { CharacterDisplay } from "@/components/game/CharacterDisplay";
 import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay"; // Import SkillTreeDisplay
 import { InventoryDisplay } from "@/components/game/InventoryDisplay"; // Import InventoryDisplay
@@ -19,7 +20,7 @@ import { assessActionDifficulty, type AssessActionDifficultyInput } from "@/ai/f
 import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "@/ai/flows/attempt-crafting"; // Import crafting flow
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award, Hammer, CheckSquare, Square, Users, Milestone, CalendarClock, Skull, HeartPulse, GitBranch, ShieldAlert, Zap, Settings } from "lucide-react"; // Added Settings icon
+import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award, Hammer, CheckSquare, Square, Users, Milestone, CalendarClock, Skull, HeartPulse, GitBranch, ShieldAlert, Zap, Settings, CheckCircle } from "lucide-react"; // Added CheckCircle
 import { rollD6, rollD10, rollD20, rollD100 } from "@/services/dice-roller"; // Import specific rollers
 import {
   AlertDialog,
@@ -38,7 +39,8 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetFooter // Added SheetFooter
+  SheetTrigger, // Added SheetTrigger
+  SheetFooter, // Keep SheetFooter
 } from "@/components/ui/sheet";
 import {
    Dialog,
@@ -51,12 +53,12 @@ import {
 } from "@/components/ui/dialog"; // Import Dialog components
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Progress } from "../ui/progress"; // Import Progress
-import { Skeleton } from "../ui/skeleton"; // Import Skeleton
-import { Label } from "../ui/label"; // Import Label
-import { Badge } from "../ui/badge"; // Import Badge for item selection
+import { Progress } from "@/components/ui/progress"; // Import Progress
+import { Skeleton } from "@/components/ui/skeleton"; // Import Skeleton
+import { Label } from "@/components/ui/label"; // Import Label
+import { Badge } from "@/components/ui/badge"; // Import Badge for item selection
 import { getQualityColor } from "@/lib/utils"; // Import quality color helper
-import { SettingsPanel } from "./SettingsPanel"; // Import SettingsPanel
+import { SettingsPanel } from "@/components/screens/SettingsPanel"; // Corrected import path for SettingsPanel
 import {
     Tooltip,
     TooltipContent,
@@ -188,7 +190,8 @@ export function Gameplay() {
 
   // --- Handle Player Action Submission ---
   const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
-     if (!character || isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading) {
+     const busy = isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading;
+     if (!character || busy) {
        console.log("Action blocked: No character or already busy.", { isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, isCraftingLoading });
        let reason = "Please wait for the current action to complete.";
        if (isGeneratingSkillTree) reason = "Please wait for skill tree generation to finish.";
@@ -629,7 +632,8 @@ export function Gameplay() {
 
    // --- Handle Save Game ---
    const handleSaveGame = useCallback(async () => {
-        if (isLoading || isEnding || isSaving || !currentAdventureId || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading) return;
+        const busy = isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading;
+        if (busy || !currentAdventureId) return;
         setIsSaving(true);
         toast({ title: "Saving Progress..." });
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -754,7 +758,8 @@ export function Gameplay() {
 
   // --- Initial Narration & Skill Tree Trigger ---
   useEffect(() => {
-     if (state.status !== "Gameplay" || !character || isEnding || isSaving || isGeneratingSkillTree) return;
+     const busy = isLoading || isEnding || isSaving || isGeneratingSkillTree;
+     if (state.status !== "Gameplay" || !character || busy) return;
 
      const isNewGame = storyLog.length === 0 && !state.savedAdventures.some(s => s.id === state.currentAdventureId);
      const isLoadedGame = storyLog.length > 0 && state.savedAdventures.some(s => s.id === state.currentAdventureId);
@@ -813,7 +818,8 @@ export function Gameplay() {
 
    // --- Go Back (Abandon Adventure) ---
    const handleGoBack = useCallback(() => {
-        if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading) return;
+        const busy = isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading;
+        if (busy) return;
         toast({ title: "Returning to Main Menu...", description: "Abandoning current adventure." });
         dispatch({ type: "RESET_GAME" });
    }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, dispatch, toast, isCraftingLoading]);
@@ -821,7 +827,8 @@ export function Gameplay() {
 
    // --- Suggest Action ---
    const handleSuggestAction = useCallback(() => {
-       if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || !character || isCraftingLoading) return;
+       const busy = isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading;
+       if (busy || !character) return;
        const learnedSkillNames = character.learnedSkills.map(s => s.name);
         const baseSuggestions = [ "Look around", "Examine surroundings", "Check inventory", "Check status", "Check relationships", "Check reputation", "Move north", "Move east", "Move south", "Move west", "Talk to [NPC Name]", "Ask about [Topic]", "Examine [Object]", "Pick up [Item]", "Use [Item]", "Drop [Item]", "Open [Door/Chest]", "Search the area", "Rest here", "Wait for a while", "Attack [Target]", "Defend yourself", "Flee", ];
         const skillSuggestions = learnedSkillNames.map(name => `Use skill: ${name}`);
@@ -974,181 +981,384 @@ export function Gameplay() {
     return null; // Should not happen often
    };
 
+   // Define the settings panel content
+   const renderSettingsPanel = () => (
+       <SettingsPanel isOpen={isSettingsPanelOpen} onOpenChange={setIsSettingsPanelOpen} />
+   );
+
+   // Define crafting dialog content
+   const renderCraftingDialog = () => (
+     <Dialog open={isCraftingDialogOpen} onOpenChange={setIsCraftingDialogOpen}>
+       <DialogContent className="sm:max-w-[480px]">
+         <DialogHeader>
+           <DialogTitle className="flex items-center gap-2"><Hammer className="w-5 h-5"/>Attempt Crafting</DialogTitle>
+           <DialogDescription>
+             Combine items from your inventory to create something new. The AI will determine the outcome based on your knowledge, skills, and the ingredients used.
+           </DialogDescription>
+         </DialogHeader>
+         <div className="grid gap-4 py-4">
+           {/* Crafting Goal Input */}
+           <div className="grid grid-cols-4 items-center gap-4">
+             <Label htmlFor="crafting-goal" className="text-right col-span-1">
+               Goal
+             </Label>
+             <Input
+               id="crafting-goal"
+               value={craftingGoal}
+               onChange={(e) => setCraftingGoal(e.target.value)}
+               placeholder="e.g., Healing Poultice, Sharp Dagger"
+               className="col-span-3"
+               disabled={isCraftingLoading}
+             />
+           </div>
+           {/* Ingredient Selection */}
+           <div className="grid grid-cols-4 items-start gap-4">
+              <Label className="text-right col-span-1 mt-2">
+                 Ingredients
+              </Label>
+              <div className="col-span-3">
+                 <ScrollArea className="h-40 border rounded-md p-2 bg-muted/30">
+                   {inventory.length > 0 ? (
+                     <div className="space-y-1">
+                       {inventory.map((item) => (
+                         <div key={item.name} className="flex items-center gap-2">
+                           <Square
+                             data-state={selectedIngredients.includes(item.name) ? 'checked' : 'unchecked'}
+                             onClick={() => !isCraftingLoading && handleIngredientToggle(item.name)}
+                             className={cn(
+                                 "w-4 h-4 text-primary cursor-pointer transition-colors",
+                                 selectedIngredients.includes(item.name) ? 'bg-primary text-primary-foreground' : 'text-muted-foreground/50 hover:text-foreground'
+                             )}
+                             aria-label={`Select ${item.name}`}
+                           >
+                              {selectedIngredients.includes(item.name) && <CheckCircle className="w-full h-full p-0.5"/>}
+                            </Square>
+                            <Label
+                               htmlFor={`ingredient-${item.name}`} // Link label to checkbox (optional, using Square click instead)
+                               className={`text-sm flex-1 cursor-pointer ${getQualityColor(item.quality)}`}
+                               onClick={() => !isCraftingLoading && handleIngredientToggle(item.name)}
+                             >
+                                {item.name} {item.quality && item.quality !== "Common" ? `(${item.quality})` : ''}
+                            </Label>
+                         </div>
+                       ))}
+                     </div>
+                   ) : (
+                     <p className="text-sm text-muted-foreground italic text-center py-4">Inventory is empty.</p>
+                   )}
+                 </ScrollArea>
+                 <p className="text-xs text-muted-foreground mt-1">Select the items you want to use.</p>
+              </div>
+           </div>
+           {craftingError && (
+             <Alert variant="destructive" className="col-span-4">
+               <AlertDescription>{craftingError}</AlertDescription>
+             </Alert>
+           )}
+         </div>
+         <DialogClose asChild>
+              <Button type="button" variant="secondary" disabled={isCraftingLoading}>
+                 Cancel
+               </Button>
+         </DialogClose>
+          <Button type="button" onClick={handleCrafting} disabled={isCraftingLoading || !craftingGoal.trim() || selectedIngredients.length === 0}>
+             {isCraftingLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+             Attempt Craft
+           </Button>
+       </DialogContent>
+     </Dialog>
+   );
+
+   // --- Render Main Component ---
   return (
-    // Adjusted root div: removed max-h-screen, added min-h-screen for mobile
     <TooltipProvider>
         <div className="flex flex-col md:flex-row min-h-screen overflow-hidden bg-gradient-to-br from-background to-muted/30">
 
-                {/* Left Panel (Character, Progression, Inventory/Skills) - Fixed width on Desktop */}
-                <div className="hidden md:flex flex-col w-80 lg:w-96 p-4 border-r border-foreground/10 overflow-y-auto bg-card/50 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-                    {/* Character Display */}
-                    <CharacterDisplay />
+            {/* Left Panel (Character, Progression, Inventory/Skills) - Fixed width on Desktop */}
+            <div className="hidden md:flex flex-col w-80 lg:w-96 p-4 border-r border-foreground/10 overflow-y-auto bg-card/50 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+                {/* Character Display */}
+                <CharacterDisplay />
 
-                    {/* Progression Card */}
-                     <CardboardCard className="mb-4 bg-card/90 backdrop-blur-sm">
-                         <CardHeader className="pb-2 pt-4 border-b border-foreground/10">
-                           <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                               <Milestone className="w-5 h-5"/> Progression
-                           </CardTitle>
-                         </CardHeader>
-                         <CardContent className="pt-4 pb-4 text-sm space-y-3">
-                            {/* Level and XP */}
-                            <TooltipProvider delayDuration={100}>
-                                <Tooltip>
-                                    <TooltipTrigger className="w-full cursor-help">
-                                        <div className="flex items-center justify-between mb-1">
-                                          <span className="text-sm font-medium flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Level:</span>
-                                          <span className="font-bold text-base">{character.level}</span>
-                                          <span className="ml-auto font-medium text-muted-foreground">XP:</span>
-                                          <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
-                                        </div>
-                                        <Progress
-                                            value={(character.xp / character.xpToNextLevel) * 100}
-                                            className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"
-                                            aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`}
-                                        />
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p>Experience Points</p>
-                                        <p className="text-xs text-muted-foreground">({character.xpToNextLevel - character.xp} needed for next level)</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-
-                             <Separator />
-                             {/* Reputation */}
-                             <div className="space-y-1">
-                                 <Label className="text-sm font-medium flex items-center gap-1 mb-1"><Users className="w-3.5 h-3.5"/> Reputation:</Label>
-                                 {renderReputation(character.reputation)}
-                             </div>
-
-                             <Separator />
-                             {/* Relationships */}
-                              <div className="space-y-1">
-                                 <Label className="text-sm font-medium flex items-center gap-1 mb-1"><HeartPulse className="w-3.5 h-3.5"/> Relationships:</Label>
-                                 {renderNpcRelationships(character.npcRelationships)}
-                             </div>
-
-                             <Separator />
-                              {/* Turn Count */}
-                             <div className="flex justify-between items-center">
-                                  <Label className="text-sm font-medium flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5"/> Turn:</Label>
-                                  <span className="font-bold text-base">{turnCount}</span>
-                             </div>
-                         </CardContent>
-                     </CardboardCard>
-
-                     {/* Inventory/Skills Tabs */}
-                    <Tabs defaultValue="inventory" className="h-full flex flex-col">
-                         <TabsList className="flex-none">
-                             <TabsTrigger value="inventory" className="flex items-center" aria-label="Open Inventory">
-                                 Inventory
-                                  <Backpack className="w-4 h-4 mr-1.5"/>
-                             </TabsTrigger>
-                             <TabsTrigger value="skills" className="flex items-center" aria-label="Open Skill Tree">
-                                 Skills
-                                 <Workflow className="w-4 h-4 mr-1.5"/>
-                             </TabsTrigger>
-                         </TabsList>
-                         <div className="flex-grow">
-                             <TabsContent value="inventory" className="flex-grow">
-                                 <InventoryDisplay />
-                             </TabsContent>
-                             <TabsContent value="skills" className="flex-grow">
-                                   {character.skillTree && !isGeneratingSkillTree ? (
-                                        <SkillTreeDisplay skillTree={character.skillTree} learnedSkills={character.learnedSkills}  currentStage={character.skillTreeStage}/>
-                                   ) : (
-                                        <div className="flex items-center justify-center h-full">
-                                             {isGeneratingSkillTree ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : ""}
-                                            {isGeneratingSkillTree ? "Generating skill tree..." : "No skill tree available."}
-                                        </div>
-                                   )}
-                             </TabsContent>
-                         </div>
-                     </Tabs>
-                </div>
-
-            <div className="flex-1 flex flex-col">
-              {/* Top Bar - Narration + Action Input */}
-              <CardboardCard className="mb-4 bg-card/90 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="text-xl font-semibold">Adventure Log</CardTitle>
-                  <CardDescription>
-                      {/* Initial Narration: Display only AFTER loading is finished (prevent empty profile at startup) */}
-                      {(!isInitialLoading && storyLog.length === 0) ? "Your adventure begins now." : ""}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="flex-1 pb-0">
-                  <ScrollArea className="h-80 pr-3">
-                    {storyLog.length > 0 ? (
-                      storyLog.map((log, index) => (
-                        <div key={`log-${index}`} className="mb-3 pb-3 border-b border-border/50 last:border-b-0">
-                          <p className="text-sm font-semibold text-muted-foreground">Turn {index + 1} <span className="text-xs">({new Date(log.timestamp || Date.now()).toLocaleTimeString()})</span></p>
-                          <p className="text-sm whitespace-pre-wrap mt-1 leading-relaxed">{log.narration}</p>
-                        </div>
-                      ))
-                    ) : (
-                      isInitialLoading ? <Skeleton className="h-12 w-full" /> : (
-                         <p className="text-sm text-muted-foreground italic">No story log entries yet. Start your adventure!</p>
-                      )
-                    )}
-                    <div ref={scrollEndRef} />
-                  </ScrollArea>
-                  {renderDynamicContent()}
-                </CardContent>
-                <CardFooter>
-                  <form onSubmit={handleSubmit} className="w-full flex gap-2">
-                    <Input
-                      type="text"
-                      value={playerInput}
-                      onChange={(e) => setPlayerInput(e.target.value)}
-                      placeholder="What do you do?"
-                      className="flex-1 text-sm"
-                      aria-label="Enter your action or command"
-                    />
-                    <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground" aria-label="Send action to narrator">
-                      <Send className="w-4 h-4 mr-2" /> Send
-                    </Button>
-                     <TooltipProvider>
-                       <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button variant="secondary" size="icon" onClick={handleSuggestAction} aria-label="Suggest Action">
-                                   <Sparkles className="w-4 h-4"/>
-                                </Button>
+                {/* Progression Card */}
+                <CardboardCard className="mb-4 bg-card/90 backdrop-blur-sm">
+                    <CardHeader className="pb-2 pt-4 border-b border-foreground/10">
+                        <CardTitle className="text-xl font-semibold flex items-center gap-2">
+                            <Milestone className="w-5 h-5"/> Progression
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="pt-4 pb-4 text-sm space-y-3">
+                        {/* Level and XP */}
+                        <Tooltip>
+                            <TooltipTrigger className="w-full cursor-help">
+                                <div className="flex items-center justify-between mb-1">
+                                    <span className="text-sm font-medium flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Level:</span>
+                                    <span className="font-bold text-base">{character.level}</span>
+                                    <span className="ml-auto font-medium text-muted-foreground">XP:</span>
+                                    <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
+                                </div>
+                                <Progress
+                                    value={(character.xp / character.xpToNextLevel) * 100}
+                                    className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"
+                                    aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`}
+                                />
                             </TooltipTrigger>
                             <TooltipContent>
-                                <p>Need Inspiration?</p>
-                                <p className="text-xs text-muted-foreground">Suggest a random action.</p>
+                                <p>Experience Points</p>
+                                <p className="text-xs text-muted-foreground">({character.xpToNextLevel - character.xp} needed for next level)</p>
                             </TooltipContent>
-                       </Tooltip>
-                     </TooltipProvider>
-                  </form>
-                </CardFooter>
-              </CardboardCard>
+                        </Tooltip>
 
-              {/* Add sheet or other mobile-friendly container to reveal inventory on mobile */}
-               <div className="md:hidden">
-                   {/* Mobile Inventory Trigger */}
-                   <Sheet>
-                       <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon">
-                                 <Backpack className="h-5 w-5" />
-                                 <span className="sr-only">Open Inventory</span>
-                            </Button>
-                       </SheetTrigger>
-                       <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
-                           <SheetHeader className="p-4 border-b">
-                                <SheetTitle>Inventory</SheetTitle>
-                           </SheetHeader>
-                           <div className="flex-grow overflow-hidden">
-                                <InventoryDisplay />
-                           </div>
-                            <SheetFooter className="p-4 border-t bg-background mt-auto">
-                                {/* Add relevant mobile actions here if needed */}
-                            </SheetFooter>
-                       </SheetContent>
-                   </Sheet>
-               </div>
+                        <Separator />
+                        {/* Reputation */}
+                        <div className="space-y-1">
+                            <Label className="text-sm font-medium flex items-center gap-1 mb-1"><Users className="w-3.5 h-3.5"/> Reputation:</Label>
+                            {renderReputation(character.reputation)}
+                        </div>
+
+                        <Separator />
+                        {/* Relationships */}
+                        <div className="space-y-1">
+                            <Label className="text-sm font-medium flex items-center gap-1 mb-1"><HeartPulse className="w-3.5 h-3.5"/> Relationships:</Label>
+                            {renderNpcRelationships(character.npcRelationships)}
+                        </div>
+
+                        <Separator />
+                         {/* Turn Count */}
+                        <div className="flex justify-between items-center">
+                             <Label className="text-sm font-medium flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5"/> Turn:</Label>
+                             <span className="font-bold text-base">{turnCount}</span>
+                        </div>
+                    </CardContent>
+                </CardboardCard>
+
+                {/* Inventory/Skills Tabs */}
+                <Tabs defaultValue="inventory" className="h-full flex flex-col">
+                    <TabsList className="flex-none">
+                        <TabsTrigger value="inventory" className="flex items-center" aria-label="Open Inventory">
+                           <Backpack className="w-4 h-4 mr-1.5"/> Inventory
+                        </TabsTrigger>
+                        <TabsTrigger value="skills" className="flex items-center" aria-label="Open Skill Tree">
+                           <Workflow className="w-4 h-4 mr-1.5"/> Skills
+                        </TabsTrigger>
+                    </TabsList>
+                    <div className="flex-grow">
+                        <TabsContent value="inventory" className="flex-grow">
+                            <InventoryDisplay />
+                        </TabsContent>
+                        <TabsContent value="skills" className="flex-grow">
+                            {character.skillTree && !isGeneratingSkillTree ? (
+                                <SkillTreeDisplay skillTree={character.skillTree} learnedSkills={character.learnedSkills}  currentStage={character.skillTreeStage}/>
+                            ) : (
+                                <div className="flex items-center justify-center h-full">
+                                    {isGeneratingSkillTree ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : ""}
+                                    {isGeneratingSkillTree ? "Generating skill tree..." : "No skill tree available."}
+                                </div>
+                            )}
+                        </TabsContent>
+                    </div>
+                </Tabs>
+            </div>
+
+             {/* Main Panel (Narration & Input) */}
+            <div className="flex-1 flex flex-col p-4 overflow-hidden"> {/* Use flex-col and overflow */}
+                {/* Top Bar - Mobile Only */}
+                <div className="md:hidden flex justify-between items-center mb-2 border-b pb-2">
+                    <Sheet>
+                        <SheetTrigger asChild>
+                            <Button variant="ghost" size="sm"><User className="w-4 h-4 mr-1.5"/> Profile</Button>
+                        </SheetTrigger>
+                        <SheetContent side="left" className="w-[85vw] p-0 flex flex-col">
+                             <SheetHeader className="p-4 border-b">
+                                <SheetTitle>Character Profile</SheetTitle>
+                            </SheetHeader>
+                            <ScrollArea className="flex-grow p-4">
+                                <CharacterDisplay />
+                                {/* Mobile Progression Card */}
+                                <CardboardCard className="mb-4">
+                                    <CardHeader className="pb-2 pt-4">
+                                        <CardTitle className="text-lg font-semibold flex items-center gap-2"><Milestone className="w-4 h-4"/> Progression</CardTitle>
+                                    </CardHeader>
+                                     <CardContent className="pt-4 pb-4 text-sm space-y-3">
+                                        <Tooltip>
+                                            <TooltipTrigger className="w-full cursor-help">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-sm font-medium flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Level:</span>
+                                                    <span className="font-bold text-base">{character.level}</span>
+                                                    <span className="ml-auto font-medium text-muted-foreground">XP:</span>
+                                                    <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
+                                                </div>
+                                                <Progress value={(character.xp / character.xpToNextLevel) * 100} className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"/>
+                                            </TooltipTrigger>
+                                            <TooltipContent><p>Experience Points</p><p className="text-xs text-muted-foreground">({character.xpToNextLevel - character.xp} needed)</p></TooltipContent>
+                                        </Tooltip>
+                                        <Separator />
+                                        <div className="space-y-1"><Label className="text-sm font-medium flex items-center gap-1 mb-1"><Users className="w-3.5 h-3.5"/> Reputation:</Label>{renderReputation(character.reputation)}</div>
+                                        <Separator />
+                                        <div className="space-y-1"><Label className="text-sm font-medium flex items-center gap-1 mb-1"><HeartPulse className="w-3.5 h-3.5"/> Relationships:</Label>{renderNpcRelationships(character.npcRelationships)}</div>
+                                        <Separator />
+                                         <div className="flex justify-between items-center"><Label className="text-sm font-medium flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5"/> Turn:</Label><span className="font-bold text-base">{turnCount}</span></div>
+                                    </CardContent>
+                                </CardboardCard>
+                            </ScrollArea>
+                        </SheetContent>
+                    </Sheet>
+                    <div className="flex gap-1">
+                        {/* Mobile Inventory/Skills Trigger */}
+                        <Sheet>
+                            <SheetTrigger asChild>
+                                <Button variant="ghost" size="icon"><Backpack className="w-5 h-5" /></Button>
+                            </SheetTrigger>
+                            <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
+                               <Tabs defaultValue="inventory" className="h-full flex flex-col">
+                                    <TabsList className="flex-none border-b">
+                                        <TabsTrigger value="inventory" className="flex-1"><Backpack className="w-4 h-4 mr-1.5"/> Inventory</TabsTrigger>
+                                        <TabsTrigger value="skills" className="flex-1"><Workflow className="w-4 h-4 mr-1.5"/> Skills</TabsTrigger>
+                                    </TabsList>
+                                    <div className="flex-grow overflow-hidden">
+                                        <TabsContent value="inventory" className="h-full"><InventoryDisplay /></TabsContent>
+                                        <TabsContent value="skills" className="h-full">
+                                            {character.skillTree && !isGeneratingSkillTree ? (
+                                                <SkillTreeDisplay skillTree={character.skillTree} learnedSkills={character.learnedSkills} currentStage={character.skillTreeStage} />
+                                             ) : (
+                                                <div className="flex items-center justify-center h-full">
+                                                    {isGeneratingSkillTree ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : ""}
+                                                    {isGeneratingSkillTree ? "Generating skill tree..." : "No skill tree available."}
+                                                </div>
+                                             )}
+                                         </TabsContent>
+                                    </div>
+                                </Tabs>
+                            </SheetContent>
+                        </Sheet>
+                        {/* Mobile Settings Trigger */}
+                        <Sheet open={isSettingsPanelOpen} onOpenChange={setIsSettingsPanelOpen}>
+                            <SheetTrigger asChild><Button variant="ghost" size="icon"><Settings className="w-5 h-5" /></Button></SheetTrigger>
+                            {renderSettingsPanel()}
+                        </Sheet>
+                    </div>
+                </div>
+
+                 {/* Narration Area */}
+                 <CardboardCard className="flex-1 flex flex-col overflow-hidden mb-4 border-2 border-foreground/20 shadow-inner min-h-0">
+                    <CardHeader className="flex-none border-b border-foreground/10 py-3 px-4">
+                        <CardTitle className="text-lg font-semibold flex items-center gap-2">
+                            <BookCopy className="w-4 h-4"/> Story Log
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex-1 pb-2 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
+                        <ScrollArea className="h-full pr-3"> {/* Use full height */}
+                            {storyLog.length > 0 ? (
+                                storyLog.map((log, index) => (
+                                    <div key={`log-${index}`} className="mb-3 pb-3 border-b border-border/50 last:border-b-0">
+                                        <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                                            <CalendarClock className="w-3 h-3"/> Turn {index + 1}
+                                            <span className="ml-auto text-xs">({new Date(log.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})</span>
+                                        </p>
+                                        <p className="text-sm whitespace-pre-wrap mt-1 leading-relaxed">{log.narration}</p>
+                                    </div>
+                                ))
+                            ) : (
+                                isInitialLoading ? <Skeleton className="h-12 w-full mt-2" /> : (
+                                    <p className="text-sm text-muted-foreground italic mt-4">Your adventure begins now. Type your first action below.</p>
+                                )
+                            )}
+                             {renderDynamicContent()} {/* Render loading, dice, errors, or choices here */}
+                            <div ref={scrollEndRef} />
+                        </ScrollArea>
+
+                    </CardContent>
+                 </CardboardCard>
+
+                 {/* Input Area */}
+                 <div className="flex-none"> {/* Prevent input area from shrinking */}
+                    <form onSubmit={handleSubmit} className="flex gap-2 items-center">
+                        <Input
+                            type="text"
+                            value={playerInput}
+                            onChange={(e) => setPlayerInput(e.target.value)}
+                            placeholder="What do you do? (e.g., look around, use sword, talk to guard)"
+                            className="flex-1 text-sm h-10"
+                            aria-label="Enter your action or command"
+                            disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}
+                        />
+                         <Tooltip>
+                             <TooltipTrigger asChild>
+                                <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground h-10 px-4" aria-label="Send action to narrator" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading || !playerInput.trim()}>
+                                   <Send className="w-4 h-4" />
+                                </Button>
+                             </TooltipTrigger>
+                              <TooltipContent>Send Action</TooltipContent>
+                         </Tooltip>
+                          <Tooltip>
+                             <TooltipTrigger asChild>
+                                <Button variant="outline" size="icon" type="button" onClick={handleSuggestAction} aria-label="Suggest Action" className="h-10 w-10" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
+                                   <Sparkles className="w-4 h-4"/>
+                                </Button>
+                             </TooltipTrigger>
+                              <TooltipContent><p>Suggest Action</p></TooltipContent>
+                         </Tooltip>
+                         {/* Crafting Button */}
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button variant="outline" size="icon" type="button" onClick={() => setIsCraftingDialogOpen(true)} aria-label="Open Crafting" className="h-10 w-10" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
+                                    <Hammer className="w-4 h-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent><p>Open Crafting</p></TooltipContent>
+                        </Tooltip>
+
+                    </form>
+                 </div>
+
+                {/* Action Buttons - Placed below input */}
+                <div className="flex-none flex flex-wrap gap-2 mt-4 justify-center md:justify-start">
+                    <Button variant="secondary" size="sm" onClick={handleSaveGame} disabled={isLoading || isEnding || isSaving || !currentAdventureId || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
+                        <Save className="mr-1 h-4 w-4" /> Save Game
+                    </Button>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                             <Button variant="outline" size="sm" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
+                                <ArrowLeft className="mr-1 h-4 w-4" /> Abandon
+                             </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader><AlertDialogTitle>Are you sure?</AlertDialogTitle><AlertDialogDescription>Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu.</AlertDialogDescription></AlertDialogHeader>
+                            <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction></AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                    <Button variant="destructive" size="sm" onClick={() => handleEndAdventure()} disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
+                       <Skull className="mr-1 h-4 w-4" /> End Adventure
+                    </Button>
+                     {/* Desktop Settings Button */}
+                     <Sheet open={isSettingsPanelOpen} onOpenChange={setIsSettingsPanelOpen}>
+                        <SheetTrigger asChild>
+                           <Button variant="ghost" size="sm" className="hidden md:inline-flex"><Settings className="w-4 h-4 mr-1.5" /> Settings</Button>
+                        </SheetTrigger>
+                        {renderSettingsPanel()}
+                    </Sheet>
+                </div>
+
+
+                {/* Class Change Confirmation Dialog */}
+                 {pendingClassChange && (
+                    <AlertDialog open={!!pendingClassChange} onOpenChange={() => setPendingClassChange(null)}>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Class Change Suggestion</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Your actions suggest you might be more suited to the **{pendingClassChange}** class. Changing class will reset your current skill progression ({character.class} Stage {character.skillTreeStage}) and grant you the starting skills of a {pendingClassChange}. Do you wish to change?
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel onClick={() => setPendingClassChange(null)}>Stay as {character.class}</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleConfirmClassChange(pendingClassChange)}>Become a {pendingClassChange}</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                 )}
+
+                 {/* Render Crafting Dialog */}
+                 {renderCraftingDialog()}
             </div>
         </div>
     </TooltipProvider>

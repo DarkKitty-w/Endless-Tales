@@ -5,7 +5,7 @@ import type { LucideIcon } from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants";
-import type { CharacterStats } from "@/types/game-types";
+import type { CharacterStats } from "@/types/character-types";
 import { cn } from "@/lib/utils";
 
 interface StatAllocationInputProps {
@@ -14,7 +14,7 @@ interface StatAllocationInputProps {
   value: number;
   onChange: (statKey: keyof CharacterStats, value: number) => void;
   Icon?: LucideIcon;
-  iconColor?: string;
+  iconColor?: string; // Keep this prop for compatibility, but don't use it directly
 }
 
 export function StatAllocationInput({
@@ -23,7 +23,7 @@ export function StatAllocationInput({
   value,
   onChange,
   Icon,
-  iconColor = "text-muted-foreground",
+  // iconColor is no longer needed here as it's applied within the Icon usage
 }: StatAllocationInputProps) {
   const handleSliderChange = (newValue: number[]) => {
     onChange(statKey, newValue[0]);
@@ -32,8 +32,14 @@ export function StatAllocationInput({
   return (
     <div className="space-y-3 border p-4 rounded-md bg-card/50">
       <div className="flex items-center justify-between">
-         <Label htmlFor={statKey} className={cn("text-base font-medium flex items-center gap-1.5", iconColor)}>
-             {Icon && <Icon className="w-4 h-4" />}
+         <Label htmlFor={statKey} className="text-base font-medium flex items-center gap-1.5">
+              {/* Apply icon color directly to the Icon component */}
+              {Icon && <Icon className={cn("w-4 h-4",
+                  statKey === 'strength' ? 'text-destructive' :
+                  statKey === 'stamina' ? 'text-green-600' :
+                  statKey === 'agility' ? 'text-blue-500' :
+                  'text-muted-foreground' // Default color
+               )} />}
              {label}
          </Label>
          <span className="text-lg font-bold font-mono">{value}</span>
@@ -50,4 +56,3 @@ export function StatAllocationInput({
     </div>
   );
 }
-
