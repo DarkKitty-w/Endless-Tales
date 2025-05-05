@@ -8,8 +8,8 @@ import type { InventoryItem, StoryLogEntry, SkillTree, Skill, Character, Reputat
 import { calculateXpToNextLevel } from "@/lib/gameUtils"; // Import specific game utils
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
-import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { CardboardCard, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/game/CardboardCard";
 import { CharacterDisplay } from "@/components/game/CharacterDisplay";
 import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay"; // Import SkillTreeDisplay
 import { InventoryDisplay } from "@/components/game/InventoryDisplay"; // Import InventoryDisplay
@@ -39,7 +39,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-  SheetFooter // Import SheetFooter
+  SheetFooter
 } from "@/components/ui/sheet";
 import {
    Dialog,
@@ -86,12 +86,7 @@ export function Gameplay() {
   const [diceType, setDiceType] = useState<string>("None");
   const scrollEndRef = useRef<HTMLDivElement>(null);
   const [pendingClassChange, setPendingClassChange] = useState<string | null>(null); // State for pending class change confirmation
-  const [branchingChoices, setBranchingChoices] = useState<NarrateAdventureOutput['branchingChoices']>([
-        { text: "Continue...", consequenceHint: "Just go on..." },
-        { text: "Observe the surrounding...", consequenceHint: "You may discover something new" },
-        { text: "Check our inventory", consequenceHint: "What are you holding ?" },
-        { text: "Rest here", consequenceHint: "Regain your strenth" },
-    ]); // State for branching choices
+  const [branchingChoices, setBranchingChoices] = useState<NarrateAdventureOutput['branchingChoices']>([]); // State for branching choices
 
   // Crafting state
   const [isCraftingDialogOpen, setIsCraftingDialogOpen] = useState(false);
@@ -174,7 +169,7 @@ export function Gameplay() {
     setError(null);
     setDiceResult(null);
     setDiceType("None");
-    //setBranchingChoices([]); // REMOVE : NO MORE
+    setBranchingChoices([]); // Reset choices before processing
 
     let actionWithDice = action;
     let assessedDifficulty: DifficultyLevel = "Normal";
@@ -383,12 +378,7 @@ export function Gameplay() {
       };
       dispatch({ type: "UPDATE_NARRATION", payload: logEntryForResult });
 
-      setBranchingChoices(narrationResult.branchingChoices || [
-        { text: "Continue...", consequenceHint: "Just go on..." },
-        { text: "Observe the surrounding...", consequenceHint: "You may discover something new" },
-        { text: "Check our inventory", consequenceHint: "What are you holding ?" },
-        { text: "Rest here", consequenceHint: "Regain your strenth" },
-    ]); // ALWAYS provide branching choices
+       setBranchingChoices(narrationResult.branchingChoices ?? []); // Set choices from result
 
       if (narrationResult.dynamicEventTriggered) {
           toast({
@@ -712,22 +702,16 @@ export function Gameplay() {
        );
    }
 
-    const currentStageName = character.skillTree && character.skillTreeStage >= 0 && character.skillTree.stages[character.skillTreeStage]
-        ? character.skillTree.stages[character.skillTreeStage]?.stageName ?? `Stage ${character.skillTreeStage}`
-        : "Potential";
-
-    const renderReputation = (rep: Record<string, number>) => {
-        const entries = Object.entries(rep);
-        if (entries.length === 0) return <p className="text-xs text-muted-foreground italic">No faction reputations yet.</p>;
+    // Helper Functions for Progression Card
+    const renderReputation = (rep: Reputation | undefined) => {
+        if (!rep || Object.keys(rep).length === 0) return <p className="text-xs text-muted-foreground italic">No faction reputations yet.</p>;
         return (
             <ul className="space-y-1">
-                {entries.map(([faction, score]) => (
+                {Object.entries(rep).map(([faction, score]) => (
                     <li key={faction} className="flex justify-between items-center text-xs">
                         <span>{faction}:</span>
                         <span className={`font-medium ${score > 10 ? 'text-green-600' : score < -10 ? 'text-destructive' : ''}`}>
                             {score}
-                             {score > 50 && <ThumbsUp className="inline ml-1 h-3 w-3 text-green-500"/>}
-                             {score < -50 && <ThumbsDown className="inline ml-1 h-3 w-3 text-red-500"/>}
                         </span>
                     </li>
                 ))}
@@ -735,19 +719,15 @@ export function Gameplay() {
         );
     };
 
-    const renderNpcRelationships = (NpcRelationships: NpcRelationships | undefined) => {
-        if (!NpcRelationships) return <p className="text-xs text-muted-foreground italic">No known relationships.</p>;
-        const entries = Object.entries(NpcRelationships);
-        if (entries.length === 0) return <p className="text-xs text-muted-foreground italic">No known relationships.</p>;
+    const renderNpcRelationships = (rels: NpcRelationships | undefined) => {
+        if (!rels || Object.keys(rels).length === 0) return <p className="text-xs text-muted-foreground italic">No known relationships.</p>;
         return (
             <ul className="space-y-1">
-                {entries.map(([npcName, score]) => (
+                {Object.entries(rels).map(([npcName, score]) => (
                     <li key={npcName} className="flex justify-between items-center text-xs">
                         <span>{npcName}:</span>
-                        <span className={`font-medium ${score > 20 ? 'text-green-600' : score < -20 ? 'text-destructive' : ''}`}>
+                         <span className={`font-medium ${score > 20 ? 'text-green-600' : score < -20 ? 'text-destructive' : ''}`}>
                             {score}
-                             {score > 50 && <HeartPulse className="inline ml-1 h-3 w-3 text-pink-500"/>}
-                             {score < -50 && <Skull className="inline ml-1 h-3 w-3 text-gray-500"/>}
                         </span>
                     </li>
                 ))}
@@ -858,103 +838,77 @@ export function Gameplay() {
     // Adjusted root div: removed max-h-screen, added min-h-screen for mobile
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden bg-gradient-to-br from-background to-muted/30">
 
-        {/* Left Panel (Character & Actions) - Fixed width on Desktop */}
+        {/* Left Panel (Character, Progression, Inventory/Skills) - Fixed width on Desktop */}
         <div className="hidden md:flex flex-col w-80 lg:w-96 p-4 border-r border-foreground/10 overflow-y-auto bg-card/50 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-             <CharacterDisplay />
-             {/* Moved Action Buttons here for Desktop */}
-             <CardboardCard className="mt-auto sticky bottom-0 bg-card/95 backdrop-blur-sm pt-4 pb-2 z-10 border-t border-foreground/10">
-                 <CardContent className="flex flex-col gap-2">
-                    {/* Suggest Action Button */}
-                    <Button onClick={handleSuggestAction} variant="ghost" size="sm" className="w-full justify-start text-muted-foreground" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
-                        <Sparkles className="mr-2 h-4 w-4" /> Suggest Action
-                    </Button>
-                     {/* Save Button */}
-                     <Button onClick={handleSaveGame} variant="secondary" size="sm" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
-                       {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                       {isSaving ? 'Saving...' : 'Save Game'}
-                     </Button>
-                     {/* Crafting Button */}
-                      <Dialog open={isCraftingDialogOpen} onOpenChange={setIsCraftingDialogOpen}>
-                          <DialogTrigger asChild>
-                              <Button variant="outline" size="sm" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
-                                  <Hammer className="mr-2 h-4 w-4" /> Craft Item
-                              </Button>
-                          </DialogTrigger>
-                          <DialogContent className="sm:max-w-[425px]">
-                              <DialogHeader>
-                                  <DialogTitle className="flex items-center gap-2"><Hammer className="w-5 h-5"/> Attempt Crafting</DialogTitle>
-                                  <DialogDescription>Combine items from your inventory. Success depends on your knowledge, skills, and the materials used.</DialogDescription>
-                              </DialogHeader>
-                              <div className="grid gap-4 py-4">
-                                  {craftingError && <Alert variant="destructive"><AlertDescription>{craftingError}</AlertDescription></Alert>}
-                                  <div className="grid grid-cols-4 items-center gap-4">
-                                      <Label htmlFor="crafting-goal" className="text-right col-span-1">Goal</Label>
-                                      <Input
-                                          id="crafting-goal"
-                                          value={craftingGoal}
-                                          onChange={(e) => setCraftingGoal(e.target.value)}
-                                          placeholder="e.g., Healing Salve, Sharpened Dagger"
-                                          className="col-span-3"
-                                          disabled={isCraftingLoading}
-                                      />
-                                  </div>
-                                  <div className="grid grid-cols-4 items-start gap-4">
-                                      <Label className="text-right col-span-1 pt-1">Ingredients</Label>
-                                      <div className="col-span-3 space-y-1 max-h-40 overflow-y-auto border rounded-md p-2 bg-muted/30 scrollbar-thin">
-                                          {inventory.length > 0 ? inventory.map(item => (
-                                               <div key={item.name} className="flex items-center justify-between text-sm">
-                                                    <Label
-                                                       htmlFor={`ingredient-${item.name.replace(/\s+/g, '-')}`}
-                                                       className={`flex items-center gap-1.5 cursor-pointer ${getQualityColor(item.quality)}`}
-                                                    >
-                                                        <Square className={`w-4 h-4 ${selectedIngredients.includes(item.name) ? 'hidden' : 'block'} text-muted-foreground`} />
-                                                        <CheckSquare className={`w-4 h-4 ${selectedIngredients.includes(item.name) ? 'block' : 'hidden'} text-primary`} />
-                                                        {item.name} {item.quality && item.quality !== "Common" && `(${item.quality})`}
-                                                    </Label>
-                                                     <input
-                                                         type="checkbox"
-                                                         id={`ingredient-${item.name.replace(/\s+/g, '-')}`}
-                                                         checked={selectedIngredients.includes(item.name)}
-                                                         onChange={() => handleIngredientToggle(item.name)}
-                                                         className="sr-only" // Visually hide checkbox, use label interaction
-                                                         disabled={isCraftingLoading}
-                                                     />
-                                               </div>
-                                           )) : <p className="text-xs text-muted-foreground italic">Inventory is empty.</p>}
-                                      </div>
-                                  </div>
-                              </div>
-                              <DialogFooter>
-                                  <DialogClose asChild>
-                                      <Button type="button" variant="outline" disabled={isCraftingLoading}>Cancel</Button>
-                                  </DialogClose>
-                                  <Button
-                                      type="button"
-                                      onClick={handleCrafting}
-                                      disabled={isLoading || isCraftingLoading || !craftingGoal.trim() || selectedIngredients.length === 0}
-                                  >
-                                      {isCraftingLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                                      Attempt Craft
-                                  </Button>
-                              </DialogFooter>
-                          </DialogContent>
-                      </Dialog>
+            {/* Character Display */}
+            <CharacterDisplay />
 
-                     {/* Abandon Button */}
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm" className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
-                           <ArrowLeft className="mr-2 h-4 w-4" /> Abandon Adventure
-                        </Button>
-                      </AlertDialogTrigger>
-                       <AlertDialogContent> <AlertDialogHeader> <AlertDialogTitle>Are you sure?</AlertDialogTitle> <AlertDialogDescription> Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu. </AlertDialogDescription> </AlertDialogHeader> <AlertDialogFooter> <AlertDialogCancel>Cancel</AlertDialogCancel> <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction> </AlertDialogFooter> </AlertDialogContent>
-                    </AlertDialog>
-                     {/* Explicit End Adventure Button */}
-                     {/* <Button variant="destructive" onClick={() => handleEndAdventure()} className="w-full" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
-                       End Adventure Now
-                     </Button> */}
+            {/* Progression Card */}
+             <CardboardCard className="mb-4 bg-card/90 backdrop-blur-sm">
+                 <CardHeader className="pb-2 pt-4 border-b border-foreground/10">
+                   <CardTitle className="text-xl font-semibold flex items-center gap-2">
+                       <Milestone className="w-5 h-5"/> Progression
+                   </CardTitle>
+                 </CardHeader>
+                 <CardContent className="pt-4 pb-4 text-sm space-y-3">
+                     {/* Level & XP */}
+                     <div>
+                         <div className="flex justify-between items-baseline mb-1">
+                           <Label className="text-sm font-medium flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Level:</Label>
+                           <span className="font-bold text-base">{character.level}</span>
+                         </div>
+                         <div className="flex items-center justify-between text-xs mb-1">
+                              <span className="font-medium text-muted-foreground">XP:</span>
+                              <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
+                         </div>
+                         <Progress
+                              value={(character.xp / character.xpToNextLevel) * 100}
+                              className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"
+                              aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`}
+                         />
+                     </div>
+                     <Separator />
+                     {/* Reputation */}
+                     <div>
+                         <Label className="text-sm font-medium flex items-center gap-1 mb-1"><Users className="w-3.5 h-3.5"/> Reputation:</Label>
+                         {renderReputation(character.reputation)}
+                     </div>
+                     <Separator />
+                     {/* Relationships */}
+                      <div>
+                         <Label className="text-sm font-medium flex items-center gap-1 mb-1"><HeartPulse className="w-3.5 h-3.5"/> Relationships:</Label>
+                         {renderNpcRelationships(character.npcRelationships)}
+                     </div>
+                     <Separator />
+                      {/* Turn Count */}
+                     <div className="flex justify-between items-baseline">
+                          <Label className="text-sm font-medium flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5"/> Turn:</Label>
+                          <span className="font-bold text-base">{turnCount}</span>
+                     </div>
                  </CardContent>
              </CardboardCard>
+
+             {/* Inventory/Skills Tabs */}
+            <Tabs defaultValue="inventory" className="flex-1 flex flex-col min-h-0"> {/* Allow tabs to take remaining space */}
+                 <TabsList className="grid w-full grid-cols-2">
+                     <TabsTrigger value="inventory"><Backpack className="w-4 h-4 mr-1.5"/>Inventory</TabsTrigger>
+                     <TabsTrigger value="skills"><Workflow className="w-4 h-4 mr-1.5"/>Skills</TabsTrigger>
+                 </TabsList>
+                 <TabsContent value="inventory" className="flex-1 overflow-hidden m-0 ring-offset-0 focus-visible:ring-0 focus-visible:outline-none">
+                      <InventoryDisplay />
+                 </TabsContent>
+                 <TabsContent value="skills" className="flex-1 overflow-hidden m-0 ring-offset-0 focus-visible:ring-0 focus-visible:outline-none">
+                      {character.skillTree && !isGeneratingSkillTree ? (
+                           <SkillTreeDisplay skillTree={character.skillTree} learnedSkills={character.learnedSkills} currentStage={character.skillTreeStage}/>
+                      ) : (
+                           <div className="p-4 flex flex-col items-center justify-center h-full">
+                               {isGeneratingSkillTree ? <Loader2 className="h-6 w-6 animate-spin mb-2" /> : <ShieldAlert className="h-6 w-6 mb-2 text-muted-foreground"/>}
+                               <p className="text-muted-foreground text-sm italic">{isGeneratingSkillTree ? "Generating skill tree..." : "No skill tree available."}</p>
+                           </div>
+                      )}
+                 </TabsContent>
+            </Tabs>
+
         </div>
 
         {/* Right Panel (Game Log & Input) - Takes remaining space */}
@@ -977,11 +931,44 @@ export function Gameplay() {
                            <ScrollArea className="flex-1">
                             <div className="p-4">
                              <CharacterDisplay />
+                             {/* Mobile Progression Card */}
+                             <CardboardCard className="my-4 bg-card/90 backdrop-blur-sm">
+                                 <CardHeader className="pb-2 pt-4 border-b border-foreground/10">
+                                   <CardTitle className="text-xl font-semibold flex items-center gap-2">
+                                       <Milestone className="w-5 h-5"/> Progression
+                                   </CardTitle>
+                                 </CardHeader>
+                                 <CardContent className="pt-4 pb-4 text-sm space-y-3">
+                                     <div>
+                                          <div className="flex justify-between items-baseline mb-1">
+                                            <Label className="text-sm font-medium flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Level:</Label>
+                                            <span className="font-bold text-base">{character.level}</span>
+                                          </div>
+                                          <div className="flex items-center justify-between text-xs mb-1">
+                                              <span className="font-medium text-muted-foreground">XP:</span>
+                                              <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
+                                          </div>
+                                          <Progress value={(character.xp / character.xpToNextLevel) * 100} className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500" aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`} />
+                                     </div>
+                                     <Separator />
+                                     <div>
+                                          <Label className="text-sm font-medium flex items-center gap-1 mb-1"><Users className="w-3.5 h-3.5"/> Reputation:</Label>
+                                          {renderReputation(character.reputation)}
+                                     </div>
+                                     <Separator />
+                                     <div>
+                                          <Label className="text-sm font-medium flex items-center gap-1 mb-1"><HeartPulse className="w-3.5 h-3.5"/> Relationships:</Label>
+                                          {renderNpcRelationships(character.npcRelationships)}
+                                     </div>
+                                     <Separator />
+                                     <div className="flex justify-between items-baseline">
+                                          <Label className="text-sm font-medium flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5"/> Turn:</Label>
+                                          <span className="font-bold text-base">{turnCount}</span>
+                                     </div>
+                                 </CardContent>
+                             </CardboardCard>
                             </div>
                            </ScrollArea>
-                            <SheetFooter className="p-4 border-t bg-background mt-auto">
-                               {/* Add relevant mobile actions here if needed */}
-                           </SheetFooter>
                       </SheetContent>
                    </Sheet>
 
@@ -1110,7 +1097,7 @@ export function Gameplay() {
             <CardboardCard className="flex-1 flex flex-col overflow-hidden mb-4 border-2 border-foreground/20 shadow-inner min-h-0"> {/* Ensure flex-1 and min-h-0 */}
                 <CardHeader className="flex-shrink-0 border-b border-foreground/10 pb-2 pt-3">
                      <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                        <BookCopy className="w-5 h-5 text-primary"/> Story Log <span className="text-sm text-muted-foreground ml-auto">(Turn: {turnCount})</span>
+                        <BookCopy className="w-5 h-5 text-primary"/> Story Log
                      </CardTitle>
                 </CardHeader>
                 <CardContent className="flex-1 overflow-y-auto p-4 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"> {/* Allow content to scroll */}
@@ -1118,7 +1105,7 @@ export function Gameplay() {
                           {storyLog.map((log, index) => (
                                <div key={log.timestamp ? `log-${log.timestamp}-${index}` : `log-fallback-${index}`} className="pb-3 border-b border-dashed border-foreground/10 last:border-b-0">
                                     {/* Optional Turn Indicator */}
-                                     <p className="text-xs font-semibold text-muted-foreground mb-1 opacity-80">Turn {index + 1}</p>
+                                     {/* <p className="text-xs font-semibold text-muted-foreground mb-1 opacity-80">Turn {index + 1}</p> */}
                                      {/* Narration Text */}
                                      <p className="text-base whitespace-pre-wrap leading-relaxed">{log.narration}</p>
                                </div>
@@ -1129,22 +1116,116 @@ export function Gameplay() {
                 </CardContent>
             </CardboardCard>
 
-            {/* Player Input Area */}
-            <form onSubmit={handleSubmit} className="flex gap-2 flex-shrink-0 mt-auto"> {/* Ensure input doesn't shrink */}
-                 <Input
-                     type="text"
-                     value={playerInput}
-                     onChange={(e) => setPlayerInput(e.target.value)}
-                     placeholder="What do you do?"
-                     className="flex-1 text-base" // Ensure input takes available space
-                     disabled={isLoading || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isEnding || isSaving || isCraftingLoading}
-                     aria-label="Enter your action"
-                 />
-                 <Button type="submit" size="icon" disabled={isLoading || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isEnding || isSaving || isCraftingLoading}>
-                     <Send className="h-5 w-5" />
-                     <span className="sr-only">Submit Action</span>
-                 </Button>
-            </form>
+             {/* Player Input Area */}
+             <div className="flex-shrink-0 mt-auto">
+                <form onSubmit={handleSubmit} className="flex gap-2 mb-2">
+                     <Input
+                         type="text"
+                         value={playerInput}
+                         onChange={(e) => setPlayerInput(e.target.value)}
+                         placeholder="Enter your action..."
+                         className="flex-1 text-base" // Ensure input takes available space
+                         disabled={isLoading || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isEnding || isSaving || isCraftingLoading}
+                         aria-label="Enter your action"
+                     />
+                     <Button onClick={handleSuggestAction} variant="ghost" size="icon" className="text-muted-foreground" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
+                        <Sparkles className="h-5 w-5" />
+                        <span className="sr-only">Suggest Action</span>
+                    </Button>
+                     <Button type="submit" size="icon" disabled={isLoading || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isEnding || isSaving || isCraftingLoading}>
+                         <Send className="h-5 w-5" />
+                         <span className="sr-only">Submit Action</span>
+                     </Button>
+                </form>
+
+                {/* Action Buttons - Moved below input */}
+                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                     {/* Abandon Button */}
+                     <AlertDialog>
+                       <AlertDialogTrigger asChild>
+                         <Button variant="outline" size="sm" className="w-full justify-center" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
+                            <ArrowLeft className="mr-2 h-4 w-4" /> Abandon
+                         </Button>
+                       </AlertDialogTrigger>
+                       <AlertDialogContent> <AlertDialogHeader> <AlertDialogTitle>Are you sure?</AlertDialogTitle> <AlertDialogDescription> Abandoning the adventure will end your current progress (unsaved changes lost) and return you to the main menu. </AlertDialogDescription> </AlertDialogHeader> <AlertDialogFooter> <AlertDialogCancel>Cancel</AlertDialogCancel> <AlertDialogAction onClick={handleGoBack} className="bg-destructive hover:bg-destructive/90">Abandon</AlertDialogAction> </AlertDialogFooter> </AlertDialogContent>
+                     </AlertDialog>
+                     {/* Crafting Button */}
+                       <Dialog open={isCraftingDialogOpen} onOpenChange={setIsCraftingDialogOpen}>
+                           <DialogTrigger asChild>
+                               <Button variant="outline" size="sm" className="w-full justify-center" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
+                                   <Hammer className="mr-2 h-4 w-4" /> Craft
+                               </Button>
+                           </DialogTrigger>
+                           <DialogContent className="sm:max-w-[425px]">
+                               <DialogHeader>
+                                   <DialogTitle className="flex items-center gap-2"><Hammer className="w-5 h-5"/> Attempt Crafting</DialogTitle>
+                                   <DialogDescription>Combine items from your inventory. Success depends on your knowledge, skills, and the materials used.</DialogDescription>
+                               </DialogHeader>
+                               <div className="grid gap-4 py-4">
+                                   {craftingError && <Alert variant="destructive"><AlertDescription>{craftingError}</AlertDescription></Alert>}
+                                   <div className="grid grid-cols-4 items-center gap-4">
+                                       <Label htmlFor="crafting-goal" className="text-right col-span-1">Goal</Label>
+                                       <Input
+                                           id="crafting-goal"
+                                           value={craftingGoal}
+                                           onChange={(e) => setCraftingGoal(e.target.value)}
+                                           placeholder="e.g., Healing Salve, Sharpened Dagger"
+                                           className="col-span-3"
+                                           disabled={isCraftingLoading}
+                                       />
+                                   </div>
+                                   <div className="grid grid-cols-4 items-start gap-4">
+                                       <Label className="text-right col-span-1 pt-1">Ingredients</Label>
+                                       <div className="col-span-3 space-y-1 max-h-40 overflow-y-auto border rounded-md p-2 bg-muted/30 scrollbar-thin">
+                                           {inventory.length > 0 ? inventory.map(item => (
+                                                <div key={item.name} className="flex items-center justify-between text-sm">
+                                                     <Label
+                                                        htmlFor={`ingredient-${item.name.replace(/\s+/g, '-')}`}
+                                                        className={`flex items-center gap-1.5 cursor-pointer ${getQualityColor(item.quality)}`}
+                                                     >
+                                                         <Square className={`w-4 h-4 ${selectedIngredients.includes(item.name) ? 'hidden' : 'block'} text-muted-foreground`} />
+                                                         <CheckSquare className={`w-4 h-4 ${selectedIngredients.includes(item.name) ? 'block' : 'hidden'} text-primary`} />
+                                                         {item.name} {item.quality && item.quality !== "Common" && `(${item.quality})`}
+                                                     </Label>
+                                                      <input
+                                                          type="checkbox"
+                                                          id={`ingredient-${item.name.replace(/\s+/g, '-')}`}
+                                                          checked={selectedIngredients.includes(item.name)}
+                                                          onChange={() => handleIngredientToggle(item.name)}
+                                                          className="sr-only" // Visually hide checkbox, use label interaction
+                                                          disabled={isCraftingLoading}
+                                                      />
+                                                </div>
+                                            )) : <p className="text-xs text-muted-foreground italic">Inventory is empty.</p>}
+                                       </div>
+                                   </div>
+                               </div>
+                               <DialogFooter>
+                                   <DialogClose asChild>
+                                       <Button type="button" variant="outline" disabled={isCraftingLoading}>Cancel</Button>
+                                   </DialogClose>
+                                   <Button
+                                       type="button"
+                                       onClick={handleCrafting}
+                                       disabled={isLoading || isCraftingLoading || !craftingGoal.trim() || selectedIngredients.length === 0}
+                                   >
+                                       {isCraftingLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                       Attempt Craft
+                                   </Button>
+                               </DialogFooter>
+                           </DialogContent>
+                       </Dialog>
+                      {/* Explicit End Adventure Button */}
+                       <Button variant="destructive" onClick={() => handleEndAdventure()} size="sm" className="w-full justify-center" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
+                         End Adventure
+                       </Button>
+                       {/* Save Button */}
+                      <Button onClick={handleSaveGame} variant="secondary" size="sm" className="w-full justify-center" disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading}>
+                        {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        {isSaving ? 'Saving...' : 'Save'}
+                      </Button>
+                 </div>
+             </div>
 
              {/* Pending Class Change Confirmation Dialog */}
               <AlertDialog open={!!pendingClassChange} onOpenChange={(open) => { if (!open) setPendingClassChange(null); }}>
