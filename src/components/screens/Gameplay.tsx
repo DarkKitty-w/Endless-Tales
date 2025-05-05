@@ -16,7 +16,7 @@ import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay"; // Import
 import { InventoryDisplay } from "@/components/game/InventoryDisplay"; // Import InventoryDisplay
 import { narrateAdventure, type NarrateAdventureInput, type NarrateAdventureOutput } from "@/ai/flows/narrate-adventure";
 import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
-import { assessActionDifficulty, type AssessActionDifficultyInput } from "@/ai/flows/assess-action-difficulty"; // Import AssessActionDifficultyInput
+import { assessActionDifficulty, type AssessActionDifficultyInput, type DifficultyLevel as AssessedDifficultyLevel } from "@/ai/flows/assess-action-difficulty"; // Import AssessActionDifficultyInput and its DifficultyLevel
 import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "@/ai/flows/attempt-crafting"; // Import crafting flow
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -39,7 +39,7 @@ import {
   SheetDescription,
   SheetHeader,
   SheetTitle,
-  SheetTrigger, // Added SheetTrigger
+  SheetTrigger,
   SheetFooter, // Keep SheetFooter
 } from "@/components/ui/sheet";
 import {
@@ -66,6 +66,8 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils"; // Import cn utility
+import { LeftPanel } from "@/components/game/LeftPanel"; // Import the new LeftPanel
+
 
 // Helper function to map difficulty dice string to roller function
 const getDiceRollFunction = (diceType: string): (() => Promise<number>) | null => {
@@ -116,7 +118,8 @@ export function Gameplay() {
 
    // --- End Adventure (Define before handlePlayerAction) ---
    const handleEndAdventure = useCallback(async (finalNarrationEntry?: StoryLogEntry) => {
-     if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading) return;
+     const busy = isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading;
+     if (busy) return; // Check busy state at the start
      setIsEnding(true);
      setError(null);
      toast({ title: "Ending Adventure", description: "Summarizing your tale..." });
@@ -197,6 +200,10 @@ export function Gameplay() {
        let reason = "Please wait for the current action to complete.";
        if (isGeneratingSkillTree) reason = "Please wait for skill tree generation to finish.";
        if (isCraftingLoading) reason = "Please wait for crafting to finish.";
+       if (isEnding) reason = "Adventure is ending...";
+       if (isSaving) reason = "Saving progress...";
+       if (isAssessingDifficulty) reason = "Assessing difficulty...";
+       if (isRollingDice) reason = "Rolling dice...";
        toast({ description: reason, variant: "default", duration: 1500 });
        return;
      }
@@ -338,7 +345,7 @@ export function Gameplay() {
     setBranchingChoices([]); // Reset choices before processing
 
     let actionWithDice = action;
-    let assessedDifficulty: DifficultyLevel = "Normal";
+    let assessedDifficulty: AssessedDifficultyLevel = "Normal";
     let difficultyReasoning = "";
     let requiresRoll = false;
     let rollFunction: (() => Promise<number>) | null = null;
@@ -733,7 +740,7 @@ export function Gameplay() {
         } finally {
             setIsCraftingLoading(false);
         }
-    }, [character, inventory, craftingGoal, selectedIngredients, dispatch, toast, isLoading, isCraftingLoading, currentGameStateString, isEnding, isSaving]);
+    }, [character, inventory, craftingGoal, selectedIngredients, dispatch, toast, isLoading, isCraftingLoading, isEnding, isSaving]); // Added missing deps
 
 
      // Handle ingredient selection toggle
@@ -1057,15 +1064,17 @@ export function Gameplay() {
              </Alert>
            )}
          </div>
-         <DialogClose asChild>
-              <Button type="button" variant="secondary" disabled={isCraftingLoading}>
-                 Cancel
+         <DialogFooter>
+             <DialogClose asChild>
+                 <Button type="button" variant="secondary" disabled={isCraftingLoading}>
+                     Cancel
+                 </Button>
+             </DialogClose>
+              <Button type="button" onClick={handleCrafting} disabled={isCraftingLoading || !craftingGoal.trim() || selectedIngredients.length === 0}>
+                 {isCraftingLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                 Attempt Craft
                </Button>
-         </DialogClose>
-          <Button type="button" onClick={handleCrafting} disabled={isCraftingLoading || !craftingGoal.trim() || selectedIngredients.length === 0}>
-             {isCraftingLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-             Attempt Craft
-           </Button>
+         </DialogFooter>
        </DialogContent>
      </Dialog>
    );
@@ -1075,90 +1084,16 @@ export function Gameplay() {
     <TooltipProvider>
         <div className="flex flex-col md:flex-row min-h-screen overflow-hidden bg-gradient-to-br from-background to-muted/30">
 
-            {/* Left Panel (Character, Progression, Inventory/Skills) - Fixed width on Desktop */}
-            <div className="hidden md:flex flex-col w-80 lg:w-96 p-4 border-r border-foreground/10 overflow-y-auto bg-card/50 scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
-                {/* Character Display */}
-                <CharacterDisplay />
+            {/* Left Panel */}
+             <LeftPanel
+                 character={character}
+                 inventory={inventory}
+                 isGeneratingSkillTree={isGeneratingSkillTree}
+                 turnCount={turnCount}
+                 renderReputation={renderReputation} // Pass helper functions
+                 renderNpcRelationships={renderNpcRelationships} // Pass helper functions
+             />
 
-                {/* Progression Card */}
-                <CardboardCard className="mb-4 bg-card/90 backdrop-blur-sm">
-                    <CardHeader className="pb-2 pt-4 border-b border-foreground/10">
-                        <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                            <Milestone className="w-5 h-5"/> Progression
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-4 pb-4 text-sm space-y-3">
-                        {/* Level and XP */}
-                        <Tooltip>
-                            <TooltipTrigger className="w-full cursor-help">
-                                <div className="flex items-center justify-between mb-1">
-                                    <span className="text-sm font-medium flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Level:</span>
-                                    <span className="font-bold text-base">{character.level}</span>
-                                    <span className="ml-auto font-medium text-muted-foreground">XP:</span>
-                                    <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
-                                </div>
-                                <Progress
-                                    value={(character.xp / character.xpToNextLevel) * 100}
-                                    className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"
-                                    aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`}
-                                />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Experience Points</p>
-                                <p className="text-xs text-muted-foreground">({character.xpToNextLevel - character.xp} needed for next level)</p>
-                            </TooltipContent>
-                        </Tooltip>
-
-                        <Separator />
-                        {/* Reputation */}
-                        <div className="space-y-1">
-                            <Label className="text-sm font-medium flex items-center gap-1 mb-1"><Users className="w-3.5 h-3.5"/> Reputation:</Label>
-                            {renderReputation(character.reputation)}
-                        </div>
-
-                        <Separator />
-                        {/* Relationships */}
-                        <div className="space-y-1">
-                            <Label className="text-sm font-medium flex items-center gap-1 mb-1"><HeartPulse className="w-3.5 h-3.5"/> Relationships:</Label>
-                            {renderNpcRelationships(character.npcRelationships)}
-                        </div>
-
-                        <Separator />
-                         {/* Turn Count */}
-                        <div className="flex justify-between items-center">
-                             <Label className="text-sm font-medium flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5"/> Turn:</Label>
-                             <span className="font-bold text-base">{turnCount}</span>
-                        </div>
-                    </CardContent>
-                </CardboardCard>
-
-                {/* Inventory/Skills Tabs */}
-                <Tabs defaultValue="inventory" className="h-full flex flex-col">
-                    <TabsList className="flex-none">
-                        <TabsTrigger value="inventory" className="flex items-center" aria-label="Open Inventory">
-                           <Backpack className="w-4 h-4 mr-1.5"/> Inventory
-                        </TabsTrigger>
-                        <TabsTrigger value="skills" className="flex items-center" aria-label="Open Skill Tree">
-                           <Workflow className="w-4 h-4 mr-1.5"/> Skills
-                        </TabsTrigger>
-                    </TabsList>
-                    <div className="flex-grow">
-                        <TabsContent value="inventory" className="flex-grow">
-                            <InventoryDisplay />
-                        </TabsContent>
-                        <TabsContent value="skills" className="flex-grow">
-                            {character.skillTree && !isGeneratingSkillTree ? (
-                                <SkillTreeDisplay skillTree={character.skillTree} learnedSkills={character.learnedSkills}  currentStage={character.skillTreeStage}/>
-                            ) : (
-                                <div className="flex items-center justify-center h-full">
-                                    {isGeneratingSkillTree ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : ""}
-                                    {isGeneratingSkillTree ? "Generating skill tree..." : "No skill tree available."}
-                                </div>
-                            )}
-                        </TabsContent>
-                    </div>
-                </Tabs>
-            </div>
 
              {/* Main Panel (Narration & Input) */}
             <div className="flex-1 flex flex-col p-4 overflow-hidden"> {/* Use flex-col and overflow */}
@@ -1201,6 +1136,9 @@ export function Gameplay() {
                                     </CardContent>
                                 </CardboardCard>
                             </ScrollArea>
+                            <SheetFooter className="p-4 border-t bg-background mt-auto">
+                                {/* Add relevant mobile actions here if needed */}
+                           </SheetFooter>
                         </SheetContent>
                     </Sheet>
                     <div className="flex gap-1">
@@ -1365,5 +1303,3 @@ export function Gameplay() {
     </TooltipProvider>
   );
 }
-
-    
