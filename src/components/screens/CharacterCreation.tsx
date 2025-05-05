@@ -19,7 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
-import { StatAllocationInput } from "@/components/game/StatAllocationInput"; // Import the new input component
+import { StatAllocationInput } from "@/components/game/StatAllocationInput"; // Corrected import path
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
 import type { CharacterStats } from "@/types/character-types"; // Import from specific types file
 import { initialCharacterState } from "@/context/game-initial-state"; // Import initialCharacterState
@@ -107,17 +107,30 @@ export function CharacterCreation() {
 
         if (currentTotal <= TOTAL_STAT_POINTS) {
             setRemainingPoints(TOTAL_STAT_POINTS - currentTotal);
-            setStatError(null); // Clear stat error if allocation is valid
+            // Clear stat error only if allocation is valid *and* all points are used or points remain
+             if (currentTotal <= TOTAL_STAT_POINTS) {
+                 setStatError(null);
+             } else {
+                 // This case shouldn't technically be reachable due to the outer if, but kept for safety
+                 setStatError(`Cannot exceed ${TOTAL_STAT_POINTS} total points.`);
+             }
             return tentativeStats;
         } else {
             // If the allocation exceeds total points, revert the change visually
             // and display an error message near the points indicator.
             setRemainingPoints(TOTAL_STAT_POINTS - (prevStats.strength + prevStats.stamina + prevStats.agility));
             setStatError(`Cannot exceed ${TOTAL_STAT_POINTS} total points.`); // Set specific stat error message
-             return prevStats; // Revert to previous stats
+            // Show a toast for immediate feedback on error
+            toast({
+                title: "Stat Limit Reached",
+                description: `Cannot exceed ${TOTAL_STAT_POINTS} total stat points.`,
+                variant: "destructive",
+                duration: 2000 // Short duration
+            });
+            return prevStats; // Revert to previous stats
         }
     });
- }, [setStats, setRemainingPoints]);
+ }, [setStats, setRemainingPoints, toast]);
 
 
  // --- Randomize Stats ---
@@ -136,7 +149,7 @@ export function CharacterCreation() {
     // Distribute remaining points randomly
     while (pointsLeft > 0) {
         const availableKeys = statKeys.filter(key => newStats[key] < MAX_STAT_VALUE);
-        if (availableKeys.length === 0) break;
+        if (availableKeys.length === 0) break; // Safety break if all stats reach max
         const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
         newStats[randomKey]++;
         pointsLeft--;
@@ -147,7 +160,7 @@ export function CharacterCreation() {
     while (finalTotal > TOTAL_STAT_POINTS) {
        // If total exceeds, decrement a random stat that's above min
        const decrementableKeys = statKeys.filter(key => newStats[key] > MIN_STAT_VALUE);
-       if (decrementableKeys.length === 0) break; // Should not happen with proper min/max logic, but safety check
+       if (decrementableKeys.length === 0) break; // Should not happen, but safety check
        const randomKey = decrementableKeys[Math.floor(Math.random() * decrementableKeys.length)];
        newStats[randomKey]--;
        finalTotal--;
@@ -230,7 +243,7 @@ export function CharacterCreation() {
      setTimeout(() => setRandomizationComplete(false), 1000);
      trigger(); // Trigger validation after setting values
 
- }, [creationType, reset, setValue, randomizeStats, trigger]); // Removed toast from deps
+ }, [creationType, reset, setValue, randomizeStats, trigger]);
 
 
   // Watch form values for dynamic checks
@@ -387,6 +400,13 @@ export function CharacterCreation() {
     setStats(defaultStats);
     setRemainingPoints(initialPoints);
   }, [defaultStats, initialPoints]); // Depend on initialStats and initialPoints
+
+  // Clear statError when remaining points become 0
+  useEffect(() => {
+    if (remainingPoints === 0) {
+        setStatError(null);
+    }
+  }, [remainingPoints]);
 
 
   return (
@@ -556,10 +576,10 @@ export function CharacterCreation() {
 
                          {/* Remaining Points Indicator and Stat Error */}
                          <div className="text-center pt-2">
-                             <p className={`text-sm font-medium ${remainingPoints !== 0 || statError ? 'text-destructive' : 'text-primary'}`}>
+                             <p className={`text-sm font-medium ${remainingPoints !== 0 ? 'text-primary' : 'text-green-600'}`}>
                                 {remainingPoints} points remaining.
                              </p>
-                             {/* Display specific error for overallocation or invalid stats */}
+                             {/* Display specific error for overallocation */}
                               {statError && <p className="text-sm font-medium text-destructive">{statError}</p>}
                          </div>
 
@@ -593,7 +613,7 @@ export function CharacterCreation() {
                      <Button
                          type="submit"
                          className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
-                         disabled={isGenerating || !!statError || remainingPoints !== 0 || isRandomizing} // Disable if stat error, points remain, or randomizing
+                         disabled={isGenerating || remainingPoints !== 0 || isRandomizing} // Disable if generating, points remain, or randomizing
                          aria-label="Save character and proceed to adventure setup"
                       >
                         <Save className="mr-2 h-4 w-4" />
@@ -605,4 +625,3 @@ export function CharacterCreation() {
     </div>
   );
 }
-
