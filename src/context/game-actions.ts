@@ -7,9 +7,10 @@ import type {
     Skill,
     ReputationChange,
     NpcRelationshipChange,
+    CharacterStats, // Import CharacterStats
 } from "@/types/character-types"; // Import character-related types
 import type { InventoryItem } from "@/types/inventory-types"; // Import inventory types
-import type { AdventureSettings, StoryLogEntry, SavedAdventure } from "@/types/adventure-types"; // Import adventure types
+import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel } from "@/types/adventure-types"; // Import adventure types
 
 /** Defines all possible actions that can be dispatched to the game reducer. */
 export type Action =
@@ -41,4 +42,4 @@ export type Action =
   | { type: "UPDATE_INVENTORY"; payload: InventoryItem[] }
   | { type: "SET_THEME_ID"; payload: string }
   | { type: "SET_DARK_MODE"; payload: boolean }
-  | { type: "UPDATE_CRAFTING_RESULT"; payload: { narration: string; consumedItems: string[]; craftedItem: InventoryItem | null; newGameStateString: string } }; // Keep crafting here or move if grows
+  | { type: "UPDATE_CRAFTING_RESULT"; payload: { narration: string; consumedItems: string[]; craftedItem: InventoryItem | null; newGameStateString: string } };
