@@ -4,7 +4,7 @@
 import { useGame } from "@/context/GameContext";
 import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons";
-import { User, ShieldQuestion, Star, Zap, HeartPulse, Workflow, BarChartBig, Award } from "lucide-react"; // Added BarChartBig, Award
+import { User, ShieldQuestion, Star, Zap, HeartPulse, Workflow, BarChartBig, Award, Users, Milestone } from "lucide-react"; // Added Milestone, Users
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
@@ -24,7 +24,7 @@ export function CharacterDisplay() {
   }
 
    // Find the current stage name
-   const currentStageName = character.skillTree && character.skillTreeStage >= 0 && character.skillTree.stages[character.skillTreeStage]
+   const currentStageName = character.skillTree && character.skillTreeStage >= 0 && character.skillTree.stages.length > character.skillTreeStage
        ? character.skillTree.stages[character.skillTreeStage]?.stageName ?? `Stage ${character.skillTreeStage}`
        : "Potential"; // Default to "Potential" for stage 0
 
@@ -81,16 +81,19 @@ export function CharacterDisplay() {
          <div className="space-y-1 mb-4">
             <TooltipProvider delayDuration={100}>
               <Tooltip>
-                <TooltipTrigger className="w-full">
-                    <div className="flex items-center justify-between text-xs mb-1">
-                      <span className="font-medium text-yellow-600 dark:text-yellow-400 flex items-center gap-1"> <Award className="w-3.5 h-3.5"/> XP</span>
-                      <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
+                <TooltipTrigger asChild>
+                    {/* Make the entire div the trigger */}
+                    <div className="w-full cursor-help">
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="font-medium text-yellow-600 dark:text-yellow-400 flex items-center gap-1"> <Award className="w-3.5 h-3.5"/> XP</span>
+                          <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
+                        </div>
+                        <Progress
+                            value={(character.xp / character.xpToNextLevel) * 100}
+                            className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"
+                            aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`}
+                        />
                     </div>
-                    <Progress
-                        value={(character.xp / character.xpToNextLevel) * 100}
-                        className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"
-                        aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`}
-                    />
                 </TooltipTrigger>
                 <TooltipContent>
                     <p>Experience Points</p>
@@ -253,6 +256,16 @@ export function CharacterDisplay() {
                  )}
              </div>
          )}
+
+         {/* Progression Card (Reputation/Relationships/Turn) - Add if needed or keep separate */}
+          {/* Example:
+           <Separator className="my-3"/>
+           <div className="space-y-2 text-xs">
+               <div className="flex justify-between"><span>Reputation:</span> <span className="text-right">{Object.keys(character.reputation).length > 0 ? Object.entries(character.reputation).map(([f,s]) => `${f}: ${s}`).join(', ') : 'None'}</span></div>
+               <div className="flex justify-between"><span>Relationships:</span> <span className="text-right">{Object.keys(character.npcRelationships).length > 0 ? Object.entries(character.npcRelationships).map(([n,s]) => `${n}: ${s}`).join(', ') : 'None'}</span></div>
+               <div className="flex justify-between"><span>Turn:</span> <span className="font-bold">{state.turnCount}</span></div>
+           </div>
+          */}
 
          {/* Separator before Description */}
          <Separator className="my-3"/>
