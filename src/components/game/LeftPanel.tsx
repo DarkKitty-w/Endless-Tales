@@ -8,14 +8,14 @@ import type {
 import { CharacterDisplay } from "@/components/game/CharacterDisplay";
 import { InventoryDisplay } from "@/components/game/InventoryDisplay";
 import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay";
-import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
+import { CardboardCard, CardContent } from "@/components/game/CardboardCard"; // Removed unused header/title
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { Label } from "@/components/ui/label";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"; // Added TooltipProvider
 import {
-    Award, Users, HeartPulse, CalendarClock, Milestone, Backpack, Workflow, Loader2, User, BarChartBig // Added User, BarChartBig
+    Award, Users, HeartPulse, CalendarClock, Milestone, Backpack, Workflow, Loader2, User, BarChartBig
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -68,28 +68,29 @@ export function LeftPanel({
                     <TabsContent value="progression" className="h-full m-0">
                          <ScrollArea className="h-full pr-3">
                             <CardboardCard className="bg-transparent shadow-none border-0">
-                                {/* Removed CardHeader */}
                                 <CardContent className="pt-4 pb-4 text-sm space-y-3">
                                     {/* Level and XP */}
-                                    <Tooltip>
-                                        <TooltipTrigger className="w-full cursor-help text-left">
-                                            <div className="flex items-center justify-between mb-1">
-                                                <span className="text-sm font-medium flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Level:</span>
-                                                <span className="font-bold text-base">{character.level}</span>
-                                                <span className="ml-auto font-medium text-muted-foreground">XP:</span>
-                                                <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
-                                            </div>
-                                            <Progress
-                                                value={(character.xp / character.xpToNextLevel) * 100}
-                                                className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"
-                                                aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`}
-                                            />
-                                        </TooltipTrigger>
-                                        <TooltipContent>
-                                            <p>Experience Points</p>
-                                            <p className="text-xs text-muted-foreground">({character.xpToNextLevel - character.xp} needed for next level)</p>
-                                        </TooltipContent>
-                                    </Tooltip>
+                                     <TooltipProvider delayDuration={100}>
+                                        <Tooltip>
+                                            <TooltipTrigger className="w-full cursor-help text-left">
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-sm font-medium flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Level:</span>
+                                                    <span className="font-bold text-base">{character.level}</span>
+                                                    <span className="ml-auto font-medium text-muted-foreground">XP:</span>
+                                                    <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
+                                                </div>
+                                                <Progress
+                                                    value={(character.xp / character.xpToNextLevel) * 100}
+                                                    className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"
+                                                    aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`}
+                                                />
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>Experience Points</p>
+                                                <p className="text-xs text-muted-foreground">({character.xpToNextLevel - character.xp} needed for next level)</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                     </TooltipProvider>
 
                                     <Separator />
                                     {/* Reputation */}
@@ -126,7 +127,7 @@ export function LeftPanel({
                     <TabsContent value="skills" className="h-full m-0">
                         {/* SkillTreeDisplay handles its own scrolling */}
                         {character.skillTree && !isGeneratingSkillTree ? (
-                            <SkillTreeDisplay skillTree={character.skillTree} learnedSkills={character.learnedSkills}  currentStage={character.skillTreeStage}/>
+                            <SkillTreeDisplay skillTree={character.skillTree} learnedSkills={character.learnedSkills} currentStage={character.skillTreeStage}/>
                         ) : (
                             <div className="flex items-center justify-center h-full text-muted-foreground italic p-4">
                                 {isGeneratingSkillTree ? (
@@ -145,3 +146,4 @@ export function LeftPanel({
         </div>
     );
 }
+    

@@ -15,7 +15,7 @@ import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "@/ai/flows/attempt-crafting";
 import { Loader2, Settings, ArrowLeft, Skull, Save } from "lucide-react";
 import { SettingsPanel } from "@/components/screens/SettingsPanel";
-import { LeftPanel } from "@/components/game/LeftPanel";
+import { LeftPanel } from "@/components/game/LeftPanel"; // Import LeftPanel
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { NarrationDisplay } from '@/components/gameplay/NarrationDisplay';
 import { ActionInput } from '@/components/gameplay/ActionInput';
@@ -26,6 +26,8 @@ import { MobileSheet } from '@/components/gameplay/MobileSheet'; // Import Mobil
 import { useIsMobile } from "@/hooks/use-mobile"; // Import useIsMobile hook
 import { Button } from '@/components/ui/button'; // Import Button
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'; // Import Sheet components
+import { cn } from "@/lib/utils"; // Import cn
+
 
 // Helper function to map difficulty dice string to roller function
 declare global {
@@ -72,6 +74,8 @@ export function Gameplay() {
     const [isCraftingDialogOpen, setIsCraftingDialogOpen] = useState(false);
     const [isCraftingLoading, setIsCraftingLoading] = useState(false); // Separate loading for crafting
     const [isInitialLoading, setIsInitialLoading] = useState(true);
+    const [isDesktopSettingsOpen, setIsDesktopSettingsOpen] = useState(false);
+
 
     const isMobile = useIsMobile(); // Hook to check screen size
 
@@ -195,36 +199,31 @@ export function Gameplay() {
                 devNarration = `(Developer Mode) Attempted to remove item: ${value}.`;
                 stateUpdateDispatched = true;
             }
-            // Add more commands: /setstat, /setrep, /setrel, /tp (teleport - harder)
 
             if (!stateUpdateDispatched) {
                 devNarration += " performed successfully. Restrictions bypassed.";
             }
 
-             // Dispatch standard narration update AFTER potential state changes
              const devLogEntry = {
                  narration: devNarration,
-                 updatedGameState: "", // Reducer will calculate this
+                 updatedGameState: "",
                  timestamp: Date.now(),
              };
-             // Dispatch UPDATE_NARRATION last so it can use the updated state
+
              dispatch({ type: "UPDATE_NARRATION", payload: devLogEntry });
 
-
-             // Check for level up after dispatching changes
-             // Use a small timeout to allow state to potentially update before check
              setTimeout(() => {
-                 const potentiallyUpdatedChar = state.character; // Read potentially updated state
+                 const potentiallyUpdatedChar = state.character;
                  if (potentiallyUpdatedChar && potentiallyUpdatedChar.xp >= potentiallyUpdatedChar.xpToNextLevel) {
                      const newLevel = potentiallyUpdatedChar.level + 1;
                      const newXpToNext = calculateXpToNextLevel(newLevel);
                      dispatch({ type: "LEVEL_UP", payload: { newLevel, newXpToNextLevel: newXpToNext } });
                      toast({ title: `Level Up! Reached Level ${newLevel}!`, description: "You feel stronger!", duration: 5000, className: "bg-green-100 dark:bg-green-900 border-green-500" });
                  }
-             }, 10); // Short delay
+             }, 10);
 
             setIsLoading(false);
-            return; // Exit early for developer mode
+            return;
         }
 
         // --- Standard Action Handling (Non-Dev Mode) ---
@@ -427,9 +426,8 @@ export function Gameplay() {
 
             if (narrationResult.xpGained && narrationResult.xpGained > 0) {
                  toast({ title: `Gained ${narrationResult.xpGained} XP!`, duration: 3000, className: "bg-yellow-100 dark:bg-yellow-900 border-yellow-500" });
-                // Check for level up after dispatch potentially updates state
                 setTimeout(() => {
-                     const potentiallyUpdatedChar = state.character; // Read potentially updated state
+                     const potentiallyUpdatedChar = state.character;
                      if (potentiallyUpdatedChar && potentiallyUpdatedChar.xp >= potentiallyUpdatedChar.xpToNextLevel) {
                         const newLevel = potentiallyUpdatedChar.level + 1;
                         const newXpToNext = calculateXpToNextLevel(newLevel);
@@ -473,7 +471,7 @@ export function Gameplay() {
 
     }, [
         character, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice,
-        isGeneratingSkillTree, currentGameStateString, currentNarration, storyLog, adventureSettings, turnCount, state, // Include full state
+        isGeneratingSkillTree, currentGameStateString, currentNarration, storyLog, adventureSettings, turnCount, state,
         dispatch, toast, triggerSkillTreeGeneration, handleEndAdventure, isCraftingLoading
     ]);
 
@@ -532,19 +530,17 @@ export function Gameplay() {
                 craftedItem: result.success ? result.craftedItem : null,
                 newGameStateString: "" // Reducer will calculate
             }});
-            setIsCraftingDialogOpen(false); // Close dialog on success/failure
+            setIsCraftingDialogOpen(false);
 
         } catch (err: any) {
             console.error("Crafting AI call failed:", err);
             let userFriendlyError = `Crafting attempt failed. Please try again later.`;
-            // Simplified error check
              if (err.message?.includes('400 Bad Request')) {
                  userFriendlyError = "Crafting failed: Invalid materials or combination?";
              } else if (err.message) {
                  userFriendlyError = `Crafting Error: ${err.message.substring(0, 100)}`;
              }
             toast({ title: "Crafting Error", description: userFriendlyError, variant: "destructive" });
-             // Keep dialog open on error for retry? Or close? Let's close for now.
              setIsCraftingDialogOpen(false);
         } finally {
             setIsCraftingLoading(false);
@@ -554,7 +550,7 @@ export function Gameplay() {
      // --- Confirm and Handle Class Change ---
      const handleConfirmClassChange = useCallback(async (newClass: string) => {
          if (!character || !newClass || isGeneratingSkillTree) return;
-         setPendingClassChange(null); // Close the dialog immediately
+         setPendingClassChange(null);
          dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: true });
          toast({ title: `Becoming a ${newClass}...`, description: "Generating new skill path...", duration: 2000 });
 
@@ -565,7 +561,7 @@ export function Gameplay() {
          } catch (err: any) {
              console.error("Failed to generate skill tree for new class:", err);
              toast({ title: "Class Change Error", description: `Could not generate skill tree for ${newClass}. Class change aborted.`, variant: "destructive" });
-             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false }); // Ensure flag is reset on error
+             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false });
          }
      }, [character, dispatch, toast, isGeneratingSkillTree]);
 
@@ -587,7 +583,6 @@ export function Gameplay() {
         const skillSuggestions = learnedSkillNames.map(name => `Use skill: ${name}`);
         const suggestions = [...baseSuggestions, ...skillSuggestions];
         const suggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
-        // Don't directly set input, just show toast
         toast({ title: "Suggestion", description: `Try: "${suggestion}"`, duration: 3000 });
     }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, character, toast, isCraftingLoading]);
 
@@ -607,20 +602,19 @@ export function Gameplay() {
                 console.log("Gameplay: Triggering initial narration (skill tree exists).");
                 handlePlayerAction("Begin the adventure by looking around.", true).finally(() => setIsInitialLoading(false));
             }
-        } else if (!isNewGame && isInitialLoading) { // Loaded game case
+        } else if (!isNewGame && isInitialLoading) {
             console.log("Gameplay: Resumed loaded game.");
             toast({ title: "Game Loaded", description: `Resuming adventure for ${character.name}.`, duration: 3000 });
              if (!character.skillTree && !isGeneratingSkillTree) {
                  console.log("Gameplay (Load): Triggering skill tree generation for loaded character.");
                  triggerSkillTreeGeneration(character.class);
              }
-             setIsInitialLoading(false); // Mark initial load complete for loaded games
+             setIsInitialLoading(false);
         } else if (isInitialLoading && character.skillTree && !isLoading && !isGeneratingSkillTree && storyLog.length === 0) {
-            // Handle case where skill tree finished generating for a new game
             console.log("Gameplay: Skill tree generated, triggering initial narration.");
             handlePlayerAction("Begin the adventure by looking around.", true).finally(() => setIsInitialLoading(false));
         }
-    }, [state.status, character, state.currentAdventureId, storyLog.length, isLoading, isEnding, isSaving, isGeneratingSkillTree, triggerSkillTreeGeneration, handlePlayerAction, state.savedAdventures, toast, isInitialLoading]); // Added isInitialLoading
+    }, [state.status, character, state.currentAdventureId, storyLog.length, isLoading, isEnding, isSaving, isGeneratingSkillTree, triggerSkillTreeGeneration, handlePlayerAction, state.savedAdventures, toast, isInitialLoading]);
 
 
     if (!character) {
@@ -661,9 +655,6 @@ export function Gameplay() {
         );
     };
 
-    // State for desktop settings panel
-    const [isDesktopSettingsOpen, setIsDesktopSettingsOpen] = useState(false);
-
 
     return (
         <TooltipProvider>
@@ -692,7 +683,6 @@ export function Gameplay() {
                         renderNpcRelationships={renderNpcRelationships}
                         onSettingsOpen={() => setIsDesktopSettingsOpen(true)} // Use the same state setter
                      />
-
 
                      {/* Narration Area */}
                     <NarrationDisplay
@@ -758,5 +748,4 @@ export function Gameplay() {
         </TooltipProvider>
     );
 }
-
     
