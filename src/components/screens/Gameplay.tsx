@@ -21,7 +21,6 @@ import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "@/ai/flows/attempt-crafting"; // Import crafting flow
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Send, Loader2, BookCopy, ArrowLeft, Info, Dices, Sparkles, Save, Backpack, Workflow, User, Star, ThumbsUp, ThumbsDown, Award, Hammer, CheckSquare, Square, Users, Milestone, CalendarClock, Skull, HeartPulse, GitBranch, ShieldAlert, Zap, Settings, CheckCircle } from "lucide-react"; // Added CheckCircle
-import { rollD6, rollD10, rollD20, rollD100 } from "@/services/dice-roller"; // Import specific rollers
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,6 +49,7 @@ import {
    DialogTitle,
    DialogTrigger,
    DialogClose, // Import DialogClose
+   DialogFooter, // Import DialogFooter
 } from "@/components/ui/dialog"; // Import Dialog components
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
