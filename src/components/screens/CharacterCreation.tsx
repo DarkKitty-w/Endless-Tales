@@ -22,7 +22,7 @@ import { Separator } from "@/components/ui/separator";
 import { StatAllocationInput } from "@/components/game/StatAllocationInput"; // Corrected import path
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
 import type { CharacterStats } from "@/types/character-types"; // Import from specific types file
-import { initialCharacterState } from "@/context/game-initial-state"; // Import initialCharacterState
+import { initialStats } from "@/context/game-initial-state"; // Import initialStats
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons"; // Import stat icons
 
 
@@ -51,7 +51,7 @@ const basicCreationSchema = baseCharacterSchema.extend({
 
 const textCreationSchema = baseCharacterSchema.extend({
   creationType: z.literal("text"),
-  description: z.string().min(10, "Please provide a brief description (at least 10 characters)."), // Removed max limit
+  description: z.string().min(10, "Please provide a brief description (at least 10 characters)."),
 });
 
 const combinedSchema = z.discriminatedUnion("creationType", [
@@ -68,17 +68,18 @@ export function CharacterCreation() {
   const [creationType, setCreationType] = useState<"basic" | "text">("basic");
   // Initialize stats correctly based on context or defaults
   const [stats, setStats] = useState<CharacterStats>(() => {
-      // Use initialCharacterState's stats as a base, then merge with saved stats if available
-      return state.character?.stats ? { ...initialCharacterState.stats, ...state.character.stats } : { ...initialCharacterState.stats };
+       // Use initialStats from the context import as a base, then merge with saved stats if available
+       return state.character?.stats ? { ...initialStats, ...state.character.stats } : { ...initialStats };
   });
 
+
    // Calculate initial remaining points based ONLY on the 3 allocated stats
-   const calculateInitialRemainingPoints = (currentStats: CharacterStats): number => {
+   const calculateRemainingPoints = (currentStats: CharacterStats): number => {
      const allocatedTotal = currentStats.strength + currentStats.stamina + currentStats.agility;
      return TOTAL_STAT_POINTS - allocatedTotal;
    };
 
-  const [remainingPoints, setRemainingPoints] = useState<number>(() => calculateInitialRemainingPoints(stats));
+  const [remainingPoints, setRemainingPoints] = useState<number>(() => calculateRemainingPoints(stats));
   const [isRandomizing, setIsRandomizing] = useState(false); // State for randomization animation
   const [randomizationComplete, setRandomizationComplete] = useState(false); // State for checkmark
   const [isGenerating, setIsGenerating] = useState(false);
@@ -109,30 +110,26 @@ export function CharacterCreation() {
      const clampedValue = Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, value));
 
      setStats(prevStats => {
-         // Create tentative stats including the change
          const tentativeStats = { ...prevStats, [statName]: clampedValue };
-         // Calculate total ONLY for the 3 adjustable stats
-         const currentAllocatedTotal = tentativeStats.strength + tentativeStats.stamina + tentativeStats.agility;
-         const newRemaining = TOTAL_STAT_POINTS - currentAllocatedTotal;
+         const newRemaining = calculateRemainingPoints(tentativeStats);
 
-          setRemainingPoints(newRemaining); // Always update remaining points display
+          setRemainingPoints(newRemaining);
 
-          if (newRemaining < 0) {
-             setStatError(`1 point over the limit`); // Set specific error message
-             return tentativeStats; // Allow the state update to show the invalid allocation temporarily
-          } else {
-             setStatError(null); // Clear stat error if valid
-             return tentativeStats; // Return the valid updated stats
-          }
+         if (newRemaining < 0) {
+             setStatError(`1 point over the limit`);
+             return tentativeStats;
+         } else {
+             setStatError(null);
+             return tentativeStats;
+         }
      });
    }, [setStats, setRemainingPoints]);
 
 
    // --- Randomize Stats ---
-   const randomizeStats = useCallback(() => {
-       setStatError(null); // Clear previous stat error
+    const randomizeStats = useCallback(() => {
+       setStatError(null);
        let pointsLeft = TOTAL_STAT_POINTS;
-       // Start with minimums ONLY for the allocated stats
        let newAllocatedStats: Pick<CharacterStats, 'strength' | 'stamina' | 'agility'> = {
            strength: MIN_STAT_VALUE,
            stamina: MIN_STAT_VALUE,
@@ -142,27 +139,23 @@ export function CharacterCreation() {
 
        const allocatedStatKeys: (keyof typeof newAllocatedStats)[] = ['strength', 'stamina', 'agility'];
 
-       // Distribute remaining points randomly among the allocated stats
        while (pointsLeft > 0) {
            const availableKeys = allocatedStatKeys.filter(key => newAllocatedStats[key] < MAX_STAT_VALUE);
-           if (availableKeys.length === 0) break; // Safety break if all stats reach max
+           if (availableKeys.length === 0) break;
            const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
            newAllocatedStats[randomKey]++;
            pointsLeft--;
        }
 
-       // Keep the other stats (Intellect, Wisdom, Charisma) at their initial/default values
        const finalStats: CharacterStats = {
-           ...initialCharacterState.stats, // Start with the base defaults for all stats
-           ...newAllocatedStats, // Override the allocated ones
+           ...initialStats, // Start with the base defaults for all stats
+           ...newAllocatedStats,
        };
 
        setStats(finalStats);
-        // Recalculate remaining points based on the final allocated stats
-        const finalAllocatedTotal = allocatedStatKeys.reduce((sum, key) => sum + finalStats[key], 0);
-        setRemainingPoints(TOTAL_STAT_POINTS - finalAllocatedTotal);
+       setRemainingPoints(calculateRemainingPoints(finalStats)); // Update remaining points based on final allocation
 
-   }, [setStats, setRemainingPoints]); // Dependency on initialCharacterState.stats removed as it's constant
+    }, [setStats, setRemainingPoints]);
 
 
  // --- Randomize All ---
@@ -227,10 +220,10 @@ export function CharacterCreation() {
      setRandomizationComplete(true); // Show checkmark
      // Hide checkmark after a delay
      setTimeout(() => setRandomizationComplete(false), 1000);
-
+     // No randomization toast
      trigger(); // Trigger validation after setting values
 
- }, [creationType, reset, setValue, randomizeStats, trigger]);
+ }, [creationType, reset, setValue, randomizeStats, trigger, watch]);
 
 
   // Watch form values for dynamic checks
@@ -240,9 +233,7 @@ export function CharacterCreation() {
 
   // --- AI Description Generation ---
   const handleGenerateDescription = useCallback(async () => {
-     // Trigger validation for the description field specifically
      await trigger("description");
-     // Get the potentially updated description value and error state
      const currentDescValue = watch("description");
      const currentName = watch("name");
      const descError = errors.description;
@@ -262,22 +253,18 @@ export function CharacterCreation() {
          // Update the main description field with the AI's elaborated text
          setValue("description", result.detailedDescription || currentDescValue, { shouldValidate: true, shouldDirty: true });
 
-         // Update the BASIC fields based on AI inference, ONLY if AI provided values
-         const inferredClass = result.inferredClass || "Adventurer";
-         const inferredTraits = (result.inferredTraits && result.inferredTraits.length > 0) ? result.inferredTraits.join(', ') : "";
-         const inferredKnowledge = (result.inferredKnowledge && result.inferredKnowledge.length > 0) ? result.inferredKnowledge.join(', ') : "";
-         const inferredBackground = result.inferredBackground || "";
-
-          setValue("class", inferredClass, { shouldValidate: true, shouldDirty: true });
-          setValue("traits", inferredTraits, { shouldValidate: true, shouldDirty: true });
-          setValue("knowledge", inferredKnowledge, { shouldValidate: true, shouldDirty: true });
-          setValue("background", inferredBackground, { shouldValidate: true, shouldDirty: true });
+         // Update the BASIC fields based on AI inference
+         setValue("class", result.inferredClass || "Adventurer", { shouldValidate: true, shouldDirty: true });
+         setValue("traits", (result.inferredTraits && result.inferredTraits.length > 0) ? result.inferredTraits.join(', ') : "", { shouldValidate: true, shouldDirty: true });
+         setValue("knowledge", (result.inferredKnowledge && result.inferredKnowledge.length > 0) ? result.inferredKnowledge.join(', ') : "", { shouldValidate: true, shouldDirty: true });
+         setValue("background", result.inferredBackground || "", { shouldValidate: true, shouldDirty: true });
 
          dispatch({ type: "SET_AI_DESCRIPTION", payload: result.detailedDescription });
 
+         // Trigger validation for the updated basic fields AFTER setting them
          setTimeout(() => {
-           trigger(["class", "traits", "knowledge", "background", "description"]);
-         }, 0);
+            trigger(["class", "traits", "knowledge", "background", "description"]);
+          }, 0); // Use setTimeout to ensure state updates are processed
 
      } catch (err) {
        console.error("AI generation failed:", err);
@@ -293,14 +280,13 @@ export function CharacterCreation() {
     setError(null);
     setStatError(null);
 
-    // Check remaining points exactly equals 0
-     if (remainingPoints !== 0) {
-        setStatError(`${remainingPoints > 0 ? `${remainingPoints} points remaining.` : `1 point over the limit`}`);
-        return;
-     }
-     // Individual stat bounds check (redundant if slider is used, but good safety)
+    // Final validation before submitting
+    if (remainingPoints !== 0) {
+       setStatError(`${remainingPoints > 0 ? `${remainingPoints} points remaining.` : `Points exceed limit.`}`);
+       return;
+    }
      if (Object.entries(stats).some(([key, val]) => ['strength', 'stamina', 'agility'].includes(key) && (val < MIN_STAT_VALUE || val > MAX_STAT_VALUE))) {
-         setStatError(`Allocated stats (STR, STA, AGI) must be between ${MIN_STAT_VALUE} and ${MAX_STAT_VALUE}.`);
+         setStatError(`Stats (STR, STA, AGI) must be between ${MIN_STAT_VALUE} and ${MAX_STAT_VALUE}.`);
          return;
      }
 
@@ -308,11 +294,12 @@ export function CharacterCreation() {
     let characterData: Partial<Character>;
 
     if (data.creationType === 'text') {
+        // Use the potentially AI-updated values from the form state
         const currentClass = watch("class") || "Adventurer";
         const currentTraits = watch("traits")?.split(',').map(t => t.trim()).filter(Boolean) ?? [];
         const currentKnowledge = watch("knowledge")?.split(',').map(k => k.trim()).filter(Boolean) ?? [];
         const currentBackground = watch("background") || "";
-        const currentDescription = watch("description"); // Get the potentially AI-updated description
+        const currentDescription = watch("description"); // Get the final description
 
         characterData = {
           name: data.name,
@@ -322,17 +309,18 @@ export function CharacterCreation() {
           knowledge: currentKnowledge,
           background: currentBackground,
           stats: stats,
-          aiGeneratedDescription: state.character?.aiGeneratedDescription,
+          aiGeneratedDescription: state.character?.aiGeneratedDescription, // Keep this if it exists
         };
     } else { // Basic creation
         const traitsArray = data.traits?.split(',').map(t => t.trim()).filter(Boolean) ?? [];
         const knowledgeArray = data.knowledge?.split(',').map(k => k.trim()).filter(Boolean) ?? [];
-        const currentClass = data.class?.trim() ?? "Adventurer";
+        const currentClass = data.class?.trim() || "Adventurer"; // Ensure default if empty
         const currentBackground = data.background?.trim() ?? "";
 
-        let finalDescription = watch("description"); // Keep AI generated description if available
+        // Generate a basic description if one doesn't exist (e.g., from AI)
+        let finalDescription = watch("description");
         if (!finalDescription) {
-             finalDescription = `A ${currentClass} ${currentBackground ? `with a background as a ${currentBackground}` : ''}, possessing traits like ${traitsArray.join(', ') || 'none'} and knowledge of ${knowledgeArray.join(', ') || 'nothing specific'}.`;
+             finalDescription = `A ${currentClass} ${currentBackground ? `with a background as a ${currentBackground}` : ''}, known for being ${traitsArray.join(', ') || 'undefined'} and having knowledge of ${knowledgeArray.join(', ') || 'nothing specific'}.`;
         }
 
         characterData = {
@@ -343,7 +331,7 @@ export function CharacterCreation() {
             knowledge: knowledgeArray,
             background: currentBackground,
             stats: stats,
-            aiGeneratedDescription: state.character?.aiGeneratedDescription,
+            aiGeneratedDescription: state.character?.aiGeneratedDescription, // Keep this
         };
     }
 
@@ -359,26 +347,25 @@ export function CharacterCreation() {
        reset(currentValues, {
          keepValues: true,
          keepDirty: true,
-         keepErrors: false,
+         keepErrors: false, // Reset errors when switching tabs
          keepTouched: false,
          keepIsValid: false,
          keepSubmitCount: false,
        });
        setValue("creationType", creationType);
-       trigger();
+       trigger(); // Validate after schema change
    }, [creationType, reset, watch, setValue, trigger]);
 
+   // Update stat error message based on remaining points
    useEffect(() => {
-       const newRemaining = calculateInitialRemainingPoints(stats);
-       setRemainingPoints(newRemaining);
-       if (newRemaining < 0) {
-           setStatError(`1 point over the limit`);
-       } else if (newRemaining > 0 && statError?.includes('over limit')) {
-            setStatError(`${newRemaining} points remaining.`);
-       } else if (newRemaining === 0 && statError) {
-            setStatError(null); // Clear error if points are exactly 0
-       }
-   }, [stats, statError]); // Added statError to dependencies
+     if (remainingPoints < 0) {
+       setStatError(`1 point over the limit`);
+     } else if (remainingPoints > 0) {
+        setStatError(`${remainingPoints} points remaining.`);
+     } else {
+       setStatError(null); // Clear error if exactly 0 points remain
+     }
+   }, [remainingPoints]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
@@ -501,7 +488,7 @@ export function CharacterCreation() {
                                             size="sm"
                                             aria-label="Generate detailed description using AI and infer basic fields"
                                         >
-                                            <Wand2 className="mr-2 h-4 w-4" />
+                                            <Wand2 className={`mr-2 h-4 w-4 ${isGenerating ? 'animate-spin' : ''}`} />
                                             {isGenerating ? "Generating..." : "Ask AI for Detailed Profile & Fields"}
                                          </Button>
                                     </TooltipTrigger>
@@ -517,75 +504,87 @@ export function CharacterCreation() {
 
                     {/* --- Stat Allocation --- */}
                     <Separator />
-                     <div className="space-y-4">
-                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
-                             <h3 className="text-xl font-semibold">Allocate Stats ({TOTAL_STAT_POINTS} Total Points)</h3>
+                    <div className="space-y-4">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
+                            <h3 className="text-xl font-semibold">Allocate Stats ({TOTAL_STAT_POINTS} Total Points)</h3>
                              <p className={`text-sm font-medium ${remainingPoints < 0 ? 'text-destructive' : 'text-muted-foreground'}`}>
-                                {statError ? statError : (remainingPoints === 0 ? "All points allocated!" : `${remainingPoints} points remaining.`)}
+                                 {statError ? (
+                                    <span className="flex items-center gap-1 text-destructive">
+                                        <AlertCircle className="h-4 w-4" /> {statError}
+                                    </span>
+                                 ) : (remainingPoints === 0 ? "All points allocated!" : `${remainingPoints} points remaining.`)}
                              </p>
-                         </div>
+                        </div>
 
-                         {/* Stat Inputs (Grid) */}
-                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                              <StatAllocationInput
-                                  label="Strength"
-                                  statKey="strength"
-                                  value={stats.strength}
-                                  onChange={handleStatChange}
-                                  Icon={HandDrawnStrengthIcon}
-                              />
-                              <StatAllocationInput
-                                  label="Stamina"
-                                  statKey="stamina"
-                                  value={stats.stamina}
-                                  onChange={handleStatChange}
-                                  Icon={HandDrawnStaminaIcon}
-                              />
-                              <StatAllocationInput
-                                  label="Agility"
-                                  statKey="agility"
-                                  value={stats.agility}
-                                  onChange={handleStatChange}
-                                  Icon={HandDrawnAgilityIcon}
-                              />
-                         </div>
+                        {/* Stat Inputs (Grid) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                             <StatAllocationInput
+                                label="Strength"
+                                statKey="strength"
+                                value={stats.strength}
+                                onChange={handleStatChange}
+                                Icon={HandDrawnStrengthIcon}
+                                disabled={isGenerating || isRandomizing} // Disable during AI/randomization
+                             />
+                             <StatAllocationInput
+                                label="Stamina"
+                                statKey="stamina"
+                                value={stats.stamina}
+                                onChange={handleStatChange}
+                                Icon={HandDrawnStaminaIcon}
+                                disabled={isGenerating || isRandomizing}
+                             />
+                             <StatAllocationInput
+                                label="Agility"
+                                statKey="agility"
+                                value={stats.agility}
+                                onChange={handleStatChange}
+                                Icon={HandDrawnAgilityIcon}
+                                disabled={isGenerating || isRandomizing}
+                             />
+                        </div>
+                        {/* Display non-adjustable stats */}
+                        <div className="text-sm text-muted-foreground grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+                            <span>Intellect: {stats.intellect}</span>
+                            <span>Wisdom: {stats.wisdom}</span>
+                            <span>Charisma: {stats.charisma}</span>
+                        </div>
                     </div>
 
-
                 </CardContent>
-                <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t border-foreground/10">
+                 <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t border-foreground/10">
                      <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    type="button"
-                                    onClick={randomizeAll}
-                                    variant="secondary"
-                                    aria-label="Randomize All Character Fields and Stats"
-                                    className="relative overflow-hidden w-full sm:w-auto"
-                                    disabled={isRandomizing || isGenerating}
-                                >
-                                    <RotateCcw className={`mr-2 h-4 w-4 ${isRandomizing ? 'animate-spin' : ''}`} />
-                                    {isRandomizing ? 'Randomizing...' : 'Randomize Everything'}
-                                     {/* Checkmark appears briefly after randomizing */}
-                                     <CheckCircle className={`absolute right-2 h-4 w-4 text-green-500 transition-opacity duration-500 ${randomizationComplete ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: randomizationComplete ? '300ms' : '0ms' }} />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Generate a completely random character based on the selected creation type.</p>
-                            </TooltipContent>
-                        </Tooltip>
-                     </TooltipProvider>
+                         <Tooltip>
+                             <TooltipTrigger asChild>
+                                 <Button
+                                     type="button"
+                                     onClick={randomizeAll}
+                                     variant="secondary"
+                                     aria-label="Randomize All Character Fields and Stats"
+                                     className="relative overflow-hidden w-full sm:w-auto"
+                                     disabled={isRandomizing || isGenerating}
+                                 >
+                                     <RotateCcw className={`mr-2 h-4 w-4 ${isRandomizing ? 'animate-spin' : ''}`} />
+                                     {isRandomizing ? 'Randomizing...' : 'Randomize Everything'}
+                                      {/* Checkmark appears briefly after randomizing */}
+                                      <CheckCircle className={`absolute right-2 h-4 w-4 text-green-500 transition-opacity duration-500 ${randomizationComplete ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: randomizationComplete ? '300ms' : '0ms' }} />
+                                 </Button>
+                             </TooltipTrigger>
+                             <TooltipContent>
+                                 <p>Generate a completely random character based on the selected creation type.</p>
+                             </TooltipContent>
+                         </Tooltip>
+                      </TooltipProvider>
                      <Button
                          type="submit"
                          className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
-                         disabled={isGenerating || remainingPoints !== 0 || isRandomizing || !!statError} // Disable if generating, points remain, randomizing, or stat error exists
+                          disabled={isGenerating || isRandomizing || remainingPoints !== 0 || !!statError} // Disable if generating, randomizing, points remain, or stat error exists
                          aria-label="Save character and proceed to adventure setup"
                       >
-                        <Save className="mr-2 h-4 w-4" />
-                        {remainingPoints !== 0 || statError ? 'Invalid Allocation' : 'Proceed to Adventure Setup'}
-                    </Button>
-                </CardFooter>
+                         <Save className="mr-2 h-4 w-4" />
+                         {remainingPoints !== 0 || statError ? 'Invalid Allocation' : 'Proceed to Adventure Setup'}
+                     </Button>
+                 </CardFooter>
             </CardboardCard>
         </form>
     </div>

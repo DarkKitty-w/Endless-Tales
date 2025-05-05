@@ -3,17 +3,13 @@
 
 import type { ReactNode } from "react";
 import React, { createContext, useContext, useReducer, Dispatch, useEffect, useCallback } from "react";
-import type { GameState } from "@/types/game-types";
+import type { GameState, Character, InventoryItem, StoryLogEntry, SkillTree, Skill, Reputation, NpcRelationships } from "@/types/game-types"; // Import all necessary types
 import type { Action } from "./game-actions";
 import { initialState } from "./game-initial-state";
-import { gameReducer } from "./game-reducer";
+import { gameReducer } from "./game-reducer"; // Import the main combined reducer
 import { THEMES } from "@/lib/themes";
-import type { SavedAdventure } from "@/types/adventure-types"; // Import SavedAdventure type
-
-// --- LocalStorage Keys ---
-const SAVED_ADVENTURES_KEY = "endlessTalesSavedAdventures";
-const THEME_ID_KEY = "colorTheme";
-const THEME_MODE_KEY = "themeMode";
+import { SAVED_ADVENTURES_KEY, THEME_ID_KEY, THEME_MODE_KEY } from "@/lib/constants"; // Import constants
+import type { SavedAdventure } from "@/types/adventure-types";
 
 // --- Context Definition ---
 const GameContext = createContext<{ state: GameState; dispatch: Dispatch<Action> } | undefined>(undefined);
@@ -42,15 +38,16 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
             root.classList.remove('dark');
         }
 
-        // Save preferences (moved from reducer)
+        // Save preferences to localStorage
         localStorage.setItem(THEME_ID_KEY, themeId);
         localStorage.setItem(THEME_MODE_KEY, isDark ? 'dark' : 'light');
    }, []);
 
 
-    // --- Persistence Effect ---
+    // --- Persistence Effect (Loading) ---
     useEffect(() => {
         console.log("GameProvider mounted. Attempting to load saved data.");
+        let loadedStateApplied = false;
 
         // Load Saved Adventures
         try {
@@ -69,7 +66,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
             }
         } catch (error) {
             console.error("Failed to load saved adventures:", error);
-             localStorage.removeItem(SAVED_ADVENTURES_KEY);
+            localStorage.removeItem(SAVED_ADVENTURES_KEY);
         }
 
          // Load Theme Settings
@@ -78,22 +75,28 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
          const prefersDark = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
          const initialDarkMode = savedMode === 'dark' || (!savedMode && prefersDark);
 
-         dispatch({ type: 'SET_THEME_ID', payload: savedThemeId });
-         dispatch({ type: 'SET_DARK_MODE', payload: initialDarkMode });
+         // Dispatch theme settings directly if they differ from initial state defaults
+         if (savedThemeId !== initialState.selectedThemeId || initialDarkMode !== initialState.isDarkMode) {
+            dispatch({ type: 'SET_THEME_ID', payload: savedThemeId });
+            dispatch({ type: 'SET_DARK_MODE', payload: initialDarkMode });
+            console.log(`Loaded theme: ${savedThemeId}, Mode: ${initialDarkMode ? 'Dark' : 'Light'}`);
+            applyTheme(savedThemeId, initialDarkMode); // Apply immediately
+            loadedStateApplied = true;
+         }
 
-         console.log(`Loaded theme: ${savedThemeId}, Mode: ${initialDarkMode ? 'Dark' : 'Light'}`);
-         // Apply the loaded theme directly here
-         applyTheme(savedThemeId, initialDarkMode);
+         // Apply default theme if no saved theme was loaded/dispatched
+         if (!loadedStateApplied) {
+             console.log(`Applying default theme: ${initialState.selectedThemeId}, Mode: ${initialState.isDarkMode ? 'Dark' : 'Light'}`);
+             applyTheme(initialState.selectedThemeId, initialState.isDarkMode);
+         }
 
-    }, [applyTheme]);
+    }, [applyTheme]); // Run only once on mount
 
-    // --- Apply theme whenever state changes ---
+    // --- Theme Application Effect (Reacting to State Changes) ---
      useEffect(() => {
-         // Only apply if state has been initialized (avoids initial double-application)
-         // Check if the theme values in the state *differ* from the initial state defaults
-         // before applying. This prevents unnecessary reapplications on initial load.
-         if (state.selectedThemeId !== initialState.selectedThemeId || state.isDarkMode !== initialState.isDarkMode) {
-             // Check if localStorage already matches the state to avoid redundant saves/applications
+         // Only apply if state has initialized and theme/mode actually changed from initial defaults
+         if ((state.selectedThemeId !== initialState.selectedThemeId || state.isDarkMode !== initialState.isDarkMode)) {
+             // Check against localStorage to prevent redundant writes/applications if state matches storage
              const storedThemeId = localStorage.getItem(THEME_ID_KEY);
              const storedMode = localStorage.getItem(THEME_MODE_KEY);
              const isStoredDark = storedMode === 'dark';
@@ -109,27 +112,29 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
    useEffect(() => {
       const currentStageName = state.character?.skillTreeStage !== undefined && state.character?.skillTree
           ? state.character.skillTree.stages[state.character.skillTreeStage]?.stageName ?? `Stage ${state.character.skillTreeStage}`
-          : "Stage 0";
+          : "Potential"; // Updated default name
       const reputationString = state.character ? Object.entries(state.character.reputation).map(([f, s]) => `${f}: ${s}`).join(', ') || 'None' : 'N/A';
-      const relationshipString = state.character ? Object.entries(state.character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'None' : 'N/A'; // Log relationships
+      const relationshipString = state.character ? Object.entries(state.character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'None' : 'N/A';
       const inventoryString = state.inventory.map(i => `${i.name}${i.quality ? ` (${i.quality})` : ''}`).join(', ') || 'Empty';
-     // console.log("Game State Updated:", { // Temporarily disable verbose logging
-     //    status: state.status,
-     //    turn: state.turnCount,
-     //    character: state.character?.name,
-     //    level: state.character?.level,
-     //    xp: `${state.character?.xp}/${state.character?.xpToNextLevel}`,
-     //    reputation: reputationString,
-     //    relationships: relationshipString,
-     //    class: state.character?.class,
-     //    stage: `${currentStageName} (${state.character?.skillTreeStage}/4)`,
-     //    stamina: `${state.character?.currentStamina}/${state.character?.maxStamina}`,
-     //    mana: `${state.character?.currentMana}/${state.character?.maxMana}`,
-     //    adventureId: state.currentAdventureId,
-     //    settings: state.adventureSettings,
-     //    inventory: inventoryString,
-     // });
-   }, [state]);
+      console.log("Game State Updated:", {
+         status: state.status,
+         turn: state.turnCount,
+         character: state.character?.name,
+         level: state.character?.level,
+         xp: `${state.character?.xp}/${state.character?.xpToNextLevel}`,
+         reputation: reputationString,
+         relationships: relationshipString,
+         class: state.character?.class,
+         stage: `${currentStageName} (${state.character?.skillTreeStage ?? 0}/4)`,
+         stamina: `${state.character?.currentStamina}/${state.character?.maxStamina}`,
+         mana: `${state.character?.currentMana}/${state.character?.maxMana}`,
+         adventureId: state.currentAdventureId,
+         settings: state.adventureSettings,
+         inventory: inventoryString,
+         theme: `${state.selectedThemeId} (${state.isDarkMode ? 'Dark' : 'Light'})`,
+         storyLogLength: state.storyLog.length,
+      });
+   }, [state]); // Log whenever the state object changes
 
 
   return (
@@ -146,4 +151,17 @@ export const useGame = () => {
     throw new Error("useGame must be used within a GameProvider");
   }
   return context;
+};
+
+// --- Re-export types if needed, or import directly from specific files ---
+export type {
+    GameState,
+    Action,
+    Character,
+    InventoryItem,
+    StoryLogEntry,
+    SkillTree,
+    Skill,
+    Reputation,
+    NpcRelationships
 };
