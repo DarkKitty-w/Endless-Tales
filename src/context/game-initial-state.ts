@@ -15,15 +15,19 @@ import {
     calculateXpToNextLevel,
     getStarterSkillsForClass
 } from "@/lib/gameUtils";
+import { TOTAL_STAT_POINTS, MIN_STAT_VALUE } from "@/lib/constants"; // Import constants
 
-/** Initial stats for a new character. */
+/** Initial stats for a new character, ensuring they respect the total points. */
+const baseValue = Math.floor(TOTAL_STAT_POINTS / 3); // Divide points among STR, STA, AGI
+const remainder = TOTAL_STAT_POINTS % 3;
+
 export const initialStats: CharacterStats = {
-    strength: 5,
-    stamina: 5,
-    agility: 5,
-    intellect: 5, // Added
-    wisdom: 5,    // Added
-    charisma: 5,  // Added
+    strength: baseValue + (remainder > 0 ? 1 : 0), // Distribute remainder
+    stamina: baseValue + (remainder > 1 ? 1 : 0),
+    agility: baseValue,
+    intellect: MIN_STAT_VALUE, // Keep non-allocatable stats at min
+    wisdom: MIN_STAT_VALUE,
+    charisma: MIN_STAT_VALUE,
 };
 
 /** Initial state for a new character. */

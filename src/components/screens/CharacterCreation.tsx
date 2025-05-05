@@ -1,4 +1,3 @@
-// src/components/screens/CharacterCreation.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
@@ -19,10 +18,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
-import { StatAllocationInput } from "@/components/game/StatAllocationInput"; // Corrected import path
+import { StatAllocationInput } from "@/components/game/StatAllocationInput"; // Import the new input component
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
 import type { CharacterStats } from "@/types/character-types"; // Import from specific types file
-import { initialStats } from "@/context/game-initial-state"; // Corrected import
+import { initialCharacterState } from "@/context/game-initial-state"; // Import initialCharacterState
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons"; // Import stat icons
 
 
@@ -51,7 +50,7 @@ const basicCreationSchema = baseCharacterSchema.extend({
 
 const textCreationSchema = baseCharacterSchema.extend({
   creationType: z.literal("text"),
-  description: z.string().min(10, "Please provide a brief description (at least 10 characters)."), // Removed max limit
+  description: z.string().min(10, "Please provide a brief description (at least 10 characters)."),
 });
 
 const combinedSchema = z.discriminatedUnion("creationType", [
@@ -67,15 +66,20 @@ export function CharacterCreation() {
   const { toast } = useToast();
   const [creationType, setCreationType] = useState<"basic" | "text">("basic");
   // Initialize stats correctly based on context or defaults
-  const defaultStats = state.character?.stats ?? initialStats; // Use initialStats
-  const [stats, setStats] = useState<CharacterStats>(defaultStats);
-  // Calculate initial remaining points based on the initialized stats
-  const initialPoints = TOTAL_STAT_POINTS - (defaultStats.strength + defaultStats.stamina + defaultStats.agility + defaultStats.intellect + defaultStats.wisdom + defaultStats.charisma); // Include all stats
-  const [remainingPoints, setRemainingPoints] = useState(initialPoints);
+  const [stats, setStats] = useState<CharacterStats>(() => {
+      // Use initialCharacterState's stats as a base, then merge with saved stats if available
+      return state.character?.stats ? { ...initialCharacterState.stats, ...state.character.stats } : { ...initialCharacterState.stats };
+  });
+
+   // Calculate initial remaining points based ONLY on the 3 allocated stats
+   const calculateInitialRemainingPoints = (currentStats: CharacterStats): number => {
+     const allocatedTotal = currentStats.strength + currentStats.stamina + currentStats.agility;
+     return TOTAL_STAT_POINTS - allocatedTotal;
+   };
+
+  const [remainingPoints, setRemainingPoints] = useState<number>(() => calculateInitialRemainingPoints(stats));
   const [isRandomizing, setIsRandomizing] = useState(false); // State for randomization animation
   const [randomizationComplete, setRandomizationComplete] = useState(false); // State for checkmark
-
-
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [statError, setStatError] = useState<string | null>(null); // Specific error for stats
@@ -100,23 +104,27 @@ export function CharacterCreation() {
 
 
    // --- Stat Allocation Logic ---
-   const handleStatChange = useCallback((statName: keyof CharacterStats, value: number) => {
+   const handleStatChange = useCallback((statName: keyof Pick<CharacterStats, 'strength' | 'stamina' | 'agility'>, value: number) => {
      const clampedValue = Math.max(MIN_STAT_VALUE, Math.min(MAX_STAT_VALUE, value));
 
      setStats(prevStats => {
+         // Create tentative stats including the change
          const tentativeStats = { ...prevStats, [statName]: clampedValue };
-         const currentTotal = tentativeStats.strength + tentativeStats.stamina + tentativeStats.agility + tentativeStats.intellect + tentativeStats.wisdom + tentativeStats.charisma; // Include all stats
+         // Calculate total ONLY for the 3 adjustable stats
+         const currentAllocatedTotal = tentativeStats.strength + tentativeStats.stamina + tentativeStats.agility;
+         const newRemaining = TOTAL_STAT_POINTS - currentAllocatedTotal;
 
-         if (currentTotal <= TOTAL_STAT_POINTS) {
-             setRemainingPoints(TOTAL_STAT_POINTS - currentTotal);
+          setRemainingPoints(newRemaining); // Always update remaining points display
+
+          if (newRemaining < 0) {
+             setStatError(`Cannot exceed ${TOTAL_STAT_POINTS} total points for allocated stats.`);
+             // Optionally prevent the update if over budget, or allow it and show error
+             // To prevent update: return prevStats;
+              return tentativeStats; // Allow the state update to show the invalid allocation temporarily
+          } else {
              setStatError(null); // Clear stat error if valid
-             return tentativeStats;
-         } else {
-             // Instead of preventing the change, we just show the error
-             setRemainingPoints(TOTAL_STAT_POINTS - currentTotal); // Show negative remaining points
-             setStatError(`Cannot exceed ${TOTAL_STAT_POINTS} total stat points.`);
-             return tentativeStats; // Allow the state update to show the invalid allocation
-         }
+             return tentativeStats; // Return the valid updated stats
+          }
      });
    }, [setStats, setRemainingPoints]);
 
@@ -125,46 +133,35 @@ export function CharacterCreation() {
    const randomizeStats = useCallback(() => {
        setStatError(null); // Clear previous stat error
        let pointsLeft = TOTAL_STAT_POINTS;
-       let newStats: CharacterStats = { strength: 0, stamina: 0, agility: 0, intellect: 0, wisdom: 0, charisma: 0 }; // Initialize all stats
-       const statKeys: (keyof CharacterStats)[] = ['strength', 'stamina', 'agility', 'intellect', 'wisdom', 'charisma']; // Include all stats
+       // Start with minimums ONLY for the allocated stats
+       let newAllocatedStats: Pick<CharacterStats, 'strength' | 'stamina' | 'agility'> = {
+           strength: MIN_STAT_VALUE,
+           stamina: MIN_STAT_VALUE,
+           agility: MIN_STAT_VALUE,
+       };
+       pointsLeft -= (MIN_STAT_VALUE * 3);
 
-       // Initialize with minimum values
-       statKeys.forEach(key => {
-           newStats[key] = MIN_STAT_VALUE;
-           pointsLeft -= MIN_STAT_VALUE;
-       });
+       const allocatedStatKeys: (keyof typeof newAllocatedStats)[] = ['strength', 'stamina', 'agility'];
 
-       // Distribute remaining points randomly
+       // Distribute remaining points randomly among the allocated stats
        while (pointsLeft > 0) {
-           const availableKeys = statKeys.filter(key => newStats[key] < MAX_STAT_VALUE);
+           const availableKeys = allocatedStatKeys.filter(key => newAllocatedStats[key] < MAX_STAT_VALUE);
            if (availableKeys.length === 0) break; // Safety break if all stats reach max
            const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
-           newStats[randomKey]++;
+           newAllocatedStats[randomKey]++;
            pointsLeft--;
        }
 
-        // Final correctness check and adjustment if necessary
-      let finalTotal = statKeys.reduce((sum, key) => sum + newStats[key], 0); // Calculate sum correctly
-      while (finalTotal > TOTAL_STAT_POINTS) {
-         // If total exceeds, decrement a random stat that's above min
-         const decrementableKeys = statKeys.filter(key => newStats[key] > MIN_STAT_VALUE);
-         if (decrementableKeys.length === 0) break; // Should not happen, but safety check
-         const randomKey = decrementableKeys[Math.floor(Math.random() * decrementableKeys.length)];
-         newStats[randomKey]--;
-         finalTotal--;
-      }
-      while (finalTotal < TOTAL_STAT_POINTS) {
-          // If total is less, increment a random stat that's below max
-          const incrementableKeys = statKeys.filter(key => newStats[key] < MAX_STAT_VALUE);
-          if (incrementableKeys.length === 0) break;
-          const randomKey = incrementableKeys[Math.floor(Math.random() * incrementableKeys.length)];
-          newStats[randomKey]++;
-          finalTotal++;
-      }
+       // Keep the other stats (Intellect, Wisdom, Charisma) at their initial/default values
+       const finalStats: CharacterStats = {
+           ...initialCharacterState.stats, // Start with the base defaults for all stats
+           ...newAllocatedStats, // Override the allocated ones
+       };
 
-       setStats(newStats);
-       setRemainingPoints(TOTAL_STAT_POINTS - (newStats.strength + newStats.stamina + newStats.agility + newStats.intellect + newStats.wisdom + newStats.charisma)); // Include all stats in final remaining points calculation
-
+       setStats(finalStats);
+        // Recalculate remaining points based on the final allocated stats
+        const finalAllocatedTotal = allocatedStatKeys.reduce((sum, key) => sum + finalStats[key], 0);
+        setRemainingPoints(TOTAL_STAT_POINTS - finalAllocatedTotal);
 
    }, [setStats, setRemainingPoints]);
 
@@ -304,16 +301,18 @@ export function CharacterCreation() {
 
   // --- Form Submission ---
   const onSubmit = (data: FormData) => {
-    setError(null); // Clear previous errors
-    setStatError(null); // Clear previous stat errors
+    setError(null);
+    setStatError(null);
 
+    // Check remaining points exactly equals 0
      if (remainingPoints !== 0) {
-        setStatError(`You must allocate all ${TOTAL_STAT_POINTS} stat points. ${remainingPoints > 0 ? `${remainingPoints} remaining.` : `${Math.abs(remainingPoints)} over allocated.`}`);
+        setStatError(`You must allocate exactly ${TOTAL_STAT_POINTS} stat points. ${remainingPoints > 0 ? `${remainingPoints} remaining.` : `${Math.abs(remainingPoints)} over allocated.`}`);
+        toast({ title: "Stat Allocation Error", description: `You have ${remainingPoints > 0 ? `${remainingPoints} points` : `${Math.abs(remainingPoints)} too many points`} allocated. Total must be ${TOTAL_STAT_POINTS}.`, variant: "destructive" });
         return;
      }
      // Individual stat bounds check (redundant if slider is used, but good safety)
-     if (Object.values(stats).some(val => val < MIN_STAT_VALUE || val > MAX_STAT_VALUE)) {
-         setStatError(`Stats must be between ${MIN_STAT_VALUE} and ${MAX_STAT_VALUE}.`);
+     if (Object.entries(stats).some(([key, val]) => ['strength', 'stamina', 'agility'].includes(key) && (val < MIN_STAT_VALUE || val > MAX_STAT_VALUE))) {
+         setStatError(`Allocated stats (STR, STA, AGI) must be between ${MIN_STAT_VALUE} and ${MAX_STAT_VALUE}.`);
          return;
      }
 
@@ -336,8 +335,8 @@ export function CharacterCreation() {
           traits: currentTraits,
           knowledge: currentKnowledge,
           background: currentBackground,
-          stats: stats,
-          // aiGeneratedDescription is handled via dispatch in handleGenerateDescription
+          stats: stats, // Use the full stats object (including non-allocated ones)
+          aiGeneratedDescription: state.character?.aiGeneratedDescription, // Get from existing state if AI generated
         };
     } else { // Basic creation (data.creationType === 'basic')
         const traitsArray = data.traits?.split(',').map(t => t.trim()).filter(Boolean) ?? [];
@@ -352,7 +351,6 @@ export function CharacterCreation() {
              finalDescription = `A ${currentClass} ${currentBackground ? `with a background as a ${currentBackground}` : ''}, possessing traits like ${traitsArray.join(', ') || 'none'} and knowledge of ${knowledgeArray.join(', ') || 'nothing specific'}.`;
         }
 
-
         characterData = {
             name: data.name,
             class: currentClass,
@@ -360,7 +358,8 @@ export function CharacterCreation() {
             traits: traitsArray,
             knowledge: knowledgeArray,
             background: currentBackground,
-            stats: stats,
+            stats: stats, // Use the full stats object
+            aiGeneratedDescription: state.character?.aiGeneratedDescription, // Get from existing state if AI generated
         };
     }
 
@@ -388,21 +387,26 @@ export function CharacterCreation() {
        trigger(); // Re-validate everything after schema change
    }, [creationType, reset, watch, setValue, trigger]);
 
-  // Update slider initial position when component mounts or character data changes
-  useEffect(() => {
-    setStats(defaultStats);
-    // Recalculate remaining points based on potentially loaded character stats
-    const currentTotal = defaultStats.strength + defaultStats.stamina + defaultStats.agility + defaultStats.intellect + defaultStats.wisdom + defaultStats.charisma; // Include all stats
-    setRemainingPoints(TOTAL_STAT_POINTS - currentTotal);
-  }, [defaultStats]); // Only re-run when defaultStats changes
+  // Update sliders and remaining points when character data changes (e.g., loading)
+   useEffect(() => {
+       // When stats state changes externally (like from loading), recalculate remaining points
+       const newRemaining = calculateInitialRemainingPoints(stats);
+       setRemainingPoints(newRemaining);
+       // Clear or set stat error based on the recalculated points
+       if (newRemaining !== 0) {
+           setStatError(`You must allocate exactly ${TOTAL_STAT_POINTS} points. ${newRemaining > 0 ? `${newRemaining} remaining.` : `${Math.abs(newRemaining)} over allocated.`}`);
+       } else {
+           setStatError(null);
+       }
+   }, [stats]); // Only re-run when the 'stats' object reference changes
 
 
   // Clear statError when remaining points become 0
   useEffect(() => {
-    if (remainingPoints === 0) {
+    if (remainingPoints === 0 && statError) { // Only clear if there *is* an error
         setStatError(null);
     }
-  }, [remainingPoints]);
+  }, [remainingPoints, statError]); // Depend on both
 
 
   return (
@@ -625,7 +629,7 @@ export function CharacterCreation() {
                          aria-label="Save character and proceed to adventure setup"
                       >
                         <Save className="mr-2 h-4 w-4" />
-                        {remainingPoints > 0 ? `Allocate ${remainingPoints} More Points` : remainingPoints < 0 || statError ? 'Invalid Allocation' : 'Proceed to Adventure Setup'}
+                        {remainingPoints !== 0 || statError ? 'Invalid Allocation' : 'Proceed to Adventure Setup'}
                     </Button>
                 </CardFooter>
             </CardboardCard>
@@ -633,4 +637,3 @@ export function CharacterCreation() {
     </div>
   );
 }
-    
