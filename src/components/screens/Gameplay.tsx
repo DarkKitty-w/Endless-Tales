@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { useGame } from "@/context/GameContext"; // Added useGame
+import { useGame } from "@/context/GameContext";
 import { useToast } from "@/hooks/use-toast";
 import type { InventoryItem, StoryLogEntry, SkillTree, Skill, Character, Reputation, NpcRelationships } from "@/types/game-types"; // Import types
 import { calculateXpToNextLevel } from "@/lib/gameUtils"; // Import specific game utils
@@ -39,6 +39,7 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
+  SheetFooter // Import SheetFooter
 } from "@/components/ui/sheet";
 import {
    Dialog,
@@ -407,8 +408,8 @@ export function Gameplay() {
             const removedItems = currentInvNames.filter(name => !itemsFromGameState.includes(name));
 
             addedItems.forEach(name => dispatch({ type: "ADD_ITEM", payload: { name, description: "Acquired during adventure", quality: "Common" } }));
-            removedItems.forEach(name => dispatch({ type: "REMOVE_ITEM", payload: { itemName: name } }))
-            const updatedGameState = `${input.gameState}\nEvent: ${addedItems.length} items added. ${removedItems.length} items removed.}`;
+            removedItems.forEach(name => dispatch({ type: "REMOVE_ITEM", payload: { itemName: name } }));
+            const updatedGameState = `${inputForAI.gameState}\nEvent: ${addedItems.length} items added. ${removedItems.length} items removed.}`;
             dispatch({ type: 'UPDATE_NARRATION', payload: { narration: `Inventory updated.`, updatedGameState, timestamp: Date.now() } });
 
             if (addedItems.length > 0 || removedItems.length > 0) {
