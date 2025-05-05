@@ -58,15 +58,26 @@ const attemptCraftingPrompt = ai.definePrompt({
   prompt: `You are a Master Crafter AI for the text adventure "Endless Tales". Evaluate a player's crafting attempt based on their knowledge, skills, available inventory, desired item, and the ingredients they chose to use.
 
 **Character Capabilities:**
-*   Knowledge: {{#if characterKnowledge}}{{#each characterKnowledge}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{else}}None{{/if}}
-*   Skills: {{#if characterSkills}}{{#each characterSkills}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{else}}None{{/if}}
+*   Knowledge:
+{{#if characterKnowledge}}
+{{#each characterKnowledge}}    - {{{this}}}\n{{/each}}
+{{else}}    - None\n{{/if}}
+*   Skills:
+{{#if characterSkills}}
+{{#each characterSkills}}    - {{{this}}}\n{{/each}}
+{{else}}    - None\n{{/if}}
 
 **Full Inventory:**
-{{#if inventoryItems}}{{#each inventoryItems}}- {{{this}}}\n{{/each}}{{else}}Empty{{/if}}
+{{#if inventoryItems}}
+{{#each inventoryItems}}    - {{{this}}}\n{{/each}}
+{{else}}    - Empty\n{{/if}}
 
 **Crafting Attempt:**
 *   Goal: {{{desiredItem}}}
-*   Ingredients Used: {{#if usedIngredients}}{{#each usedIngredients}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{else}}None Specified{{/if}}
+*   Ingredients Used:
+{{#if usedIngredients}}
+{{#each usedIngredients}}    - {{{this}}}\n{{/each}}
+{{else}}    - None Specified\n{{/if}}
 
 **Evaluation Task:**
 Determine if the crafting attempt is possible and likely to succeed. Consider:
