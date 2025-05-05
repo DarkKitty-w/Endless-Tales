@@ -108,7 +108,7 @@ export function Gameplay() {
 
    // --- End Adventure (Define before handlePlayerAction) ---
    const handleEndAdventure = useCallback(async (finalNarrationEntry?: StoryLogEntry) => {
-     if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree) return;
+     if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading) return;
      setIsEnding(true);
      setError(null);
      toast({ title: "Ending Adventure", description: "Summarizing your tale..." });
@@ -138,7 +138,7 @@ export function Gameplay() {
      }
      dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationEntry } });
      setIsEnding(false); // Ensure ending state is reset
-   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, storyLog, dispatch, toast]);
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, storyLog, dispatch, toast, isCraftingLoading]);
 
 
   // --- Trigger Skill Tree Generation ---
@@ -183,90 +183,126 @@ export function Gameplay() {
 
   // --- Handle Player Action Submission ---
   const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
-     if (!character || isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree) {
-       console.log("Action blocked: No character or already busy.", { isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree });
+     if (!character || isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading) {
+       console.log("Action blocked: No character or already busy.", { isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, isCraftingLoading });
        let reason = "Please wait for the current action to complete.";
        if (isGeneratingSkillTree) reason = "Please wait for skill tree generation to finish.";
+       if (isCraftingLoading) reason = "Please wait for crafting to finish.";
        toast({ description: reason, variant: "default", duration: 1500 });
        return;
      }
 
-    // Developer Mode Check (Early Exit)
+    // Developer Mode Check & Command Handling
     if (character.class === 'admin000') {
-        console.log("Developer Mode: Bypassing difficulty assessment and costs for action:", action);
-        // Directly proceed to AI narration, skipping assessment/rolls
-        setIsLoading(true); // Still show loading for narration
+        console.log("Developer Mode: Processing action:", action);
+        setIsLoading(true); // Show loading while processing dev command
         setError(null);
         setDiceResult(null);
         setDiceType("None");
         setBranchingChoices([]);
 
-        const actionWithDevTag = `(Developer Mode) ${action}`;
+        let devNarration = `(Developer Mode) Action: "${action}"`;
+        let devGameState = `Turn: ${turnCount + 1}\n${currentGameStateString.replace(/Turn: \d+/, '')}\nDEV MODE ACTIVE`; // Basic state update
+        let xpGained = 0;
+        let progressedToStage: number | undefined = undefined;
+        let stateUpdateDispatched = false; // Track if a specific action was dispatched
 
-        let skillTreeSummaryForAI = null;
-        if (character.skillTree && character.skillTreeStage >= 0) {
-            const currentStageData = character.skillTree.stages.find(s => s.stage === character.skillTreeStage);
-            skillTreeSummaryForAI = {
-                className: character.skillTree.className,
-                stageCount: character.skillTree.stages.length,
-                availableSkillsAtCurrentStage: currentStageData ? currentStageData.skills.map(s => s.name) : [],
-            };
+        const command = action.trim().toLowerCase();
+
+        // Command Parsing
+        if (command.startsWith('/xp')) {
+            const amountMatch = command.match(/\/xp\s+(\d+)/);
+            if (amountMatch && amountMatch[1]) {
+                const amount = parseInt(amountMatch[1], 10);
+                if (!isNaN(amount)) {
+                    xpGained = amount;
+                    dispatch({ type: 'GRANT_XP', payload: amount });
+                    devNarration = `(Developer Mode) Granted ${amount} XP.`;
+                    stateUpdateDispatched = true;
+                } else {
+                    devNarration += " - Invalid XP amount.";
+                }
+            } else {
+                devNarration += " - Usage: /xp <amount>";
+            }
+        } else if (command.startsWith('/stage')) {
+            const stageMatch = command.match(/\/stage\s+(\d)/);
+             if (stageMatch && stageMatch[1]) {
+                const stageNum = parseInt(stageMatch[1], 10);
+                 if (!isNaN(stageNum) && stageNum >= 0 && stageNum <= 4) {
+                    progressedToStage = stageNum;
+                    dispatch({ type: 'PROGRESS_SKILL_STAGE', payload: stageNum });
+                     devNarration = `(Developer Mode) Set skill stage to ${stageNum}.`;
+                     stateUpdateDispatched = true;
+                 } else {
+                     devNarration += " - Invalid stage number (0-4).";
+                 }
+             } else {
+                 devNarration += " - Usage: /stage <0-4>";
+             }
+        } else if (command.startsWith('/additem')) {
+             const itemMatch = command.match(/\/additem\s+(.+)/);
+             if (itemMatch && itemMatch[1]) {
+                 const itemName = itemMatch[1].trim();
+                 const newItem: InventoryItem = { name: itemName, description: "(Dev Added Item)", quality: "Common" };
+                 dispatch({ type: 'ADD_ITEM', payload: newItem });
+                 devNarration = `(Developer Mode) Added item: ${itemName}.`;
+                 // Update inventory string for game state
+                 const newInventory = [...inventory, newItem];
+                 const newInventoryString = newInventory.map(item => `${item.name}${item.quality ? ` (${item.quality})` : ''}`).join(', ') || 'Empty';
+                 devGameState = devGameState.replace(/Inventory:.*?\n/, `Inventory: ${newInventoryString}\n`);
+                 stateUpdateDispatched = true;
+             } else {
+                 devNarration += " - Usage: /additem <item name>";
+             }
+         } else if (command.startsWith('/removeitem')) {
+              const itemMatch = command.match(/\/removeitem\s+(.+)/);
+              if (itemMatch && itemMatch[1]) {
+                  const itemName = itemMatch[1].trim();
+                  dispatch({ type: 'REMOVE_ITEM', payload: { itemName } });
+                  devNarration = `(Developer Mode) Attempted to remove item: ${itemName}.`;
+                   // Note: Game state string update happens after dispatch re-renders, so we don't manually update here
+                  stateUpdateDispatched = true;
+              } else {
+                  devNarration += " - Usage: /removeitem <item name>";
+              }
+          }
+          // Add more commands as needed (/setstat, /setrep, etc.)
+
+
+        // If no specific command was processed, narrate the action as successful
+        if (!stateUpdateDispatched) {
+             devNarration += " performed successfully. Restrictions bypassed.";
         }
 
-        const inputForDevAI: NarrateAdventureInput = {
-          character: {
-             ...character, // Pass the full character object
-             learnedSkills: character.learnedSkills.map(s => s.name), // Pass skill names
-          },
-          playerChoice: actionWithDevTag,
-          gameState: currentGameStateString,
-          previousNarration: storyLog.length > 0 ? storyLog[storyLog.length - 1].narration : undefined,
-          adventureSettings: {
-            difficulty: adventureSettings.difficulty,
-            permanentDeath: adventureSettings.permanentDeath,
-            adventureType: adventureSettings.adventureType,
-          },
-          turnCount: turnCount,
+        // Dispatch a standard narration update to show the command result/narration
+        // Use the potentially modified game state string
+        const devLogEntry: StoryLogEntry = {
+            narration: devNarration,
+            updatedGameState: devGameState, // Use the updated state string if inventory changed
+            timestamp: Date.now(),
+            // Only include progression fields if they were explicitly changed by a command
+             ...(xpGained > 0 && { xpGained }),
+             ...(progressedToStage !== undefined && { progressedToStage }),
         };
+        dispatch({ type: "UPDATE_NARRATION", payload: devLogEntry });
 
-         try {
-             const result = await narrateAdventure(inputForDevAI); // Directly call the narrate flow
-             if (!result || !result.narration || !result.updatedGameState) {
-                 throw new Error("AI response missing critical narration or game state.");
-             }
-             if (!result.updatedGameState.toLowerCase().includes('turn:')) {
-                 throw new Error("AI response missing Turn count in updated game state.");
-             }
-
-             const devLogEntry: StoryLogEntry = {
-                narration: result.narration,
-                updatedGameState: result.updatedGameState,
-                // No costs applied in dev mode
-                xpGained: result.xpGained, // Still allow XP gain if desired for testing
-                timestamp: Date.now(),
-                // Potentially other effects could be mocked/forced here too
-             };
-             dispatch({ type: "UPDATE_NARRATION", payload: devLogEntry });
-             setBranchingChoices(result.branchingChoices ?? []);
-
-             // Handle game over condition even in dev mode
-             const lowerNarration = result.narration?.toLowerCase() || "";
-             const lowerGameState = result.updatedGameState?.toLowerCase() || "";
-             const isGameOver = lowerGameState.includes("game over") || lowerNarration.includes("your adventure ends") || lowerNarration.includes("you have died") || lowerNarration.includes("you achieved victory");
-
-             if (isGameOver) {
-                toast({title: "Adventure Concluded (Dev Mode)!", description: "The tale reaches its end.", duration: 5000});
-                await handleEndAdventure(devLogEntry); // Use the devLogEntry
-             }
-
-         } catch (err: any) {
-             console.error("Narration error (Developer Mode):", err);
-             setError(`Narration failed (Dev Mode): ${err.message || 'Unknown error'}`);
-             toast({ title: "Narration Failed (Dev Mode)", description: "Please check the AI flow or input.", variant: "destructive", duration: 5000 });
-         } finally {
-             setIsLoading(false);
-             scrollToBottom();
+        // Check for level up AFTER granting XP via dispatch
+         if (xpGained > 0 && character) {
+             // Need to check potential level up based on state *after* dispatch
+             // This might require getting updated state or recalculating here
+             const charAfterXp = { ...character, xp: character.xp + xpGained }; // Simulate XP gain
+              if (charAfterXp.xp >= charAfterXp.xpToNextLevel) {
+                 const newLevel = charAfterXp.level + 1;
+                 const newXpToNext = calculateXpToNextLevel(newLevel);
+                 dispatch({ type: "LEVEL_UP", payload: { newLevel, newXpToNextLevel } });
+                  toast({ title: `Level Up! Reached Level ${newLevel}!`, description: "You feel stronger!", duration: 5000, className: "bg-green-100 dark:bg-green-900 border-green-500" });
+              }
          }
+
+
+        setIsLoading(false);
+        scrollToBottom();
         return; // Exit early for developer mode
     }
 
@@ -274,6 +310,7 @@ export function Gameplay() {
     if (!character.skillTree && !isGeneratingSkillTree) {
         triggerSkillTreeGeneration(character.class);
         toast({ description: "Initializing skill tree before proceeding...", duration: 1500 });
+        setIsLoading(false); // Reset loading state here
         return;
     }
 
@@ -504,39 +541,63 @@ export function Gameplay() {
           });
       }
 
-        const gameStateInventoryMatch = narrationResult.updatedGameState.match(/Inventory: (.*?)\n/);
-        if (gameStateInventoryMatch && gameStateInventoryMatch[1]) {
-            const itemsFromGameState = gameStateInventoryMatch[1].split(',').map(name => name.trim().replace(/\s*\((Poor|Common|Uncommon|Rare|Epic|Legendary)\)$/i, '')).filter(Boolean);
-            const currentInvNames = inventory.map(i => i.name);
-            const addedItems = itemsFromGameState.filter(name => !currentInvNames.includes(name));
-            const removedItems = currentInvNames.filter(name => !itemsFromGameState.includes(name));
+        // Inventory update logic (still needs robust parsing)
+        try {
+            const gameStateInventoryMatch = narrationResult.updatedGameState.match(/Inventory:\s*(.*?)(?:\n|$)/i);
+            if (gameStateInventoryMatch && gameStateInventoryMatch[1] && gameStateInventoryMatch[1].trim().toLowerCase() !== 'empty') {
+                const itemsFromGameState = gameStateInventoryMatch[1].split(',').map(name => name.trim()).filter(Boolean);
+                let currentInvNames = inventory.map(i => i.name);
+                let inventoryChanged = false;
+                let updatedInventory = [...inventory]; // Start with current inventory
 
-            addedItems.forEach(name => dispatch({ type: "ADD_ITEM", payload: { name, description: "Acquired during adventure", quality: "Common" } }));
-            removedItems.forEach(name => dispatch({ type: "REMOVE_ITEM", payload: { itemName: name } }));
+                // Add new items (basic object, quality/desc needs refinement)
+                itemsFromGameState.forEach(name => {
+                    if (!currentInvNames.includes(name)) {
+                        updatedInventory.push({ name, description: "Acquired during adventure", quality: "Common" });
+                        inventoryChanged = true;
+                    }
+                });
 
+                // Remove items no longer listed
+                updatedInventory = updatedInventory.filter(item => {
+                     if (!itemsFromGameState.includes(item.name)) {
+                         inventoryChanged = true;
+                         return false; // Remove item
+                     }
+                     return true; // Keep item
+                 });
 
-            if (addedItems.length > 0 || removedItems.length > 0) {
-                console.log("Inventory updated via game state parsing:", { added: addedItems, removed: removedItems });
-                toast({ title: "Inventory Updated", description: `${addedItems.length > 0 ? 'Added: ' + addedItems.join(', ') : ''}${removedItems.length > 0 ? ' Removed: ' + removedItems.join(', ') : ''}`, duration: 3000 });
-                // Create separate log entry for inventory change for clarity
-                const inventoryNarration = `Inventory updated. ${addedItems.length > 0 ? 'Gained: ' + addedItems.join(', ') : ''}${removedItems.length > 0 ? ' Lost: ' + removedItems.join(', ') : ''}`;
-                 // Don't increment turn count for this meta-log
-                 const updatedGameStateForInventoryLog = narrationResult.updatedGameState; // Use the state AFTER the main action
-                dispatch({ type: 'UPDATE_NARRATION', payload: { narration: inventoryNarration, updatedGameState: updatedGameStateForInventoryLog, timestamp: Date.now()+1 } }); // Add 1ms to timestamp to ensure order
+                 if (inventoryChanged) {
+                     dispatch({ type: 'UPDATE_INVENTORY', payload: updatedInventory });
+                      // Optionally create a separate log entry for inventory changes for clarity
+                      // dispatch({ type: 'UPDATE_NARRATION', payload: { narration: `Inventory updated.`, updatedGameState: narrationResult.updatedGameState, timestamp: Date.now() + 1 } });
+                 }
+
+            } else if (gameStateInventoryMatch && gameStateInventoryMatch[1].trim().toLowerCase() === 'empty') {
+                if (inventory.length > 0) { // Only update if inventory was not already empty
+                     dispatch({ type: 'UPDATE_INVENTORY', payload: [] }); // Clear inventory
+                }
             }
+        } catch (e) {
+            console.error("Error parsing inventory from game state:", e);
+            // Keep existing inventory if parsing fails
         }
+
 
       if (logEntryForResult.xpGained && logEntryForResult.xpGained > 0) {
           dispatch({ type: "GRANT_XP", payload: logEntryForResult.xpGained });
            toast({ title: `Gained ${logEntryForResult.xpGained} XP!`, duration: 3000, className: "bg-yellow-100 dark:bg-yellow-900 border-yellow-500" }); // XP Toast Style
-           const charAfterXp = { ...character, xp: character.xp + logEntryForResult.xpGained };
-           if (charAfterXp.xp >= charAfterXp.xpToNextLevel) {
-                const newLevel = charAfterXp.level + 1;
-                const newXpToNext = calculateXpToNextLevel(newLevel);
-                dispatch({ type: "LEVEL_UP", payload: { newLevel, newXpToNextLevel } });
-                toast({ title: `Level Up! Reached Level ${newLevel}!`, description: "You feel stronger!", duration: 5000, className: "bg-green-100 dark:bg-green-900 border-green-500" }); // Level Up Toast Style
-           }
-      }
+           // Check for level up after state updates from dispatch
+            requestAnimationFrame(() => { // Check after the state update cycle
+                const updatedCharacterState = state.character; // Re-read state (may not be fully updated yet)
+                 if (updatedCharacterState && updatedCharacterState.xp >= updatedCharacterState.xpToNextLevel) {
+                    const newLevel = updatedCharacterState.level + 1;
+                    const newXpToNext = calculateXpToNextLevel(newLevel);
+                    dispatch({ type: "LEVEL_UP", payload: { newLevel, newXpToNextLevel } });
+                    toast({ title: `Level Up! Reached Level ${newLevel}!`, description: "You feel stronger!", duration: 5000, className: "bg-green-100 dark:bg-green-900 border-green-500" }); // Level Up Toast Style
+                 }
+            });
+       }
 
        if (logEntryForResult.reputationChange) {
             dispatch({ type: 'UPDATE_REPUTATION', payload: logEntryForResult.reputationChange });
@@ -558,6 +619,7 @@ export function Gameplay() {
            toast({ title: "Skill Stage Increased!", description: `You've reached ${progressedStageName} (Stage ${narrationResult.progressedToStage}) of the ${character.class} path!`, duration: 4000, className: "bg-purple-100 dark:bg-purple-900 border-purple-500" }); // Skill Stage Toast
        }
         if (narrationResult.gainedSkill) {
+            // Dispatching is handled within UPDATE_NARRATION reducer case
             toast({ title: "Skill Learned!", description: `You gained the skill: ${narrationResult.gainedSkill.name}!`, duration: 4000 });
         }
 
@@ -589,14 +651,14 @@ export function Gameplay() {
 
   }, [
       character, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice,
-      isGeneratingSkillTree, currentGameStateString, currentNarration, storyLog, adventureSettings, turnCount,
-      dispatch, toast, scrollToBottom, triggerSkillTreeGeneration, handleEndAdventure
+      isGeneratingSkillTree, currentGameStateString, currentNarration, storyLog, adventureSettings, turnCount, state, // Added state here
+      dispatch, toast, scrollToBottom, triggerSkillTreeGeneration, handleEndAdventure, isCraftingLoading
   ]);
 
 
    // --- Handle Save Game ---
    const handleSaveGame = useCallback(async () => {
-        if (isLoading || isEnding || isSaving || !currentAdventureId || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree) return;
+        if (isLoading || isEnding || isSaving || !currentAdventureId || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading) return;
         setIsSaving(true);
         toast({ title: "Saving Progress..." });
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -609,7 +671,7 @@ export function Gameplay() {
         } finally {
             setIsSaving(false);
         }
-   }, [dispatch, toast, isLoading, isEnding, isSaving, currentAdventureId, character, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree]);
+   }, [dispatch, toast, isLoading, isEnding, isSaving, currentAdventureId, character, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, isCraftingLoading]);
 
     // --- Handle Crafting Attempt ---
     const handleCrafting = useCallback(async () => {
@@ -773,7 +835,7 @@ export function Gameplay() {
    // Scroll to bottom effect
    useEffect(() => {
        scrollToBottom();
-   }, [storyLog, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, diceResult, error, branchingChoices, scrollToBottom]);
+   }, [storyLog, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, diceResult, error, branchingChoices, scrollToBottom, isCraftingLoading]);
 
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -790,6 +852,7 @@ export function Gameplay() {
         if (isGeneratingSkillTree) reason = "Generating skill tree...";
         if (isEnding) reason = "Ending adventure...";
         if (isSaving) reason = "Saving game...";
+         if (isCraftingLoading) reason = "Crafting in progress...";
         toast({ description: reason, variant: "default", duration: 2000 });
     }
   };
@@ -797,15 +860,15 @@ export function Gameplay() {
 
    // --- Go Back (Abandon Adventure) ---
    const handleGoBack = useCallback(() => {
-        if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree) return;
+        if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isCraftingLoading) return;
         toast({ title: "Returning to Main Menu...", description: "Abandoning current adventure." });
         dispatch({ type: "RESET_GAME" });
-   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, dispatch, toast]);
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, dispatch, toast, isCraftingLoading]);
 
 
    // --- Suggest Action ---
    const handleSuggestAction = useCallback(() => {
-       if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || !character) return;
+       if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || !character || isCraftingLoading) return;
        const learnedSkillNames = character.learnedSkills.map(s => s.name);
         const baseSuggestions = [ "Look around", "Examine surroundings", "Check inventory", "Check status", "Check relationships", "Check reputation", "Move north", "Move east", "Move south", "Move west", "Talk to [NPC Name]", "Ask about [Topic]", "Examine [Object]", "Pick up [Item]", "Use [Item]", "Drop [Item]", "Open [Door/Chest]", "Search the area", "Rest here", "Wait for a while", "Attack [Target]", "Defend yourself", "Flee", ];
         const skillSuggestions = learnedSkillNames.map(name => `Use skill: ${name}`);
@@ -814,7 +877,7 @@ export function Gameplay() {
         const suggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
         setPlayerInput(suggestion);
         toast({ title: "Suggestion", description: `Try: "${suggestion}"`, duration: 3000 });
-   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, character, toast]);
+   }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, character, toast, isCraftingLoading]);
 
    if (!character) {
        return (
@@ -976,21 +1039,29 @@ export function Gameplay() {
                  </CardHeader>
                  <CardContent className="pt-4 pb-4 text-sm space-y-3">
                      {/* Level & XP */}
-                     <div>
-                         <div className="flex justify-between items-baseline mb-1">
-                           <Label className="text-sm font-medium flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Level:</Label>
-                           <span className="font-bold text-base">{character.level}</span>
-                         </div>
-                         <div className="flex items-center justify-between text-xs mb-1">
-                              <span className="font-medium text-muted-foreground">XP:</span>
-                              <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
-                         </div>
-                         <Progress
-                              value={(character.xp / character.xpToNextLevel) * 100}
-                              className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"
-                              aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`}
-                         />
-                     </div>
+                     <TooltipProvider delayDuration={100}>
+                       <Tooltip>
+                         <TooltipTrigger className="w-full">
+                             <div className="flex justify-between items-baseline mb-1">
+                               <Label className="text-sm font-medium flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Level:</Label>
+                               <span className="font-bold text-base">{character.level}</span>
+                             </div>
+                             <div className="flex items-center justify-between text-xs mb-1">
+                                  <span className="font-medium text-muted-foreground">XP:</span>
+                                  <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
+                             </div>
+                             <Progress
+                                  value={(character.xp / character.xpToNextLevel) * 100}
+                                  className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500"
+                                  aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`}
+                             />
+                         </TooltipTrigger>
+                         <TooltipContent>
+                           <p>Experience Points</p>
+                           <p className="text-xs text-muted-foreground">({character.xpToNextLevel - character.xp} needed for next level)</p>
+                         </TooltipContent>
+                       </Tooltip>
+                     </TooltipProvider>
                      <Separator />
                      {/* Reputation */}
                      <div>
@@ -1133,17 +1204,25 @@ export function Gameplay() {
                                    </CardTitle>
                                  </CardHeader>
                                  <CardContent className="pt-4 pb-4 text-sm space-y-3">
-                                     <div>
-                                          <div className="flex justify-between items-baseline mb-1">
-                                            <Label className="text-sm font-medium flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Level:</Label>
-                                            <span className="font-bold text-base">{character.level}</span>
-                                          </div>
-                                          <div className="flex items-center justify-between text-xs mb-1">
-                                              <span className="font-medium text-muted-foreground">XP:</span>
-                                              <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
-                                          </div>
-                                          <Progress value={(character.xp / character.xpToNextLevel) * 100} className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500" aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`} />
-                                     </div>
+                                     <TooltipProvider delayDuration={100}>
+                                        <Tooltip>
+                                            <TooltipTrigger className="w-full text-left">
+                                                <div className="flex justify-between items-baseline mb-1">
+                                                    <Label className="text-sm font-medium flex items-center gap-1"><Award className="w-3.5 h-3.5"/> Level:</Label>
+                                                    <span className="font-bold text-base">{character.level}</span>
+                                                </div>
+                                                <div className="flex items-center justify-between text-xs mb-1">
+                                                    <span className="font-medium text-muted-foreground">XP:</span>
+                                                    <span className="font-mono text-muted-foreground">{character.xp} / {character.xpToNextLevel}</span>
+                                                </div>
+                                                <Progress value={(character.xp / character.xpToNextLevel) * 100} className="h-2 bg-yellow-100 dark:bg-yellow-900/50 [&>div]:bg-yellow-500" aria-label={`Experience points ${character.xp} of ${character.xpToNextLevel}`} />
+                                            </TooltipTrigger>
+                                            <TooltipContent>
+                                                <p>Experience Points</p>
+                                                <p className="text-xs text-muted-foreground">({character.xpToNextLevel - character.xp} needed for next level)</p>
+                                            </TooltipContent>
+                                        </Tooltip>
+                                    </TooltipProvider>
                                      <Separator />
                                      <div>
                                           <Label className="text-sm font-medium flex items-center gap-1 mb-1"><Users className="w-3.5 h-3.5"/> Reputation:</Label>
@@ -1445,5 +1524,3 @@ export function Gameplay() {
     </div>
   );
 }
-
-    

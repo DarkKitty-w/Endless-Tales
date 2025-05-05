@@ -3,7 +3,7 @@
 import type {
     GameState, StoryLogEntry, Character, SkillTreeStage,
     ItemQuality, SavedAdventure, DifficultyLevel, SkillTree,
-    CharacterStats, InventoryItem, Reputation, NpcRelationships
+    CharacterStats, InventoryItem, Reputation, NpcRelationships, Skill
 } from "@/types/game-types";
 import type { Action } from "./game-actions";
 import { initialCharacterState, initialAdventureSettings, initialInventory, initialState, initialStats } from "./game-initial-state";
@@ -15,6 +15,33 @@ const SAVED_ADVENTURES_KEY = "endlessTalesSavedAdventures";
 // Keys for theme persistence (moved here for consistency)
 const THEME_ID_KEY = "colorTheme";
 const THEME_MODE_KEY = "themeMode";
+
+// Helper function to update the game state string with current character and inventory info
+const updateGameStateString = (
+    baseString: string,
+    character: Character | null,
+    inventory: InventoryItem[],
+    turn: number
+): string => {
+    if (!character) return baseString;
+
+    const inventoryString = inventory.length > 0 ? inventory.map(item => `${item.name}${item.quality ? ` (${item.quality})` : ''}`).join(', ') : 'Empty';
+    const reputationString = Object.entries(character.reputation).map(([f, s]) => `${f}: ${s}`).join(', ') || 'None';
+    const relationshipString = Object.entries(character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'None';
+
+    let updatedString = baseString.replace(/Turn: \d+/, `Turn: ${turn}`);
+    updatedString = updatedString.replace(/Level: \d+ \(\d+\/\d+ XP\)/, `Level: ${character.level} (${character.xp}/${character.xpToNextLevel} XP)`);
+    updatedString = updatedString.replace(/Inventory:.*?\n/, `Inventory: ${inventoryString}\n`);
+    updatedString = updatedString.replace(/Status: Healthy \(STA: \d+\/\d+, MANA: \d+\/\d+\)/, `Status: Healthy (STA: ${character.currentStamina}/${character.maxStamina}, MANA: ${character.currentMana}/${character.maxMana})`);
+    updatedString = updatedString.replace(/Reputation:.*?\n/, `Reputation: ${reputationString}\n`);
+    updatedString = updatedString.replace(/NPC Relationships:.*?\n/, `NPC Relationships: ${relationshipString}\n`);
+    updatedString = updatedString.replace(/Class: .*?\n/, `Class: ${character.class}\n`);
+    updatedString = updatedString.replace(/Skill Stage: \d+\/\d+/, `Skill Stage: ${character.skillTreeStage}/4`);
+    updatedString = updatedString.replace(/Learned Skills:.*?\n/, `Learned Skills: ${character.learnedSkills.map(s => s.name).join(', ') || 'None'}\n`);
+
+    return updatedString;
+};
+
 
 /**
  * The main reducer function for managing the game state.
@@ -111,7 +138,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
         return { ...state, character: { ...state.character, aiGeneratedDescription: action.payload } };
     case "SET_ADVENTURE_SETTINGS": {
         // Validate difficulty before setting
-        const difficulty = VALID_DIFFICULTY_LEVELS.includes(action.payload.difficulty as DifficultyLevel)
+         const difficulty = VALID_DIFFICULTY_LEVELS.includes(action.payload.difficulty as DifficultyLevel)
             ? action.payload.difficulty as DifficultyLevel
             : state.adventureSettings.difficulty; // Keep old if invalid
 
@@ -120,7 +147,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
           adventureSettings: {
             ...state.adventureSettings,
             ...action.payload,
-            difficulty, // Use the validated difficulty
+             difficulty, // Use the validated difficulty
           },
         };
     }
@@ -173,75 +200,87 @@ export function gameReducer(state: GameState, action: Action): GameState {
         }
       };
     }
-     case "INCREMENT_TURN":
+    case "INCREMENT_TURN":
         return { ...state, turnCount: state.turnCount + 1 };
-     case "GRANT_XP": {
-         if (!state.character) return state;
-         const newXp = state.character.xp + action.payload;
-         const xpNeeded = state.character.xpToNextLevel;
-         console.log(`Granted ${action.payload} XP. Current XP: ${newXp}/${xpNeeded}`);
-         return {
-             ...state,
-             character: {
-                 ...state.character,
-                 xp: newXp,
-             },
-         };
-        }
-    case "LEVEL_UP": {
+    case "GRANT_XP": {
         if (!state.character) return state;
-        if (action.payload.newLevel <= state.character.level) {
-            console.warn(`Attempted to level up to ${action.payload.newLevel}, but current level is ${state.character.level}. Ignoring.`);
-            return state;
-        }
-        console.log(`Level Up! ${state.character.level} -> ${action.payload.newLevel}. Next level at ${action.payload.newXpToNextLevel} XP.`);
-         const remainingXp = Math.max(0, state.character.xp - state.character.xpToNextLevel);
+        const newXp = state.character.xp + action.payload;
+        const xpNeeded = state.character.xpToNextLevel;
+        console.log(`Granted ${action.payload} XP. Current XP: ${newXp}/${xpNeeded}`);
+         const updatedChar = {
+             ...state.character,
+             xp: newXp,
+         };
         return {
             ...state,
-            character: {
-                ...state.character,
-                level: action.payload.newLevel,
-                xp: remainingXp,
-                xpToNextLevel: action.payload.newXpToNextLevel,
-                 currentStamina: state.character.maxStamina, // Restore resources on level up
-                 currentMana: state.character.maxMana,
-            },
+             character: updatedChar,
+             // Update game state string after character update
+             currentGameStateString: updateGameStateString(state.currentGameStateString, updatedChar, state.inventory, state.turnCount)
+        };
+       }
+   case "LEVEL_UP": {
+       if (!state.character) return state;
+       if (action.payload.newLevel <= state.character.level) {
+           console.warn(`Attempted to level up to ${action.payload.newLevel}, but current level is ${state.character.level}. Ignoring.`);
+           return state;
+       }
+       console.log(`Level Up! ${state.character.level} -> ${action.payload.newLevel}. Next level at ${action.payload.newXpToNextLevel} XP.`);
+        const remainingXp = Math.max(0, state.character.xp - state.character.xpToNextLevel);
+         const updatedChar = {
+             ...state.character,
+             level: action.payload.newLevel,
+             xp: remainingXp,
+             xpToNextLevel: action.payload.newXpToNextLevel,
+              currentStamina: state.character.maxStamina, // Restore resources on level up
+              currentMana: state.character.maxMana,
+         };
+       return {
+           ...state,
+           character: updatedChar,
+            // Update game state string after character update
+            currentGameStateString: updateGameStateString(state.currentGameStateString, updatedChar, state.inventory, state.turnCount)
+       };
+   }
+    case "UPDATE_REPUTATION": {
+        if (!state.character) return state;
+        const { faction, change } = action.payload;
+        const currentScore = state.character.reputation[faction] ?? 0;
+        const newScore = Math.max(-100, Math.min(100, currentScore + change)); // Clamp score
+        console.log(`Reputation update for ${faction}: ${currentScore} -> ${newScore}`);
+         const updatedChar = {
+             ...state.character,
+             reputation: {
+                 ...state.character.reputation,
+                 [faction]: newScore,
+             },
+         };
+        return {
+            ...state,
+             character: updatedChar,
+             // Update game state string after character update
+             currentGameStateString: updateGameStateString(state.currentGameStateString, updatedChar, state.inventory, state.turnCount)
+        };
+       }
+    case "UPDATE_NPC_RELATIONSHIP": {
+        if (!state.character) return state;
+        const { npcName, change } = action.payload;
+        const currentScore = state.character.npcRelationships[npcName] ?? 0;
+        const newScore = Math.max(-100, Math.min(100, currentScore + change)); // Clamp score
+        console.log(`Relationship update with ${npcName}: ${currentScore} -> ${newScore}`);
+         const updatedChar = {
+             ...state.character,
+             npcRelationships: {
+                 ...state.character.npcRelationships,
+                 [npcName]: newScore,
+             },
+         };
+        return {
+            ...state,
+             character: updatedChar,
+             // Update game state string after character update
+             currentGameStateString: updateGameStateString(state.currentGameStateString, updatedChar, state.inventory, state.turnCount)
         };
     }
-     case "UPDATE_REPUTATION": {
-         if (!state.character) return state;
-         const { faction, change } = action.payload;
-         const currentScore = state.character.reputation[faction] ?? 0;
-         const newScore = Math.max(-100, Math.min(100, currentScore + change)); // Clamp score
-         console.log(`Reputation update for ${faction}: ${currentScore} -> ${newScore}`);
-         return {
-             ...state,
-             character: {
-                 ...state.character,
-                 reputation: {
-                     ...state.character.reputation,
-                     [faction]: newScore,
-                 },
-             },
-         };
-        }
-     case "UPDATE_NPC_RELATIONSHIP": {
-         if (!state.character) return state;
-         const { npcName, change } = action.payload;
-         const currentScore = state.character.npcRelationships[npcName] ?? 0;
-         const newScore = Math.max(-100, Math.min(100, currentScore + change)); // Clamp score
-         console.log(`Relationship update with ${npcName}: ${currentScore} -> ${newScore}`);
-         return {
-             ...state,
-             character: {
-                 ...state.character,
-                 npcRelationships: {
-                     ...state.character.npcRelationships,
-                     [npcName]: newScore,
-                 },
-             },
-         };
-     }
     case "UPDATE_NARRATION": {
         const newLogEntry: StoryLogEntry = { ...action.payload, timestamp: action.payload.timestamp || Date.now() };
         const newLog = [...state.storyLog, newLogEntry];
@@ -294,11 +333,12 @@ export function gameReducer(state: GameState, action: Action): GameState {
                 xp: currentXp,
                 reputation: updatedReputation,
                 npcRelationships: updatedNpcRelationships,
+                skillTreeStage: action.payload.progressedToStage ?? state.character.skillTreeStage, // Update stage if provided
             };
-            console.log("Character updated via narration:", { stats: action.payload.stats, traits: action.payload.updatedTraits, knowledge: action.payload.knowledge, staminaChange, manaChange, gainedSkill: action.payload.gainedSkill?.name, xpGained, reputationChange: action.payload.reputationChange, npcRelationshipChange: action.payload.npcRelationshipChange });
-        } else {
-             charAfterNarration = state.character;
-        }
+            console.log("Character updated via narration:", { stats: action.payload.stats, traits: action.payload.updatedTraits, knowledge: action.payload.knowledge, staminaChange, manaChange, gainedSkill: action.payload.gainedSkill?.name, xpGained, reputationChange: action.payload.reputationChange, npcRelationshipChange: action.payload.npcRelationshipChange, progressedStage: action.payload.progressedToStage });
+         } else {
+              charAfterNarration = state.character;
+         }
 
 
         // Inventory update logic (still needs robust parsing)
@@ -326,6 +366,8 @@ export function gameReducer(state: GameState, action: Action): GameState {
              // Keep existing inventory if parsing fails
          }
 
+         // Increment turn count here, after processing all narration effects
+         const newTurnCount = state.turnCount + 1;
 
         return {
             ...state,
@@ -333,8 +375,8 @@ export function gameReducer(state: GameState, action: Action): GameState {
             currentNarration: newLogEntry,
             storyLog: newLog,
             inventory: inventoryAfterNarration, // Set updated inventory
-            currentGameStateString: action.payload.updatedGameState,
-            turnCount: state.turnCount + 1,
+            currentGameStateString: updateGameStateString(action.payload.updatedGameState, charAfterNarration, inventoryAfterNarration, newTurnCount), // Update game state string with latest info
+            turnCount: newTurnCount,
         };
     }
     case "END_ADVENTURE": {
@@ -349,7 +391,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
             const finalEntry: StoryLogEntry = { ...action.payload.finalNarration, timestamp: action.payload.finalNarration.timestamp || Date.now() };
             finalLog.push(finalEntry);
             finalGameState = action.payload.finalNarration.updatedGameState;
-            finalTurnCount += 1;
+            finalTurnCount += 1; // Increment turn for the final narration event
 
             // Apply character updates from the final narration
             if (state.character) {
@@ -410,7 +452,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
                 character: finalCharacterState,
                 adventureSettings: state.adventureSettings,
                 storyLog: finalLog,
-                currentGameStateString: finalGameState, // Save the final game state
+                currentGameStateString: updateGameStateString(finalGameState, finalCharacterState, finalInventoryState, finalTurnCount), // Ensure final state string is updated
                 inventory: finalInventoryState, // Save the final inventory
                 statusBeforeSave: "AdventureSummary", // Mark as ended
                 adventureSummary: action.payload.summary,
@@ -456,7 +498,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
         character: state.character,
         adventureSettings: state.adventureSettings,
         storyLog: state.storyLog,
-        currentGameStateString: state.currentGameStateString,
+        currentGameStateString: updateGameStateString(state.currentGameStateString, state.character, state.inventory, state.turnCount), // Update game state string on save
         inventory: state.inventory,
         statusBeforeSave: state.status, // Save current status (likely Gameplay)
         adventureSummary: state.adventureSummary, // Usually null during gameplay
@@ -503,7 +545,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
                className: savedChar.skillTree.className || savedChar.class || "Adventurer",
                stages: (Array.isArray(savedChar.skillTree.stages) ? savedChar.skillTree.stages : []).map((stage, index) => ({
                     stage: typeof stage.stage === 'number' ? stage.stage : index,
-                    stageName: stage.stageName || `Stage ${stage.stage ?? index}`,
+                    stageName: stage.stageName || (i === 0 ? "Potential" : `Stage ${stage.stage ?? index}`),
                      skills: (Array.isArray(stage.skills) ? stage.skills : []).map(skill => ({
                         name: skill.name || "Unknown Skill",
                         description: skill.description || "",
@@ -559,7 +601,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
           storyLog: Array.isArray(adventureToLoad.storyLog) ? adventureToLoad.storyLog : [],
           inventory: validatedInventory,
           turnCount: typeof adventureToLoad.turnCount === 'number' ? adventureToLoad.turnCount : 0,
-          currentGameStateString: adventureToLoad.currentGameStateString || initialState.currentGameStateString,
+          currentGameStateString: adventureToLoad.currentGameStateString || updateGameStateString(initialState.currentGameStateString, validatedCharacter, validatedInventory, typeof adventureToLoad.turnCount === 'number' ? adventureToLoad.turnCount : 0), // Recalculate if missing
           currentNarration: adventureToLoad.storyLog && adventureToLoad.storyLog.length > 0 ? adventureToLoad.storyLog[adventureToLoad.storyLog.length - 1] : null,
           adventureSummary: adventureToLoad.adventureSummary, // Load summary if ended
           currentAdventureId: adventureToLoad.id,
@@ -605,13 +647,16 @@ export function gameReducer(state: GameState, action: Action): GameState {
             className: action.payload.class,
             stages: validatedStages
          };
+          const updatedChar = {
+             ...state.character,
+             skillTree: validatedSkillTree,
+          };
         return {
             ...state,
-            character: {
-                ...state.character,
-                skillTree: validatedSkillTree,
-            },
-            isGeneratingSkillTree: false,
+             character: updatedChar,
+             isGeneratingSkillTree: false,
+              // Update game state string after skill tree update
+             currentGameStateString: updateGameStateString(state.currentGameStateString, updatedChar, state.inventory, state.turnCount)
         };
       }
      case "CHANGE_CLASS_AND_RESET_SKILLS": {
@@ -642,16 +687,19 @@ export function gameReducer(state: GameState, action: Action): GameState {
              stages: validatedStages
          };
          const starterSkills = getStarterSkillsForClass(action.payload.newClass);
+          const updatedChar = {
+             ...state.character,
+             class: action.payload.newClass,
+             skillTree: newValidatedSkillTree,
+             skillTreeStage: 0, // Reset stage
+             learnedSkills: starterSkills, // Reset to new class's starter skills
+          };
          return {
              ...state,
-             character: {
-                 ...state.character,
-                 class: action.payload.newClass,
-                 skillTree: newValidatedSkillTree,
-                 skillTreeStage: 0, // Reset stage
-                 learnedSkills: starterSkills, // Reset to new class's starter skills
-             },
-             isGeneratingSkillTree: false,
+              character: updatedChar,
+              isGeneratingSkillTree: false,
+               // Update game state string after class change
+              currentGameStateString: updateGameStateString(state.currentGameStateString, updatedChar, state.inventory, state.turnCount)
          };
         }
      case "PROGRESS_SKILL_STAGE": {
@@ -660,12 +708,15 @@ export function gameReducer(state: GameState, action: Action): GameState {
          if (newStage > state.character.skillTreeStage) {
               const newStageName = state.character.skillTree.stages[newStage]?.stageName || `Stage ${newStage}`;
              console.log(`Progressing skill stage from ${state.character.skillTreeStage} to ${newStage} (${newStageName}).`);
+              const updatedChar = {
+                 ...state.character,
+                 skillTreeStage: newStage,
+              };
              return {
                  ...state,
-                 character: {
-                     ...state.character,
-                     skillTreeStage: newStage,
-                 },
+                 character: updatedChar,
+                  // Update game state string after stage progression
+                 currentGameStateString: updateGameStateString(state.currentGameStateString, updatedChar, state.inventory, state.turnCount)
              };
          } else {
              console.log(`Attempted to progress skill stage to ${newStage}, but current stage is ${state.character.skillTreeStage}. No change.`);
@@ -682,8 +733,14 @@ export function gameReducer(state: GameState, action: Action): GameState {
             durability: typeof action.payload.durability === 'number' ? action.payload.durability : undefined,
             magicalEffect: action.payload.magicalEffect || undefined,
         };
+         const newInventory = [...state.inventory, newItem];
         console.log("Adding validated item:", newItem.name);
-        return { ...state, inventory: [...state.inventory, newItem] };
+        return {
+             ...state,
+              inventory: newInventory,
+             // Update game state string after adding item
+             currentGameStateString: updateGameStateString(state.currentGameStateString, state.character, newInventory, state.turnCount)
+        };
       }
     case "REMOVE_ITEM": {
         const { itemName, quantity = 1 } = action.payload;
@@ -700,16 +757,24 @@ export function gameReducer(state: GameState, action: Action): GameState {
         if (removedCount < quantity) {
             console.warn(`Tried to remove ${quantity} of ${itemName}, but only found ${removedCount}.`);
         }
-        return { ...state, inventory: updatedInventory };
+        return {
+             ...state,
+              inventory: updatedInventory,
+             // Update game state string after removing item
+             currentGameStateString: updateGameStateString(state.currentGameStateString, state.character, updatedInventory, state.turnCount)
+        };
       }
     case "UPDATE_ITEM": {
         const { itemName, updates } = action.payload;
+         const updatedInventory = state.inventory.map(item =>
+             item.name === itemName ? { ...item, ...updates } : item
+         );
         console.log("Updating item:", itemName, "with", updates);
         return {
             ...state,
-            inventory: state.inventory.map(item =>
-                item.name === itemName ? { ...item, ...updates } : item
-            ),
+             inventory: updatedInventory,
+             // Update game state string after updating item
+             currentGameStateString: updateGameStateString(state.currentGameStateString, state.character, updatedInventory, state.turnCount)
         };
      }
     case "UPDATE_INVENTORY": {
@@ -723,7 +788,12 @@ export function gameReducer(state: GameState, action: Action): GameState {
             durability: typeof item.durability === 'number' ? item.durability : undefined,
             magicalEffect: item.magicalEffect || undefined,
         }));
-        return { ...state, inventory: validatedNewInventory };
+        return {
+             ...state,
+              inventory: validatedNewInventory,
+             // Update game state string after full inventory update
+             currentGameStateString: updateGameStateString(state.currentGameStateString, state.character, validatedNewInventory, state.turnCount)
+         };
       }
     // Handle theme changes
     case "SET_THEME_ID":
