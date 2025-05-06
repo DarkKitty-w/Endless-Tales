@@ -3,115 +3,91 @@
 /**
  * @fileOverview An AI agent that narrates the story of a text adventure game based on player actions and game state.
  *
- * - narrateAdventure - A function that generates the next part of the story.
+ * - narrateAdventure - A function that narrates the adventure story.
  * - NarrateAdventureInput - The input type for the narrateAdventure function.
  * - NarrateAdventureOutput - The return type for the narrateAdventure function.
  */
-
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
-import type { CharacterStats, SkillTree, Skill, ReputationChange, NpcRelationshipChange, InventoryItem } from '@/types/game-types'; // Import types from central location
-import { toast } from '@/hooks/use-toast'; // Import toast for user feedback
-import type { AdventureType } from '@/types/adventure-types'; // Import AdventureType
+import type {
+  CharacterStats,
+  Reputation,
+  NpcRelationships,
+} from '@/types/character-types';
+import type {DifficultyLevel} from '@/types/game-types';
+import {SkillSchema} from '@/ai/schemas/skill-schema';
+
+// Schemas
+const BranchingChoiceSchema = z.object({
+  text: z.string().describe('The player-facing text for this choice.'),
+  consequenceHint: z
+    .string()
+    .optional()
+    .describe(
+      'A brief hint about the potential consequences of this choice.'
+    ),
+});
 
 // --- Zod Schemas (Internal - Not Exported) ---
-const CharacterStatsSchema = z.object({
-  strength: z.number().describe('Character strength attribute (1-10 range).'),
-  stamina: z.number().describe('Character stamina attribute (1-10 range).'),
-  agility: z.number().describe('Character agility attribute (1-10 range).'),
-  intellect: z.number().describe('Character intellect attribute (1-10 range).'),
-  wisdom: z.number().describe('Character wisdom attribute (1-10 range).'),
-  charisma: z.number().describe('Character charisma attribute (1-10 range).'),
-});
-
-const SkillSchema = z.object({
-    name: z.string().describe("The name of the skill."),
-    description: z.string().describe("A brief description of what the skill does or represents."),
-    type: z.enum(["Starter", "Learned"]).optional().describe("Indicates if the skill was a starter skill or learned during gameplay."), // Added type
-    manaCost: z.number().optional().describe("Mana cost to use the skill, if any."),
-    staminaCost: z.number().optional().describe("Stamina cost to use the skill, if any."),
-});
-
-
-const SkillTreeSummarySchema = z.object({
-    className: z.string().describe("The class the skill tree belongs to."),
-    stageCount: z.number().describe("The total number of stages in the tree (should be 4 + stage 0)."), // 0-4 stages
-    availableSkillsAtCurrentStage: z.array(z.string()).optional().describe("Names of skills available (but not necessarily learned) at the character's current stage."),
-}).nullable(); // Make the whole skill tree summary optional
-
-const ReputationChangeSchema = z.object({
-    faction: z.string().describe("The name of the faction whose reputation changed."),
-    change: z.number().int().describe("The amount the reputation changed (positive or negative)."),
-});
-
-const NpcRelationshipChangeSchema = z.object({
-    npcName: z.string().describe("The name of the NPC whose relationship changed."),
-    change: z.number().int().describe("The amount the relationship score changed (positive or negative)."),
-});
-
-// Define schema for branching choices
-const BranchingChoiceSchema = z.object({
-    text: z.string().describe("The text describing the choice option for the player."),
-    consequenceHint: z.string().optional().describe("A subtle hint about the potential outcome or required check (e.g., 'Might require agility', 'Could anger the guard')."),
-});
-
-const AdventureTypeSchema = z.enum(["Randomized", "Custom", "Immersed"]).nullable();
-
 const NarrateAdventureInputSchema = z.object({
   character: z.object({
-    name: z.string().describe('Character name.'),
-    class: z.string().describe('Character class (e.g., Warrior, Mage, Rogue). **Handle "admin000" as a special developer mode.**'), // Highlight dev mode
-    description: z.string().describe('A brief description of the character (appearance, personality, backstory snippet).'),
-    traits: z.array(z.string()).describe('List of character traits (e.g., Brave, Curious).'),
-    knowledge: z.array(z.string()).describe('List of character knowledge areas (e.g., Magic, History).'),
-    background: z.string().describe('Character background (e.g., Soldier, Royalty).'),
-    stats: CharacterStatsSchema,
-    currentStamina: z.number().describe('Current stamina points.'),
-    maxStamina: z.number().describe('Maximum stamina points.'),
-    currentMana: z.number().describe('Current mana points.'),
-    maxMana: z.number().describe('Maximum mana points.'),
-    level: z.number().describe("Character's current level."),
-    xp: z.number().describe("Character's current experience points."),
-    xpToNextLevel: z.number().describe("Experience points needed for the next level."),
-    reputation: z.record(z.number()).describe("Current reputation scores with various factions (e.g., {\"Town Guard\": 10, \"Thieves Guild\": -5})."),
-    npcRelationships: z.record(z.number()).describe("Current relationship scores with specific NPCs (e.g., {\"Elara\": 25, \"Guard Captain\": -10})."),
-    skillTreeSummary: SkillTreeSummarySchema.describe("A summary of the character's current class skill tree and available skills at their stage."), // Add skill tree summary
-    skillTreeStage: z.number().min(0).max(4).describe("The character's current skill progression stage (0-4). Stage affects available actions/skill power."), // Add current stage
-    learnedSkills: z.array(z.string()).describe("List of skill names the character has actually learned."), // Add learned skills list
-    aiGeneratedDescription: z.string().optional().describe('Optional detailed AI-generated character profile.'),
-  }).describe('The player character details.'),
-  playerChoice: z.string().describe('The player\'s chosen action or command. May include dice roll result like "(Dice Roll Result: 4)". May be an attempt to use a learned skill by name.'),
-  gameState: z.string().describe('A string representing the current state of the game, including location, **current full inventory list**, ongoing events, character progression milestones achieved, **and known NPC states/relationships**.'),
-  previousNarration: z.string().optional().describe('The narration text immediately preceding the player\'s current choice, for context.'),
-  adventureSettings: z.object({ // Include adventure settings
-      difficulty: z.string().describe("Overall game difficulty (e.g., Easy, Normal, Hard, Nightmare). Influences challenge levels and potential event triggers."),
-      permanentDeath: z.boolean().describe("Whether permanent death is enabled."),
-      adventureType: AdventureTypeSchema,
-      // Add custom fields only if adventureType is Custom or Immersed
-      worldType: z.string().optional().describe("The specified world type (if Custom adventure)."),
-      mainQuestline: z.string().optional().describe("The specified main quest goal (if Custom adventure)."),
-      universeName: z.string().optional().describe("The specified universe name (if Immersed adventure, e.g., Star Wars, Lord of the Rings)."),
-      playerCharacterConcept: z.string().optional().describe("The player's character concept within the immersed universe (if Immersed adventure, e.g., A young Jedi Padawan, A hobbit on an unexpected journey)."),
-  }).describe("The overall settings for the current adventure."),
-  turnCount: z.number().describe("The current turn number of the adventure. Can be used to trigger time-based events."),
+    name: z.string().describe('The character\'s name.'),
+    class: z.string().describe('The character\'s class (e.g., Warrior, Mage).'),
+    description: z.string().describe('A description of the character.'),
+    traits: z.array(z.string()).describe('A list of character traits.'),
+    knowledge: z.array(z.string()).describe('A list of areas of knowledge.'),
+    background: z.string().describe('The character\'s background.'),
+    stats: z.object({
+      strength: z.number(),
+      stamina: z.number(),
+      agility: z.number(),
+      intellect: z.number(),
+      wisdom: z.number(),
+      charisma: z.number(),
+    }).describe('The character\'s stats.'),
+    currentStamina: z.number().describe('The character\'s current stamina.'),
+    maxStamina: z.number().describe('The character\'s maximum stamina.'),
+    currentMana: z.number().describe('The character\'s current mana.'),
+    maxMana: z.number().describe('The character\'s maximum mana, if applicable.'),
+    level: z.number().describe('The character\'s current level.'),
+    xp: z.number().describe('The character\'s current experience points.'),
+    xpToNextLevel: z.number().describe('The experience points needed to reach the next level.'),
+    reputation: z.record(z.number()).describe('The character\'s reputation with different factions.'),
+    npcRelationships: z.record(z.number()).describe('The character\'s relationships with different NPCs.'),
+    skillTreeSummary: z
+      .object({
+        className: z.string(),
+        stageCount: z.number(),
+        availableSkillsAtCurrentStage: z.array(z.string()),
+      })
+      .nullable()
+      .describe('A summary of the character\'s skill tree and available skills.'),
+    skillTreeStage: z.number().describe('The character\'s current skill tree stage.'),
+    learnedSkills: z.array(z.string()).describe('List of learned skill names'),
+    aiGeneratedDescription: z.string().optional().describe("A description of the character that was generated by AI."),
+  }),
+  playerChoice: z.string().describe('The action the player chose to perform.'),
+  gameState: z.string().describe('The current game state.'),
+  previousNarration: z.string().optional().describe('The previous narration in the story.'),
+  adventureSettings: z.object({
+    difficulty: z.string().describe('The difficulty level of the adventure.'),
+    permanentDeath: z.boolean().describe('Whether permanent death is enabled.'),
+    adventureType: z.string().describe('The type of adventure (Randomized, Custom).'),
+    worldType: z.string().optional().describe('The type of world for custom adventures.'),
+    mainQuestline: z.string().optional().describe('The main questline for custom adventures.'),
+    universeName: z.string().optional().describe('The universe the immersed adventure takes place in'),
+    playerCharacterConcept: z.string().optional().describe('Optional: A brief description of the character in an immersed adventure'),
+  }),
+  turnCount: z.number().describe('The current turn number.'),
 });
 
 const NarrateAdventureOutputSchema = z.object({
-  narration: z.string().describe('**REQUIRED.** The AI-generated narration describing the outcome of the action and the current situation. **Should occasionally introduce branching choices or dynamic events.**'),
-  updatedGameState: z.string().describe('**REQUIRED.** The updated state of the game string after the player action and narration. **MUST accurately reflect changes** in location, inventory, character status (including stamina/mana, level, XP, reputation, NPC relationships), time, or achieved milestones. **MUST include the current Turn count (e.g., "Turn: 16").**'),
-  updatedStats: CharacterStatsSchema.partial().optional().describe('Optional: Changes to character stats resulting from the narration (e.g., gained 1 strength). **Only include if stats actually changed.**'),
-  updatedTraits: z.array(z.string()).optional().describe('Optional: The complete new list of character traits **only if they changed.**'),
-  updatedKnowledge: z.array(z.string()).optional().describe('Optional: The complete new list of character knowledge areas **only if they changed.**'),
-  xpGained: z.number().int().min(0).optional().describe('Optional: The amount of XP gained **only if XP was awarded.**'), // Add XP gained
-  reputationChange: ReputationChangeSchema.optional().describe('Optional: Change in reputation with a specific faction **only if reputation changed.**'), // Add reputation change
-  npcRelationshipChange: NpcRelationshipChangeSchema.optional().describe('Optional: Change in relationship score with a specific NPC **only if relationship changed.**'), // Add NPC relationship change
-  staminaChange: z.number().optional().describe('Optional: Change in current stamina (negative for cost, positive for gain). **Only include if stamina changed.**'),
-  manaChange: z.number().optional().describe('Optional: Change in current mana (negative for cost, positive for gain). **Only include if mana changed.**'),
-  progressedToStage: z.number().min(1).max(4).optional().describe('Optional: The new skill stage (1-4) **only if the character progressed to a new stage.**'),
+  narration: z.string().describe('The next segment of the story.'),
+  updatedGameState: z.string().describe('The updated game state.'),
   suggestedClassChange: z.string().optional().describe("Optional: Suggest a different class name **only if the AI detects the player's actions consistently align with a different class.**"),
-  gainedSkill: SkillSchema.optional().describe("Optional: Details of a new skill **only if the character learned a new skill.**"), // Added gainedSkill
+  gainedSkill: SkillSchema.optional().describe("Optional: Details of a new skill **only if the character learned a new skill.**"),
   branchingChoices: z.array(BranchingChoiceSchema).length(4).optional().describe("Optional: Always 4 significant choices presented to the player, **only if relevant narrative branches occurred.**"),
-   dynamicEventTriggered: z.string().optional().describe("Optional: A brief description **only if a random or time-based dynamic world event occurred.**"),
+  dynamicEventTriggered: z.string().optional().describe("Optional: A brief description **only if a random or time-based dynamic world event occurred.**"),
 });
 
 // --- Exported Types (Derived from internal schemas) ---
@@ -119,12 +95,91 @@ export type NarrateAdventureInput = z.infer<typeof NarrateAdventureInputSchema>;
 export type NarrateAdventureOutput = z.infer<typeof NarrateAdventureOutputSchema>;
 
 // --- Exported Async Function ---
-export async function narrateAdventure(input: NarrateAdventureInput): Promise<NarrateAdventureOutput> {
+export async function narrateAdventure(
+  input: NarrateAdventureInput
+): Promise<NarrateAdventureOutput> {
+  // Check for Developer Mode
   if (input.character.class === 'admin000') {
-    console.log("Developer Mode detected in narrateAdventure. Skipping standard AI narration.");
-    return processDevCommand(input);
+    console.log("Developer Mode detected. Bypassing AI narration.");
+    // Bypassing AI Narration
+    const devNarration = `(Developer Mode) Player chose: "${input.playerChoice}". No AI Narration.`;
+    return {
+      narration: devNarration,
+      updatedGameState: input.gameState, // No actual game state change
+      // Intentionally omitting all other optional fields for dev mode
+    };
   }
   return narrateAdventureFlow(input);
 }
 
 // --- Helper Function for Developer Commands ---
+async function processDevCommand(input: NarrateAdventureInput): Promise<NarrateAdventureOutput> {
+    const devNarration = `(Developer Mode) Processing developer command. Restrictions bypassed.`;
+    return {
+        narration: devNarration,
+        updatedGameState: input.gameState, // No actual game state change
+        // Intentionally omitting all other optional fields for dev mode
+    };
+}
+
+// --- Internal Prompt and Flow Definitions ---
+const narrateAdventurePrompt = ai.definePrompt({
+  name: 'narrateAdventurePrompt',
+  input: { schema: NarrateAdventureInputSchema },
+  output: { schema: NarrateAdventureOutputSchema },
+  prompt: `You are a creative Game Master AI for the text adventure "Endless Tales". Your task is to narrate the next segment of the story based on the player's choice, current game state, and adventure settings.
+
+Here's the context:
+*   **Player's Name:** {{{character.name}}}
+*   **Character Description:** {{{character.description}}} (Traits: {{{character.traits}}}, Knowledge: {{{character.knowledge}}}, Background: {{{character.background}}})
+*   **Stats:** STR: {{{character.stats.strength}}}, STA: {{{character.stats.stamina}}}, AGI: {{{character.stats.agility}}}, INT: {{{character.stats.intellect}}}, WIS: {{{character.stats.wisdom}}}, CHA: {{{character.stats.charisma}}}
+*   **Current Turn:** {{{turnCount}}}
+*   **Learned Skills:** {{{character.learnedSkills}}}
+*   **Current Game State:** {{{gameState}}}
+*   **Player's Choice:** {{{playerChoice}}}
+*   **Previous Narration (if any):** {{{previousNarration}}}
+
+**Requirements:**
+1.  **Narrative Continuation:** Craft an engaging narrative that seamlessly continues the story from the 'previousNarration' (if it exists) and logically follows the 'playerChoice' within the existing 'gameState'. Consider the character's stats, skills, traits, and the overall world setting to ensure consistency and plausibility.
+2.  **Logical Progression, Resource Costs & Restrictions:**
+    *   **Evaluate Feasibility:** Assess if the action is logically possible. *Actions tied to higher skill stages should only be possible if the character has reached that stage.* Harder difficulties might make certain actions less feasible initially.
+    *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output \`staminaChange\`, \`manaChange\` **only if they changed**.
+    *   **Block Impossible Actions:** Prevent universe-breaking actions (e.g., "destroy the universe", "teleport to another dimension") unless EXTREME justification exists in gameState AND skill stage is high. Simple reality-bending ("become king", "control time") is also typically Impossible without justification.
+    *   **Narrate Failure Reason:** If blocked/failed, explain why (lack of skill, resources, item, stage, reputation, **NPC relationships**, difficulty, etc.).
+    *   **Skill-based Progression:** Very powerful actions require high milestones AND skill stages.
+3.  **Incorporate Dice Rolls:** Interpret dice roll results (e.g., "(Difficulty: Hard, Dice Roll Result: 75/100)") contextually. High rolls succeed, low rolls fail, adjusted by **game difficulty**. Narrate the degree of success/failure. Success might grant more XP or better reputation/relationship changes. Failure might have negative consequences, potentially more severe on higher difficulties.
+4.  **Consequences, Resources, XP, Reputation, Relationships & Character Progression:**
+    *   **Resource Changes:** If current stamina or mana changed, include staminaChange or manaChange. **Do not include if unchanged.**
+    *   **XP Awards:** If the action was significant (overcame challenge, clever solution, quest progress), award XP via \`xpGained\` (adjust based on **difficulty** - harder challenges grant more). **Only include if XP was gained.**
+    *   **Reputation Changes:** If the action affects a faction's view, include \`reputationChange\`. **Only include if reputation changed.**
+    *   **NPC Relationship Changes:** If the action affects an NPC's view, include \`npcRelationshipChange\`. **Only include if relationship changed.**
+5.  **Update Game State String:** Modify the 'gameState' string (passed as input) to reflect **ALL** changes from the action (location, new inventory, NPC moods, time, quest progress, milestones, character status like 'Injured', 'Blessed'). **It MUST include the current Turn count, which is always {{{turnCount}}} + 1.**
+6.  **Dynamic Events & Branching:** Occasionally, introduce dynamic world events (via \`dynamicEventTriggered\`) or present the player with **EXACTLY 4** meaningful branching choices (via \`branchingChoices\`) if the narrative allows for significant divergence. These choices should have hints.
+7.  **Tone:** Maintain a consistent tone suitable for the adventure type and difficulty. Be descriptive and engaging.
+
+*   **'narration' and 'updatedGameState' are **REQUIRED**.
+*   All other fields are **OPTIONAL** and should **ONLY** be included if their corresponding event actually occurred (e.g., include xpGained only if XP was actually awarded).
+*   If including \`branchingChoices\`, ensure the array contains **exactly 4** choices.
+*   Ensure the 'updatedGameState' string contains the correct turn count.
+
+Example Output (Success with XP and branching choices):
+`,
+});
+
+const narrateAdventureFlow = ai.defineFlow<
+  typeof NarrateAdventureInputSchema,
+  typeof NarrateAdventureOutputSchema
+>(
+  {
+    name: 'narrateAdventureFlow',
+    inputSchema: NarrateAdventureInputSchema,
+    outputSchema: NarrateAdventureOutputSchema,
+  },
+  async input => {
+    // Developer mode check is now handled in the exported function
+    console.log("Sending to narrateAdventurePrompt:", JSON.stringify(input, null, 2)); // Log the input being sent
+    const {output} = await narrateAdventurePrompt(input);
+    console.log("Received from narrateAdventurePrompt:", JSON.stringify(output, null, 2)); // Log the output received
+    return output;
+  }
+);
