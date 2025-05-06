@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useForm, type FieldErrors } from "react-hook-form";
+import { useForm, type FieldErrors, type UseFormRegister } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useGame } from "@/context/GameContext";
@@ -16,27 +16,25 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { StatAllocationInput } from "@/components/character/StatAllocationInput";
-import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
-import type { CharacterStats, Character } from "@/types/character-types"; // Import from specific types file
-import { initialCharacterStats as defaultInitialStats } from "@/context/game-initial-state"; // Corrected import
+import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants";
+import type { CharacterStats, Character } from "@/types/character-types";
+import { initialCharacterStats as defaultInitialStats } from "@/context/game-initial-state";
 import { BasicCharacterForm } from "@/components/character/BasicCharacterForm";
 import { TextCharacterForm } from "@/components/character/TextCharacterForm";
-import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons"; // Import stat icons
-
+import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons";
 
 // --- Zod Schema for Validation ---
 const baseCharacterSchema = z.object({
   name: z.string().min(1, "Character name is required.").max(50, "Name too long (max 50)."),
 });
 
-// Helper for comma-separated strings with max item validation
 const commaSeparatedMaxItems = (max: number, message: string) =>
   z.string()
-   .transform(val => val === undefined || val === "" ? [] : val.split(',').map(s => s.trim()).filter(Boolean)) // Transform to array first
-   .refine(arr => arr.length <= max, { message }) // Validate array length
-   .transform(arr => arr.join(', ')) // Transform back to string for form state if needed
+   .transform(val => val === undefined || val === "" ? [] : val.split(',').map(s => s.trim()).filter(Boolean))
+   .refine(arr => arr.length <= max, { message })
+   .transform(arr => arr.join(', '))
    .optional()
-   .transform(val => val || ""); // Ensure empty string if optional and not provided
+   .transform(val => val || "");
 
 const basicCreationSchema = baseCharacterSchema.extend({
   creationType: z.literal("basic"),
@@ -44,12 +42,20 @@ const basicCreationSchema = baseCharacterSchema.extend({
   traits: commaSeparatedMaxItems(5, "Max 5 traits allowed (comma-separated)."),
   knowledge: commaSeparatedMaxItems(5, "Max 5 knowledge areas allowed (comma-separated)."),
   background: z.string().max(100, "Background too long (max 100).").optional().transform(val => val || ""),
+  // Ensure description from text tab is not required here
+  description: z.string().optional().transform(val => val || ""),
 });
 
 const textCreationSchema = baseCharacterSchema.extend({
   creationType: z.literal("text"),
   description: z.string().min(10, "Please provide a brief description (at least 10 characters)."),
+  // Ensure basic fields are not required here if AI fills them
+  class: z.string().optional().transform(val => val || "Adventurer"),
+  traits: commaSeparatedMaxItems(5, "Max 5 traits allowed (comma-separated)."),
+  knowledge: commaSeparatedMaxItems(5, "Max 5 knowledge areas allowed (comma-separated)."),
+  background: z.string().max(100, "Background too long (max 100).").optional().transform(val => val || ""),
 });
+
 
 const combinedSchema = z.discriminatedUnion("creationType", [
   basicCreationSchema,
@@ -64,7 +70,6 @@ export function CharacterCreation() {
   const { toast } = useToast();
   const [creationType, setCreationType] = useState<"basic" | "text">("basic");
 
-  // --- Stat Allocation Logic ---
   const calculateRemainingPoints = useCallback((currentStats: CharacterStats): number => {
     const allocatedTotal = currentStats.strength + currentStats.stamina + currentStats.agility;
     return TOTAL_STAT_POINTS - allocatedTotal;
@@ -74,8 +79,10 @@ export function CharacterCreation() {
     const loadedStats = state.character?.stats;
     const initial = loadedStats ? { ...defaultInitialStats, ...loadedStats } : { ...defaultInitialStats };
     let currentTotal = initial.strength + initial.stamina + initial.agility;
-    if (currentTotal > TOTAL_STAT_POINTS) {
-        console.warn("Loaded stats exceeded total points, resetting to default.");
+
+    if (currentTotal !== TOTAL_STAT_POINTS) {
+        // If total is not 15, reset to default distribution that sums to 15
+        console.warn(`Initial stats total (${currentTotal}) was not ${TOTAL_STAT_POINTS}. Resetting to default allocation.`);
         return { ...defaultInitialStats };
     }
     return initial;
@@ -87,28 +94,28 @@ export function CharacterCreation() {
   const [isRandomizing, setIsRandomizing] = useState(false);
   const [randomizationComplete, setRandomizationComplete] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null); // General error
+  const [error, setError] = useState<string | null>(null);
 
-  // Centralized handler for stat changes
- const handleStatChange = useCallback((newStats: CharacterStats) => {
+  const handleStatChange = useCallback((newStats: CharacterStats) => {
     const newRemaining = calculateRemainingPoints(newStats);
     setStats(newStats);
     setRemainingPoints(newRemaining);
 
     if (newRemaining < 0) {
       setStatError(`${Math.abs(newRemaining)} point(s) over the limit.`);
-    } else {
+    } else if (newRemaining > 0) {
+      setStatError(`${newRemaining} point(s) remaining.`);
+    }
+     else {
       setStatError(null);
     }
   }, [calculateRemainingPoints]);
 
-
-  // Determine the current schema based on the selected tab
   const currentSchema = creationType === "basic" ? basicCreationSchema : textCreationSchema;
 
-  const { register, handleSubmit, formState: { errors }, reset, watch, setValue, trigger } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors, isValid: formIsValid, isDirty }, reset, watch, setValue, trigger } = useForm<FormData>({
      resolver: zodResolver(currentSchema),
-     mode: "onChange", // Trigger validation on change
+     mode: "onChange",
      defaultValues: {
         creationType: "basic",
         name: state.character?.name ?? "",
@@ -116,14 +123,13 @@ export function CharacterCreation() {
         traits: state.character?.traits?.join(', ') ?? "",
         knowledge: state.character?.knowledge?.join(', ') ?? "",
         background: state.character?.background ?? "",
-        description: state.character?.description ?? state.character?.aiGeneratedDescription ?? "", // Use main description, fallback to AI
+        description: state.character?.description ?? state.character?.aiGeneratedDescription ?? "",
      },
    });
 
- // --- Randomize All ---
  const randomizeStats = useCallback(() => {
     let pointsLeft = TOTAL_STAT_POINTS;
-    let newAllocatedStats: Pick<CharacterStats, 'strength' | 'stamina' | 'agility'> = {
+    const newAllocatedStats: Pick<CharacterStats, 'strength' | 'stamina' | 'agility'> = {
         strength: MIN_STAT_VALUE,
         stamina: MIN_STAT_VALUE,
         agility: MIN_STAT_VALUE,
@@ -134,43 +140,61 @@ export function CharacterCreation() {
 
     while (pointsLeft > 0) {
         const availableKeys = allocatedStatKeys.filter(key => newAllocatedStats[key] < MAX_STAT_VALUE);
-        if (availableKeys.length === 0) break; 
+        if (availableKeys.length === 0) break;
         const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
         newAllocatedStats[randomKey]++;
         pointsLeft--;
     }
 
-     let currentTotal = newAllocatedStats.strength + newAllocatedStats.stamina + newAllocatedStats.agility;
-     let safetyNet = 0; 
-     while (currentTotal !== TOTAL_STAT_POINTS && safetyNet < 20) {
-         if (currentTotal < TOTAL_STAT_POINTS) {
-             const availableKeys = allocatedStatKeys.filter(key => newAllocatedStats[key] < MAX_STAT_VALUE);
-             if (availableKeys.length === 0) break;
-             const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
-             newAllocatedStats[randomKey]++;
-             currentTotal++;
-         } else { 
-             const availableKeys = allocatedStatKeys.filter(key => newAllocatedStats[key] > MIN_STAT_VALUE);
-             if (availableKeys.length === 0) break;
-             const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
-             newAllocatedStats[randomKey]--;
-             currentTotal--;
-         }
-         safetyNet++;
-     }
+    let currentTotal = newAllocatedStats.strength + newAllocatedStats.stamina + newAllocatedStats.agility;
+    let safetyNet = 0;
+    while (currentTotal !== TOTAL_STAT_POINTS && safetyNet < 50) { // Increased safety net
+        if (currentTotal < TOTAL_STAT_POINTS) {
+            const availableKeys = allocatedStatKeys.filter(key => newAllocatedStats[key] < MAX_STAT_VALUE);
+            if (availableKeys.length === 0) break;
+            const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
+            newAllocatedStats[randomKey]++;
+            currentTotal++;
+        } else {
+            const availableKeys = allocatedStatKeys.filter(key => newAllocatedStats[key] > MIN_STAT_VALUE);
+            if (availableKeys.length === 0) break;
+            const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
+            newAllocatedStats[randomKey]--;
+            currentTotal--;
+        }
+        safetyNet++;
+    }
+     if (currentTotal !== TOTAL_STAT_POINTS) {
+        // Fallback if distribution fails, ensure it sums to 15
+        console.warn("Stat randomization safety net reached, re-balancing to ensure total 15.");
+        let diff = TOTAL_STAT_POINTS - currentTotal;
+        while (diff !== 0) {
+            const keyToAdjust = allocatedStatKeys[Math.floor(Math.random() * allocatedStatKeys.length)];
+            if (diff > 0 && newAllocatedStats[keyToAdjust] < MAX_STAT_VALUE) {
+                newAllocatedStats[keyToAdjust]++;
+                diff--;
+            } else if (diff < 0 && newAllocatedStats[keyToAdjust] > MIN_STAT_VALUE) {
+                newAllocatedStats[keyToAdjust]--;
+                diff++;
+            }
+            // Prevent infinite loop if all stats are at min/max
+            if (allocatedStatKeys.every(k => (diff > 0 && newAllocatedStats[k] === MAX_STAT_VALUE) || (diff < 0 && newAllocatedStats[k] === MIN_STAT_VALUE))) break;
+        }
+    }
+
 
     const finalStats: CharacterStats = {
-        ...defaultInitialStats, 
+        ...defaultInitialStats,
         ...newAllocatedStats,
     };
 
-    handleStatChange(finalStats); 
-}, [handleStatChange, defaultInitialStats]); // Added defaultInitialStats to dependencies
+    handleStatChange(finalStats);
+}, [handleStatChange, defaultInitialStats]);
 
  const randomizeAll = useCallback(async () => {
-     setIsRandomizing(true); 
-     setRandomizationComplete(false); 
-     await new Promise(res => setTimeout(res, 300)); 
+     setIsRandomizing(true);
+     setRandomizationComplete(false);
+     await new Promise(res => setTimeout(res, 300));
 
      setError(null);
 
@@ -192,10 +216,10 @@ export function CharacterCreation() {
          "A quiet hunter, adept at tracking and moving unseen through the wilds.",
      ];
 
-     reset(); 
+     reset();
 
      const name = randomNames[Math.floor(Math.random() * randomNames.length)];
-     setValue("name", name);
+     setValue("name", name, { shouldValidate: true, shouldDirty: true });
 
      if (creationType === 'basic') {
          const charClass = randomClasses[Math.floor(Math.random() * randomClasses.length)];
@@ -203,91 +227,80 @@ export function CharacterCreation() {
          const knowledge = randomKnowledgePool.sort(() => 0.5 - Math.random()).slice(0, Math.floor(Math.random() * 4) + 1).join(', ');
          const background = randomBackgrounds[Math.floor(Math.random() * randomBackgrounds.length)];
          setValue("creationType", "basic");
-         setValue("class", charClass);
-         setValue("traits", traits);
-         setValue("knowledge", knowledge);
-         setValue("background", background);
-         setValue("description", ""); 
+         setValue("class", charClass, { shouldValidate: true, shouldDirty: true });
+         setValue("traits", traits, { shouldValidate: true, shouldDirty: true });
+         setValue("knowledge", knowledge, { shouldValidate: true, shouldDirty: true });
+         setValue("background", background, { shouldValidate: true, shouldDirty: true });
+         setValue("description", "", { shouldValidate: true, shouldDirty: true });
      } else {
          const description = randomDescriptions[Math.floor(Math.random() * randomDescriptions.length)];
          setValue("creationType", "text");
-         setValue("description", description);
-         setValue("class", "Adventurer");
-         setValue("traits", "");
-         setValue("knowledge", "");
-         setValue("background", "");
+         setValue("description", description, { shouldValidate: true, shouldDirty: true });
+         // When randomizing for text, also set default basic fields which AI might populate later
+         setValue("class", "Adventurer", { shouldValidate: true, shouldDirty: true });
+         setValue("traits", "", { shouldValidate: true, shouldDirty: true });
+         setValue("knowledge", "", { shouldValidate: true, shouldDirty: true });
+         setValue("background", "", { shouldValidate: true, shouldDirty: true });
      }
 
-     randomizeStats(); 
+     randomizeStats();
 
-     await new Promise(res => setTimeout(res, 200)); 
-     setIsRandomizing(false); 
-     setRandomizationComplete(true); 
-     setTimeout(() => setRandomizationComplete(false), 1000); 
+     await new Promise(res => setTimeout(res, 200));
+     setIsRandomizing(false);
+     setRandomizationComplete(true);
+     setTimeout(() => setRandomizationComplete(false), 1000);
+
+     trigger();
+
+ }, [creationType, reset, setValue, randomizeStats, trigger]);
 
 
-     trigger(); 
-
- }, [creationType, reset, setValue, randomizeStats, toast, trigger]);
-
-
-  // --- AI Description Generation ---
- const handleGenerateDescription = useCallback(async () => {
-     await trigger(["name", "description"]); 
+  const handleGenerateDescription = useCallback(async () => {
+     await trigger(["name", "description"]);
      const currentDescValue = watch("description");
      const currentName = watch("name");
      const nameError = errors.name;
      const descError = errors.description;
 
-     if (nameError || descError || !currentDescValue || currentDescValue.length < 10) {
-       setError("Please provide a valid name and description (min 10 chars) before generating.");
+     if (nameError || !currentName?.trim() || (creationType === 'text' && (descError || !currentDescValue || currentDescValue.length < 10))) {
+       setError(nameError ? "Name is required." : "Please provide a description (min 10 chars) before generating.");
        return;
      }
 
      setError(null);
      setIsGenerating(true);
      try {
-        console.log("Calling generateCharacterDescription with:", currentDescValue);
-        const result: GenerateCharacterDescriptionOutput = await generateCharacterDescription({ characterDescription: currentDescValue });
-        console.log("AI Result:", result);
+        const descriptionToProcess = currentDescValue || `A character named ${currentName}.`; // Fallback if description is empty but name exists
+        const result: GenerateCharacterDescriptionOutput = await generateCharacterDescription({ characterDescription: descriptionToProcess });
 
-         setValue("description", result.detailedDescription || currentDescValue, { shouldValidate: true, shouldDirty: true });
+        setValue("description", result.detailedDescription || descriptionToProcess, { shouldValidate: true, shouldDirty: true });
+        setValue("class", result.inferredClass || "Adventurer", { shouldValidate: true, shouldDirty: true });
+        setValue("traits", (result.inferredTraits && result.inferredTraits.length > 0) ? result.inferredTraits.join(', ') : "", { shouldValidate: true, shouldDirty: true });
+        setValue("knowledge", (result.inferredKnowledge && result.inferredKnowledge.length > 0) ? result.inferredKnowledge.join(', ') : "", { shouldValidate: true, shouldDirty: true });
+        setValue("background", result.inferredBackground || "", { shouldValidate: true, shouldDirty: true });
 
-         setValue("class", result.inferredClass || "Adventurer", { shouldValidate: true, shouldDirty: true });
-         setValue("traits", (result.inferredTraits && result.inferredTraits.length > 0) ? result.inferredTraits.join(', ') : "", { shouldValidate: true, shouldDirty: true });
-         setValue("knowledge", (result.inferredKnowledge && result.inferredKnowledge.length > 0) ? result.inferredKnowledge.join(', ') : "", { shouldValidate: true, shouldDirty: true });
-         setValue("background", result.inferredBackground || "", { shouldValidate: true, shouldDirty: true });
-
-         dispatch({ type: "SET_AI_DESCRIPTION", payload: result.detailedDescription });
-
-         setTimeout(() => {
-            trigger(["class", "traits", "knowledge", "background", "description"]);
-          }, 0); 
-
+        dispatch({ type: "SET_AI_DESCRIPTION", payload: result.detailedDescription });
+        toast({ title: "AI Profile Generated!", description: "Character details have been updated based on the description.", duration: 4000});
+        trigger(); // Retrigger validation for all fields
      } catch (err) {
        console.error("AI generation failed:", err);
        setError("Failed to generate description or infer details. The AI might be busy or encountered an error. Please try again later.");
+       toast({ title: "AI Generation Failed", description: "Could not process the description.", variant: "destructive" });
      } finally {
        setIsGenerating(false);
      }
-   }, [watch, trigger, errors.name, errors.description, setValue, dispatch]);
+   }, [watch, trigger, errors.name, errors.description, setValue, dispatch, toast, creationType]);
 
 
-  // --- Form Submission ---
   const onSubmit = (data: FormData) => {
-     setError(null); 
+     setError(null);
 
-     const finalAllocatedTotal = stats.strength + stats.stamina + stats.agility;
-     if (finalAllocatedTotal !== TOTAL_STAT_POINTS) {
-         setStatError(`Total points must be exactly ${TOTAL_STAT_POINTS} (currently ${finalAllocatedTotal}). Please adjust.`);
+     if (remainingPoints !== 0) {
+         setStatError(`Please allocate all ${TOTAL_STAT_POINTS} stat points. ${remainingPoints} points ${remainingPoints > 0 ? 'remaining' : 'over'}.`);
+         toast({ title: "Stat Allocation Incomplete", description: `You have ${remainingPoints} points ${remainingPoints > 0 ? 'left to allocate' : 'over the limit'}.`, variant: "destructive"});
          return;
      }
-     if (Object.entries(stats).some(([key, val]) => ['strength', 'stamina', 'agility'].includes(key) && (val < MIN_STAT_VALUE || val > MAX_STAT_VALUE))) {
-         setStatError(`Allocatable stats (STR, STA, AGI) must be between ${MIN_STAT_VALUE} and ${MAX_STAT_VALUE}.`);
-         return;
-     }
-
-     setStatError(null); 
+     setStatError(null);
 
      const finalName = data.name;
      let finalClass = "Adventurer";
@@ -297,21 +310,19 @@ export function CharacterCreation() {
      let finalDescription = "";
      let finalAiGeneratedDescription = state.character?.aiGeneratedDescription;
 
-     if (creationType === 'basic') {
-         const basicData = data as z.infer<typeof basicCreationSchema>;
-         finalClass = basicData.class || "Adventurer";
-         finalTraits = basicData.traits?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? [];
-         finalKnowledge = basicData.knowledge?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? [];
-         finalBackground = basicData.background ?? "";
-         finalDescription = watch("description") || ""; 
-     } else { 
-          const textData = data as z.infer<typeof textCreationSchema>;
-         finalDescription = textData.description || ""; 
-         finalClass = watch("class") || "Adventurer";
-         finalTraits = watch("traits")?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? [];
-         finalKnowledge = watch("knowledge")?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? [];
-         finalBackground = watch("background") ?? "";
-         finalAiGeneratedDescription = finalDescription; 
+     if (data.creationType === 'basic') {
+         finalClass = data.class || "Adventurer";
+         finalTraits = data.traits?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? [];
+         finalKnowledge = data.knowledge?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? [];
+         finalBackground = data.background ?? "";
+         finalDescription = data.description ?? ""; // Can come from AI if basic was populated by AI
+     } else { // text creation
+         finalDescription = data.description || "";
+         finalClass = data.class || "Adventurer"; // This should be populated by AI if "Ask AI" was used
+         finalTraits = data.traits?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? [];
+         finalKnowledge = data.knowledge?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? [];
+         finalBackground = data.background ?? "";
+         finalAiGeneratedDescription = finalDescription; // In text mode, the user's description is the AI's source
      }
 
      const characterData: Partial<Character> = {
@@ -321,73 +332,54 @@ export function CharacterCreation() {
          traits: finalTraits,
          knowledge: finalKnowledge,
          background: finalBackground,
-         stats: stats, 
+         stats: stats,
          aiGeneratedDescription: finalAiGeneratedDescription,
      };
 
-     console.log("Dispatching CREATE_CHARACTER_AND_SETUP with payload:", characterData);
      dispatch({ type: "CREATE_CHARACTER_AND_SETUP", payload: characterData });
      toast({ title: "Character Created!", description: `Welcome, ${characterData.name}. Prepare your adventure!` });
-
    };
 
-
-  // --- Effects ---
    useEffect(() => {
        const newSchema = creationType === 'basic' ? basicCreationSchema : textCreationSchema;
        const currentValues = watch();
        reset(currentValues, {
-         keepValues: true, 
-         keepDirty: true, 
-         keepErrors: false, 
-         keepTouched: false, 
-         keepIsValid: false, 
-         keepSubmitCount: false, 
+         keepValues: true,
+         keepDirty: true,
+         keepErrors: false,
+         keepTouched: false,
+         keepIsValid: false,
+         keepSubmitCount: false,
        });
-       setValue("creationType", creationType); 
-       trigger(); 
+       setValue("creationType", creationType);
+       trigger();
    }, [creationType, reset, watch, setValue, trigger]);
 
-
    const watchedFields = watch();
-   const formValues = JSON.stringify(watchedFields); 
+   const formValues = JSON.stringify(watchedFields);
 
-   // --- Calculate if proceed button should be disabled ---
-    const isProceedDisabled = useCallback(() => {
-        const hasNameError = !!errors.name;
-        const hasStatErrorCondition = !!statError; 
-        const hasRemainingPointsError = remainingPoints !== 0;
+    const isProceedButtonDisabled = useCallback(() => {
+        if (isGenerating || isRandomizing) return true;
+        if (remainingPoints !== 0) return true; // Must allocate all points
+        if (!!statError) return true; // Any stat error (over/under limit from direct input)
 
-        let typeSpecificError = false;
+        const name = watch("name");
+        if (!name?.trim() || !!errors.name) return true;
 
         if (creationType === 'basic') {
-            const basicData = watch() as z.infer<typeof basicCreationSchema>;
-            const basicErrors = errors as FieldErrors<z.infer<typeof basicCreationSchema>>;
-            typeSpecificError = !!basicErrors.class || !!basicErrors.traits || !!basicErrors.knowledge || !!basicErrors.background;
-            if (!typeSpecificError && !basicData.class) typeSpecificError = true; // Check if class is empty and no error
-        } else { // creationType === 'text'
-            const textData = watch() as z.infer<typeof textCreationSchema>;
-            const textErrors = errors as FieldErrors<z.infer<typeof textCreationSchema>>;
-            typeSpecificError = !!textErrors.description;
-            if (!typeSpecificError && (!textData.description || textData.description.length < 10)) typeSpecificError = true;
+            const charClass = watch("class");
+            if (!charClass?.trim() || !!errors.class) return true;
+            if (!!errors.traits || !!errors.knowledge || !!errors.background) return true;
+        } else { // 'text'
+            const description = watch("description");
+            if (!description?.trim() || description.length < 10 || !!errors.description) return true;
+            // For text mode, class/traits/etc. might be optional if AI is expected to fill them.
+            // However, if "Ask AI" wasn't used, they might be empty.
+            // Let's assume if "Ask AI" was not used, they might be blank, but that's okay if description is valid.
+            // If "Ask AI" *was* used, the zod schema will validate their format if they exist.
         }
-
-         if (!errors.name && !watch("name")) {
-             typeSpecificError = true;
-         }
-
-         const finalDisabledState =
-            isGenerating ||
-            isRandomizing ||
-            hasStatErrorCondition ||
-            hasRemainingPointsError ||
-            hasNameError ||
-            typeSpecificError;
-
-        return finalDisabledState;
-    }, [
-        isGenerating, isRandomizing, statError, remainingPoints, errors, creationType, formValues, watch
-    ]);
+        return !formIsValid; // Rely on overall form validity from zod
+    }, [isGenerating, isRandomizing, remainingPoints, statError, errors, watch, creationType, formIsValid, formValues]);
 
 
   return (
@@ -400,15 +392,14 @@ export function CharacterCreation() {
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6 pt-6">
-                    {error && (
+                    {(error || statError) && (
                         <Alert variant="destructive" className="mb-4">
                             <AlertCircle className="h-4 w-4" />
                             <AlertTitle>Hold On!</AlertTitle>
-                            <AlertDescription>{error}</AlertDescription>
+                            <AlertDescription>{error || statError}</AlertDescription>
                         </Alert>
                     )}
 
-                    {/* --- Creation Type Tabs --- */}
                     <Tabs value={creationType} onValueChange={(value) => {
                         const newType = value as "basic" | "text";
                         setCreationType(newType);
@@ -418,12 +409,10 @@ export function CharacterCreation() {
                             <TabsTrigger value="text">Text Description</TabsTrigger>
                         </TabsList>
 
-                        {/* --- Basic Creation Content --- */}
                         <TabsContent value="basic" className="space-y-4 pt-4 border rounded-md p-4 mt-2 bg-card/50">
                             <BasicCharacterForm register={register as UseFormRegister<any>} errors={errors as FieldErrors<any>} />
                         </TabsContent>
 
-                        {/* --- Text-Based Creation Content --- */}
                         <TabsContent value="text" className="space-y-4 pt-4 border rounded-md p-4 mt-2 bg-card/50">
                             <TextCharacterForm
                                 register={register as UseFormRegister<any>}
@@ -436,21 +425,27 @@ export function CharacterCreation() {
                         </TabsContent>
                     </Tabs>
 
-                    {/* --- Stat Allocation --- */}
                     <Separator />
-                    <div className="space-y-4">
+                     <div className="space-y-4">
                         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
                             <h3 className="text-xl font-semibold">Allocate Stats ({stats.strength + stats.stamina + stats.agility} / {TOTAL_STAT_POINTS} Total Points)</h3>
-                            <p className={`text-sm font-medium ${statError ? 'text-destructive' : 'text-muted-foreground'}`}>
-                                {statError ? (
-                                    <span className="flex items-center gap-1 text-destructive">
-                                        <AlertCircle className="h-4 w-4" /> {statError}
+                             <p className={`text-sm font-medium ${remainingPoints !== 0 ? 'text-destructive' : 'text-green-600'}`}>
+                                {remainingPoints < 0 ? (
+                                    <span className="flex items-center gap-1">
+                                        <AlertCircle className="h-4 w-4" /> {Math.abs(remainingPoints)} point(s) over limit.
                                     </span>
-                                ) : (remainingPoints === 0 ? "All points allocated!" : `${remainingPoints} points remaining.`)}
+                                ) : remainingPoints > 0 ? (
+                                     <span className="flex items-center gap-1">
+                                        <AlertCircle className="h-4 w-4" /> {remainingPoints} point(s) remaining.
+                                    </span>
+                                ) : (
+                                    <span className="flex items-center gap-1 text-green-600">
+                                        <CheckCircle className="h-4 w-4" /> All points allocated!
+                                    </span>
+                                )}
                             </p>
                         </div>
 
-                        {/* Stat Inputs (Grid) */}
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <StatAllocationInput
                                 label="Strength"
@@ -480,7 +475,6 @@ export function CharacterCreation() {
                                 remainingPoints={remainingPoints}
                             />
                         </div>
-                        {/* Display non-adjustable stats */}
                         <div className="text-sm text-muted-foreground grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
                             <span>Intellect: {stats.intellect}</span>
                             <span>Wisdom: {stats.wisdom}</span>
@@ -514,7 +508,7 @@ export function CharacterCreation() {
                     <Button
                         type="submit"
                         className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
-                        disabled={isProceedDisabled()}
+                        disabled={isProceedButtonDisabled()}
                         aria-label="Save character and proceed to adventure setup"
                     >
                         <Save className="mr-2 h-4 w-4" />
