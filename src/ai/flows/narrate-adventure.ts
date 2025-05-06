@@ -70,14 +70,14 @@ const NarrateAdventureInputSchema = z.object({
     xp: z.number().describe("Character's current experience points."),
     xpToNextLevel: z.number().describe("Experience points needed for the next level."),
     reputation: z.record(z.number()).describe("Current reputation scores with various factions (e.g., {\"Town Guard\": 10, \"Thieves Guild\": -5})."),
-    npcRelationships: z.record(z.number()).describe("Current relationship scores with specific NPCs (e.g., {\"Elara\": 25, \"Guard Captain\": -10})."), // Keep schema, remove from prompt for now
+    npcRelationships: z.record(z.number()).describe("Current relationship scores with specific NPCs (e.g., {\"Elara\": 25, \"Guard Captain\": -10})."),
     skillTreeSummary: SkillTreeSummarySchema.describe("A summary of the character's current class skill tree and available skills at their stage."), // Add skill tree summary
     skillTreeStage: z.number().min(0).max(4).describe("The character's current skill progression stage (0-4). Stage affects available actions/skill power."), // Add current stage
     learnedSkills: z.array(z.string()).describe("List of skill names the character has actually learned."), // Add learned skills list
     aiGeneratedDescription: z.string().optional().describe('Optional detailed AI-generated character profile.'),
   }).describe('The player character details.'),
   playerChoice: z.string().describe('The player\'s chosen action or command. May include dice roll result like "(Dice Roll Result: 4)". May be an attempt to use a learned skill by name.'),
-  gameState: z.string().describe('A string representing the current state of the game, including location, **current full inventory list**, ongoing events, character progression milestones achieved, **and known NPC states**.'), // Temporarily removed relationships from description
+  gameState: z.string().describe('A string representing the current state of the game, including location, **current full inventory list**, ongoing events, character progression milestones achieved, **and known NPC states/relationships**.'),
   previousNarration: z.string().optional().describe('The narration text immediately preceding the player\'s current choice, for context.'),
   adventureSettings: z.object({ // Include adventure settings
       difficulty: z.string().describe("Overall game difficulty (e.g., Easy, Normal, Hard, Nightmare). Influences challenge levels and potential event triggers."),
@@ -89,7 +89,7 @@ const NarrateAdventureInputSchema = z.object({
 
 const NarrateAdventureOutputSchema = z.object({
   narration: z.string().describe('**REQUIRED.** The AI-generated narration describing the outcome of the action and the current situation. **Should occasionally introduce branching choices or dynamic events.**'),
-  updatedGameState: z.string().describe('**REQUIRED.** The updated state of the game string after the player action and narration. **MUST accurately reflect changes** in location, inventory, character status (including stamina/mana, level, XP, reputation), time, or achieved milestones. **MUST include the current Turn count (e.g., "Turn: 16").**'), // Temporarily removed npc relationships from description
+  updatedGameState: z.string().describe('**REQUIRED.** The updated state of the game string after the player action and narration. **MUST accurately reflect changes** in location, inventory, character status (including stamina/mana, level, XP, reputation, NPC relationships), time, or achieved milestones. **MUST include the current Turn count (e.g., "Turn: 16").**'),
   updatedStats: CharacterStatsSchema.partial().optional().describe('Optional: Changes to character stats resulting from the narration (e.g., gained 1 strength). **Only include if stats actually changed.**'),
   updatedTraits: z.array(z.string()).optional().describe('Optional: The complete new list of character traits **only if they changed.**'),
   updatedKnowledge: z.array(z.string()).optional().describe('Optional: The complete new list of character knowledge areas **only if they changed.**'),
@@ -102,7 +102,7 @@ const NarrateAdventureOutputSchema = z.object({
   suggestedClassChange: z.string().optional().describe("Optional: Suggest a different class name **only if the AI detects the player's actions consistently align with a different class.**"),
   gainedSkill: SkillSchema.optional().describe("Optional: Details of a new skill **only if the character learned a new skill.**"), // Added gainedSkill
   // New fields for branching narratives and events
-  branchingChoices: z.array(BranchingChoiceSchema).max(4).optional().describe("Optional: Up to 4 significant choices presented to the player, **only if relevant narrative branches occurred.**"),
+  branchingChoices: z.array(BranchingChoiceSchema).length(4).optional().describe("Optional: Always 4 significant choices presented to the player, **only if relevant narrative branches occurred.**"),
   dynamicEventTriggered: z.string().optional().describe("Optional: A brief description **only if a random or time-based dynamic world event occurred.**"),
 });
 
@@ -115,18 +115,89 @@ export async function narrateAdventure(input: NarrateAdventureInput): Promise<Na
   // Check for Developer Mode
   if (input.character.class === 'admin000') {
     console.log("Developer Mode detected in narrateAdventure. Skipping standard AI narration.");
-    // Basic success narration, bypassing costs and restrictions
-    const devNarration = `(Developer Mode) Action "${input.playerChoice}" performed successfully. Restrictions bypassed.`;
-    // Update game state minimally, just increment turn. Modify as needed.
-    const devGameState = `Turn: ${input.turnCount + 1}\n${input.gameState.replace(/Turn: \d+\n/, '')}\nDEV MODE ACTIVE`;
-    return {
-      narration: devNarration,
-      updatedGameState: devGameState,
-      // No costs, no XP gain, no other automatic changes unless specifically implemented for dev mode
-    };
+    // Process dev commands or return simple success
+    return processDevCommand(input); // Use the new helper function
   }
   return narrateAdventureFlow(input);
 }
+
+// --- Helper Function for Developer Commands ---
+function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput {
+    const { character, playerChoice, gameState, turnCount } = input;
+    const command = playerChoice.trim().toLowerCase();
+    const parts = command.split(' ');
+    const baseCommand = parts[0];
+    const value = parts.length > 1 ? parts.slice(1).join(' ') : undefined;
+
+    let devNarration = `(Developer Mode) Action: "${playerChoice}"`;
+    let updatedStats: Partial<CharacterStats> | undefined = undefined;
+    let xpGained: number | undefined = undefined;
+    let progressedToStage: number | undefined = undefined;
+    let addedItemName: string | undefined = undefined;
+    let removedItemName: string | undefined = undefined;
+
+    try { // Wrap dev commands in try/catch
+        if (baseCommand === '/xp' && value) {
+            const amount = parseInt(value, 10);
+            if (!isNaN(amount)) {
+                xpGained = amount;
+                devNarration = `(Developer Mode) Granted ${amount} XP.`;
+                // Level up logic will be handled by the reducer after dispatch
+            } else {
+                devNarration += " - Invalid XP amount.";
+            }
+        } else if (baseCommand === '/stage' && value) {
+            const stageNum = parseInt(value, 10);
+            if (!isNaN(stageNum) && stageNum >= 0 && stageNum <= 4) {
+                progressedToStage = stageNum;
+                devNarration = `(Developer Mode) Set skill stage to ${stageNum}.`;
+            } else {
+                devNarration += " - Invalid stage number (0-4).";
+            }
+        } else if (baseCommand === '/additem' && value) {
+            addedItemName = value; // Signal to reducer to add this item
+            devNarration = `(Developer Mode) Added item: ${value}.`;
+        } else if (baseCommand === '/removeitem' && value) {
+            removedItemName = value; // Signal to reducer to remove this item
+            devNarration = `(Developer Mode) Attempted to remove item: ${value}.`;
+        } else if (baseCommand === '/stat' && parts.length === 3) {
+            const statKey = parts[1].toLowerCase() as keyof CharacterStats;
+            const statValue = parseInt(parts[2], 10);
+            if (Object.keys(character.stats).includes(statKey) && !isNaN(statValue)) {
+                 updatedStats = { [statKey]: statValue };
+                 devNarration = `(Developer Mode) Set ${statKey} to ${statValue}.`;
+            } else {
+                devNarration += " - Invalid stat or value (e.g., /stat strength 8).";
+            }
+        }
+         else {
+            // Default success message if no specific command matched
+            devNarration += " performed successfully. Restrictions bypassed.";
+        }
+
+        // Generate a basic updated game state string for dev mode
+        const updatedGameStateString = `Turn: ${turnCount + 1}\n${gameState.replace(/Turn: \d+/, '')}\nDEV MODE ACTIVE - Last command: ${playerChoice}`;
+
+        return {
+            narration: devNarration,
+            updatedGameState: updatedGameStateString,
+            xpGained: xpGained,
+            progressedToStage: progressedToStage,
+            // Send other changes if needed by reducer
+            // gainedSkill: addedItemName ? { name: addedItemName, description: "(Dev Added)" } : undefined, // Example, adjust as needed
+            // consumedItems: removedItemName ? [removedItemName] : [], // Example
+            updatedStats: updatedStats,
+        };
+
+    } catch (devError: any) {
+        console.error("Error processing dev command:", devError);
+        return {
+            narration: `(Developer Mode) Command failed: ${devError.message}`,
+            updatedGameState: `Turn: ${turnCount + 1}\n${gameState.replace(/Turn: \d+/, '')}\nDEV MODE ERROR`,
+        };
+    }
+}
+
 
 // --- Internal Prompt and Flow Definitions ---
 const narrateAdventurePrompt = ai.definePrompt({
@@ -173,16 +244,16 @@ Generate the next part of the story based on ALL the information above.
 1.  **React Dynamically:** Describe the outcome of the player's action. Consider their character's class, level, xp, reputation, relationships, stats, **current stamina and mana**, traits, knowledge, background, *current skill stage*, **learned skills**, inventory, the current gameState, and the **game difficulty**.
 2.  **Logical Progression, Resource Costs & Restrictions:**
     *   **Evaluate Feasibility:** Assess if the action is logically possible. *Actions tied to higher skill stages should only be possible if the character has reached that stage.* Harder difficulties might make certain actions less feasible initially.
-    *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output \`staminaChange\`, \`manaChange\` **only if they changed**.
+    *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output staminaChange, manaChange **only if they changed**.
     *   **Block Impossible Actions:** Prevent universe-breaking actions (e.g., "destroy the universe", "teleport to another dimension") unless EXTREME justification exists in gameState AND skill stage is high. Simple reality-bending ("become king", "control time") is also typically Impossible without justification.
     *   **Narrate Failure Reason:** If blocked/failed, explain why (lack of skill, resources, item, stage, reputation, **NPC relationships**, difficulty, etc.).
     *   **Skill-based Progression:** Very powerful actions require high milestones AND skill stages.
 3.  **Incorporate Dice Rolls:** Interpret dice roll results (e.g., "(Difficulty: Hard, Dice Roll Result: 75/100)") contextually. High rolls succeed, low rolls fail, adjusted by **game difficulty**. Narrate the degree of success/failure. Success might grant more XP or better reputation/relationship changes. Failure might have negative consequences, potentially more severe on higher difficulties.
 4.  **Consequences, Resources, XP, Reputation, Relationships & Character Progression:**
-    *   **Resource Changes:** If current stamina or mana changed, include \`staminaChange\` or \`manaChange\`. **Do not include if unchanged.**
-    *   **XP Awards:** If the action was significant (overcame challenge, clever solution, quest progress), award XP via \`xpGained\` (adjust based on **difficulty** - harder challenges grant more). **Only include if XP was gained.**
-    *   **Reputation Changes:** If the action affects a faction's view, include \`reputationChange\`. **Only include if reputation changed.**
-    *   **NPC Relationship Changes:** If the action affects an NPC's view, include \`npcRelationshipChange\`. **Only include if relationship changed.**
+    *   **Resource Changes:** If current stamina or mana changed, include staminaChange or manaChange. **Do not include if unchanged.**
+    *   **XP Awards:** If the action was significant (overcame challenge, clever solution, quest progress), award XP via xpGained (adjust based on **difficulty** - harder challenges grant more). **Only include if XP was gained.**
+    *   **Reputation Changes:** If the action affects a faction's view, include reputationChange. **Only include if reputation changed.**
+    *   **NPC Relationship Changes:** If the action affects an NPC's view, include npcRelationshipChange. **Only include if relationship changed.**
     *   **Character Progression (Optional):** If events lead to development:
         *   Include updatedStats, updatedTraits, updatedKnowledge. **Only include if they changed.**
         *   **Skill Stage Progression:** Include progressedToStage **only if milestones warrant advancement.**
@@ -190,31 +261,34 @@ Generate the next part of the story based on ALL the information above.
         *   **Gaining Skills:** Include gainedSkill **only if appropriate.**
 5.  **Update Game State:** **REQUIRED.** Modify the 'gameState' string concisely to reflect ALL changes (location, **inventory**, NPC mood, time, quest progress, milestones, **status including resources, level, XP, reputation, and NPC relationships**). **Ensure the inventory listed in the 'updatedGameState' string is the character's complete and accurate inventory after the action.** **MUST include the current Turn count (e.g., "Turn: 16").**
 6.  **Branching Narratives & Dynamic Events (Introduce Occasionally):**
-    *   **Branching Choices:** At significant moments, present 2-4 meaningful 'branchingChoices' that significantly alter the path forward. Provide optional subtle 'consequenceHint' for each. **Only include if relevant.**
+    *   **Branching Choices:** At significant moments, present **exactly 4** meaningful 'branchingChoices' that significantly alter the path forward. Provide optional subtle 'consequenceHint' for each. **Only include if relevant.**
     *   **Dynamic Events:** Based on 'turnCount' or randomness (especially on higher difficulties), trigger a 'dynamicEventTriggered'. This event should integrate into the current narration. Keep these events relatively infrequent. **Only include if triggered.**
 7.  **Tone:** Maintain a consistent fantasy text adventure tone. Be descriptive and engaging. Adjust tone slightly based on **difficulty** (e.g., more ominous on Hard).
 
 **Output Format:** Respond **ONLY** with a valid JSON object matching the NarrateAdventureOutput schema.
 *   'narration' and 'updatedGameState' are **REQUIRED**.
 *   All other fields are **OPTIONAL** and should **ONLY** be included if their corresponding event actually occurred (e.g., include xpGained only if XP was actually awarded).
+*   If including branchingChoices, ensure the array contains **exactly 4** choices.
 *   Ensure the 'updatedGameState' string contains the correct turn count.
 
-Example Output (Success with XP and branching choice):
+Example Output (Success with XP and branching choices):
 {
-  "narration": "You successfully sneak past the sleeping goblin! Ahead, the tunnel forks. To the left, you hear dripping water. To the right, a faint metallic clang echoes.",
-  "updatedGameState": "Turn: 15\\nLocation: Goblin Tunnel\\nInventory: Torch, Sword, Lockpicks\\nStatus: Healthy (STA: 90/100, MANA: 15/20)\\nLevel: 2, XP: 160/250\\nReputation: None\\nNPC Relationships: None\\nLearned Skills: Observe, Sneak, Quick Strike",
+  "narration": "You successfully sneak past the sleeping goblin! Ahead, the tunnel forks. To the left, you hear dripping water. To the right, a faint metallic clang echoes. Straight ahead, the main tunnel continues into darkness. You could also try examining the goblin's discarded pouch.",
+  "updatedGameState": "Turn: 15\\nLocation: Goblin Tunnel\\nInventory: Torch, Sword, Lockpicks\\nStatus: Healthy (STA: 90/100, MANA: 15/20)\\nLevel: 2, XP: 160/250\\nReputation: None\\nNPC Relationships: None\\nLearned Skills: Observe, Sneak, Quick Strike\\nSkill Stage: Stage 1 - Scout",
   "xpGained": 15,
   "staminaChange": -5,
   "branchingChoices": [
-    { "text": "Investigate the dripping sound (Left Fork)", "consequenceHint": "Might lead to water source or damp passage." },
-    { "text": "Follow the metallic clang (Right Fork)", "consequenceHint": "Could be guards, machinery, or treasure." }
+    { "text": "Venture into the narrow passage (Left Fork)", "consequenceHint": "Might lead to water source or damp passage." },
+    { "text": "Follow the metallic clang (Right Fork)", "consequenceHint": "Could be guards, machinery, or treasure." },
+    { "text": "Continue straight down the main tunnel", "consequenceHint": "The most obvious path." },
+    { "text": "Examine the goblin's pouch", "consequenceHint": "Might find something useful, or wake the goblin." }
   ]
 }
 
 Example Output (Failure with no other changes):
 {
   "narration": "You try to force the rusty lever, but it refuses to budge. Your muscles strain, but it's stuck fast.",
-  "updatedGameState": "Turn: 17\\nLocation: Rusty Lever Room\\nInventory: Torch, Rope\\nStatus: Healthy (STA: 85/95, MANA: 10/10)\\nLevel: 1, XP: 50/100\\nReputation: Town Guard: 5\\nNPC Relationships: Guard Captain: -5\\nLearned Skills: Basic Strike, Shield Block, Observe",
+  "updatedGameState": "Turn: 17\\nLocation: Rusty Lever Room\\nInventory: Torch, Rope\\nStatus: Healthy (STA: 85/95, MANA: 10/10)\\nLevel: 1, XP: 50/100\\nReputation: Town Guard: 5\\nNPC Relationships: Guard Captain: -5\\nLearned Skills: Basic Strike, Shield Block, Observe\\nSkill Stage: Stage 0 - Potential",
   "staminaChange": -5
 }
 `,
@@ -287,9 +361,9 @@ const narrateAdventureFlow = ai.defineFlow<
                  output.manaChange = undefined;
              }
              // Validate branching choices if present
-             if (output.branchingChoices && (!Array.isArray(output.branchingChoices) || output.branchingChoices.some(c => !c.text))) {
-                  console.warn("AI returned invalid branchingChoices structure:", output.branchingChoices);
-                  output.branchingChoices = undefined;
+             if (output.branchingChoices && (!Array.isArray(output.branchingChoices) || output.branchingChoices.length !== 4 || output.branchingChoices.some(c => !c.text))) {
+                  console.warn(`AI returned invalid branchingChoices structure (expected 4 choices, got ${output.branchingChoices?.length}):`, output.branchingChoices);
+                  output.branchingChoices = undefined; // Discard invalid choices
              }
              // Validate dynamic event trigger if present
              if (output.dynamicEventTriggered !== undefined && typeof output.dynamicEventTriggered !== 'string') {
@@ -302,24 +376,24 @@ const narrateAdventureFlow = ai.defineFlow<
             console.error(`AI narration attempt ${attempt} error:`, err);
             errorOccurred = true;
              if (err.message?.includes('503') || err.message?.includes('overloaded')) {
-                errorMessage = `AI Service Overloaded (Attempt ${attempt}/${maxAttempts + 1}). Please try again shortly. Retrying...`;
+                errorMessage = `AI Service Overloaded (Attempt ${attempt}/${maxAttempts}). Please try again shortly. Retrying...`;
                 // No toast on server-side
                 // toast({ title: "AI Busy", description: `Service overloaded. Retrying...`, variant: "default"});
                 // Optional: Wait longer before retrying on overload
                 if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
              } else if (err.message?.includes('400 Bad Request')) {
-                 errorMessage = `AI Error: Bad Request (${err.message?.substring(0, 50)}...). Check prompt or input format. Retrying... (Attempt ${attempt}/${maxAttempts + 1})`;
+                 errorMessage = `AI Error: Bad Request (${err.message?.substring(0, 50)}...). Check prompt or input format. Retrying... (Attempt ${attempt}/${maxAttempts})`;
                  // No toast on server-side
                  // toast({ title: "AI Error", description: `${errorMessage.substring(0, 60)}... Retrying...`, variant: "destructive"});
                  if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 500 * attempt));
              }
               else if (err.message?.includes('Error fetching')) {
-                  errorMessage = `AI Error: Could not reach or process request with the story generation service (Attempt ${attempt}/${maxAttempts + 1}). Check network or try again. (${err.message})`;
+                  errorMessage = `AI Error: Could not reach or process request with the story generation service (Attempt ${attempt}/${maxAttempts}). Check network or try again. (${err.message})`;
                   // No toast on server-side
                   // toast({ title: "Network Error", description: "Could not reach AI service. Retrying...", variant: "destructive"});
                   if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 500 * attempt));
               } else {
-                 errorMessage = `AI Error: ${err.message?.substring(0, 150) || 'Unknown error'} (Attempt ${attempt}/${maxAttempts + 1})`;
+                 errorMessage = `AI Error: ${err.message?.substring(0, 150) || 'Unknown error'} (Attempt ${attempt}/${maxAttempts})`;
                  // No toast on server-side
                  // toast({ title: "Story Error", description: `${errorMessage.substring(0, 60)}... Retrying...`, variant: "destructive"});
                  if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 500 * attempt));
