@@ -15,12 +15,12 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
-import { CharacterStatsAllocator } from "@/components/character/CharacterStatsAllocator"; // Import Stats Allocator
+import { StatAllocationInput } from "@/components/character/StatAllocationInput";
 import { BasicCharacterForm } from "@/components/character/BasicCharacterForm"; // Import Basic form component
 import { TextCharacterForm } from "@/components/character/TextCharacterForm"; // Import Text form component
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
 import type { CharacterStats, Character } from "@/types/character-types"; // Import from specific types file
-import { initialStats as defaultInitialStats } from "@/context/game-initial-state"; // Import initialStats with alias
+import { initialStats as defaultInitialStats } from "@/context/game-initial-state"; // Corrected import
 
 
 // --- Zod Schema for Validation ---
@@ -63,13 +63,11 @@ export function CharacterCreation() {
   const { toast } = useToast();
   const [creationType, setCreationType] = useState<"basic" | "text">("basic");
 
-   // --- Stat Allocation Logic ---
-   // Define calculateRemainingPoints *before* it's used in useState initialization
-   const calculateRemainingPoints = useCallback((currentStats: CharacterStats): number => {
-        const allocatedTotal = currentStats.strength + currentStats.stamina + currentStats.agility;
-        return TOTAL_STAT_POINTS - allocatedTotal;
-   }, []); // No dependencies needed for this calculation
-
+  // --- Stat Allocation Logic ---
+  const calculateRemainingPoints = useCallback((currentStats: CharacterStats): number => {
+    const allocatedTotal = currentStats.strength + currentStats.stamina + currentStats.agility;
+    return TOTAL_STAT_POINTS - allocatedTotal;
+  }, []);
 
   // State for stats
   const [stats, setStats] = useState<CharacterStats>(() => {
@@ -82,7 +80,6 @@ export function CharacterCreation() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null); // General error
 
-
   const handleStatChange = useCallback((newStats: CharacterStats) => {
     const newRemaining = calculateRemainingPoints(newStats);
     setStats(newStats);
@@ -93,24 +90,6 @@ export function CharacterCreation() {
       setStatError(null);
     }
   }, [calculateRemainingPoints]);
-
-
-  // Determine the current schema based on the selected tab
-  const currentSchema = creationType === "basic" ? basicCreationSchema : textCreationSchema;
-
-  const { register, handleSubmit, formState: { errors }, reset, watch, setValue, trigger } = useForm<FormData>({
-     resolver: zodResolver(currentSchema),
-     mode: "onChange", // Trigger validation on change
-     defaultValues: {
-        creationType: "basic",
-        name: state.character?.name ?? "",
-        class: state.character?.class ?? "Adventurer",
-        traits: state.character?.traits?.join(', ') ?? "",
-        knowledge: state.character?.knowledge?.join(', ') ?? "",
-        background: state.character?.background ?? "",
-        description: state.character?.description ?? state.character?.aiGeneratedDescription ?? "", // Use main description, fallback to AI
-     },
-   });
 
    const randomizeStats = useCallback(() => {
         let pointsLeft = TOTAL_STAT_POINTS;
@@ -161,6 +140,22 @@ export function CharacterCreation() {
         handleStatChange(finalStats); // Update stats using the handler
    }, [handleStatChange]);
 
+  // Determine the current schema based on the selected tab
+  const currentSchema = creationType === "basic" ? basicCreationSchema : textCreationSchema;
+
+  const { register, handleSubmit, formState: { errors }, reset, watch, setValue, trigger } = useForm<FormData>({
+     resolver: zodResolver(currentSchema),
+     mode: "onChange", // Trigger validation on change
+     defaultValues: {
+        creationType: "basic",
+        name: state.character?.name ?? "",
+        class: state.character?.class ?? "Adventurer",
+        traits: state.character?.traits?.join(', ') ?? "",
+        knowledge: state.character?.knowledge?.join(', ') ?? "",
+        background: state.character?.background ?? "",
+        description: state.character?.description ?? state.character?.aiGeneratedDescription ?? "", // Use main description, fallback to AI
+     },
+   });
 
  // --- Randomize All ---
  const randomizeAll = useCallback(async () => {
@@ -218,17 +213,13 @@ export function CharacterCreation() {
 
      randomizeStats(); // Randomize stats
 
-    // No toast here, use the checkmark animation instead
-    // toast({ title: "Character Randomized!", description: `Created a new character: ${name}` });
-
      await new Promise(res => setTimeout(res, 200)); // Allow state to update visually
      setIsRandomizing(false); // End animation
      setRandomizationComplete(true); // Show checkmark
-     // Hide checkmark after a delay
-     setTimeout(() => setRandomizationComplete(false), 1000);
+     setTimeout(() => setRandomizationComplete(false), 1000); // Hide checkmark after a delay
      trigger(); // Trigger validation after setting values
 
- }, [creationType, reset, setValue, randomizeStats, toast, trigger, watch]);
+ }, [creationType, reset, setValue, randomizeStats, trigger, watch]);
 
 
   // --- AI Description Generation ---
@@ -284,12 +275,12 @@ export function CharacterCreation() {
      const finalAllocatedTotal = stats.strength + stats.stamina + stats.agility;
      if (finalAllocatedTotal !== TOTAL_STAT_POINTS) {
          setStatError(`Total points must be exactly ${TOTAL_STAT_POINTS} (currently ${finalAllocatedTotal}). Please adjust.`);
-         toast({ title: "Stat Allocation Error", description: statError, variant: "destructive" });
+         // Removed toast here, error is displayed near the stats
          return;
      }
      if (Object.entries(stats).some(([key, val]) => ['strength', 'stamina', 'agility'].includes(key) && (val < MIN_STAT_VALUE || val > MAX_STAT_VALUE))) {
          setStatError(`Allocatable stats (STR, STA, AGI) must be between ${MIN_STAT_VALUE} and ${MAX_STAT_VALUE}.`);
-          toast({ title: "Stat Allocation Error", description: statError, variant: "destructive" });
+          // Removed toast here
          return;
      }
 
@@ -331,15 +322,9 @@ export function CharacterCreation() {
          aiGeneratedDescription: state.character?.aiGeneratedDescription, // Preserve AI description if it exists
      };
 
-     console.log("Dispatching CREATE_CHARACTER with payload:", characterData);
-     dispatch({ type: "CREATE_CHARACTER", payload: characterData });
-     // Dispatch SET_GAME_STATUS *after* CREATE_CHARACTER is processed
-     // Use a slight delay if needed, though reducer should handle it sequentially
-      setTimeout(() => {
-          dispatch({ type: "SET_GAME_STATUS", payload: "AdventureSetup" });
-          console.log("Navigating to Adventure Setup...");
-          toast({ title: "Character Created!", description: `Welcome, ${characterData.name}. Prepare your adventure!` });
-       }, 0);
+     console.log("Dispatching CREATE_CHARACTER_AND_SETUP with payload:", characterData);
+     dispatch({ type: "CREATE_CHARACTER_AND_SETUP", payload: characterData });
+     toast({ title: "Character Created!", description: `Welcome, ${characterData.name}. Prepare your adventure!` });
 
    };
 
@@ -367,52 +352,50 @@ export function CharacterCreation() {
    const formValues = JSON.stringify(watchedFields); // Use JSON stringify for dependency array
 
    // --- Calculate if proceed button should be disabled ---
-   const isProceedDisabled = useCallback(() => {
-       const hasNameError = !!errors.name;
-       const hasStatError = !!statError || remainingPoints !== 0;
-       let typeSpecificError = false;
+    const isProceedDisabled = useCallback(() => {
+        const hasNameError = !!errors.name;
+        const hasStatErrorCondition = !!statError || remainingPoints !== 0; // Condition causing error
+        let typeSpecificError = false;
 
-       if (creationType === 'basic') {
-           const basicErrors = errors as FieldErrors<z.infer<typeof basicCreationSchema>>;
-           typeSpecificError = !!basicErrors.class || !!basicErrors.traits || !!basicErrors.knowledge || !!basicErrors.background;
-       } else {
-           const textErrors = errors as FieldErrors<z.infer<typeof textCreationSchema>>;
-           typeSpecificError = !!textErrors.description;
-       }
-
-        // Check if required fields are empty (only if no error exists for them yet)
-        let requiredFieldsEmpty = false;
-        if (creationType === 'basic' && !errors.class) {
-            requiredFieldsEmpty = !watch("class");
-        } else if (creationType === 'text' && !errors.description) {
-             requiredFieldsEmpty = !watch("description") || (watch("description")?.length ?? 0) < 10;
-        }
-        if (!errors.name && !watch("name")) {
-             requiredFieldsEmpty = true;
+        if (creationType === 'basic') {
+            const basicErrors = errors as FieldErrors<z.infer<typeof basicCreationSchema>>;
+            typeSpecificError = !!basicErrors.class || !!basicErrors.traits || !!basicErrors.knowledge || !!basicErrors.background;
+        } else {
+            const textErrors = errors as FieldErrors<z.infer<typeof textCreationSchema>>;
+            typeSpecificError = !!textErrors.description;
         }
 
+         // Check if required fields are empty (only if no error exists for them yet)
+         let requiredFieldsEmpty = false;
+         if (creationType === 'basic' && !errors.class) {
+             requiredFieldsEmpty = !watch("class");
+         } else if (creationType === 'text' && !errors.description) {
+              requiredFieldsEmpty = !watch("description") || (watch("description")?.length ?? 0) < 10;
+         }
+         if (!errors.name && !watch("name")) {
+              requiredFieldsEmpty = true;
+         }
 
-       const isDisabled =
-           isGenerating ||
-           isRandomizing ||
-           hasStatError ||
-           hasNameError ||
-           typeSpecificError ||
-           requiredFieldsEmpty; // Added check for empty required fields
+         const finalDisabledState =
+            isGenerating ||
+            isRandomizing ||
+            hasStatErrorCondition || // Use the condition directly
+            hasNameError ||
+            typeSpecificError ||
+            requiredFieldsEmpty;
 
 
-       // console.log("Proceed Disabled Check:", {
-       //     isGenerating, isRandomizing, hasStatError, hasNameError, typeSpecificError, requiredFieldsEmpty, isDisabled,
-       //     errors: JSON.stringify(errors), // Log errors
-       //     stats, remainingPoints, statError, // Log stat state
-       //     watchedName: watch("name"), watchedClass: watch("class"), watchedDesc: watch("description") // Log watched fields
-       // });
+        console.log("Proceed Disabled Check:", {
+            isGenerating, isRandomizing, hasStatErrorCondition, hasNameError, typeSpecificError, requiredFieldsEmpty, finalDisabledState,
+            errors: JSON.stringify(errors), // Log errors
+            stats, remainingPoints, statError, // Log stat state
+            watchedName: watch("name"), watchedClass: watch("class"), watchedDesc: watch("description") // Log watched fields
+        });
 
-       return isDisabled;
-   }, [
-       isGenerating, isRandomizing, statError, remainingPoints, errors, creationType, formValues, watch // Depend on JSON string
-   ]);
-
+        return finalDisabledState;
+    }, [
+        isGenerating, isRandomizing, statError, remainingPoints, errors, creationType, formValues, watch // Depend on JSON string
+    ]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
@@ -462,14 +445,55 @@ export function CharacterCreation() {
 
             {/* --- Stat Allocation --- */}
             <Separator />
-             {/* Render CharacterStatsAllocator */}
-            <CharacterStatsAllocator
-              stats={stats}
-              remainingPoints={remainingPoints}
-              statError={statError}
-              onStatChange={handleStatChange}
-              isGenerating={isGenerating || isRandomizing}
-            />
+            <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
+                    <h3 className="text-xl font-semibold">Allocate Stats ({stats.strength + stats.stamina + stats.agility} / {TOTAL_STAT_POINTS} Total Points)</h3>
+                    <p className={`text-sm font-medium ${statError ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        {statError ? (
+                            <span className="flex items-center gap-1 text-destructive">
+                                <AlertCircle className="h-4 w-4" /> {statError}
+                            </span>
+                        ) : (remainingPoints === 0 ? "All points allocated!" : `${remainingPoints} points remaining.`)}
+                    </p>
+                </div>
+
+                {/* Stat Inputs (Grid) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <StatAllocationInput
+                        label="Strength"
+                        statKey="strength"
+                        value={stats.strength}
+                        onChange={(key, val) => handleStatChange({...stats, [key]: val})}
+                        Icon={HandDrawnStrengthIcon}
+                        disabled={isGenerating || isRandomizing}
+                        remainingPoints={remainingPoints}
+                    />
+                    <StatAllocationInput
+                        label="Stamina"
+                        statKey="stamina"
+                        value={stats.stamina}
+                        onChange={(key, val) => handleStatChange({...stats, [key]: val})}
+                        Icon={HandDrawnStaminaIcon}
+                        disabled={isGenerating || isRandomizing}
+                        remainingPoints={remainingPoints}
+                    />
+                    <StatAllocationInput
+                        label="Agility"
+                        statKey="agility"
+                        value={stats.agility}
+                        onChange={(key, val) => handleStatChange({...stats, [key]: val})}
+                        Icon={HandDrawnAgilityIcon}
+                        disabled={isGenerating || isRandomizing}
+                        remainingPoints={remainingPoints}
+                    />
+                </div>
+                {/* Display non-adjustable stats */}
+                <div className="text-sm text-muted-foreground grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+                    <span>Intellect: {stats.intellect}</span>
+                    <span>Wisdom: {stats.wisdom}</span>
+                    <span>Charisma: {stats.charisma}</span>
+                </div>
+            </div>
 
           </CardContent>
           <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t border-foreground/10">

@@ -16,6 +16,7 @@ import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel 
 export type Action =
   | { type: "SET_GAME_STATUS"; payload: GameStatus }
   | { type: "CREATE_CHARACTER"; payload: Partial<Character> }
+  | { type: "CREATE_CHARACTER_AND_SETUP"; payload: Partial<Character> } // New action
   | { type: "UPDATE_CHARACTER"; payload: Partial<Character> }
   | { type: "SET_AI_DESCRIPTION"; payload: string }
   | { type: "SET_ADVENTURE_SETTINGS"; payload: Partial<AdventureSettings> }

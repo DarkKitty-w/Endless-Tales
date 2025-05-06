@@ -24,10 +24,11 @@ export function gameReducer(state: GameState, action: Action): GameState {
     // Delegate actions to specific reducers
     let nextState: GameState = {
         ...state,
+        // Pass the current character state to characterReducer
         character: characterReducer(state.character, action),
         inventory: inventoryReducer(state.inventory, action),
-        adventureSettings: settingsReducer(state.adventureSettings, action),
-        // Settings state is now handled within settingsReducer for theme/dark mode
+        adventureSettings: settingsReducer(state.adventureSettings, action).adventureSettings,
+        // Pass the full state to settingsReducer for theme/mode handling
         selectedThemeId: settingsReducer(state, action).selectedThemeId,
         isDarkMode: settingsReducer(state, action).isDarkMode,
     };
@@ -37,6 +38,23 @@ export function gameReducer(state: GameState, action: Action): GameState {
 
     // --- Global State / Cross-Cutting Actions ---
      switch (action.type) {
+        case "CREATE_CHARACTER_AND_SETUP": {
+             const newCharacter = characterReducer(null, { type: "CREATE_CHARACTER", payload: action.payload });
+             if (!newCharacter) return state; // Should not happen if payload is valid, but check anyway
+             return {
+                 ...state, // Keep saved adventures, theme, etc.
+                 character: newCharacter,
+                 inventory: inventoryReducer([], { type: "START_GAMEPLAY" }), // Initialize inventory
+                 status: "AdventureSetup", // Navigate immediately after character creation
+                 // Reset other relevant gameplay state if needed
+                 storyLog: [],
+                 currentNarration: null,
+                 currentGameStateString: "Adventure setup pending...",
+                 currentAdventureId: null,
+                 turnCount: 0,
+                 adventureSummary: null,
+             };
+         }
         case "RESET_GAME": {
            const saved = state.savedAdventures; // Keep saved adventures
            const themeId = state.selectedThemeId; // Keep theme
