@@ -1,4 +1,3 @@
-// src/components/character/BasicCharacterForm.tsx
 "use client";
 
 import React from 'react';
@@ -20,9 +19,10 @@ interface BasicFormData {
 interface BasicCharacterFormProps {
   register: UseFormRegister<BasicFormData>; // Use the specific form data type
   errors: FieldErrors<BasicFormData>;
+  adventureType: string | null;
 }
 
-export function BasicCharacterForm({ register, errors }: BasicCharacterFormProps) {
+export function BasicCharacterForm({ register, errors, adventureType }: BasicCharacterFormProps) {
   return (
     <>
       <h3 className="text-lg font-medium mb-3 border-b pb-2">Define Details</h3>
@@ -39,19 +39,21 @@ export function BasicCharacterForm({ register, errors }: BasicCharacterFormProps
             {errors.name && <p className="text-sm text-destructive mt-1">{errors.name.message}</p>}
         </div>
       {/* Class Input */}
-      <div className="space-y-2">
-        <Label htmlFor="class" className="flex items-center gap-1">
-          <ShieldQuestion className="w-4 h-4 text-muted-foreground" /> Class
-        </Label>
-        <Input
-          id="class"
-          {...register("class")}
-          placeholder="e.g., Warrior, Mage, Rogue"
-          className={errors.class ? 'border-destructive' : ''}
-          aria-invalid={errors.class ? "true" : "false"}
-        />
-        {errors.class && <p className="text-sm text-destructive mt-1">{errors.class.message}</p>}
-      </div>
+      {adventureType !== "Immersed" && (
+        <div className="space-y-2">
+          <Label htmlFor="class" className="flex items-center gap-1">
+            <ShieldQuestion className="w-4 h-4 text-muted-foreground" /> Class
+          </Label>
+          <Input
+            id="class"
+            {...register("class")}
+            placeholder="e.g., Warrior, Mage, Rogue"
+            className={errors.class ? 'border-destructive' : ''}
+            aria-invalid={errors.class ? "true" : "false"}
+          />
+          {errors.class && <p className="text-sm text-destructive mt-1">{errors.class.message}</p>}
+        </div>
+      )}
       {/* Traits Input */}
       <div className="space-y-2">
         <Label htmlFor="traits">Traits (comma-separated, max 5)</Label>
@@ -91,4 +93,3 @@ export function BasicCharacterForm({ register, errors }: BasicCharacterFormProps
     </>
   );
 }
-    
