@@ -5,18 +5,22 @@ import type { Action } from "../game-actions";
 import { initialAdventureSettings, initialState } from "../game-initial-state";
 import { VALID_DIFFICULTY_LEVELS, THEME_ID_KEY, THEME_MODE_KEY } from "@/lib/constants"; // Import constants
 
+// Define the part of the state this reducer handles
+type SettingsState = Pick<GameState, 'adventureSettings' | 'selectedThemeId' | 'isDarkMode'>;
+
 // Combined reducer for settings (adventure settings + appearance)
-export function settingsReducer(state: Pick<GameState, 'adventureSettings' | 'selectedThemeId' | 'isDarkMode'>, action: Action): Pick<GameState, 'adventureSettings' | 'selectedThemeId' | 'isDarkMode'> {
+export function settingsReducer(state: SettingsState, action: Action): SettingsState {
     switch (action.type) {
         case "SET_ADVENTURE_SETTINGS": {
-            const difficulty = VALID_DIFFICULTY_LEVELS.includes(action.payload.difficulty as DifficultyLevel)
-                ? action.payload.difficulty as DifficultyLevel
-                : state.adventureSettings.difficulty;
+            // Ensure action.payload.difficulty is validated against the allowed enum values
+             const validatedDifficulty = VALID_DIFFICULTY_LEVELS.includes(action.payload.difficulty as DifficultyLevel)
+                 ? action.payload.difficulty as DifficultyLevel
+                 : state.adventureSettings.difficulty; // Fallback to current if invalid
 
-            const newSettings = {
+            const newSettings: AdventureSettings = {
                 ...state.adventureSettings,
-                ...action.payload,
-                difficulty,
+                ...(action.payload || {}), // Apply payload, ensuring it's not null/undefined
+                difficulty: validatedDifficulty, // Apply validated difficulty
             };
             return { ...state, adventureSettings: newSettings };
         }
@@ -33,19 +37,22 @@ export function settingsReducer(state: Pick<GameState, 'adventureSettings' | 'se
                 ...state, // Keep selectedThemeId and isDarkMode
                  adventureSettings: { ...initialAdventureSettings }
              };
-         case "LOAD_ADVENTURE": // Load adventure settings from saved game
-             const validatedDifficulty = VALID_DIFFICULTY_LEVELS.includes(action.payload.adventureSettings?.difficulty as DifficultyLevel)
-                 ? action.payload.adventureSettings.difficulty as DifficultyLevel
-                 : initialAdventureSettings.difficulty;
-             const validatedSettings = {
-                 ...initialAdventureSettings,
-                 ...(action.payload.adventureSettings || {}),
-                 difficulty: validatedDifficulty,
+         case "LOAD_ADVENTURE": { // Load adventure settings from saved game
+             const settingsToLoad = action.payload.adventureSettings;
+             const validatedDifficulty = VALID_DIFFICULTY_LEVELS.includes(settingsToLoad?.difficulty as DifficultyLevel)
+                 ? settingsToLoad.difficulty as DifficultyLevel
+                 : initialAdventureSettings.difficulty; // Default if missing or invalid
+
+             const validatedSettings: AdventureSettings = {
+                 ...initialAdventureSettings, // Start with defaults
+                 ...(settingsToLoad || {}), // Apply loaded settings
+                 difficulty: validatedDifficulty, // Apply validated difficulty
              };
              return {
                 ...state, // Keep current theme/mode on load
                  adventureSettings: validatedSettings
              };
+         }
         default:
             return state;
     }

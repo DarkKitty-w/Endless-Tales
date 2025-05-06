@@ -27,8 +27,8 @@ export function gameReducer(state: GameState, action: Action): GameState {
         // Pass the current character state to characterReducer
         character: characterReducer(state.character, action),
         inventory: inventoryReducer(state.inventory, action),
-        adventureSettings: settingsReducer(state.adventureSettings, action).adventureSettings,
-        // Pass the full state to settingsReducer for theme/mode handling
+        // Pass the full state object to settingsReducer for all its concerns
+        adventureSettings: settingsReducer(state, action).adventureSettings,
         selectedThemeId: settingsReducer(state, action).selectedThemeId,
         isDarkMode: settingsReducer(state, action).isDarkMode,
     };
