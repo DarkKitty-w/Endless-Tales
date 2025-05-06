@@ -1,5 +1,4 @@
 // src/context/game-actions.ts
-
 import type { GameStatus, GameState } from "@/types/game-types"; // Import GameStatus from main game types
 import type {
     Character,
@@ -10,7 +9,7 @@ import type {
     CharacterStats, // Import CharacterStats
 } from "@/types/character-types"; // Import character-related types
 import type { InventoryItem } from "@/types/inventory-types"; // Import inventory types
-import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel } from "@/types/adventure-types"; // Import adventure types
+import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel, AdventureType } from "@/types/adventure-types"; // Import adventure types
 
 /** Defines all possible actions that can be dispatched to the game reducer. */
 export type Action =
@@ -44,4 +43,6 @@ export type Action =
   | { type: "SET_THEME_ID"; payload: string }
   | { type: "SET_DARK_MODE"; payload: boolean }
   | { type: "SET_USER_API_KEY"; payload: string | null } // Action for user API key
-  | { type: "UPDATE_CRAFTING_RESULT"; payload: { narration: string; consumedItems: string[]; craftedItem: InventoryItem | null; newGameStateString: string } };
+  | { type: "UPDATE_CRAFTING_RESULT"; payload: { narration: string; consumedItems: string[]; craftedItem: InventoryItem | null; newGameStateString: string } }
+  | { type: "SET_ADVENTURE_TYPE", payload: AdventureType };
+
