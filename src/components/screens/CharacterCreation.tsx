@@ -15,10 +15,10 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
-import { StatAllocationInput } from "@/components/character/StatAllocationInput"; // Corrected import path
+import { StatAllocationInput } from "@/components/character/StatAllocationInput";
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
 import type { CharacterStats, Character } from "@/types/character-types"; // Import from specific types file
-import { initialStats as defaultInitialStats } from "@/context/game-initial-state"; // Import initialStats
+import { initialCharacterStats as defaultInitialStats } from "@/context/game-initial-state"; // Corrected import
 import { BasicCharacterForm } from "@/components/character/BasicCharacterForm";
 import { TextCharacterForm } from "@/components/character/TextCharacterForm";
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons"; // Import stat icons
@@ -70,19 +70,17 @@ export function CharacterCreation() {
     return TOTAL_STAT_POINTS - allocatedTotal;
   }, []);
 
-  // Initialize stats - ensuring we start with a valid distribution
   const [stats, setStats] = useState<CharacterStats>(() => {
     const loadedStats = state.character?.stats;
     const initial = loadedStats ? { ...defaultInitialStats, ...loadedStats } : { ...defaultInitialStats };
-    // Recalculate initial total to ensure it doesn't exceed limit on load
     let currentTotal = initial.strength + initial.stamina + initial.agility;
     if (currentTotal > TOTAL_STAT_POINTS) {
-        // If loaded stats exceed the limit, reset to default distribution
         console.warn("Loaded stats exceeded total points, resetting to default.");
         return { ...defaultInitialStats };
     }
     return initial;
   });
+
 
   const [remainingPoints, setRemainingPoints] = useState<number>(() => calculateRemainingPoints(stats));
   const [statError, setStatError] = useState<string | null>(null);
@@ -136,25 +134,22 @@ export function CharacterCreation() {
 
     while (pointsLeft > 0) {
         const availableKeys = allocatedStatKeys.filter(key => newAllocatedStats[key] < MAX_STAT_VALUE);
-        if (availableKeys.length === 0) break; // Avoid infinite loop if somehow all maxed out
+        if (availableKeys.length === 0) break; 
         const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
         newAllocatedStats[randomKey]++;
         pointsLeft--;
     }
 
-    // Ensure total points are exactly TOTAL_STAT_POINTS, adjusting if necessary due to MAX_STAT_VALUE limits
      let currentTotal = newAllocatedStats.strength + newAllocatedStats.stamina + newAllocatedStats.agility;
-     let safetyNet = 0; // Prevent infinite loop in adjustment phase
+     let safetyNet = 0; 
      while (currentTotal !== TOTAL_STAT_POINTS && safetyNet < 20) {
          if (currentTotal < TOTAL_STAT_POINTS) {
-            // Add points randomly to stats not at max
              const availableKeys = allocatedStatKeys.filter(key => newAllocatedStats[key] < MAX_STAT_VALUE);
              if (availableKeys.length === 0) break;
              const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
              newAllocatedStats[randomKey]++;
              currentTotal++;
-         } else { // currentTotal > TOTAL_STAT_POINTS
-            // Subtract points randomly from stats not at min
+         } else { 
              const availableKeys = allocatedStatKeys.filter(key => newAllocatedStats[key] > MIN_STAT_VALUE);
              if (availableKeys.length === 0) break;
              const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
@@ -165,19 +160,18 @@ export function CharacterCreation() {
      }
 
     const finalStats: CharacterStats = {
-        ...defaultInitialStats, // Start with the base defaults for all stats
+        ...defaultInitialStats, 
         ...newAllocatedStats,
     };
 
-    handleStatChange(finalStats); // Update stats using the handler
-}, [handleStatChange]);
+    handleStatChange(finalStats); 
+}, [handleStatChange, defaultInitialStats]); // Added defaultInitialStats to dependencies
 
  const randomizeAll = useCallback(async () => {
-     setIsRandomizing(true); // Start animation
-     setRandomizationComplete(false); // Hide checkmark initially
-     await new Promise(res => setTimeout(res, 300)); // Wait for visual effect
+     setIsRandomizing(true); 
+     setRandomizationComplete(false); 
+     await new Promise(res => setTimeout(res, 300)); 
 
-     // Reset errors
      setError(null);
 
      const randomNames = ["Anya", "Borin", "Carys", "Darian", "Elara", "Fendrel", "Gorok", "Silas", "Lyra", "Roric"];
@@ -198,7 +192,7 @@ export function CharacterCreation() {
          "A quiet hunter, adept at tracking and moving unseen through the wilds.",
      ];
 
-     reset(); // Clear form fields
+     reset(); 
 
      const name = randomNames[Math.floor(Math.random() * randomNames.length)];
      setValue("name", name);
@@ -213,36 +207,33 @@ export function CharacterCreation() {
          setValue("traits", traits);
          setValue("knowledge", knowledge);
          setValue("background", background);
-         setValue("description", ""); // Ensure description is cleared for basic random
+         setValue("description", ""); 
      } else {
          const description = randomDescriptions[Math.floor(Math.random() * randomDescriptions.length)];
          setValue("creationType", "text");
          setValue("description", description);
-         // Reset basic fields when randomizing text description
          setValue("class", "Adventurer");
          setValue("traits", "");
          setValue("knowledge", "");
          setValue("background", "");
      }
 
-     randomizeStats(); // Randomize stats
+     randomizeStats(); 
 
-     await new Promise(res => setTimeout(res, 200)); // Allow state to update visually
-     setIsRandomizing(false); // End animation
-     setRandomizationComplete(true); // Show checkmark
-     setTimeout(() => setRandomizationComplete(false), 1000); // Hide checkmark after a delay
+     await new Promise(res => setTimeout(res, 200)); 
+     setIsRandomizing(false); 
+     setRandomizationComplete(true); 
+     setTimeout(() => setRandomizationComplete(false), 1000); 
 
-     // toast({ title: "Character Randomized!", description: `Created a new character: ${name}` }); // Removed toast
-     // toast({ title: "Stats Randomized", description: `Distributed ${TOTAL_STAT_POINTS} points.` }); // Removed toast
 
-     trigger(); // Trigger validation after setting values
+     trigger(); 
 
- }, [creationType, reset, setValue, randomizeStats, toast, trigger, watch]);
+ }, [creationType, reset, setValue, randomizeStats, toast, trigger]);
 
 
   // --- AI Description Generation ---
  const handleGenerateDescription = useCallback(async () => {
-     await trigger(["name", "description"]); // Validate name and description first
+     await trigger(["name", "description"]); 
      const currentDescValue = watch("description");
      const currentName = watch("name");
      const nameError = errors.name;
@@ -260,10 +251,8 @@ export function CharacterCreation() {
         const result: GenerateCharacterDescriptionOutput = await generateCharacterDescription({ characterDescription: currentDescValue });
         console.log("AI Result:", result);
 
-         // Update the main description field with the AI's elaborated text
          setValue("description", result.detailedDescription || currentDescValue, { shouldValidate: true, shouldDirty: true });
 
-         // Update the BASIC fields based on AI inference
          setValue("class", result.inferredClass || "Adventurer", { shouldValidate: true, shouldDirty: true });
          setValue("traits", (result.inferredTraits && result.inferredTraits.length > 0) ? result.inferredTraits.join(', ') : "", { shouldValidate: true, shouldDirty: true });
          setValue("knowledge", (result.inferredKnowledge && result.inferredKnowledge.length > 0) ? result.inferredKnowledge.join(', ') : "", { shouldValidate: true, shouldDirty: true });
@@ -271,10 +260,9 @@ export function CharacterCreation() {
 
          dispatch({ type: "SET_AI_DESCRIPTION", payload: result.detailedDescription });
 
-         // Trigger validation for the updated basic fields AFTER setting them
          setTimeout(() => {
             trigger(["class", "traits", "knowledge", "background", "description"]);
-          }, 0); // Use setTimeout to ensure state updates are processed
+          }, 0); 
 
      } catch (err) {
        console.error("AI generation failed:", err);
@@ -287,9 +275,8 @@ export function CharacterCreation() {
 
   // --- Form Submission ---
   const onSubmit = (data: FormData) => {
-     setError(null); // Clear general error on submit attempt
+     setError(null); 
 
-     // Final stat validation before submitting
      const finalAllocatedTotal = stats.strength + stats.stamina + stats.agility;
      if (finalAllocatedTotal !== TOTAL_STAT_POINTS) {
          setStatError(`Total points must be exactly ${TOTAL_STAT_POINTS} (currently ${finalAllocatedTotal}). Please adjust.`);
@@ -300,9 +287,8 @@ export function CharacterCreation() {
          return;
      }
 
-     setStatError(null); // Clear stat error if validation passes
+     setStatError(null); 
 
-     // Determine final values based on creation type and potentially AI inference
      const finalName = data.name;
      let finalClass = "Adventurer";
      let finalTraits: string[] = [];
@@ -317,16 +303,15 @@ export function CharacterCreation() {
          finalTraits = basicData.traits?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? [];
          finalKnowledge = basicData.knowledge?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? [];
          finalBackground = basicData.background ?? "";
-         finalDescription = watch("description") || ""; // Keep potential AI description if user switched back
-     } else { // creationType === 'text'
+         finalDescription = watch("description") || ""; 
+     } else { 
           const textData = data as z.infer<typeof textCreationSchema>;
-         finalDescription = textData.description || ""; // Always take description from the text field
-         // Use the potentially AI-inferred basic fields stored in the form state
+         finalDescription = textData.description || ""; 
          finalClass = watch("class") || "Adventurer";
          finalTraits = watch("traits")?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? [];
          finalKnowledge = watch("knowledge")?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? [];
          finalBackground = watch("background") ?? "";
-         finalAiGeneratedDescription = finalDescription; // In text mode, AI description IS the description
+         finalAiGeneratedDescription = finalDescription; 
      }
 
      const characterData: Partial<Character> = {
@@ -336,7 +321,7 @@ export function CharacterCreation() {
          traits: finalTraits,
          knowledge: finalKnowledge,
          background: finalBackground,
-         stats: stats, // Use the current stats from state
+         stats: stats, 
          aiGeneratedDescription: finalAiGeneratedDescription,
      };
 
@@ -349,205 +334,195 @@ export function CharacterCreation() {
 
   // --- Effects ---
    useEffect(() => {
-       // Resets the form validation schema and state when the creationType changes
        const newSchema = creationType === 'basic' ? basicCreationSchema : textCreationSchema;
        const currentValues = watch();
        reset(currentValues, {
-         keepValues: true, // Keep existing values if fields match
-         keepDirty: true, // Keep track of which fields were touched
-         keepErrors: false, // Clear errors from the other schema
-         keepTouched: false, // Reset touched status for validation
-         keepIsValid: false, // Re-evaluate validity
-         keepSubmitCount: false, // Reset submit count
+         keepValues: true, 
+         keepDirty: true, 
+         keepErrors: false, 
+         keepTouched: false, 
+         keepIsValid: false, 
+         keepSubmitCount: false, 
        });
-       setValue("creationType", creationType); // Ensure creationType is set correctly
-       trigger(); // Re-validate the entire form with the new schema
+       setValue("creationType", creationType); 
+       trigger(); 
    }, [creationType, reset, watch, setValue, trigger]);
 
 
-   // Watch all form fields to dynamically calculate if the proceed button should be enabled
    const watchedFields = watch();
-   const formValues = JSON.stringify(watchedFields); // Use JSON stringify for dependency array
+   const formValues = JSON.stringify(watchedFields); 
 
    // --- Calculate if proceed button should be disabled ---
     const isProceedDisabled = useCallback(() => {
         const hasNameError = !!errors.name;
-        const hasStatErrorCondition = !!statError; // Only disable if there's an actual error message
-        const hasRemainingPoints = remainingPoints !== 0; // Disable if points are not exactly 0
+        const hasStatErrorCondition = !!statError; 
+        const hasRemainingPointsError = remainingPoints !== 0;
+
         let typeSpecificError = false;
 
         if (creationType === 'basic') {
+            const basicData = watch() as z.infer<typeof basicCreationSchema>;
             const basicErrors = errors as FieldErrors<z.infer<typeof basicCreationSchema>>;
             typeSpecificError = !!basicErrors.class || !!basicErrors.traits || !!basicErrors.knowledge || !!basicErrors.background;
-        } else {
+            if (!typeSpecificError && !basicData.class) typeSpecificError = true; // Check if class is empty and no error
+        } else { // creationType === 'text'
+            const textData = watch() as z.infer<typeof textCreationSchema>;
             const textErrors = errors as FieldErrors<z.infer<typeof textCreationSchema>>;
             typeSpecificError = !!textErrors.description;
+            if (!typeSpecificError && (!textData.description || textData.description.length < 10)) typeSpecificError = true;
         }
 
-         // Check if required fields are empty (only if no error exists for them yet)
-         let requiredFieldsEmpty = false;
-         if (creationType === 'basic' && !errors.class) {
-             requiredFieldsEmpty = !watch("class");
-         } else if (creationType === 'text' && !errors.description) {
-              requiredFieldsEmpty = !watch("description") || (watch("description")?.length ?? 0) < 10;
-         }
          if (!errors.name && !watch("name")) {
-              requiredFieldsEmpty = true;
+             typeSpecificError = true;
          }
 
          const finalDisabledState =
             isGenerating ||
             isRandomizing ||
             hasStatErrorCondition ||
-            hasRemainingPoints || // Add this condition
+            hasRemainingPointsError ||
             hasNameError ||
-            typeSpecificError ||
-            requiredFieldsEmpty;
-
-
-        // Debugging log removed for brevity, can be re-added if needed
-        // console.log("Proceed Disabled Check:", { ... });
+            typeSpecificError;
 
         return finalDisabledState;
     }, [
-        isGenerating, isRandomizing, statError, remainingPoints, errors, creationType, formValues, watch // Depend on JSON string
+        isGenerating, isRandomizing, statError, remainingPoints, errors, creationType, formValues, watch
     ]);
 
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-      <form onSubmit={handleSubmit(onSubmit)} className="w-full max-w-2xl">
-        <CardboardCard className="shadow-xl border-2 border-foreground/20">
-          <CardHeader className="border-b border-foreground/10 pb-4">
-            <CardTitle className="text-3xl font-bold text-center flex items-center justify-center gap-2">
-              <User className="w-7 h-7" /> Create Your Adventurer
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6 pt-6">
-            {error && (
-              <Alert variant="destructive" className="mb-4">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Hold On!</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
+        <form onSubmit={handleSubmit(onSubmit)} className="w-full max-w-2xl">
+            <CardboardCard className="shadow-xl border-2 border-foreground/20">
+                <CardHeader className="border-b border-foreground/10 pb-4">
+                    <CardTitle className="text-3xl font-bold text-center flex items-center justify-center gap-2">
+                        <User className="w-7 h-7" /> Create Your Adventurer
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6 pt-6">
+                    {error && (
+                        <Alert variant="destructive" className="mb-4">
+                            <AlertCircle className="h-4 w-4" />
+                            <AlertTitle>Hold On!</AlertTitle>
+                            <AlertDescription>{error}</AlertDescription>
+                        </Alert>
+                    )}
 
-            {/* --- Creation Type Tabs --- */}
-            <Tabs value={creationType} onValueChange={(value) => {
-              const newType = value as "basic" | "text";
-              setCreationType(newType);
-            }} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="basic">Basic Fields</TabsTrigger>
-                <TabsTrigger value="text">Text Description</TabsTrigger>
-              </TabsList>
+                    {/* --- Creation Type Tabs --- */}
+                    <Tabs value={creationType} onValueChange={(value) => {
+                        const newType = value as "basic" | "text";
+                        setCreationType(newType);
+                    }} className="w-full">
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="basic">Basic Fields</TabsTrigger>
+                            <TabsTrigger value="text">Text Description</TabsTrigger>
+                        </TabsList>
 
-              {/* --- Basic Creation Content --- */}
-              <TabsContent value="basic" className="space-y-4 pt-4 border rounded-md p-4 mt-2 bg-card/50">
-                <BasicCharacterForm register={register} errors={errors} />
-              </TabsContent>
+                        {/* --- Basic Creation Content --- */}
+                        <TabsContent value="basic" className="space-y-4 pt-4 border rounded-md p-4 mt-2 bg-card/50">
+                            <BasicCharacterForm register={register as UseFormRegister<any>} errors={errors as FieldErrors<any>} />
+                        </TabsContent>
 
-              {/* --- Text-Based Creation Content --- */}
-              <TabsContent value="text" className="space-y-4 pt-4 border rounded-md p-4 mt-2 bg-card/50">
-                <TextCharacterForm
-                  register={register}
-                  errors={errors}
-                  onGenerateDescription={handleGenerateDescription}
-                  isGenerating={isGenerating}
-                  watchedName={watch("name")} // Pass watched name
-                  watchedDescription={watch("description")} // Pass watched description
-                />
-              </TabsContent>
-            </Tabs>
+                        {/* --- Text-Based Creation Content --- */}
+                        <TabsContent value="text" className="space-y-4 pt-4 border rounded-md p-4 mt-2 bg-card/50">
+                            <TextCharacterForm
+                                register={register as UseFormRegister<any>}
+                                errors={errors as FieldErrors<any>}
+                                onGenerateDescription={handleGenerateDescription}
+                                isGenerating={isGenerating}
+                                watchedName={watch("name")}
+                                watchedDescription={watch("description")}
+                            />
+                        </TabsContent>
+                    </Tabs>
 
-            {/* --- Stat Allocation --- */}
-            <Separator />
-            <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
-                    <h3 className="text-xl font-semibold">Allocate Stats ({stats.strength + stats.stamina + stats.agility} / {TOTAL_STAT_POINTS} Total Points)</h3>
-                    <p className={`text-sm font-medium ${statError ? 'text-destructive' : 'text-muted-foreground'}`}>
-                        {statError ? (
-                            <span className="flex items-center gap-1 text-destructive">
-                                <AlertCircle className="h-4 w-4" /> {statError}
-                            </span>
-                        ) : (remainingPoints === 0 ? "All points allocated!" : `${remainingPoints} points remaining.`)}
-                    </p>
-                </div>
+                    {/* --- Stat Allocation --- */}
+                    <Separator />
+                    <div className="space-y-4">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
+                            <h3 className="text-xl font-semibold">Allocate Stats ({stats.strength + stats.stamina + stats.agility} / {TOTAL_STAT_POINTS} Total Points)</h3>
+                            <p className={`text-sm font-medium ${statError ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                {statError ? (
+                                    <span className="flex items-center gap-1 text-destructive">
+                                        <AlertCircle className="h-4 w-4" /> {statError}
+                                    </span>
+                                ) : (remainingPoints === 0 ? "All points allocated!" : `${remainingPoints} points remaining.`)}
+                            </p>
+                        </div>
 
-                {/* Stat Inputs (Grid) */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <StatAllocationInput
-                        label="Strength"
-                        statKey="strength"
-                        value={stats.strength}
-                        onChange={(key, val) => handleStatChange({...stats, [key]: val})}
-                        Icon={HandDrawnStrengthIcon}
-                        disabled={isGenerating || isRandomizing}
-                        remainingPoints={remainingPoints}
-                    />
-                    <StatAllocationInput
-                        label="Stamina"
-                        statKey="stamina"
-                        value={stats.stamina}
-                        onChange={(key, val) => handleStatChange({...stats, [key]: val})}
-                        Icon={HandDrawnStaminaIcon}
-                        disabled={isGenerating || isRandomizing}
-                        remainingPoints={remainingPoints}
-                    />
-                    <StatAllocationInput
-                        label="Agility"
-                        statKey="agility"
-                        value={stats.agility}
-                        onChange={(key, val) => handleStatChange({...stats, [key]: val})}
-                        Icon={HandDrawnAgilityIcon}
-                        disabled={isGenerating || isRandomizing}
-                        remainingPoints={remainingPoints}
-                    />
-                </div>
-                {/* Display non-adjustable stats */}
-                <div className="text-sm text-muted-foreground grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
-                    <span>Intellect: {stats.intellect}</span>
-                    <span>Wisdom: {stats.wisdom}</span>
-                    <span>Charisma: {stats.charisma}</span>
-                </div>
-            </div>
+                        {/* Stat Inputs (Grid) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <StatAllocationInput
+                                label="Strength"
+                                statKey="strength"
+                                value={stats.strength}
+                                onChange={(key, val) => handleStatChange({...stats, [key]: val})}
+                                Icon={HandDrawnStrengthIcon}
+                                disabled={isGenerating || isRandomizing}
+                                remainingPoints={remainingPoints}
+                            />
+                            <StatAllocationInput
+                                label="Stamina"
+                                statKey="stamina"
+                                value={stats.stamina}
+                                onChange={(key, val) => handleStatChange({...stats, [key]: val})}
+                                Icon={HandDrawnStaminaIcon}
+                                disabled={isGenerating || isRandomizing}
+                                remainingPoints={remainingPoints}
+                            />
+                            <StatAllocationInput
+                                label="Agility"
+                                statKey="agility"
+                                value={stats.agility}
+                                onChange={(key, val) => handleStatChange({...stats, [key]: val})}
+                                Icon={HandDrawnAgilityIcon}
+                                disabled={isGenerating || isRandomizing}
+                                remainingPoints={remainingPoints}
+                            />
+                        </div>
+                        {/* Display non-adjustable stats */}
+                        <div className="text-sm text-muted-foreground grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
+                            <span>Intellect: {stats.intellect}</span>
+                            <span>Wisdom: {stats.wisdom}</span>
+                            <span>Charisma: {stats.charisma}</span>
+                        </div>
+                    </div>
 
-          </CardContent>
-          <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t border-foreground/10">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    type="button"
-                    onClick={randomizeAll}
-                    variant="secondary"
-                    aria-label="Randomize All Character Fields and Stats"
-                    className="relative overflow-hidden w-full sm:w-auto"
-                    disabled={isRandomizing || isGenerating}
-                  >
-                    <RotateCcw className={`mr-2 h-4 w-4 ${isRandomizing ? 'animate-spin' : ''}`} />
-                    {isRandomizing ? 'Randomizing...' : 'Randomize Everything'}
-                    {/* Checkmark appears briefly after randomizing */}
-                    <CheckCircle className={`absolute right-2 h-4 w-4 text-green-500 transition-opacity duration-500 ${randomizationComplete ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: randomizationComplete ? '300ms' : '0ms' }} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Generate a completely random character based on the selected creation type.</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <Button
-              type="submit"
-              className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
-              disabled={isProceedDisabled()} // Use the memoized check
-              aria-label="Save character and proceed to adventure setup"
-            >
-              <Save className="mr-2 h-4 w-4" />
-              Proceed to Adventure Setup
-            </Button>
-          </CardFooter>
-        </CardboardCard>
-      </form>
+                </CardContent>
+                <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t border-foreground/10">
+                    <TooltipProvider>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    type="button"
+                                    onClick={randomizeAll}
+                                    variant="secondary"
+                                    aria-label="Randomize All Character Fields and Stats"
+                                    className="relative overflow-hidden w-full sm:w-auto"
+                                    disabled={isRandomizing || isGenerating}
+                                >
+                                    <RotateCcw className={`mr-2 h-4 w-4 ${isRandomizing ? 'animate-spin' : ''}`} />
+                                    {isRandomizing ? 'Randomizing...' : 'Randomize Everything'}
+                                    <CheckCircle className={`absolute right-2 h-4 w-4 text-green-500 transition-opacity duration-500 ${randomizationComplete ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: randomizationComplete ? '300ms' : '0ms' }} />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                <p>Generate a completely random character based on the selected creation type.</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </TooltipProvider>
+                    <Button
+                        type="submit"
+                        className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
+                        disabled={isProceedDisabled()}
+                        aria-label="Save character and proceed to adventure setup"
+                    >
+                        <Save className="mr-2 h-4 w-4" />
+                        Proceed to Adventure Setup
+                    </Button>
+                </CardFooter>
+            </CardboardCard>
+        </form>
     </div>
   );
 }

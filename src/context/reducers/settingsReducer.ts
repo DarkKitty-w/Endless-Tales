@@ -2,7 +2,7 @@
 import type { AdventureSettings, DifficultyLevel } from "@/types/adventure-types";
 import type { GameState } from "@/types/game-types";
 import type { Action } from "../game-actions";
-import { initialAdventureSettings, initialState } from "../game-initial-state";
+import { initialAdventureSettings } from "../game-initial-state";
 import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "@/lib/constants";
 
 // Define the part of the state this reducer handles
@@ -18,8 +18,13 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
 
             const newSettings: AdventureSettings = {
                 ...state.adventureSettings,
-                ...(action.payload || {}),
+                ...action.payload, // Spread the incoming payload
                 difficulty: validatedDifficulty,
+                 // Ensure specific fields are cleared if adventureType changes away from Custom/Immersed
+                worldType: action.payload.adventureType === 'Custom' ? (action.payload.worldType ?? state.adventureSettings.worldType) : (action.payload.adventureType === 'Immersed' ? state.adventureSettings.worldType : ""),
+                mainQuestline: action.payload.adventureType === 'Custom' ? (action.payload.mainQuestline ?? state.adventureSettings.mainQuestline) : (action.payload.adventureType === 'Immersed' ? state.adventureSettings.mainQuestline : ""),
+                universeName: action.payload.adventureType === 'Immersed' ? (action.payload.universeName ?? state.adventureSettings.universeName) : "",
+                playerCharacterConcept: action.payload.adventureType === 'Immersed' ? (action.payload.playerCharacterConcept ?? state.adventureSettings.playerCharacterConcept) : "",
             };
             return { ...state, adventureSettings: newSettings };
         }
@@ -33,8 +38,6 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
              return {
                 ...state,
                 adventureSettings: { ...initialAdventureSettings },
-                // userGoogleAiApiKey is persisted and not reset here.
-                // Theme and dark mode are also persisted.
              };
          case "LOAD_ADVENTURE": {
              const settingsToLoad = action.payload.adventureSettings;
@@ -44,13 +47,17 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
 
              const validatedSettings: AdventureSettings = {
                  ...initialAdventureSettings,
-                 ...(settingsToLoad || {}),
+                 ...(settingsToLoad || {}), // Spread loaded settings
                  difficulty: validatedDifficulty,
+                 // Ensure specific fields are correctly loaded or defaulted
+                worldType: settingsToLoad?.adventureType === 'Custom' ? (settingsToLoad.worldType ?? "") : "",
+                mainQuestline: settingsToLoad?.adventureType === 'Custom' ? (settingsToLoad.mainQuestline ?? "") : "",
+                universeName: settingsToLoad?.adventureType === 'Immersed' ? (settingsToLoad.universeName ?? "") : "",
+                playerCharacterConcept: settingsToLoad?.adventureType === 'Immersed' ? (settingsToLoad.playerCharacterConcept ?? "") : "",
              };
              return {
                 ...state,
                  adventureSettings: validatedSettings
-                 // userGoogleAiApiKey, theme, dark mode are kept from current state.
              };
          }
         default:

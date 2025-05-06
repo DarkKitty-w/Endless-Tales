@@ -1,7 +1,7 @@
 // src/context/reducers/characterReducer.ts
 import type { Character, CharacterStats, Skill, SkillTree, SkillTreeStage } from "@/types/character-types";
 import type { Action } from "../game-actions";
-import { initialCharacterState, initialStats } from "../game-initial-state";
+import { initialCharacterState, initialCharacterStats } from "../game-initial-state";
 import { calculateMaxStamina, calculateMaxMana, calculateXpToNextLevel, getStarterSkillsForClass } from "@/lib/gameUtils";
 import { updateGameStateString } from "@/lib/game-state-utils"; // Import if needed for derived state
 
@@ -9,8 +9,8 @@ export function characterReducer(state: Character | null, action: Action): Chara
     switch (action.type) {
         case "CREATE_CHARACTER": {
             const baseStats: CharacterStats = action.payload.stats
-                ? { ...initialStats, ...action.payload.stats }
-                : { ...initialStats };
+                ? { ...initialCharacterStats, ...action.payload.stats }
+                : { ...initialCharacterStats };
             const baseKnowledge = action.payload.knowledge ?? [];
             const maxStamina = calculateMaxStamina(baseStats);
             const maxMana = calculateMaxMana(baseStats, baseKnowledge);
@@ -244,7 +244,7 @@ export function characterReducer(state: Character | null, action: Action): Chara
          case "LOAD_ADVENTURE":
              // Validate character data from loaded adventure
              const savedChar = action.payload.character;
-             const validatedStats = savedChar?.stats ? { ...initialStats, ...savedChar.stats } : { ...initialStats };
+             const validatedStats = savedChar?.stats ? { ...initialCharacterStats, ...savedChar.stats } : { ...initialCharacterStats };
              const validatedKnowledge = Array.isArray(savedChar?.knowledge) ? savedChar.knowledge : [];
 
              return { // Return validated character state
@@ -296,3 +296,5 @@ export function characterReducer(state: Character | null, action: Action): Chara
             return state;
     }
 }
+
+    

@@ -1,3 +1,4 @@
+// src/ai/flows/narrate-adventure.ts
 'use server';
 /**
  * @fileOverview An AI agent that narrates the story of a text adventure game based on player actions and game state.
@@ -11,6 +12,7 @@ import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
 import type { CharacterStats, SkillTree, Skill, ReputationChange, NpcRelationshipChange, InventoryItem } from '@/types/game-types'; // Import types from central location
 import { toast } from '@/hooks/use-toast'; // Import toast for user feedback
+import type { AdventureType } from '@/types/adventure-types'; // Import AdventureType
 
 // --- Zod Schemas (Internal - Not Exported) ---
 const CharacterStatsSchema = z.object({
@@ -53,6 +55,8 @@ const BranchingChoiceSchema = z.object({
     consequenceHint: z.string().optional().describe("A subtle hint about the potential outcome or required check (e.g., 'Might require agility', 'Could anger the guard')."),
 });
 
+const AdventureTypeSchema = z.enum(["Randomized", "Custom", "Immersed"]).nullable();
+
 const NarrateAdventureInputSchema = z.object({
   character: z.object({
     name: z.string().describe('Character name.'),
@@ -82,10 +86,12 @@ const NarrateAdventureInputSchema = z.object({
   adventureSettings: z.object({ // Include adventure settings
       difficulty: z.string().describe("Overall game difficulty (e.g., Easy, Normal, Hard, Nightmare). Influences challenge levels and potential event triggers."),
       permanentDeath: z.boolean().describe("Whether permanent death is enabled."),
-      adventureType: z.enum(["Randomized", "Custom"]).nullable().describe("Type of adventure."),
-      // Add custom fields only if adventureType is Custom
+      adventureType: AdventureTypeSchema,
+      // Add custom fields only if adventureType is Custom or Immersed
       worldType: z.string().optional().describe("The specified world type (if Custom adventure)."),
       mainQuestline: z.string().optional().describe("The specified main quest goal (if Custom adventure)."),
+      universeName: z.string().optional().describe("The specified universe name (if Immersed adventure, e.g., Star Wars, Lord of the Rings)."),
+      playerCharacterConcept: z.string().optional().describe("The player's character concept within the immersed universe (if Immersed adventure, e.g., A young Jedi Padawan, A hobbit on an unexpected journey)."),
   }).describe("The overall settings for the current adventure."),
   turnCount: z.number().describe("The current turn number of the adventure. Can be used to trigger time-based events."),
 });
@@ -104,7 +110,6 @@ const NarrateAdventureOutputSchema = z.object({
   progressedToStage: z.number().min(1).max(4).optional().describe('Optional: The new skill stage (1-4) **only if the character progressed to a new stage.**'),
   suggestedClassChange: z.string().optional().describe("Optional: Suggest a different class name **only if the AI detects the player's actions consistently align with a different class.**"),
   gainedSkill: SkillSchema.optional().describe("Optional: Details of a new skill **only if the character learned a new skill.**"), // Added gainedSkill
-  // New fields for branching narratives and events
   branchingChoices: z.array(BranchingChoiceSchema).length(4).optional().describe("Optional: Always 4 significant choices presented to the player, **only if relevant narrative branches occurred.**"),
   dynamicEventTriggered: z.string().optional().describe("Optional: A brief description **only if a random or time-based dynamic world event occurred.**"),
 });
@@ -115,11 +120,9 @@ export type NarrateAdventureOutput = z.infer<typeof NarrateAdventureOutputSchema
 
 // --- Exported Async Function ---
 export async function narrateAdventure(input: NarrateAdventureInput): Promise<NarrateAdventureOutput> {
-  // Check for Developer Mode
   if (input.character.class === 'admin000') {
     console.log("Developer Mode detected in narrateAdventure. Skipping standard AI narration.");
-    // Process dev commands or return simple success
-    return processDevCommand(input); // Use the new helper function
+    return processDevCommand(input);
   }
   return narrateAdventureFlow(input);
 }
@@ -136,16 +139,13 @@ function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput
     let updatedStats: Partial<CharacterStats> | undefined = undefined;
     let xpGained: number | undefined = undefined;
     let progressedToStage: number | undefined = undefined;
-    let addedItemName: string | undefined = undefined;
-    let removedItemName: string | undefined = undefined;
 
-    try { // Wrap dev commands in try/catch
+    try {
         if (baseCommand === '/xp' && value) {
             const amount = parseInt(value, 10);
             if (!isNaN(amount)) {
                 xpGained = amount;
                 devNarration = `(Developer Mode) Granted ${amount} XP.`;
-                // Level up logic will be handled by the reducer after dispatch
             } else {
                 devNarration += " - Invalid XP amount.";
             }
@@ -157,12 +157,6 @@ function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput
             } else {
                 devNarration += " - Invalid stage number (0-4).";
             }
-        } else if (baseCommand === '/additem' && value) {
-            addedItemName = value; // Signal to reducer to add this item
-            devNarration = `(Developer Mode) Added item: ${value}.`;
-        } else if (baseCommand === '/removeitem' && value) {
-            removedItemName = value; // Signal to reducer to remove this item
-            devNarration = `(Developer Mode) Attempted to remove item: ${value}.`;
         } else if (baseCommand === '/stat' && parts.length === 3) {
             const statKey = parts[1].toLowerCase() as keyof CharacterStats;
             const statValue = parseInt(parts[2], 10);
@@ -174,26 +168,17 @@ function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput
             }
         }
          else {
-            // Default success message if no specific command matched
             devNarration += " performed successfully. Restrictions bypassed.";
         }
 
-        // Generate a basic updated game state string for dev mode
         const updatedGameStateString = `Turn: ${turnCount + 1}\n${gameState.replace(/Turn: \d+/, '')}\nDEV MODE ACTIVE - Last command: ${playerChoice}`;
 
-        // Return the structure expected by the reducer, including necessary updates
         return {
             narration: devNarration,
             updatedGameState: updatedGameStateString,
             xpGained: xpGained,
             progressedToStage: progressedToStage,
-            // Need to pass these signals to the reducer to handle inventory/stat changes
-            // The reducer logic needs to be updated to handle these specifically for dev mode if not already done.
-            // For example, ADD_ITEM/REMOVE_ITEM actions could be dispatched directly from Gameplay.tsx for dev commands.
-            // Or, the UPDATE_NARRATION action in the reducer could interpret these dev mode outputs.
-            // For now, sending the information in the standard fields:
             updatedStats: updatedStats,
-            // Let's assume inventory changes are handled by separate dispatches in Gameplay for dev mode.
         };
 
     } catch (devError: any) {
@@ -214,17 +199,19 @@ const narrateAdventurePrompt = ai.definePrompt({
   prompt: `You are a dynamic and engaging AI narrator for the text-based adventure game, "Endless Tales". Your role is to weave a compelling, potentially branching story based on player choices, character attributes, resources, skills, and the established game world, updating progression and occasionally introducing dynamic events or significant narrative choices.
 
 **Game Settings:** Difficulty: {{{adventureSettings.difficulty}}}, Permadeath: {{{adventureSettings.permanentDeath}}}
-{{#if adventureSettings.worldType}}
-{{#if adventureSettings.mainQuestline}}
+{{#if (eq adventureSettings.adventureType "Custom")}}
 **Adventure Type:** Custom
 **World:** {{{adventureSettings.worldType}}}, Goal: {{{adventureSettings.mainQuestline}}}
-{{else}}
-**Adventure Type:** Custom (World: {{{adventureSettings.worldType}}}, Goal: Not Specified)
-{{/if}}
-{{else if adventureSettings.adventureType}}
+{{else if (eq adventureSettings.adventureType "Randomized")}}
 **Adventure Type:** Randomized (World/Goal: Generate based on character details below)
 **INSTRUCTION:** If the adventure type is 'Randomized', **especially on the first few turns**, focus the narration on establishing a unique setting, initial challenge, or short-term goal derived directly from the character's class, background, traits, or knowledge.
 *Use these details to make the randomized world feel tailored to the player character.*
+{{else if (eq adventureSettings.adventureType "Immersed")}}
+**Adventure Type:** Immersed
+**Universe:** {{{adventureSettings.universeName}}}
+**Player Character Concept:** {{{adventureSettings.playerCharacterConcept}}}
+**INSTRUCTION:** If the adventure type is 'Immersed', **especially on the first few turns**, establish the character within the {{{adventureSettings.universeName}}} universe, consistent with its lore. The player's concept is '{{{adventureSettings.playerCharacterConcept}}}'. Introduce an initial situation or challenge appropriate to this universe and character concept.
+*Ensure the narration reflects the specific tone, rules, and elements of the {{{adventureSettings.universeName}}} universe.*
 {{else}}
 **Adventure Type:** Not specified
 {{/if}}
@@ -263,6 +250,9 @@ Description: {{{character.description}}}
 Generate the next part of the story based on ALL the information above.
 
 1.  **React Dynamically:** Describe the outcome of the player's action. Consider their character's class, level, xp, reputation, relationships, stats, **current stamina and mana**, traits, knowledge, background, *current skill stage*, **learned skills**, inventory, the current gameState, and the **game difficulty**.
+    {{#if (eq adventureSettings.adventureType "Immersed")}}
+    *   **Universe Consistency:** Ensure the narration, outcomes, and character interactions are consistent with the lore, rules, and tone of the **{{{adventureSettings.universeName}}}** universe.
+    {{/if}}
 2.  **Logical Progression, Resource Costs & Restrictions:**
     *   **Evaluate Feasibility:** Assess if the action is logically possible. *Actions tied to higher skill stages should only be possible if the character has reached that stage.* Harder difficulties might make certain actions less feasible initially.
     *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output \`staminaChange\`, \`manaChange\` **only if they changed**.
@@ -285,6 +275,9 @@ Generate the next part of the story based on ALL the information above.
     *   **Branching Choices:** At significant moments, present **exactly 4** meaningful \`branchingChoices\` that significantly alter the path forward. Provide optional subtle 'consequenceHint' for each. **Only include if relevant.**
     *   **Dynamic Events:** Based on 'turnCount' or randomness (especially on higher difficulties), trigger a \`dynamicEventTriggered\`. This event should integrate into the current narration. Keep these events relatively infrequent. **Only include if triggered.**
 7.  **Tone:** Maintain a consistent fantasy text adventure tone. Be descriptive and engaging. Adjust tone slightly based on **difficulty** (e.g., more ominous on Hard).
+    {{#if (eq adventureSettings.adventureType "Immersed")}}
+    *   **Universe Tone:** The tone MUST match the established tone of the **{{{adventureSettings.universeName}}}** universe.
+    {{/if}}
 
 **Output Format:** Respond **ONLY** with a valid JSON object matching the NarrateAdventureOutput schema.
 *   'narration' and 'updatedGameState' are **REQUIRED**.
@@ -325,7 +318,6 @@ const narrateAdventureFlow = ai.defineFlow<
     outputSchema: NarrateAdventureOutputSchema,
   },
   async (input) => {
-     // Developer mode check is now handled in the exported wrapper function
      console.log("Sending to narrateAdventurePrompt:", JSON.stringify(input, null, 2));
      let output: NarrateAdventureOutput | undefined;
      let errorOccurred = false;
@@ -340,30 +332,27 @@ const narrateAdventureFlow = ai.defineFlow<
             const result = await narrateAdventurePrompt(input);
             output = result.output;
 
-             // Basic validation
              if (!output || !output.narration || !output.updatedGameState) {
                  throw new Error(`AI returned invalid output structure (attempt ${attempt}) - missing narration or updatedGameState.`);
              }
-             // Validate game state includes turn count
              if (!output.updatedGameState.toLowerCase().includes('turn:')) {
                   throw new Error("AI response missing Turn count in updated game state.");
              }
-             // More detailed validation of optional fields if present
               if (output.xpGained !== undefined && (!Number.isInteger(output.xpGained) || output.xpGained < 0)) {
                 console.warn("AI returned invalid xpGained value:", output.xpGained);
-                output.xpGained = undefined; // Discard invalid XP
+                output.xpGained = undefined;
              }
              if (output.reputationChange && (!output.reputationChange.faction || !Number.isInteger(output.reputationChange.change))) {
                  console.warn("AI returned invalid reputationChange structure:", output.reputationChange);
-                 output.reputationChange = undefined; // Discard invalid rep change
+                 output.reputationChange = undefined;
              }
              if (output.npcRelationshipChange && (!output.npcRelationshipChange.npcName || !Number.isInteger(output.npcRelationshipChange.change))) {
                  console.warn("AI returned invalid npcRelationshipChange structure:", output.npcRelationshipChange);
-                 output.npcRelationshipChange = undefined; // Discard invalid NPC relationship change
+                 output.npcRelationshipChange = undefined;
              }
              if (output.progressedToStage !== undefined && (output.progressedToStage < 1 || output.progressedToStage > 4)) {
                 console.warn("AI returned invalid progressedToStage value:", output.progressedToStage);
-                output.progressedToStage = undefined; // Discard invalid stage
+                output.progressedToStage = undefined;
              }
              if (output.suggestedClassChange !== undefined && typeof output.suggestedClassChange !== 'string') {
                  console.warn("AI returned invalid suggestedClassChange value:", output.suggestedClassChange);
@@ -381,78 +370,59 @@ const narrateAdventureFlow = ai.defineFlow<
                  console.warn("AI returned invalid manaChange value:", output.manaChange);
                  output.manaChange = undefined;
              }
-             // Validate branching choices if present
              if (output.branchingChoices && (!Array.isArray(output.branchingChoices) || output.branchingChoices.length !== 4 || output.branchingChoices.some(c => !c.text))) {
                   console.warn(`AI returned invalid branchingChoices structure (expected 4 choices, got ${output.branchingChoices?.length}):`, output.branchingChoices);
-                  output.branchingChoices = undefined; // Discard invalid choices
+                  output.branchingChoices = undefined;
              }
-             // Validate dynamic event trigger if present
              if (output.dynamicEventTriggered !== undefined && typeof output.dynamicEventTriggered !== 'string') {
                  console.warn("AI returned invalid dynamicEventTriggered value:", output.dynamicEventTriggered);
                  output.dynamicEventTriggered = undefined;
              }
-
-
         } catch (err: any) {
             console.error(`AI narration attempt ${attempt} error:`, err);
             errorOccurred = true;
              if (err.message?.includes('503') || err.message?.includes('overloaded')) {
                 errorMessage = `AI Service Overloaded (Attempt ${attempt}/${maxAttempts}). Please try again shortly. Retrying...`;
-                // No toast on server-side
-                // toast({ title: "AI Busy", description: `Service overloaded. Retrying...`, variant: "default"});
-                // Optional: Wait longer before retrying on overload
                 if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
              } else if (err.message?.includes('400 Bad Request')) {
                  errorMessage = `AI Error: Bad Request (${err.message?.substring(0, 50)}...). Check prompt or input format. Retrying... (Attempt ${attempt}/${maxAttempts})`;
-                 // No toast on server-side
-                 // toast({ title: "AI Error", description: `${errorMessage.substring(0, 60)}... Retrying...`, variant: "destructive"});
                  if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 500 * attempt));
              }
               else if (err.message?.includes('Error fetching')) {
                   errorMessage = `AI Error: Could not reach or process request with the story generation service (Attempt ${attempt}/${maxAttempts}). Check network or try again. (${err.message})`;
-                  // No toast on server-side
-                  // toast({ title: "Network Error", description: "Could not reach AI service. Retrying...", variant: "destructive"});
                   if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 500 * attempt));
               } else {
                  errorMessage = `AI Error: ${err.message?.substring(0, 150) || 'Unknown error'} (Attempt ${attempt}/${maxAttempts})`;
-                 // No toast on server-side
-                 // toast({ title: "Story Error", description: `${errorMessage.substring(0, 60)}... Retrying...`, variant: "destructive"});
                  if (attempt < maxAttempts) await new Promise(resolve => setTimeout(resolve, 500 * attempt));
              }
         }
      }
 
-     // --- Validation & Fallback after all attempts ---
      if (!output || !output.narration || !output.updatedGameState) {
         console.error("AI narration failed after all attempts:", errorMessage);
-        // Return a structured error response instead of throwing,
-        // allowing the client to handle the failure gracefully.
         return {
             narration: `The threads of fate seem momentarily tangled. You pause, considering your next move as the world holds its breath. (${errorMessage})`,
-            updatedGameState: `${input.gameState}\nTurn: ${input.turnCount + 1}`, // Return original game state but increment turn
+            updatedGameState: `${input.gameState}\nTurn: ${input.turnCount + 1}`,
         };
      }
 
     console.log("Received valid narration from narrateAdventurePrompt:", JSON.stringify(output, null, 2));
 
-    // Ensure game state is not accidentally wiped and includes turn count
      const includesTurn = output.updatedGameState.toLowerCase().includes('turn:');
      const gameStateSeemsValid = output.updatedGameState.trim().length > 10 && includesTurn;
 
      if (!gameStateSeemsValid) {
         console.warn("AI returned suspiciously short or invalid game state (missing Turn count?), reverting to previous state with added turn count.");
-        // Try to preserve the turn count from the AI response if possible, otherwise increment from input
         const turnMatch = output.updatedGameState.match(/Turn: (\d+)/i);
         const turnFromOutput = turnMatch ? parseInt(turnMatch[1], 10) : input.turnCount + 1;
 
         const revertedGameState = input.gameState.includes(`Turn: ${input.turnCount}`)
             ? input.gameState.replace(`Turn: ${input.turnCount}`, `Turn: ${turnFromOutput}`)
-            : `Turn: ${turnFromOutput}\n${input.gameState}`; // Add turn count if missing
+            : `Turn: ${turnFromOutput}\n${input.gameState}`;
 
         return {
             narration: output.narration + "\n\n(Narrator's Note: The world state seems momentarily unstable, reverting to the last known stable point.)",
             updatedGameState: revertedGameState,
-            // Keep potential progression/resource changes from the AI output even if state reverts
              xpGained: output.xpGained,
              reputationChange: output.reputationChange,
              npcRelationshipChange: output.npcRelationshipChange,
@@ -462,19 +432,15 @@ const narrateAdventureFlow = ai.defineFlow<
              updatedTraits: output.updatedTraits,
              updatedKnowledge: output.updatedKnowledge,
              gainedSkill: output.gainedSkill,
-             // Keep potential new branches/events
              branchingChoices: output.branchingChoices,
              dynamicEventTriggered: output.dynamicEventTriggered,
-             // Don't revert progression suggestions on state revert
              progressedToStage: output.progressedToStage,
              suggestedClassChange: output.suggestedClassChange,
         };
     }
 
-    // Return the full output including optional fields
     return {
         ...output,
-        // Ensure undefined is used if values are not present, matching the schema
         updatedStats: output.updatedStats ?? undefined,
         updatedTraits: output.updatedTraits ?? undefined,
         updatedKnowledge: output.updatedKnowledge ?? undefined,
@@ -491,7 +457,3 @@ const narrateAdventureFlow = ai.defineFlow<
     };
   }
 );
-
-    
-
-    

@@ -5,53 +5,62 @@ import React, { useState, useEffect } from "react";
 import { useGame } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input"; // Import Input
+import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings, Globe, ScrollText, BarChart, ShieldAlert } from "lucide-react"; // Added icons
+import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings, Globe, ScrollText, ShieldAlert, Sparkles } from "lucide-react"; // Added Sparkles for Immersed
 import { useToast } from "@/hooks/use-toast";
-import { Alert, AlertDescription } from "@/components/ui/alert"; // Import Alert
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-  } from "@/components/ui/select" // Import Select components
-import type { AdventureSettings, DifficultyLevel } from "@/types/adventure-types"; // Import types
-import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "@/lib/constants"; // Import valid difficulty levels
+  } from "@/components/ui/select"
+import type { AdventureSettings, DifficultyLevel, AdventureType } from "@/types/adventure-types";
+import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "@/lib/constants";
 
 export function AdventureSetup() {
   const { state, dispatch } = useGame();
   const { toast } = useToast();
-  const [adventureType, setAdventureType] = useState<"Randomized" | "Custom" | null>(state.adventureSettings.adventureType);
+  const [adventureType, setAdventureType] = useState<AdventureType>(state.adventureSettings.adventureType);
   const [permanentDeath, setPermanentDeath] = useState<boolean>(state.adventureSettings.permanentDeath);
-  // State for custom adventure parameters
   const [worldType, setWorldType] = useState<string>(state.adventureSettings.worldType ?? "");
   const [mainQuestline, setMainQuestline] = useState<string>(state.adventureSettings.mainQuestline ?? "");
-  const [difficulty, setDifficulty] = useState<DifficultyLevel>(state.adventureSettings.difficulty ?? "Normal"); // Use difficulty from context
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>(state.adventureSettings.difficulty ?? "Normal");
+  const [universeName, setUniverseName] = useState<string>(state.adventureSettings.universeName ?? "");
+  const [playerCharacterConcept, setPlayerCharacterConcept] = useState<string>(state.adventureSettings.playerCharacterConcept ?? "");
   const [customError, setCustomError] = useState<string | null>(null);
 
-  const validateCustomSettings = (): boolean => {
+  const validateSettings = (): boolean => {
      if (adventureType === "Custom") {
         if (!worldType.trim()) {
-            setCustomError("Please specify a World Type.");
+            setCustomError("Please specify a World Type for Custom Adventure.");
             return false;
         }
         if (!mainQuestline.trim()) {
-             setCustomError("Please specify a Main Questline.");
+             setCustomError("Please specify a Main Questline for Custom Adventure.");
              return false;
         }
+     } else if (adventureType === "Immersed") {
+        if (!universeName.trim()) {
+            setCustomError("Please specify the Universe Name for Immersed Adventure.");
+            return false;
+        }
+        if (!playerCharacterConcept.trim()) {
+            setCustomError("Please specify your Character Concept for Immersed Adventure.");
+            return false;
+        }
      }
-     // Difficulty is now always selected via dropdown, no need for trim validation
-     setCustomError(null); // Clear error if validation passes
+     setCustomError(null);
      return true;
   };
 
 
   const handleStartAdventure = () => {
-     setCustomError(null); // Clear previous errors
+     setCustomError(null);
 
     if (!adventureType) {
         toast({
@@ -62,32 +71,35 @@ export function AdventureSetup() {
         return;
     }
 
-     // Validate custom settings if Custom type is selected
-     if (adventureType === "Custom" && !validateCustomSettings()) {
+     if (!validateSettings()) {
          toast({
-             title: "Custom Settings Required",
-             description: customError || "Please fill in all custom adventure details.",
+             title: `${adventureType} Settings Required`,
+             description: customError || `Please fill in all ${adventureType.toLowerCase()} adventure details.`,
              variant: "destructive",
           });
          return;
      }
 
-     // Ensure difficulty is valid (redundant if using Select correctly, but safe)
      const finalDifficulty = VALID_ADVENTURE_DIFFICULTY_LEVELS.includes(difficulty) ? difficulty : "Normal";
 
     const settingsPayload: Partial<AdventureSettings> = {
       adventureType,
       permanentDeath,
-      difficulty: finalDifficulty, // Include difficulty always
+      difficulty: finalDifficulty,
       ...(adventureType === "Custom" && { worldType, mainQuestline }),
+      ...(adventureType === "Immersed" && { universeName, playerCharacterConcept }),
     };
 
     dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload });
-    dispatch({ type: "START_GAMEPLAY" }); // This action will set the status to Gameplay
+    dispatch({ type: "START_GAMEPLAY" });
 
-    const description = adventureType === "Custom"
-      ? `Get ready for a custom journey in ${worldType} with quest "${mainQuestline}" (${finalDifficulty}).`
-      : `Get ready for a randomized ${finalDifficulty} journey based on your character.`;
+    let description = `Get ready for a randomized ${finalDifficulty} journey based on your character.`;
+    if (adventureType === "Custom") {
+      description = `Get ready for a custom journey in ${worldType} with quest "${mainQuestline}" (${finalDifficulty}).`;
+    } else if (adventureType === "Immersed") {
+      description = `Get ready for an immersed journey in the universe of ${universeName} as ${playerCharacterConcept} (${finalDifficulty}).`;
+    }
+
 
     toast({
         title: "Adventure Starting!",
@@ -99,17 +111,16 @@ export function AdventureSetup() {
     dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
   };
 
-   // Update local state when adventure type changes
    useEffect(() => {
       if (adventureType) {
-         setCustomError(null); // Clear errors when changing type
+         setCustomError(null);
       }
    }, [adventureType]);
 
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-      <CardboardCard className="w-full max-w-lg shadow-xl border-2 border-foreground/20">
+      <CardboardCard className="w-full max-w-xl shadow-xl border-2 border-foreground/20"> {/* Increased max-width */}
         <CardHeader className="border-b border-foreground/10 pb-4">
           <CardTitle className="text-3xl font-bold text-center flex items-center justify-center gap-2">
             <Settings className="w-7 h-7"/> Adventure Setup
@@ -121,26 +132,31 @@ export function AdventureSetup() {
             <Label className="text-xl font-semibold flex items-center gap-2"><Settings className="w-5 h-5"/>Select Adventure Type</Label>
             <RadioGroup
               value={adventureType ?? ""}
-              onValueChange={(value) => setAdventureType(value as "Randomized" | "Custom")}
-              className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+              onValueChange={(value) => setAdventureType(value as AdventureType)}
+              className="grid grid-cols-1 sm:grid-cols-3 gap-4" // Adjusted to 3 columns
               aria-label="Adventure Type"
             >
               <Label htmlFor="randomized" className="flex flex-col items-center justify-center p-4 border-2 rounded-md cursor-pointer hover:bg-accent/10 data-[state=checked]:bg-accent/20 data-[state=checked]:border-accent transition-colors">
                  <RadioGroupItem value="Randomized" id="randomized" className="sr-only" aria-label="Randomized Adventure" />
                  <Dices className="w-8 h-8 mb-2 text-primary" />
                  <span className="font-medium">Randomized</span>
-                 {/* Updated Description */}
-                 <p className="text-sm text-muted-foreground text-center mt-1">Generate a unique world, quests, and challenges based on your character.</p>
+                 <p className="text-xs text-muted-foreground text-center mt-1">Generate a unique world based on your character.</p>
               </Label>
                <Label htmlFor="custom" className="flex flex-col items-center justify-center p-4 border-2 rounded-md cursor-pointer hover:bg-accent/10 data-[state=checked]:bg-accent/20 data-[state=checked]:border-accent transition-colors">
                  <RadioGroupItem value="Custom" id="custom" className="sr-only" aria-label="Custom Adventure" />
                  <Swords className="w-8 h-8 mb-2 text-primary" />
                  <span className="font-medium">Custom</span>
-                 <p className="text-sm text-muted-foreground text-center mt-1">Define world type and main quest.</p>
+                 <p className="text-xs text-muted-foreground text-center mt-1">Define world type and main quest.</p>
+              </Label>
+              <Label htmlFor="immersed" className="flex flex-col items-center justify-center p-4 border-2 rounded-md cursor-pointer hover:bg-accent/10 data-[state=checked]:bg-accent/20 data-[state=checked]:border-accent transition-colors">
+                 <RadioGroupItem value="Immersed" id="immersed" className="sr-only" aria-label="Immersed Adventure" />
+                 <Sparkles className="w-8 h-8 mb-2 text-primary" /> {/* Icon for Immersed */}
+                 <span className="font-medium">Immersed</span>
+                 <p className="text-xs text-muted-foreground text-center mt-1">Enter a known universe (film, book, etc.).</p>
               </Label>
             </RadioGroup>
 
-             {/* Custom Adventure Parameter Inputs - Conditionally Rendered */}
+             {/* Custom Adventure Parameter Inputs */}
              {adventureType === "Custom" && (
                 <div className="space-y-4 border-t border-foreground/10 pt-6 mt-6">
                    <h3 className="text-lg font-medium mb-3 border-b pb-2">Customize Your Adventure</h3>
@@ -169,7 +185,37 @@ export function AdventureSetup() {
                             className={customError && !mainQuestline.trim() ? 'border-destructive' : ''}
                        />
                     </div>
-                   {/* Difficulty is now selected below, outside this conditional block */}
+                </div>
+            )}
+            {/* Immersed Adventure Parameter Inputs */}
+            {adventureType === "Immersed" && (
+                <div className="space-y-4 border-t border-foreground/10 pt-6 mt-6">
+                   <h3 className="text-lg font-medium mb-3 border-b pb-2">Immersed Adventure Details</h3>
+                    {customError && (
+                        <Alert variant="destructive">
+                            <AlertDescription>{customError}</AlertDescription>
+                        </Alert>
+                    )}
+                   <div className="space-y-2">
+                       <Label htmlFor="universeName" className="flex items-center gap-1"><Sparkles className="w-4 h-4"/> Universe Name</Label>
+                       <Input
+                           id="universeName"
+                           value={universeName}
+                           onChange={(e) => setUniverseName(e.target.value)}
+                           placeholder="e.g., Star Wars, Lord of the Rings, Harry Potter"
+                           className={customError && !universeName.trim() ? 'border-destructive' : ''}
+                        />
+                    </div>
+                   <div className="space-y-2">
+                        <Label htmlFor="playerCharacterConcept" className="flex items-center gap-1"><ScrollText className="w-4 h-4"/> Your Character Concept</Label>
+                       <Input
+                           id="playerCharacterConcept"
+                           value={playerCharacterConcept}
+                           onChange={(e) => setPlayerCharacterConcept(e.target.value)}
+                           placeholder="e.g., A young Jedi Padawan, A hobbit on an unexpected journey, A new student at Hogwarts"
+                            className={customError && !playerCharacterConcept.trim() ? 'border-destructive' : ''}
+                       />
+                    </div>
                 </div>
             )}
           </div>
@@ -186,7 +232,6 @@ export function AdventureSetup() {
                         <SelectItem value="Normal">Normal - A balanced experience.</SelectItem>
                         <SelectItem value="Hard">Hard - Tougher encounters, requires strategy.</SelectItem>
                         <SelectItem value="Nightmare">Nightmare - Extreme challenge, for veterans.</SelectItem>
-                        {/* Add more difficulties if desired */}
                     </SelectContent>
                 </Select>
                 <p className="text-sm text-muted-foreground">Difficulty affects challenge level, AI behavior, and potential events.</p>
@@ -218,10 +263,9 @@ export function AdventureSetup() {
            <Button variant="outline" onClick={handleBack}>
              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Character
            </Button>
-          {/* Updated disabled check */}
            <Button
             onClick={handleStartAdventure}
-            disabled={!adventureType || (adventureType === 'Custom' && (!worldType.trim() || !mainQuestline.trim()))}
+            disabled={!adventureType || (adventureType === 'Custom' && (!worldType.trim() || !mainQuestline.trim())) || (adventureType === 'Immersed' && (!universeName.trim() || !playerCharacterConcept.trim()))}
             className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
             aria-label="Start Adventure"
            >
@@ -232,5 +276,3 @@ export function AdventureSetup() {
     </div>
   );
 }
-
-    
