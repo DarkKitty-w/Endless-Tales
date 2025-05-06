@@ -15,13 +15,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
-import { StatAllocationInput } from "@/components/character/StatAllocationInput"; // Corrected import path
-import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
-import type { CharacterStats, Character } from "@/types/character-types"; // Import types
-import { initialStats as defaultInitialStats, initialCharacterState } from "@/context/game-initial-state"; // Import initialStats with alias
+import { CharacterStatsAllocator } from "@/components/character/CharacterStatsAllocator"; // Import Stats Allocator
 import { BasicCharacterForm } from "@/components/character/BasicCharacterForm"; // Import Basic form component
 import { TextCharacterForm } from "@/components/character/TextCharacterForm"; // Import Text form component
-import { CharacterStatsAllocator } from "@/components/character/CharacterStatsAllocator"; // Import Stats Allocator
+import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
+import type { CharacterStats, Character } from "@/types/character-types"; // Import from specific types file
+import { initialStats as defaultInitialStats } from "@/context/game-initial-state"; // Import initialStats with alias
+
 
 // --- Zod Schema for Validation ---
 const baseCharacterSchema = z.object({
@@ -65,10 +65,10 @@ export function CharacterCreation() {
 
    // --- Stat Allocation Logic ---
    // Define calculateRemainingPoints *before* it's used in useState initialization
-   const calculateRemainingPoints = (currentStats: CharacterStats): number => {
+   const calculateRemainingPoints = useCallback((currentStats: CharacterStats): number => {
         const allocatedTotal = currentStats.strength + currentStats.stamina + currentStats.agility;
         return TOTAL_STAT_POINTS - allocatedTotal;
-   };
+   }, []); // No dependencies needed for this calculation
 
 
   // State for stats
@@ -88,11 +88,11 @@ export function CharacterCreation() {
     setStats(newStats);
     setRemainingPoints(newRemaining);
     if (newRemaining < 0) {
-      setStatError(`Cannot exceed limit: ${Math.abs(newRemaining)} point(s) over.`);
+       setStatError(`${Math.abs(newRemaining)} point(s) over the limit.`);
     } else {
       setStatError(null);
     }
-  }, []); // Keep calculateRemainingPoints outside or memoize if needed
+  }, [calculateRemainingPoints]);
 
 
   // Determine the current schema based on the selected tab
@@ -204,7 +204,7 @@ export function CharacterCreation() {
          setValue("traits", traits);
          setValue("knowledge", knowledge);
          setValue("background", background);
-         setValue("description", "");
+         setValue("description", ""); // Ensure description is cleared for basic random
      } else {
          const description = randomDescriptions[Math.floor(Math.random() * randomDescriptions.length)];
          setValue("creationType", "text");
@@ -218,7 +218,8 @@ export function CharacterCreation() {
 
      randomizeStats(); // Randomize stats
 
-     toast({ title: "Character Randomized!", description: `Created a new character: ${name}` });
+    // No toast here, use the checkmark animation instead
+    // toast({ title: "Character Randomized!", description: `Created a new character: ${name}` });
 
      await new Promise(res => setTimeout(res, 200)); // Allow state to update visually
      setIsRandomizing(false); // End animation
@@ -277,47 +278,71 @@ export function CharacterCreation() {
 
   // --- Form Submission ---
   const onSubmit = (data: FormData) => {
-    setError(null);
+     setError(null); // Clear general error on submit attempt
 
-    // Final stat validation before submitting
-    const finalAllocatedTotal = stats.strength + stats.stamina + stats.agility;
-    if (finalAllocatedTotal !== TOTAL_STAT_POINTS) {
-        setStatError(`Total points must be exactly ${TOTAL_STAT_POINTS} (currently ${finalAllocatedTotal}).`);
-        return;
-    }
+     // Final stat validation before submitting
+     const finalAllocatedTotal = stats.strength + stats.stamina + stats.agility;
+     if (finalAllocatedTotal !== TOTAL_STAT_POINTS) {
+         setStatError(`Total points must be exactly ${TOTAL_STAT_POINTS} (currently ${finalAllocatedTotal}). Please adjust.`);
+         toast({ title: "Stat Allocation Error", description: statError, variant: "destructive" });
+         return;
+     }
      if (Object.entries(stats).some(([key, val]) => ['strength', 'stamina', 'agility'].includes(key) && (val < MIN_STAT_VALUE || val > MAX_STAT_VALUE))) {
-        setStatError(`Allocatable stats (STR, STA, AGI) must be between ${MIN_STAT_VALUE} and ${MAX_STAT_VALUE}.`);
-       return;
+         setStatError(`Allocatable stats (STR, STA, AGI) must be between ${MIN_STAT_VALUE} and ${MAX_STAT_VALUE}.`);
+          toast({ title: "Stat Allocation Error", description: statError, variant: "destructive" });
+         return;
      }
 
-    setStatError(null); // Clear stat error if validation passes
+     setStatError(null); // Clear stat error if validation passes
 
+     // Determine final values based on creation type and potentially AI inference
+     const finalName = data.name;
+     let finalClass = "Adventurer";
+     let finalTraits: string[] = [];
+     let finalKnowledge: string[] = [];
+     let finalBackground = "";
+     let finalDescription = "";
 
-    let characterData: Partial<Character>;
+     if (creationType === 'basic') {
+         const basicData = data as z.infer<typeof basicCreationSchema>;
+         finalClass = basicData.class || watch("class") || "Adventurer";
+         finalTraits = basicData.traits?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? watch("traits")?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? [];
+         finalKnowledge = basicData.knowledge?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? watch("knowledge")?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? [];
+         finalBackground = basicData.background ?? watch("background") ?? "";
+         finalDescription = watch("description") || ""; // Use description if it exists (could be AI generated)
+     } else { // creationType === 'text'
+          const textData = data as z.infer<typeof textCreationSchema>;
+         finalDescription = textData.description || watch("description") || ""; // Always take description from the text field
+         // Use the potentially AI-inferred basic fields stored in the form state
+         finalClass = watch("class") || "Adventurer";
+         finalTraits = watch("traits")?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? [];
+         finalKnowledge = watch("knowledge")?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? [];
+         finalBackground = watch("background") ?? "";
+     }
 
-    // Determine final values based on creation type and potentially AI inference
-    const finalName = data.name;
-    // Use the 'class' value directly from the form state, relying on the current schema
-    const finalClass = (data as any).class ?? watch("class") ?? "Adventurer";
-    const finalTraits = (data as any).traits?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? watch("traits")?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? [];
-    const finalKnowledge = (data as any).knowledge?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? watch("knowledge")?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? [];
-    const finalBackground = (data as any).background ?? watch("background") ?? "";
-    const finalDescription = watch("description") || ""; // Always take description from the text field if available
+     const characterData: Partial<Character> = {
+         name: finalName,
+         class: finalClass,
+         description: finalDescription,
+         traits: finalTraits,
+         knowledge: finalKnowledge,
+         background: finalBackground,
+         stats: stats, // Use the current stats from state
+         aiGeneratedDescription: state.character?.aiGeneratedDescription, // Preserve AI description if it exists
+     };
 
-    characterData = {
-      name: finalName,
-      class: finalClass,
-      description: finalDescription,
-      traits: finalTraits,
-      knowledge: finalKnowledge,
-      background: finalBackground,
-      stats: stats, // Use the current stats from state
-      aiGeneratedDescription: state.character?.aiGeneratedDescription, // Keep potential AI description separate
-    };
+     console.log("Dispatching CREATE_CHARACTER with payload:", characterData);
+     dispatch({ type: "CREATE_CHARACTER", payload: characterData });
+     // Dispatch SET_GAME_STATUS *after* CREATE_CHARACTER is processed
+     // Use a slight delay if needed, though reducer should handle it sequentially
+      setTimeout(() => {
+          dispatch({ type: "SET_GAME_STATUS", payload: "AdventureSetup" });
+          console.log("Navigating to Adventure Setup...");
+          toast({ title: "Character Created!", description: `Welcome, ${characterData.name}. Prepare your adventure!` });
+       }, 0);
 
-    dispatch({ type: "CREATE_CHARACTER", payload: characterData });
-    toast({ title: "Character Created!", description: `Welcome, ${characterData.name}. Prepare your adventure!` });
-  };
+   };
+
 
   // --- Effects ---
    useEffect(() => {
@@ -337,110 +362,151 @@ export function CharacterCreation() {
    }, [creationType, reset, watch, setValue, trigger]);
 
 
-  // --- Calculate if proceed button should be disabled ---
-  const isProceedDisabled =
-    isGenerating ||
-    isRandomizing ||
-    !!statError ||
-    remainingPoints !== 0 ||
-    !!errors.name ||
-    (creationType === 'basic' && !!(errors as any).class) || // Check basic specific errors
-    (creationType === 'text' && !!(errors as any).description); // Check text specific errors
+   // Watch all form fields to dynamically calculate if the proceed button should be enabled
+   const watchedFields = watch();
+   const formValues = JSON.stringify(watchedFields); // Use JSON stringify for dependency array
+
+   // --- Calculate if proceed button should be disabled ---
+   const isProceedDisabled = useCallback(() => {
+       const hasNameError = !!errors.name;
+       const hasStatError = !!statError || remainingPoints !== 0;
+       let typeSpecificError = false;
+
+       if (creationType === 'basic') {
+           const basicErrors = errors as FieldErrors<z.infer<typeof basicCreationSchema>>;
+           typeSpecificError = !!basicErrors.class || !!basicErrors.traits || !!basicErrors.knowledge || !!basicErrors.background;
+       } else {
+           const textErrors = errors as FieldErrors<z.infer<typeof textCreationSchema>>;
+           typeSpecificError = !!textErrors.description;
+       }
+
+        // Check if required fields are empty (only if no error exists for them yet)
+        let requiredFieldsEmpty = false;
+        if (creationType === 'basic' && !errors.class) {
+            requiredFieldsEmpty = !watch("class");
+        } else if (creationType === 'text' && !errors.description) {
+             requiredFieldsEmpty = !watch("description") || (watch("description")?.length ?? 0) < 10;
+        }
+        if (!errors.name && !watch("name")) {
+             requiredFieldsEmpty = true;
+        }
+
+
+       const isDisabled =
+           isGenerating ||
+           isRandomizing ||
+           hasStatError ||
+           hasNameError ||
+           typeSpecificError ||
+           requiredFieldsEmpty; // Added check for empty required fields
+
+
+       // console.log("Proceed Disabled Check:", {
+       //     isGenerating, isRandomizing, hasStatError, hasNameError, typeSpecificError, requiredFieldsEmpty, isDisabled,
+       //     errors: JSON.stringify(errors), // Log errors
+       //     stats, remainingPoints, statError, // Log stat state
+       //     watchedName: watch("name"), watchedClass: watch("class"), watchedDesc: watch("description") // Log watched fields
+       // });
+
+       return isDisabled;
+   }, [
+       isGenerating, isRandomizing, statError, remainingPoints, errors, creationType, formValues, watch // Depend on JSON string
+   ]);
 
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
-        <form onSubmit={handleSubmit(onSubmit)} className="w-full max-w-2xl">
-            <CardboardCard className="shadow-xl border-2 border-foreground/20">
-                <CardHeader className="border-b border-foreground/10 pb-4">
-                    <CardTitle className="text-3xl font-bold text-center flex items-center justify-center gap-2">
-                        <User className="w-7 h-7"/> Create Your Adventurer
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-6 pt-6">
-                    {error && (
-                        <Alert variant="destructive" className="mb-4">
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertTitle>Hold On!</AlertTitle>
-                            <AlertDescription>{error}</AlertDescription>
-                        </Alert>
-                    )}
+      <form onSubmit={handleSubmit(onSubmit)} className="w-full max-w-2xl">
+        <CardboardCard className="shadow-xl border-2 border-foreground/20">
+          <CardHeader className="border-b border-foreground/10 pb-4">
+            <CardTitle className="text-3xl font-bold text-center flex items-center justify-center gap-2">
+              <User className="w-7 h-7" /> Create Your Adventurer
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6 pt-6">
+            {error && (
+              <Alert variant="destructive" className="mb-4">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Hold On!</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
 
-                    {/* --- Creation Type Tabs --- */}
-                    <Tabs value={creationType} onValueChange={(value) => {
-                        const newType = value as "basic" | "text";
-                        setCreationType(newType);
-                    }} className="w-full">
-                        <TabsList className="grid w-full grid-cols-2">
-                            <TabsTrigger value="basic">Basic Fields</TabsTrigger>
-                            <TabsTrigger value="text">Text Description</TabsTrigger>
-                        </TabsList>
+            {/* --- Creation Type Tabs --- */}
+            <Tabs value={creationType} onValueChange={(value) => {
+              const newType = value as "basic" | "text";
+              setCreationType(newType);
+            }} className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="basic">Basic Fields</TabsTrigger>
+                <TabsTrigger value="text">Text Description</TabsTrigger>
+              </TabsList>
 
-                        {/* --- Basic Creation Content --- */}
-                        <TabsContent value="basic" className="space-y-4 pt-4 border rounded-md p-4 mt-2 bg-card/50">
-                            <BasicCharacterForm register={register} errors={errors} />
-                        </TabsContent>
+              {/* --- Basic Creation Content --- */}
+              <TabsContent value="basic" className="space-y-4 pt-4 border rounded-md p-4 mt-2 bg-card/50">
+                <BasicCharacterForm register={register} errors={errors} />
+              </TabsContent>
 
-                        {/* --- Text-Based Creation Content --- */}
-                        <TabsContent value="text" className="space-y-4 pt-4 border rounded-md p-4 mt-2 bg-card/50">
-                            <TextCharacterForm
-                                register={register}
-                                errors={errors}
-                                onGenerateDescription={handleGenerateDescription}
-                                isGenerating={isGenerating}
-                                watchedName={watch("name")} // Pass watched name
-                                watchedDescription={watch("description")} // Pass watched description
-                            />
-                        </TabsContent>
-                    </Tabs>
+              {/* --- Text-Based Creation Content --- */}
+              <TabsContent value="text" className="space-y-4 pt-4 border rounded-md p-4 mt-2 bg-card/50">
+                <TextCharacterForm
+                  register={register}
+                  errors={errors}
+                  onGenerateDescription={handleGenerateDescription}
+                  isGenerating={isGenerating}
+                  watchedName={watch("name")} // Pass watched name
+                  watchedDescription={watch("description")} // Pass watched description
+                />
+              </TabsContent>
+            </Tabs>
 
-                    {/* --- Stat Allocation --- */}
-                    <Separator />
-                     {/* Render CharacterStatsAllocator */}
-                    <CharacterStatsAllocator
-                        stats={stats}
-                        remainingPoints={remainingPoints}
-                        statError={statError}
-                        onStatChange={handleStatChange}
-                        isGenerating={isGenerating || isRandomizing}
-                    />
+            {/* --- Stat Allocation --- */}
+            <Separator />
+             {/* Render CharacterStatsAllocator */}
+            <CharacterStatsAllocator
+              stats={stats}
+              remainingPoints={remainingPoints}
+              statError={statError}
+              onStatChange={handleStatChange}
+              isGenerating={isGenerating || isRandomizing}
+            />
 
-                </CardContent>
-                 <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t border-foreground/10">
-                     <TooltipProvider>
-                         <Tooltip>
-                             <TooltipTrigger asChild>
-                                 <Button
-                                     type="button"
-                                     onClick={randomizeAll}
-                                     variant="secondary"
-                                     aria-label="Randomize All Character Fields and Stats"
-                                     className="relative overflow-hidden w-full sm:w-auto"
-                                     disabled={isRandomizing || isGenerating}
-                                 >
-                                     <RotateCcw className={`mr-2 h-4 w-4 ${isRandomizing ? 'animate-spin' : ''}`} />
-                                     {isRandomizing ? 'Randomizing...' : 'Randomize Everything'}
-                                     {/* Checkmark appears briefly after randomizing */}
-                                     <CheckCircle className={`absolute right-2 h-4 w-4 text-green-500 transition-opacity duration-500 ${randomizationComplete ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: randomizationComplete ? '300ms' : '0ms' }} />
-                                 </Button>
-                             </TooltipTrigger>
-                             <TooltipContent>
-                                 <p>Generate a completely random character based on the selected creation type.</p>
-                             </TooltipContent>
-                         </Tooltip>
-                      </TooltipProvider>
-                     <Button
-                         type="submit"
-                         className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
-                         disabled={isProceedDisabled} // Use the calculated disabled state
-                         aria-label="Save character and proceed to adventure setup"
-                      >
-                         <Save className="mr-2 h-4 w-4" />
-                         Proceed to Adventure Setup
-                     </Button>
-                 </CardFooter>
-            </CardboardCard>
-        </form>
+          </CardContent>
+          <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t border-foreground/10">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    onClick={randomizeAll}
+                    variant="secondary"
+                    aria-label="Randomize All Character Fields and Stats"
+                    className="relative overflow-hidden w-full sm:w-auto"
+                    disabled={isRandomizing || isGenerating}
+                  >
+                    <RotateCcw className={`mr-2 h-4 w-4 ${isRandomizing ? 'animate-spin' : ''}`} />
+                    {isRandomizing ? 'Randomizing...' : 'Randomize Everything'}
+                    {/* Checkmark appears briefly after randomizing */}
+                    <CheckCircle className={`absolute right-2 h-4 w-4 text-green-500 transition-opacity duration-500 ${randomizationComplete ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: randomizationComplete ? '300ms' : '0ms' }} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Generate a completely random character based on the selected creation type.</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <Button
+              type="submit"
+              className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
+              disabled={isProceedDisabled()} // Call the function to check disabled state
+              aria-label="Save character and proceed to adventure setup"
+            >
+              <Save className="mr-2 h-4 w-4" />
+              Proceed to Adventure Setup
+            </Button>
+          </CardFooter>
+        </CardboardCard>
+      </form>
     </div>
   );
 }
