@@ -31,6 +31,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
         adventureSettings: settingsReducer(state, action).adventureSettings,
         selectedThemeId: settingsReducer(state, action).selectedThemeId,
         isDarkMode: settingsReducer(state, action).isDarkMode,
+        userGoogleAiApiKey: settingsReducer(state, action).userGoogleAiApiKey, // Ensure API key is handled
     };
 
     // Handle actions that affect multiple slices or the root state
@@ -42,24 +43,23 @@ export function gameReducer(state: GameState, action: Action): GameState {
              const newCharacter = characterReducer(null, { type: "CREATE_CHARACTER", payload: action.payload });
              if (!newCharacter) return state; // Should not happen if payload is valid, but check anyway
              return {
-                 ...state, // Keep saved adventures, theme, etc.
+                 ...initialState, // Start with a clean slate but keep certain things
+                 savedAdventures: state.savedAdventures, // Keep saved adventures
+                 selectedThemeId: state.selectedThemeId, // Keep theme
+                 isDarkMode: state.isDarkMode, // Keep mode
+                 userGoogleAiApiKey: state.userGoogleAiApiKey, // Keep API key
                  character: newCharacter,
                  inventory: inventoryReducer([], { type: "START_GAMEPLAY" }), // Initialize inventory
                  status: "AdventureSetup", // Navigate immediately after character creation
-                 // Reset other relevant gameplay state if needed
-                 storyLog: [],
-                 currentNarration: null,
                  currentGameStateString: "Adventure setup pending...",
-                 currentAdventureId: null,
-                 turnCount: 0,
-                 adventureSummary: null,
              };
          }
         case "RESET_GAME": {
            const saved = state.savedAdventures; // Keep saved adventures
            const themeId = state.selectedThemeId; // Keep theme
            const darkMode = state.isDarkMode; // Keep mode
-           return { ...initialState, savedAdventures: saved, status: "MainMenu", selectedThemeId: themeId, isDarkMode: darkMode };
+           const apiKey = state.userGoogleAiApiKey; // Keep API key
+           return { ...initialState, savedAdventures: saved, status: "MainMenu", selectedThemeId: themeId, isDarkMode: darkMode, userGoogleAiApiKey: apiKey };
          }
         case "LOAD_SAVED_ADVENTURES":
             return { ...state, savedAdventures: action.payload };

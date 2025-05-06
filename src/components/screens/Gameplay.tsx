@@ -388,7 +388,7 @@ export function Gameplay() {
                 currentStamina: character.currentStamina,
                 maxStamina: character.maxStamina,
                 currentMana: character.currentMana,
-                maxMana: maxMana,
+                maxMana: character.maxMana, // Added maxMana
                 level: character.level,
                 xp: character.xp,
                 xpToNextLevel: character.xpToNextLevel,

@@ -19,9 +19,9 @@ export const calculateMaxStamina = (stats: CharacterStats): number => {
  */
 export const calculateMaxMana = (stats: CharacterStats, knowledge: string[]): number => {
     const baseMana = 10;
+    const intellectBonus = stats.intellect * 5; // Bonus from intellect
     const knowledgeBonus = knowledge.includes("Magic") || knowledge.includes("Arcana") || knowledge.includes("Healing") ? 20 : 0; // Expanded check
-    // Add bonus from a potential 'Intelligence' stat later if needed
-    return baseMana + knowledgeBonus;
+    return baseMana + intellectBonus + knowledgeBonus;
 };
 
 /** Represents a universally available starter skill. */
@@ -65,6 +65,9 @@ export const CLASS_STARTER_SKILLS: Record<string, Skill[]> = {
         { name: "Basic Strike", description: "A simple physical attack.", type: 'Starter', staminaCost: 5 },
         { name: "First Aid", description: "Attempt to patch up minor wounds.", type: 'Starter', staminaCost: 10 }
     ],
+     "admin000": [ // Dev mode skills
+        { name: "Dev Power", description: "Access developer abilities.", type: 'Starter' },
+    ],
 };
 
 /**
@@ -85,10 +88,10 @@ export function getStarterSkillsForClass(className: string): Skill[] {
  * @returns The total XP needed for the next level.
  */
 export const calculateXpToNextLevel = (currentLevel: number): number => {
-  // Example: Simple exponential curve (adjust as needed)
+  // Example: Adjusted curve for slower early progression, then faster
   const baseXP = 100;
-  const scalingFactor = 1.5;
-  return Math.floor(baseXP * Math.pow(scalingFactor, currentLevel - 1));
+  // More gradual increase for early levels, then steeper
+  return Math.floor(baseXP + (currentLevel -1) * 50 + Math.pow(currentLevel -1, 2.2) * 10);
 };
 
 /**
