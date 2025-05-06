@@ -87,7 +87,14 @@ export function Gameplay() {
 
     // --- Trigger Skill Tree Generation ---
     const triggerSkillTreeGeneration = useCallback(async (charClass: string) => {
-        if (!charClass || isGeneratingSkillTree) return;
+        if (!charClass || isGeneratingSkillTree || adventureSettings.adventureType === "Immersed") {
+            if (adventureSettings.adventureType === "Immersed") {
+                console.log("Skipping class-based skill tree generation for Immersed adventure.");
+                // Optionally dispatch an action to set a flag or a generic skill tree
+                dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false }); // Ensure loading is false
+            }
+            return;
+        }
         console.log(`Triggering skill tree generation for class: ${charClass}`);
         dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: true });
         setError(null);
@@ -105,7 +112,7 @@ export function Gameplay() {
         } finally {
              dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false });
         }
-    }, [dispatch, toast, isGeneratingSkillTree]); // Added isGeneratingSkillTree dependency
+    }, [dispatch, toast, isGeneratingSkillTree, adventureSettings.adventureType]); // Added isGeneratingSkillTree dependency
 
 
      // --- End Adventure ---
@@ -241,8 +248,8 @@ export function Gameplay() {
 
 
         // --- Standard Action Handling (Non-Dev Mode) ---
-        if (!character.skillTree && !isGeneratingSkillTree) {
-            // Re-trigger generation if skill tree is missing and not already generating
+        if (!character.skillTree && !isGeneratingSkillTree && adventureSettings.adventureType !== "Immersed") {
+            // Re-trigger generation if skill tree is missing, not generating, and not an Immersed adventure
             triggerSkillTreeGeneration(character.class);
             toast({ description: "Initializing skill tree before proceeding...", duration: 1500 });
             setIsLoading(false); // Reset loading state if we return early
@@ -381,7 +388,7 @@ export function Gameplay() {
                 currentStamina: character.currentStamina,
                 maxStamina: character.maxStamina,
                 currentMana: character.currentMana,
-                maxMana: character.maxMana,
+                maxMana: maxMana,
                 level: character.level,
                 xp: character.xp,
                 xpToNextLevel: character.xpToNextLevel,
@@ -395,10 +402,14 @@ export function Gameplay() {
             playerChoice: actionWithDice,
             gameState: currentGameStateString,
             previousNarration: storyLog.length > 0 ? storyLog[storyLog.length - 1].narration : undefined,
-            adventureSettings: {
+            adventureSettings: { // Ensure all adventure settings are passed
                 difficulty: adventureSettings.difficulty,
                 permanentDeath: adventureSettings.permanentDeath,
                 adventureType: adventureSettings.adventureType,
+                worldType: adventureSettings.worldType,
+                mainQuestline: adventureSettings.mainQuestline,
+                universeName: adventureSettings.universeName,
+                playerCharacterConcept: adventureSettings.playerCharacterConcept,
             },
             turnCount: turnCount,
         };
@@ -622,12 +633,12 @@ export function Gameplay() {
 
         if (isInitialLoading) {
              console.log("Initial Loading...");
-             if (!character.skillTree && !isGeneratingSkillTree) {
-                 console.log("Triggering initial skill tree generation...");
+             if (adventureSettings.adventureType !== "Immersed" && !character.skillTree && !isGeneratingSkillTree) {
+                 console.log("Triggering initial skill tree generation for non-Immersed adventure...");
                  triggerSkillTreeGeneration(character.class);
-             } else if (character.skillTree && storyLog.length === 0 && !isLoading) {
-                 // If skill tree exists, log is empty, and not already loading, trigger first narration
-                 console.log("Skill tree exists, triggering initial narration...");
+             } else if ((character.skillTree || adventureSettings.adventureType === "Immersed") && storyLog.length === 0 && !isLoading) {
+                 // If skill tree exists OR it's an Immersed adventure (doesn't strictly need a class tree), log is empty, and not already loading, trigger first narration
+                 console.log("Skill tree exists or Immersed, triggering initial narration...");
                  handlePlayerAction("Begin the adventure by looking around.", true);
                  // setIsInitialLoading will be set to false in handlePlayerAction's finally block
              } else if (!character.skillTree && isGeneratingSkillTree) {
@@ -650,7 +661,7 @@ export function Gameplay() {
 
     }, [
         state.status, character, state.currentAdventureId, storyLog.length, isGeneratingSkillTree,
-        triggerSkillTreeGeneration, handlePlayerAction, state.savedAdventures, isInitialLoading, isLoading // Added isLoading to prevent race conditions
+        triggerSkillTreeGeneration, handlePlayerAction, state.savedAdventures, isInitialLoading, isLoading, adventureSettings.adventureType // Added isLoading and adventureType
     ]);
 
 
