@@ -20,6 +20,7 @@ import {
     SelectValue,
   } from "@/components/ui/select" // Import Select components
 import type { AdventureSettings, DifficultyLevel } from "@/types/adventure-types"; // Import types
+import { VALID_DIFFICULTY_LEVELS } from "@/lib/constants"; // Import valid difficulty levels
 
 export function AdventureSetup() {
   const { state, dispatch } = useGame();
@@ -71,11 +72,13 @@ export function AdventureSetup() {
          return;
      }
 
-     // Difficulty is now always part of the settings
+     // Ensure difficulty is valid (redundant if using Select correctly, but safe)
+     const finalDifficulty = VALID_DIFFICULTY_LEVELS.includes(difficulty) ? difficulty : "Normal";
+
     const settingsPayload: Partial<AdventureSettings> = {
       adventureType,
       permanentDeath,
-      difficulty, // Include difficulty always
+      difficulty: finalDifficulty, // Include difficulty always
       ...(adventureType === "Custom" && { worldType, mainQuestline }),
     };
 
@@ -83,8 +86,8 @@ export function AdventureSetup() {
     dispatch({ type: "START_GAMEPLAY" }); // This action will set the status to Gameplay
 
     const description = adventureType === "Custom"
-      ? `Get ready for a custom journey in ${worldType} with quest "${mainQuestline}" (${difficulty}).`
-      : `Get ready for a randomized ${difficulty} journey.`;
+      ? `Get ready for a custom journey in ${worldType} with quest "${mainQuestline}" (${finalDifficulty}).`
+      : `Get ready for a randomized ${finalDifficulty} journey based on your character.`;
 
     toast({
         title: "Adventure Starting!",
@@ -126,7 +129,8 @@ export function AdventureSetup() {
                  <RadioGroupItem value="Randomized" id="randomized" className="sr-only" aria-label="Randomized Adventure" />
                  <Dices className="w-8 h-8 mb-2 text-primary" />
                  <span className="font-medium">Randomized</span>
-                 <p className="text-sm text-muted-foreground text-center mt-1">Generate a unique world, quests, and challenges.</p>
+                 {/* Updated Description */}
+                 <p className="text-sm text-muted-foreground text-center mt-1">Generate a unique world, quests, and challenges based on your character.</p>
               </Label>
                <Label htmlFor="custom" className="flex flex-col items-center justify-center p-4 border-2 rounded-md cursor-pointer hover:bg-accent/10 data-[state=checked]:bg-accent/20 data-[state=checked]:border-accent transition-colors">
                  <RadioGroupItem value="Custom" id="custom" className="sr-only" aria-label="Custom Adventure" />
@@ -228,5 +232,3 @@ export function AdventureSetup() {
     </div>
   );
 }
-
-    
