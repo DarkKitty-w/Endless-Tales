@@ -19,6 +19,7 @@ import {
     SelectTrigger,
     SelectValue,
   } from "@/components/ui/select" // Import Select components
+import type { AdventureSettings, DifficultyLevel } from "@/types/adventure-types"; // Import types
 
 export function AdventureSetup() {
   const { state, dispatch } = useGame();
@@ -28,7 +29,7 @@ export function AdventureSetup() {
   // State for custom adventure parameters
   const [worldType, setWorldType] = useState<string>(state.adventureSettings.worldType ?? "");
   const [mainQuestline, setMainQuestline] = useState<string>(state.adventureSettings.mainQuestline ?? "");
-  const [difficulty, setDifficulty] = useState<string>(state.adventureSettings.difficulty ?? "Normal"); // Use difficulty from context
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>(state.adventureSettings.difficulty ?? "Normal"); // Use difficulty from context
   const [customError, setCustomError] = useState<string | null>(null);
 
   const validateCustomSettings = (): boolean => {
@@ -71,7 +72,7 @@ export function AdventureSetup() {
      }
 
      // Difficulty is now always part of the settings
-    const settingsPayload = {
+    const settingsPayload: Partial<AdventureSettings> = {
       adventureType,
       permanentDeath,
       difficulty, // Include difficulty always
@@ -172,7 +173,7 @@ export function AdventureSetup() {
            {/* Difficulty Selection - Always visible */}
            <div className="space-y-4 border-t border-foreground/10 pt-6">
                 <Label htmlFor="difficulty-select" className="text-xl font-semibold flex items-center gap-2"><ShieldAlert className="w-5 h-5"/>Select Difficulty</Label>
-                <Select value={difficulty} onValueChange={setDifficulty}>
+                <Select value={difficulty} onValueChange={(value) => setDifficulty(value as DifficultyLevel)}>
                     <SelectTrigger id="difficulty-select" className="w-full">
                         <SelectValue placeholder="Select difficulty..." />
                     </SelectTrigger>
@@ -213,9 +214,10 @@ export function AdventureSetup() {
            <Button variant="outline" onClick={handleBack}>
              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Character
            </Button>
-          <Button
+          {/* Updated disabled check */}
+           <Button
             onClick={handleStartAdventure}
-            disabled={!adventureType} // Only disable if no type is selected
+            disabled={!adventureType || (adventureType === 'Custom' && (!worldType.trim() || !mainQuestline.trim()))}
             className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
             aria-label="Start Adventure"
            >
