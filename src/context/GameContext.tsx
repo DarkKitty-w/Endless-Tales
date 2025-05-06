@@ -80,32 +80,27 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
             dispatch({ type: 'SET_THEME_ID', payload: savedThemeId });
             dispatch({ type: 'SET_DARK_MODE', payload: initialDarkMode });
             console.log(`Loaded theme: ${savedThemeId}, Mode: ${initialDarkMode ? 'Dark' : 'Light'}`);
-            applyTheme(savedThemeId, initialDarkMode); // Apply immediately
+            // applyTheme(savedThemeId, initialDarkMode); // Apply is handled by the state change effect now
             loadedStateApplied = true;
          }
 
-         // Apply default theme if no saved theme was loaded/dispatched
-         if (!loadedStateApplied) {
-             console.log(`Applying default theme: ${initialState.selectedThemeId}, Mode: ${initialState.isDarkMode ? 'Dark' : 'Light'}`);
+         // Apply default theme if no saved theme was loaded/dispatched and state hasn't been initialized from storage
+         // This check is now less critical as the state change effect will handle it.
+         // However, we still might need an initial application if the loaded state matches the initial state perfectly.
+         if (!loadedStateApplied && state.selectedThemeId === initialState.selectedThemeId && state.isDarkMode === initialState.isDarkMode) {
+             console.log(`Applying initial default theme: ${initialState.selectedThemeId}, Mode: ${initialState.isDarkMode ? 'Dark' : 'Light'}`);
              applyTheme(initialState.selectedThemeId, initialState.isDarkMode);
          }
 
     }, [applyTheme]); // Run only once on mount
 
-    // --- Theme Application Effect (Reacting to State Changes) ---
-     useEffect(() => {
-         // Only apply if state has initialized and theme/mode actually changed from initial defaults
-         if ((state.selectedThemeId !== initialState.selectedThemeId || state.isDarkMode !== initialState.isDarkMode)) {
-             // Check against localStorage to prevent redundant writes/applications if state matches storage
-             const storedThemeId = localStorage.getItem(THEME_ID_KEY);
-             const storedMode = localStorage.getItem(THEME_MODE_KEY);
-             const isStoredDark = storedMode === 'dark';
 
-             if (storedThemeId !== state.selectedThemeId || isStoredDark !== state.isDarkMode) {
-                 applyTheme(state.selectedThemeId, state.isDarkMode);
-             }
-         }
-     }, [state.selectedThemeId, state.isDarkMode, applyTheme]);
+     // --- Theme Application Effect (Reacting to State Changes) ---
+      useEffect(() => {
+         // Always apply the theme based on the current state
+         console.log(`Theme Effect: Applying theme ${state.selectedThemeId}, Dark Mode: ${state.isDarkMode}`);
+         applyTheme(state.selectedThemeId, state.isDarkMode);
+      }, [state.selectedThemeId, state.isDarkMode, applyTheme]); // Run whenever theme or mode changes
 
 
    // Log state changes (optional but helpful for debugging)
@@ -133,6 +128,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
          inventory: inventoryString,
          theme: `${state.selectedThemeId} (${state.isDarkMode ? 'Dark' : 'Light'})`,
          storyLogLength: state.storyLog.length,
+         isGeneratingSkillTree: state.isGeneratingSkillTree, // Log skill tree generation status
       });
    }, [state]); // Log whenever the state object changes
 
@@ -165,3 +161,4 @@ export type {
     Reputation,
     NpcRelationships
 };
+
