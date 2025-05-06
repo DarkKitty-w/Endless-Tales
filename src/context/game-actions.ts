@@ -43,4 +43,5 @@ export type Action =
   | { type: "UPDATE_INVENTORY"; payload: InventoryItem[] }
   | { type: "SET_THEME_ID"; payload: string }
   | { type: "SET_DARK_MODE"; payload: boolean }
+  | { type: "SET_USER_API_KEY"; payload: string | null } // Action for user API key
   | { type: "UPDATE_CRAFTING_RESULT"; payload: { narration: string; consumedItems: string[]; craftedItem: InventoryItem | null; newGameStateString: string } };

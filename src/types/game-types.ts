@@ -30,17 +30,14 @@ export interface GameState {
   // Theme state
   selectedThemeId: string;
   isDarkMode: boolean;
+  // User API Key
+  userGoogleAiApiKey: string | null;
 }
 
 // Re-export frequently used sub-types for convenience in other files if needed
 // Or encourage importing directly from the specific type files
 export type {
     Character,
-    AdventureSettings,
-    StoryLogEntry,
-    SavedAdventure,
-    InventoryItem,
-    ItemQuality,
     CharacterStats,
     Skill,
     SkillTree,
@@ -49,10 +46,10 @@ export type {
     NpcRelationships,
     ReputationChange,
     NpcRelationshipChange,
-    DifficultyLevel,
 } from "./character-types";
 
-export type { InventoryItem as GameInventoryItem, ItemQuality as GameItemQuality } from "./inventory-types"; // Example re-export with alias
+export type { InventoryItem, ItemQuality } from "./inventory-types"; // Example re-export with alias
 
-export type { AdventureSettings as GameAdventureSettings, StoryLogEntry as GameStoryLogEntry, SavedAdventure as GameSavedAdventure, DifficultyLevel as GameDifficultyLevel } from "./adventure-types";
+export type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel } from "./adventure-types";
+
 

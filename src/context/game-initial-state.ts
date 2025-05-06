@@ -59,7 +59,7 @@ export const initialInventory: InventoryItem[] = [
 export const initialAdventureSettings: AdventureSettings = {
     adventureType: null,
     permanentDeath: true,
-    difficulty: "Normal" as DifficultyLevel, // Use DifficultyLevel type
+    difficulty: "Normal" as DifficultyLevel,
     worldType: "",
     mainQuestline: "",
 };
@@ -80,4 +80,5 @@ export const initialState: GameState = {
   turnCount: 0,
   selectedThemeId: 'cardboard', // Default theme
   isDarkMode: false, // Default mode (will be checked against system pref on load)
+  userGoogleAiApiKey: null, // Initialize user API key
 };

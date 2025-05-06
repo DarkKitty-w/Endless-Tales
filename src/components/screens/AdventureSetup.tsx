@@ -20,7 +20,7 @@ import {
     SelectValue,
   } from "@/components/ui/select" // Import Select components
 import type { AdventureSettings, DifficultyLevel } from "@/types/adventure-types"; // Import types
-import { VALID_DIFFICULTY_LEVELS } from "@/lib/constants"; // Import valid difficulty levels
+import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "@/lib/constants"; // Import valid difficulty levels
 
 export function AdventureSetup() {
   const { state, dispatch } = useGame();
@@ -73,7 +73,7 @@ export function AdventureSetup() {
      }
 
      // Ensure difficulty is valid (redundant if using Select correctly, but safe)
-     const finalDifficulty = VALID_DIFFICULTY_LEVELS.includes(difficulty) ? difficulty : "Normal";
+     const finalDifficulty = VALID_ADVENTURE_DIFFICULTY_LEVELS.includes(difficulty) ? difficulty : "Normal";
 
     const settingsPayload: Partial<AdventureSettings> = {
       adventureType,
@@ -232,3 +232,5 @@ export function AdventureSetup() {
     </div>
   );
 }
+
+    
