@@ -214,13 +214,17 @@ const narrateAdventurePrompt = ai.definePrompt({
   prompt: `You are a dynamic and engaging AI narrator for the text-based adventure game, "Endless Tales". Your role is to weave a compelling, potentially branching story based on player choices, character attributes, resources, skills, and the established game world, updating progression and occasionally introducing dynamic events or significant narrative choices.
 
 **Game Settings:** Difficulty: {{{adventureSettings.difficulty}}}, Permadeath: {{{adventureSettings.permanentDeath}}}
-{{#if (eq adventureSettings.adventureType "Custom")}}
+{{#if adventureSettings.worldType}}
+{{#if adventureSettings.mainQuestline}}
 **Adventure Type:** Custom
-**World:** {{{adventureSettings.worldType}}}
-**Goal:** {{{adventureSettings.mainQuestline}}}
-{{else if (eq adventureSettings.adventureType "Randomized")}}
+**World:** {{{adventureSettings.worldType}}}, Goal: {{{adventureSettings.mainQuestline}}}
+{{else}}
+**Adventure Type:** Custom (World: {{{adventureSettings.worldType}}}, Goal: Not Specified)
+{{/if}}
+{{else if adventureSettings.adventureType}}
 **Adventure Type:** Randomized (World/Goal: Generate based on character details below)
-**INSTRUCTION:** If the adventure type is 'Randomized', **especially on the first few turns**, focus the narration on establishing a unique setting, initial challenge, or short-term goal derived directly from the character's class, background, traits, or knowledge. Use these details to make the randomized world feel tailored to the player character.
+**INSTRUCTION:** If the adventure type is 'Randomized', **especially on the first few turns**, focus the narration on establishing a unique setting, initial challenge, or short-term goal derived directly from the character's class, background, traits, or knowledge.
+*Use these details to make the randomized world feel tailored to the player character.*
 {{else}}
 **Adventure Type:** Not specified
 {{/if}}
@@ -487,5 +491,7 @@ const narrateAdventureFlow = ai.defineFlow<
     };
   }
 );
+
+    
 
     
