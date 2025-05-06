@@ -5,6 +5,7 @@ import React from "react";
 import type {
     Character, Reputation, NpcRelationships, InventoryItem, SkillTree, Skill
 } from "@/types/game-types";
+import { useGame } from "@/context/GameContext";
 import { CharacterDisplay } from "@/components/game/CharacterDisplay";
 import { InventoryDisplay } from "@/components/game/InventoryDisplay";
 import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay";
@@ -36,11 +37,14 @@ export function LeftPanel({
     renderReputation,
     renderNpcRelationships
 }: LeftPanelProps) {
+    const { state } = useGame();
+    const showSkillsTab = state.adventureSettings.adventureType !== "Immersed";
+
     return (
         <div className="hidden md:flex flex-col w-80 lg:w-96 p-4 border-r border-foreground/10 bg-card/50 h-full">
             {/* Main Tabs for Left Panel Sections */}
             <Tabs defaultValue="character" className="flex-grow flex flex-col min-h-0 h-full">
-                <TabsList className="flex-none grid w-full grid-cols-4 h-12">
+                <TabsList className="flex-none grid w-full grid-cols-3 h-12">
                     <TabsTrigger value="character" className="flex items-center gap-1.5 text-xs sm:text-sm">
                         <User className="w-4 h-4"/> Character
                     </TabsTrigger>
@@ -50,10 +54,13 @@ export function LeftPanel({
                     <TabsTrigger value="inventory" className="flex items-center gap-1.5 text-xs sm:text-sm">
                         <Backpack className="w-4 h-4"/> Inventory
                     </TabsTrigger>
-                    <TabsTrigger value="skills" className="flex items-center gap-1.5 text-xs sm:text-sm">
-                        <Workflow className="w-4 h-4"/> Skills
-                    </TabsTrigger>
+                    {showSkillsTab && (
+                        <TabsTrigger value="skills" className="flex items-center gap-1.5 text-xs sm:text-sm">
+                            <Workflow className="w-4 h-4"/> Skills
+                        </TabsTrigger>
+                    )}
                 </TabsList>
+                
 
                 {/* Tab Content Area */}
                 <div className="flex-grow overflow-hidden mt-2">
@@ -124,26 +131,27 @@ export function LeftPanel({
                     </TabsContent>
 
                     {/* Skills Tab */}
-                    <TabsContent value="skills" className="h-full m-0">
-                        {/* SkillTreeDisplay handles its own scrolling */}
-                        {character.skillTree && !isGeneratingSkillTree ? (
-                            <SkillTreeDisplay skillTree={character.skillTree} learnedSkills={character.learnedSkills} currentStage={character.skillTreeStage}/>
-                        ) : (
-                            <div className="flex items-center justify-center h-full text-muted-foreground italic p-4">
-                                {isGeneratingSkillTree ? (
-                                    <>
-                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                        Generating skill tree...
-                                    </>
-                                ) : (
-                                     "No skill tree available."
-                                )}
-                            </div>
-                        )}
-                    </TabsContent>
+                    {showSkillsTab && (
+                     <TabsContent value="skills" className="h-full m-0">
+                         {/* SkillTreeDisplay handles its own scrolling */}
+                         {character.skillTree && !isGeneratingSkillTree ? (
+                             <SkillTreeDisplay skillTree={character.skillTree} learnedSkills={character.learnedSkills} currentStage={character.skillTreeStage}/>
+                         ) : (
+                             <div className="flex items-center justify-center h-full text-muted-foreground italic p-4">
+                                 {isGeneratingSkillTree ? (
+                                     <>
+                                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                         Generating skill tree...
+                                     </>
+                                 ) : (
+                                      "No skill tree available."
+                                 )}
+                             </div>
+                         )}
+                     </TabsContent>
+                    )}
                 </div>
             </Tabs>
         </div>
     );
 }
-    
