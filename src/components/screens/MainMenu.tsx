@@ -1,10 +1,11 @@
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
 import { useGame } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Play, Users, Settings, Sparkles, FolderClock } from "lucide-react"; // Import Users icon for Co-op
+import { Play, Users, Settings, Sparkles, FolderClock, ChevronDown } from "lucide-react"; // Import Users icon for Co-op & ChevronDown
 import { SettingsPanel } from '@/components/screens/SettingsPanel';
 import {
   Sheet,
@@ -13,6 +14,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { AdventureType } from "@/types/adventure-types";
 
 export function MainMenu() {
@@ -63,28 +70,39 @@ export function MainMenu() {
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 pt-6">
-            {/* Solo Adventure Button */}
-            <Button size="lg" onClick={() => handleNewGame("Randomized")} className="bg-accent hover:bg-accent/90 text-accent-foreground w-full">
-              <Play className="mr-2 h-5 w-5" /> Start Solo Adventure
-            </Button>
+            {/* New Adventure Dropdown Button */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground w-full">
+                  <Play className="mr-2 h-5 w-5" /> Start New Adventure <ChevronDown className="ml-auto h-4 w-4 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="w-[calc(100%-2rem)] sm:w-[364px] max-w-md"> {/* Match card width approx */}
+                <DropdownMenuItem onClick={() => handleNewGame("Randomized")} className="cursor-pointer">
+                  <Play className="mr-2 h-4 w-4" /> Solo Adventure (Randomized)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleNewGame("Custom")} className="cursor-pointer">
+                  <Users className="mr-2 h-4 w-4" /> Custom Adventure
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleNewGame("Immersed")} className="cursor-pointer">
+                  <Sparkles className="mr-2 h-4 w-4" /> Immersed Adventure
+                </DropdownMenuItem>
+                 <DropdownMenuItem disabled className="cursor-not-allowed opacity-50">
+                  <Users className="mr-2 h-4 w-4" /> Co-op Adventure (Coming Soon)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-            {/* Co-op Adventure Button (Placeholder) */}
-            <Button size="lg" variant="secondary" disabled className="w-full">
-              <Users className="mr-2 h-5 w-5" /> Start Co-op Adventure (Coming Soon)
-            </Button>
-
-            {/* Immersed Adventure Button */}
-            <Button size="lg" onClick={() => handleNewGame("Immersed")} variant="outline" className="w-full">
-              <Sparkles className="mr-2 h-5 w-5" /> Start Immersed Adventure
-            </Button>
-
-            {/* Add button to view saved adventures */}
+            {/* View Saved Adventures Button */}
             <Button size="lg" onClick={handleViewSaved} variant="secondary" className="w-full">
               <FolderClock className="mr-2 h-5 w-5" /> View Saved Adventures
             </Button>
         </CardContent>
-        <CardFooter className="pt-4 justify-center">
-           <p className="text-xs text-muted-foreground">v0.1.0 - Alpha</p>
+        <CardFooter className="pt-4 justify-center flex-col items-center">
+           <p className="text-xs text-muted-foreground mb-2">v0.1.0 - Alpha</p>
+           <a href='https://ko-fi.com/K3K31ELFCW' target='_blank' rel="noopener noreferrer">
+            <img height='36' style={{border: '0px', height: '36px'}} src='https://storage.ko-fi.com/cdn/kofi5.png?v=6' alt='Buy Me a Coffee at ko-fi.com' />
+           </a>
         </CardFooter>
       </CardboardCard>
        <footer className="mt-8 text-sm text-muted-foreground text-center">
@@ -93,4 +111,3 @@ export function MainMenu() {
     </div>
   );
 }
-
