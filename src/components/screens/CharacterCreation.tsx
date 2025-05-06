@@ -17,12 +17,11 @@ import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
 import { StatAllocationInput } from "@/components/character/StatAllocationInput"; // Corrected import path
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants"; // Import from constants file
-import type { CharacterStats } from "@/types/character-types"; // Import from specific types file
-import { initialStats as defaultInitialStats } from "@/context/game-initial-state"; // Import initialStats with alias
+import type { CharacterStats, Character } from "@/types/character-types"; // Import types
+import { initialStats as defaultInitialStats, initialCharacterState } from "@/context/game-initial-state"; // Import initialStats with alias
 import { BasicCharacterForm } from "@/components/character/BasicCharacterForm"; // Import Basic form component
 import { TextCharacterForm } from "@/components/character/TextCharacterForm"; // Import Text form component
 import { CharacterStatsAllocator } from "@/components/character/CharacterStatsAllocator"; // Import Stats Allocator
-
 
 // --- Zod Schema for Validation ---
 const baseCharacterSchema = z.object({
@@ -67,15 +66,16 @@ export function CharacterCreation() {
    // --- Stat Allocation Logic ---
    // Define calculateRemainingPoints *before* it's used in useState initialization
    const calculateRemainingPoints = (currentStats: CharacterStats): number => {
-    const allocatedTotal = currentStats.strength + currentStats.stamina + currentStats.agility;
-    return TOTAL_STAT_POINTS - allocatedTotal;
-  };
+        const allocatedTotal = currentStats.strength + currentStats.stamina + currentStats.agility;
+        return TOTAL_STAT_POINTS - allocatedTotal;
+   };
 
-  // State for stats moved to CharacterStatsAllocator
+
+  // State for stats
   const [stats, setStats] = useState<CharacterStats>(() => {
     return state.character?.stats ? { ...defaultInitialStats, ...state.character.stats } : { ...defaultInitialStats };
   });
-  const [remainingPoints, setRemainingPoints] = useState<number>(() => calculateRemainingPoints(stats));
+  const [remainingPoints, setRemainingPoints] = useState<number>(() => calculateRemainingPoints(stats)); // Initialize based on stats
   const [statError, setStatError] = useState<string | null>(null);
   const [isRandomizing, setIsRandomizing] = useState(false);
   const [randomizationComplete, setRandomizationComplete] = useState(false);
@@ -92,7 +92,7 @@ export function CharacterCreation() {
     } else {
       setStatError(null);
     }
-  }, [calculateRemainingPoints]); // Include calculateRemainingPoints in dependency array
+  }, []); // Keep calculateRemainingPoints outside or memoize if needed
 
 
   // Determine the current schema based on the selected tab
@@ -100,7 +100,7 @@ export function CharacterCreation() {
 
   const { register, handleSubmit, formState: { errors }, reset, watch, setValue, trigger } = useForm<FormData>({
      resolver: zodResolver(currentSchema),
-     mode: "onChange",
+     mode: "onChange", // Trigger validation on change
      defaultValues: {
         creationType: "basic",
         name: state.character?.name ?? "",
@@ -125,11 +125,33 @@ export function CharacterCreation() {
 
         while (pointsLeft > 0) {
             const availableKeys = allocatedStatKeys.filter(key => newAllocatedStats[key] < MAX_STAT_VALUE);
-            if (availableKeys.length === 0) break;
+            if (availableKeys.length === 0) break; // Avoid infinite loop if somehow all maxed out
             const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
             newAllocatedStats[randomKey]++;
             pointsLeft--;
         }
+
+        // Ensure total points are exactly TOTAL_STAT_POINTS, adjusting if necessary due to MAX_STAT_VALUE limits
+         let currentTotal = newAllocatedStats.strength + newAllocatedStats.stamina + newAllocatedStats.agility;
+         let safetyNet = 0; // Prevent infinite loop in adjustment phase
+         while (currentTotal !== TOTAL_STAT_POINTS && safetyNet < 20) {
+             if (currentTotal < TOTAL_STAT_POINTS) {
+                // Add points randomly to stats not at max
+                 const availableKeys = allocatedStatKeys.filter(key => newAllocatedStats[key] < MAX_STAT_VALUE);
+                 if (availableKeys.length === 0) break;
+                 const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
+                 newAllocatedStats[randomKey]++;
+                 currentTotal++;
+             } else { // currentTotal > TOTAL_STAT_POINTS
+                // Subtract points randomly from stats not at min
+                 const availableKeys = allocatedStatKeys.filter(key => newAllocatedStats[key] > MIN_STAT_VALUE);
+                 if (availableKeys.length === 0) break;
+                 const randomKey = availableKeys[Math.floor(Math.random() * availableKeys.length)];
+                 newAllocatedStats[randomKey]--;
+                 currentTotal--;
+             }
+             safetyNet++;
+         }
 
         const finalStats: CharacterStats = {
             ...defaultInitialStats, // Start with the base defaults for all stats
@@ -137,8 +159,7 @@ export function CharacterCreation() {
         };
 
         handleStatChange(finalStats); // Update stats using the handler
-        toast({ title: "Stats Randomized", description: `Distributed ${TOTAL_STAT_POINTS} points.` });
-   }, [handleStatChange, toast]);
+   }, [handleStatChange]);
 
 
  // --- Randomize All ---
@@ -211,12 +232,13 @@ export function CharacterCreation() {
 
   // --- AI Description Generation ---
   const handleGenerateDescription = useCallback(async () => {
-     await trigger("description");
+     await trigger(["name", "description"]); // Validate name and description first
      const currentDescValue = watch("description");
      const currentName = watch("name");
+     const nameError = errors.name;
      const descError = errors.description;
 
-     if (!currentName || descError || !currentDescValue || currentDescValue.length < 10) {
+     if (nameError || descError || !currentDescValue || currentDescValue.length < 10) {
        setError("Please provide a valid name and description (min 10 chars) before generating.");
        return;
      }
@@ -250,7 +272,7 @@ export function CharacterCreation() {
      } finally {
        setIsGenerating(false);
      }
-   }, [watch, trigger, errors.description, setValue, dispatch]);
+   }, [watch, trigger, errors.name, errors.description, setValue, dispatch]);
 
 
   // --- Form Submission ---
@@ -275,10 +297,11 @@ export function CharacterCreation() {
 
     // Determine final values based on creation type and potentially AI inference
     const finalName = data.name;
-    const finalClass = creationType === 'basic' ? data.class : (watch("class") || "Adventurer");
-    const finalTraits = creationType === 'basic' ? data.traits?.split(',').map(t => t.trim()).filter(Boolean) ?? [] : watch("traits")?.split(',').map(t => t.trim()).filter(Boolean) ?? [];
-    const finalKnowledge = creationType === 'basic' ? data.knowledge?.split(',').map(k => k.trim()).filter(Boolean) ?? [] : watch("knowledge")?.split(',').map(k => k.trim()).filter(Boolean) ?? [];
-    const finalBackground = creationType === 'basic' ? data.background : watch("background") || "";
+    // Use the 'class' value directly from the form state, relying on the current schema
+    const finalClass = (data as any).class ?? watch("class") ?? "Adventurer";
+    const finalTraits = (data as any).traits?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? watch("traits")?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? [];
+    const finalKnowledge = (data as any).knowledge?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? watch("knowledge")?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? [];
+    const finalBackground = (data as any).background ?? watch("background") ?? "";
     const finalDescription = watch("description") || ""; // Always take description from the text field if available
 
     characterData = {
@@ -289,7 +312,7 @@ export function CharacterCreation() {
       knowledge: finalKnowledge,
       background: finalBackground,
       stats: stats, // Use the current stats from state
-      aiGeneratedDescription: state.character?.aiGeneratedDescription,
+      aiGeneratedDescription: state.character?.aiGeneratedDescription, // Keep potential AI description separate
     };
 
     dispatch({ type: "CREATE_CHARACTER", payload: characterData });
@@ -298,19 +321,32 @@ export function CharacterCreation() {
 
   // --- Effects ---
    useEffect(() => {
+       // Resets the form validation schema and state when the creationType changes
        const newSchema = creationType === 'basic' ? basicCreationSchema : textCreationSchema;
        const currentValues = watch();
        reset(currentValues, {
-         keepValues: true,
-         keepDirty: true,
-         keepErrors: false,
-         keepTouched: false,
-         keepIsValid: false,
-         keepSubmitCount: false,
+         keepValues: true, // Keep existing values if fields match
+         keepDirty: true, // Keep track of which fields were touched
+         keepErrors: false, // Clear errors from the other schema
+         keepTouched: false, // Reset touched status for validation
+         keepIsValid: false, // Re-evaluate validity
+         keepSubmitCount: false, // Reset submit count
        });
-       setValue("creationType", creationType);
-       trigger(); // Validate after schema change
+       setValue("creationType", creationType); // Ensure creationType is set correctly
+       trigger(); // Re-validate the entire form with the new schema
    }, [creationType, reset, watch, setValue, trigger]);
+
+
+  // --- Calculate if proceed button should be disabled ---
+  const isProceedDisabled =
+    isGenerating ||
+    isRandomizing ||
+    !!statError ||
+    remainingPoints !== 0 ||
+    !!errors.name ||
+    (creationType === 'basic' && !!(errors as any).class) || // Check basic specific errors
+    (creationType === 'text' && !!(errors as any).description); // Check text specific errors
+
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
@@ -360,6 +396,7 @@ export function CharacterCreation() {
 
                     {/* --- Stat Allocation --- */}
                     <Separator />
+                     {/* Render CharacterStatsAllocator */}
                     <CharacterStatsAllocator
                         stats={stats}
                         remainingPoints={remainingPoints}
@@ -395,7 +432,7 @@ export function CharacterCreation() {
                      <Button
                          type="submit"
                          className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
-                          disabled={isGenerating || isRandomizing || !!statError || remainingPoints !== 0 || !!errors.name || (creationType === 'basic' && !!errors.class) || (creationType === 'text' && !!errors.description)}
+                         disabled={isProceedDisabled} // Use the calculated disabled state
                          aria-label="Save character and proceed to adventure setup"
                       >
                          <Save className="mr-2 h-4 w-4" />
