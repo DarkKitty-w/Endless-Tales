@@ -83,6 +83,9 @@ const NarrateAdventureInputSchema = z.object({
       difficulty: z.string().describe("Overall game difficulty (e.g., Easy, Normal, Hard, Nightmare). Influences challenge levels and potential event triggers."),
       permanentDeath: z.boolean().describe("Whether permanent death is enabled."),
       adventureType: z.enum(["Randomized", "Custom"]).nullable().describe("Type of adventure."),
+      // Add custom fields only if adventureType is Custom
+      worldType: z.string().optional().describe("The specified world type (if Custom adventure)."),
+      mainQuestline: z.string().optional().describe("The specified main quest goal (if Custom adventure)."),
   }).describe("The overall settings for the current adventure."),
   turnCount: z.number().describe("The current turn number of the adventure. Can be used to trigger time-based events."),
 });
@@ -178,15 +181,19 @@ function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput
         // Generate a basic updated game state string for dev mode
         const updatedGameStateString = `Turn: ${turnCount + 1}\n${gameState.replace(/Turn: \d+/, '')}\nDEV MODE ACTIVE - Last command: ${playerChoice}`;
 
+        // Return the structure expected by the reducer, including necessary updates
         return {
             narration: devNarration,
             updatedGameState: updatedGameStateString,
             xpGained: xpGained,
             progressedToStage: progressedToStage,
-            // Send other changes if needed by reducer
-            // gainedSkill: addedItemName ? { name: addedItemName, description: "(Dev Added)" } : undefined, // Example, adjust as needed
-            // consumedItems: removedItemName ? [removedItemName] : [], // Example
+            // Need to pass these signals to the reducer to handle inventory/stat changes
+            // The reducer logic needs to be updated to handle these specifically for dev mode if not already done.
+            // For example, ADD_ITEM/REMOVE_ITEM actions could be dispatched directly from Gameplay.tsx for dev commands.
+            // Or, the UPDATE_NARRATION action in the reducer could interpret these dev mode outputs.
+            // For now, sending the information in the standard fields:
             updatedStats: updatedStats,
+            // Let's assume inventory changes are handled by separate dispatches in Gameplay for dev mode.
         };
 
     } catch (devError: any) {
@@ -206,7 +213,17 @@ const narrateAdventurePrompt = ai.definePrompt({
   output: { schema: NarrateAdventureOutputSchema },
   prompt: `You are a dynamic and engaging AI narrator for the text-based adventure game, "Endless Tales". Your role is to weave a compelling, potentially branching story based on player choices, character attributes, resources, skills, and the established game world, updating progression and occasionally introducing dynamic events or significant narrative choices.
 
-**Game Settings:** Difficulty: {{{adventureSettings.difficulty}}}, Permadeath: {{{adventureSettings.permanentDeath}}}, Type: {{{adventureSettings.adventureType}}}
+**Game Settings:** Difficulty: {{{adventureSettings.difficulty}}}, Permadeath: {{{adventureSettings.permanentDeath}}}
+{{#if (eq adventureSettings.adventureType "Custom")}}
+**Adventure Type:** Custom
+**World:** {{{adventureSettings.worldType}}}
+**Goal:** {{{adventureSettings.mainQuestline}}}
+{{else if (eq adventureSettings.adventureType "Randomized")}}
+**Adventure Type:** Randomized (World/Goal: Generate based on character details below)
+**INSTRUCTION:** If the adventure type is 'Randomized', **especially on the first few turns**, focus the narration on establishing a unique setting, initial challenge, or short-term goal derived directly from the character's class, background, traits, or knowledge. Use these details to make the randomized world feel tailored to the player character.
+{{else}}
+**Adventure Type:** Not specified
+{{/if}}
 **Current Turn:** {{{turnCount}}}
 
 **Game Context:**
@@ -244,37 +261,37 @@ Generate the next part of the story based on ALL the information above.
 1.  **React Dynamically:** Describe the outcome of the player's action. Consider their character's class, level, xp, reputation, relationships, stats, **current stamina and mana**, traits, knowledge, background, *current skill stage*, **learned skills**, inventory, the current gameState, and the **game difficulty**.
 2.  **Logical Progression, Resource Costs & Restrictions:**
     *   **Evaluate Feasibility:** Assess if the action is logically possible. *Actions tied to higher skill stages should only be possible if the character has reached that stage.* Harder difficulties might make certain actions less feasible initially.
-    *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output staminaChange, manaChange **only if they changed**.
+    *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output \`staminaChange\`, \`manaChange\` **only if they changed**.
     *   **Block Impossible Actions:** Prevent universe-breaking actions (e.g., "destroy the universe", "teleport to another dimension") unless EXTREME justification exists in gameState AND skill stage is high. Simple reality-bending ("become king", "control time") is also typically Impossible without justification.
     *   **Narrate Failure Reason:** If blocked/failed, explain why (lack of skill, resources, item, stage, reputation, **NPC relationships**, difficulty, etc.).
     *   **Skill-based Progression:** Very powerful actions require high milestones AND skill stages.
 3.  **Incorporate Dice Rolls:** Interpret dice roll results (e.g., "(Difficulty: Hard, Dice Roll Result: 75/100)") contextually. High rolls succeed, low rolls fail, adjusted by **game difficulty**. Narrate the degree of success/failure. Success might grant more XP or better reputation/relationship changes. Failure might have negative consequences, potentially more severe on higher difficulties.
 4.  **Consequences, Resources, XP, Reputation, Relationships & Character Progression:**
-    *   **Resource Changes:** If current stamina or mana changed, include staminaChange or manaChange. **Do not include if unchanged.**
-    *   **XP Awards:** If the action was significant (overcame challenge, clever solution, quest progress), award XP via xpGained (adjust based on **difficulty** - harder challenges grant more). **Only include if XP was gained.**
-    *   **Reputation Changes:** If the action affects a faction's view, include reputationChange. **Only include if reputation changed.**
-    *   **NPC Relationship Changes:** If the action affects an NPC's view, include npcRelationshipChange. **Only include if relationship changed.**
+    *   **Resource Changes:** If current stamina or mana changed, include \`staminaChange\` or \`manaChange\`. **Do not include if unchanged.**
+    *   **XP Awards:** If the action was significant (overcame challenge, clever solution, quest progress), award XP via \`xpGained\` (adjust based on **difficulty** - harder challenges grant more). **Only include if XP was gained.**
+    *   **Reputation Changes:** If the action affects a faction's view, include \`reputationChange\`. **Only include if reputation changed.**
+    *   **NPC Relationship Changes:** If the action affects an NPC's view, include \`npcRelationshipChange\`. **Only include if relationship changed.**
     *   **Character Progression (Optional):** If events lead to development:
-        *   Include updatedStats, updatedTraits, updatedKnowledge. **Only include if they changed.**
-        *   **Skill Stage Progression:** Include progressedToStage **only if milestones warrant advancement.**
-        *   **Class Change Suggestion:** Include suggestedClassChange **only if actions strongly align elsewhere.**
-        *   **Gaining Skills:** Include gainedSkill **only if appropriate.**
+        *   Include \`updatedStats\`, \`updatedTraits\`, \`updatedKnowledge\`. **Only include if they changed.**
+        *   **Skill Stage Progression:** Include \`progressedToStage\` **only if milestones warrant advancement.**
+        *   **Class Change Suggestion:** Include \`suggestedClassChange\` **only if actions strongly align elsewhere.**
+        *   **Gaining Skills:** Include \`gainedSkill\` **only if appropriate.**
 5.  **Update Game State:** **REQUIRED.** Modify the 'gameState' string concisely to reflect ALL changes (location, **inventory**, NPC mood, time, quest progress, milestones, **status including resources, level, XP, reputation, and NPC relationships**). **Ensure the inventory listed in the 'updatedGameState' string is the character's complete and accurate inventory after the action.** **MUST include the current Turn count (e.g., "Turn: 16").**
 6.  **Branching Narratives & Dynamic Events (Introduce Occasionally):**
-    *   **Branching Choices:** At significant moments, present **exactly 4** meaningful 'branchingChoices' that significantly alter the path forward. Provide optional subtle 'consequenceHint' for each. **Only include if relevant.**
-    *   **Dynamic Events:** Based on 'turnCount' or randomness (especially on higher difficulties), trigger a 'dynamicEventTriggered'. This event should integrate into the current narration. Keep these events relatively infrequent. **Only include if triggered.**
+    *   **Branching Choices:** At significant moments, present **exactly 4** meaningful \`branchingChoices\` that significantly alter the path forward. Provide optional subtle 'consequenceHint' for each. **Only include if relevant.**
+    *   **Dynamic Events:** Based on 'turnCount' or randomness (especially on higher difficulties), trigger a \`dynamicEventTriggered\`. This event should integrate into the current narration. Keep these events relatively infrequent. **Only include if triggered.**
 7.  **Tone:** Maintain a consistent fantasy text adventure tone. Be descriptive and engaging. Adjust tone slightly based on **difficulty** (e.g., more ominous on Hard).
 
 **Output Format:** Respond **ONLY** with a valid JSON object matching the NarrateAdventureOutput schema.
 *   'narration' and 'updatedGameState' are **REQUIRED**.
-*   All other fields are **OPTIONAL** and should **ONLY** be included if their corresponding event actually occurred (e.g., include xpGained only if XP was actually awarded).
-*   If including branchingChoices, ensure the array contains **exactly 4** choices.
+*   All other fields are **OPTIONAL** and should **ONLY** be included if their corresponding event actually occurred (e.g., include \`xpGained\` only if XP was actually awarded).
+*   If including \`branchingChoices\`, ensure the array contains **exactly 4** choices.
 *   Ensure the 'updatedGameState' string contains the correct turn count.
 
 Example Output (Success with XP and branching choices):
 {
   "narration": "You successfully sneak past the sleeping goblin! Ahead, the tunnel forks. To the left, you hear dripping water. To the right, a faint metallic clang echoes. Straight ahead, the main tunnel continues into darkness. You could also try examining the goblin's discarded pouch.",
-  "updatedGameState": "Turn: 15\\nLocation: Goblin Tunnel\\nInventory: Torch, Sword, Lockpicks\\nStatus: Healthy (STA: 90/100, MANA: 15/20)\\nLevel: 2, XP: 160/250\\nReputation: None\\nNPC Relationships: None\\nLearned Skills: Observe, Sneak, Quick Strike\\nSkill Stage: Stage 1 - Scout",
+  "updatedGameState": "Turn: 15\\nLocation: Goblin Tunnel\\nInventory: Torch, Sword, Lockpicks\\nStatus: Healthy (STA: 90/100, MANA: 15/20)\\nLevel: 2, XP: 160/250\\nReputation: None\\nNPC Relationships: None\\nClass: Rogue\\nSkill Stage: Stage 1 - Scout\\nLearned Skills: Observe, Sneak, Quick Strike",
   "xpGained": 15,
   "staminaChange": -5,
   "branchingChoices": [
@@ -288,7 +305,7 @@ Example Output (Success with XP and branching choices):
 Example Output (Failure with no other changes):
 {
   "narration": "You try to force the rusty lever, but it refuses to budge. Your muscles strain, but it's stuck fast.",
-  "updatedGameState": "Turn: 17\\nLocation: Rusty Lever Room\\nInventory: Torch, Rope\\nStatus: Healthy (STA: 85/95, MANA: 10/10)\\nLevel: 1, XP: 50/100\\nReputation: Town Guard: 5\\nNPC Relationships: Guard Captain: -5\\nLearned Skills: Basic Strike, Shield Block, Observe\\nSkill Stage: Stage 0 - Potential",
+  "updatedGameState": "Turn: 17\\nLocation: Rusty Lever Room\\nInventory: Torch, Rope\\nStatus: Healthy (STA: 85/95, MANA: 10/10)\\nLevel: 1, XP: 50/100\\nReputation: Town Guard: 5\\nNPC Relationships: Guard Captain: -5\\nClass: Warrior\\nSkill Stage: Stage 0 - Potential\\nLearned Skills: Basic Strike, Shield Block, Observe",
   "staminaChange": -5
 }
 `,
