@@ -23,9 +23,11 @@ import { initialCharacterState, initialCharacterStats as defaultInitialStats } f
 import { BasicCharacterForm } from "@/components/character/BasicCharacterForm";
 import { TextCharacterForm } from "@/components/character/TextCharacterForm";
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons";
+import type { AdventureType } from "@/types/adventure-types";
+
 
 // Module-level variables for Zod schema refinement context
-let currentGlobalAdventureType: string | null | undefined = null;
+let currentGlobalAdventureType: AdventureType | undefined = undefined;
 let currentGlobalCharacterOriginType: 'existing' | 'original' | undefined = undefined;
 
 const baseCharacterSchema = z.object({
@@ -53,7 +55,7 @@ const basicCreationSchema = baseCharacterSchema.extend(basicCreationSchemaFields
 
 const textCreationSchemaFields = {
   creationType: z.literal("text"),
-  description: z.string().optional(),
+  description: z.string().optional(), 
   class: z.string().max(30, "Class name too long (max 30).").optional().transform(val => val || ""),
   traits: commaSeparatedMaxItems(5, "Max 5 traits allowed (comma-separated)."),
   knowledge: commaSeparatedMaxItems(5, "Max 5 knowledge areas allowed (comma-separated)."),
@@ -67,42 +69,35 @@ const combinedSchema = z.discriminatedUnion("creationType", [
 ]).superRefine((data, ctx) => {
   // console.log("Zod superRefine - GlobalAdventureType:", currentGlobalAdventureType, "GlobalOriginType:", currentGlobalCharacterOriginType, "Data CreationType:", data.creationType);
 
-  if (currentGlobalAdventureType === "Immersed" && currentGlobalCharacterOriginType === "existing") {
-    // For Immersed (Existing), most fields are AI-generated or not applicable here.
-    return;
-  }
-
-  if (currentGlobalAdventureType !== "Immersed") { // Randomized or Custom
-    if (data.creationType === "basic") {
-      if (!data.class || data.class.trim() === "") {
+  if (currentGlobalAdventureType === "Immersed") {
+    if (currentGlobalCharacterOriginType === "original" && data.creationType === "text") {
+      if (!data.description || data.description.trim().length < 10) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "Class is required for Randomized/Custom adventures.",
-          path: ["class"],
+          message: "Description (min 10 chars) is required for AI profile generation (Immersed Original).",
+          path: ["description"],
         });
       }
     }
-    if (data.creationType === "text") {
-        if (!data.description || data.description.trim().length < 10) {
-             ctx.addIssue({
-                 code: z.ZodIssueCode.custom,
-                 message: "Description (min 10 chars) is required for AI profile generation (Randomized/Custom).",
-                 path: ["description"],
-             });
-        }
+    return;
+  }
+
+  if (data.creationType === "basic") {
+    if (!data.class || data.class.trim() === "") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Class is required for Randomized/Custom adventures.",
+        path: ["class"],
+      });
     }
-  } else if (currentGlobalAdventureType === "Immersed" && currentGlobalCharacterOriginType === "original") {
-    // Immersed original character
-    if (data.creationType === "text") {
-        if (!data.description || data.description.trim().length < 10) {
-             ctx.addIssue({
-                 code: z.ZodIssueCode.custom,
-                 message: "Description (min 10 chars) is required for AI profile generation (Immersed Original).",
-                 path: ["description"],
-             });
-        }
+  } else if (data.creationType === "text") { 
+    if (!data.description || data.description.trim().length < 10) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Description (min 10 chars) is required for AI profile generation (Randomized/Custom).",
+        path: ["description"],
+      });
     }
-    // Class is hidden for Immersed, so no direct validation here
   }
 });
 
@@ -122,13 +117,15 @@ const staticDefaultValues: Partial<FormData> = {
 export function CharacterCreation() {
   const { state, dispatch } = useGame();
   const { toast } = useToast();
-  const formRef = useRef<HTMLFormElement>(null); // Ref for the form
+  const formRef = useRef<HTMLFormElement>(null);
 
   console.log(
     "CharacterCreation RENDER START - AdventureType:", state.adventureSettings.adventureType,
     "OriginType:", state.adventureSettings.characterOriginType,
     "Character in context:", state.character?.name
   );
+  console.log("CharacterCreation RENDER START - Full adventureSettings from context:", JSON.stringify(state.adventureSettings));
+
 
   const [creationType, setCreationType] = useState<"basic" | "text">("basic");
 
@@ -142,7 +139,7 @@ export function CharacterCreation() {
     const initial = characterStats ? { ...defaultInitialStats, ...characterStats } : { ...defaultInitialStats };
      if (initial.strength + initial.stamina + initial.agility > TOTAL_STAT_POINTS ||
          initial.strength < MIN_STAT_VALUE || initial.stamina < MIN_STAT_VALUE || initial.agility < MIN_STAT_VALUE ) {
-        return { ...defaultInitialStats };
+        return { ...defaultInitialStats }; 
     }
     return initial;
   });
@@ -156,53 +153,43 @@ export function CharacterCreation() {
 
   const { register, handleSubmit, formState, reset, watch, setValue, trigger, getValues } = useForm<FormData>({
      resolver: zodResolver(combinedSchema),
-     mode: "onChange", // "onChange" for more responsive validation feedback
-     defaultValues: staticDefaultValues,
+     mode: "onChange", 
+     defaultValues: staticDefaultValues, 
    });
    const { errors, isValid: formIsValid, isDirty, dirtyFields } = formState;
 
-
-  useEffect(() => {
-    console.log(
-      "CharacterCreation MOUNT/CONTEXT_UPDATE - AdventureType:", state.adventureSettings.adventureType,
-      "OriginType:", state.adventureSettings.characterOriginType
-    );
+   useEffect(() => {
+    console.log("CharacterCreation: Context/Tab Update Effect. AdventureType from context:", state.adventureSettings.adventureType, "Local creationType tab:", creationType);
     currentGlobalAdventureType = state.adventureSettings.adventureType;
     currentGlobalCharacterOriginType = state.adventureSettings.characterOriginType;
 
-    const newValues: Partial<FormData> = {
-        creationType: creationType, // Use local tab state
+    const newFormValues: Partial<FormData> = {
+        creationType: creationType,
         name: state.character?.name || getValues("name") || "",
-        class: (state.adventureSettings.adventureType === "Immersed")
-            ? "" // Class is hidden for Immersed
-            : state.character?.class || getValues("class") || (creationType === "basic" ? "Adventurer" : ""),
+        class: (state.adventureSettings.adventureType === "Immersed") 
+                ? "" 
+                : state.character?.class || getValues("class") || (creationType === "basic" ? "Adventurer" : ""),
         traits: state.character?.traits?.join(', ') || getValues("traits") || "",
         knowledge: state.character?.knowledge?.join(', ') || getValues("knowledge") || "",
         background: state.character?.background || getValues("background") || "",
         description: (state.character?.aiGeneratedDescription || state.character?.description) || getValues("description") || "",
     };
 
-    // Specific override for Immersed Original concept
-    if (state.adventureSettings.adventureType === "Immersed" && state.adventureSettings.characterOriginType === "original") {
-        if (!getValues("description") && state.adventureSettings.playerCharacterConcept) { // Only if user hasn't typed anything
-            newValues.description = state.adventureSettings.playerCharacterConcept;
-        }
+    if (state.adventureSettings.adventureType === "Immersed" && 
+        state.adventureSettings.characterOriginType === "original" &&
+        !getValues("description") && state.adventureSettings.playerCharacterConcept) {
+        newFormValues.description = state.adventureSettings.playerCharacterConcept;
     }
-
-    console.log("CharacterCreation: Resetting form with values:", newValues);
-    reset(newValues); // Reset with new values, don't keep dirty state from previous renders
-    trigger(); // Re-validate the form after reset
-
-  }, [state.character, state.adventureSettings.adventureType, state.adventureSettings.characterOriginType, creationType, reset, getValues, trigger, state.adventureSettings.playerCharacterConcept]);
-
-
-  // Effect for Zod schema refinement variables
-  useEffect(() => {
-    currentGlobalAdventureType = state.adventureSettings.adventureType;
-    currentGlobalCharacterOriginType = state.adventureSettings.characterOriginType;
-    // No need to trigger here, form state changes should do it.
-    console.log("CharacterCreation: Zod globals updated - AdvType:", currentGlobalAdventureType, "OriginType:", currentGlobalCharacterOriginType);
-  }, [state.adventureSettings.adventureType, state.adventureSettings.characterOriginType]);
+    
+    console.log("CharacterCreation: Calling reset with values:", newFormValues);
+    reset(newFormValues); 
+    // Trigger validation after a short delay to ensure state updates have propagated
+    // and Zod's refinement context (currentGlobalAdventureType) is set.
+    setTimeout(() => {
+        console.log("CharacterCreation: Triggering validation after reset.");
+        trigger();
+    }, 0);
+  }, [state.character, state.adventureSettings.adventureType, state.adventureSettings.characterOriginType, state.adventureSettings.playerCharacterConcept, creationType, reset, getValues, trigger]);
 
 
   const handleStatChange = useCallback((newStats: CharacterStats) => {
@@ -217,8 +204,7 @@ export function CharacterCreation() {
     } else {
         setStatError(null);
     }
-    trigger(); // Validate form on stat change as it might affect overall validity
-  }, [calculateRemainingPoints, trigger]);
+  }, [calculateRemainingPoints]);
 
 
   const randomizeStats = useCallback(() => {
@@ -242,14 +228,14 @@ export function CharacterCreation() {
         const sortedByVal = allocatedStatKeys.sort((a, b) => newAllocatedStats[a] - newAllocatedStats[b]);
 
         while (diff !== 0 && sortedByVal.length > 0) {
-            const keyToAdjust = diff > 0 ? sortedByVal[0] : sortedByVal[sortedByVal.length - 1];
+            const keyToAdjust = diff > 0 ? sortedByVal[0] : sortedByVal[sortedByVal.length - 1]; 
             const change = Math.sign(diff);
 
             if ((change > 0 && newAllocatedStats[keyToAdjust] < MAX_STAT_VALUE) || (change < 0 && newAllocatedStats[keyToAdjust] > MIN_STAT_VALUE)) {
                 newAllocatedStats[keyToAdjust] += change;
                 diff -= change;
             } else {
-                if (diff > 0) sortedByVal.shift();
+                if (diff > 0) sortedByVal.shift(); 
                 else sortedByVal.pop();
             }
         }
@@ -293,91 +279,80 @@ export function CharacterCreation() {
          dataToSet.traits = randomTraitsPool.sort(() => 0.5 - Math.random()).slice(0, Math.floor(Math.random() * 3) + 1).join(', ');
          dataToSet.knowledge = randomKnowledgePool.sort(() => 0.5 - Math.random()).slice(0, Math.floor(Math.random() * 3) + 1).join(', ');
          dataToSet.background = randomBackgrounds[Math.floor(Math.random() * randomBackgrounds.length)];
-     } else {
+     } else { 
          let desc = randomDescriptions[Math.floor(Math.random() * randomDescriptions.length)];
-         if (currentAdvType === "Immersed" && state.adventureSettings.characterOriginType === 'original') {
+         if (currentAdvType === "Immersed" && state.adventureSettings.characterOriginType === "original") {
              desc = `Concept for ${state.adventureSettings.universeName || 'chosen universe'}: A ${randomBackgrounds[Math.floor(Math.random() * randomBackgrounds.length)]} named ${name}. ${desc}`;
          }
          dataToSet.description = desc;
-         dataToSet.class = (currentAdvType === "Immersed") ? "" : "Adventurer";
+         dataToSet.class = (currentAdvType === "Immersed") ? "" : "Adventurer"; 
      }
 
      Object.entries(dataToSet).forEach(([fieldName, value]) => {
         setValue(fieldName as keyof FormData, value, { shouldValidate: true, shouldDirty: true });
      });
 
-     randomizeStats(); // Randomize stats after setting form fields
+     randomizeStats(); 
 
-     await new Promise(res => setTimeout(res, 200)); // Brief pause for visual feedback
+     await new Promise(res => setTimeout(res, 200)); 
      setIsRandomizing(false);
      setRandomizationComplete(true);
-     setTimeout(() => setRandomizationComplete(false), 1200); // Show checkmark briefly
-     trigger(); // Final validation
- }, [creationType, setValue, randomizeStats, trigger, state.adventureSettings.adventureType, state.adventureSettings.universeName, state.adventureSettings.characterOriginType, watch]);
+     toast({ title: "Character Randomized!", description: `Created a new character: ${name}` });
+     setTimeout(() => setRandomizationComplete(false), 1200); 
+     trigger();
+ }, [creationType, setValue, randomizeStats, trigger, state.adventureSettings.adventureType, state.adventureSettings.universeName, state.adventureSettings.characterOriginType, watch, toast]);
 
 
   const handleGenerateDescription = useCallback(async () => {
-     await trigger(["name", "description"]); // Validate relevant fields first
-     const currentDescValue = getValues("description");
+     await trigger(["name", "description"]);
      const currentName = getValues("name");
-     const currentAdventureType = state.adventureSettings.adventureType;
-     const playerConcept = state.adventureSettings.playerCharacterConcept; // For Immersed original
-     const universeName = state.adventureSettings.universeName; // For Immersed
-
-     let descriptionToUseForAI = currentDescValue || "";
-     let isImmersedModeForAI = currentAdventureType === "Immersed";
-     let playerCharacterConceptForAI = playerConcept;
-
+     const currentDescValue = getValues("description"); 
+     const currentAdvType = state.adventureSettings.adventureType;
+     const universeNameForAI = currentAdvType === "Immersed" ? state.adventureSettings.universeName : undefined;
+     const playerCharacterConceptForAI = (currentAdvType === "Immersed" && state.adventureSettings.characterOriginType === "original") 
+                                          ? currentDescValue 
+                                          : undefined;
 
      if (!currentName?.trim()) {
          toast({ title: "Name Required", description: "Please enter a character name.", variant: "destructive" });
          return;
      }
 
-     if (isImmersedModeForAI && state.adventureSettings.characterOriginType === 'original') {
-         // For Immersed Original, use the concept from adventure settings if description field is empty
-         if (!descriptionToUseForAI.trim() && playerConceptForAI?.trim()) {
-             descriptionToUseForAI = playerConceptForAI;
-         } else if (!descriptionToUseForAI.trim() && !playerConceptForAI?.trim()){
-             toast({ title: "Input Required", description: "For Immersed AI profile (Original), please provide a character description or ensure a Character Concept was set.", variant: "destructive" });
-             return;
-         }
-     } else if (!isImmersedModeForAI) { // Randomized or Custom
-         if (!descriptionToUseForAI || descriptionToUseForAI.length < 10) {
-             toast({ title: "Description Required", description: "Description (min 10 chars) required for AI profile.", variant: "destructive" });
-             return;
-         }
-         // For Randomized/Custom, playerCharacterConcept is not directly used by AI generation here
-         playerCharacterConceptForAI = undefined;
+     if (!currentDescValue || currentDescValue.length < 10) {
+        let msg = "Description (min 10 chars) required for AI profile generation.";
+        if (currentAdvType === "Immersed" && state.adventureSettings.characterOriginType === "original") {
+            msg = "Original Character Concept (min 10 chars in description box) required for AI profile.";
+        }
+        toast({ title: "Input Required", description: msg, variant: "destructive" });
+        return;
      }
-
-
+     
      setError(null);
      setIsGenerating(true);
      try {
         const aiInput = {
-             characterDescription: descriptionToUseForAI,
-             isImmersedMode: isImmersedModeForAI,
-             universeName: isImmersedModeForAI ? universeName : undefined,
-             playerCharacterConcept: playerCharacterConceptForAI, // This will be the original concept for Immersed Original
+             characterDescription: currentDescValue, 
+             isImmersedMode: currentAdvType === "Immersed",
+             universeName: universeNameForAI,
+             playerCharacterConcept: playerCharacterConceptForAI, 
         };
         console.log("CharacterCreation: Sending to AI for profile generation:", aiInput);
         const result: GenerateCharacterDescriptionOutput = await generateCharacterDescription(aiInput);
 
-        setValue("description", result.detailedDescription || descriptionToUseForAI, { shouldValidate: true, shouldDirty: true });
-        // Only set class if not Immersed mode
-        if (currentAdventureType !== "Immersed") {
+        setValue("description", result.detailedDescription || currentDescValue, { shouldValidate: true, shouldDirty: true });
+        
+        if (currentAdvType !== "Immersed") {
             setValue("class", result.inferredClass || "Adventurer", { shouldValidate: true, shouldDirty: true });
         } else {
-            setValue("class", "", { shouldValidate: true, shouldDirty: true }); // Ensure class is empty for Immersed
+            setValue("class", "", { shouldValidate: true, shouldDirty: true }); 
         }
         setValue("traits", (result.inferredTraits?.join(', ')) || "", { shouldValidate: true, shouldDirty: true });
         setValue("knowledge", (result.inferredKnowledge?.join(', ')) || "", { shouldValidate: true, shouldDirty: true });
         setValue("background", result.inferredBackground || "", { shouldValidate: true, shouldDirty: true });
 
-        dispatch({ type: "SET_AI_DESCRIPTION", payload: result.detailedDescription });
+        dispatch({ type: "SET_AI_DESCRIPTION", payload: result.detailedDescription }); 
         toast({ title: "AI Profile Generated!", description: "Character details updated."});
-        trigger();
+        trigger(); 
      } catch (err) {
        console.error("CharacterCreation: AI generation failed:", err);
        setError("Failed to generate profile. The AI might be busy or encountered an error.");
@@ -390,6 +365,7 @@ export function CharacterCreation() {
   const onSubmit = (data: FormData) => {
      console.log("CharacterCreation: onSubmit called. Form Data:", data, "Form validity:", formIsValid, "Errors:", errors);
      console.log("CharacterCreation: Current stats:", stats, "Remaining points:", remainingPoints, "Stat error:", statError);
+     console.log("CharacterCreation: onSubmit - Adventure Type from context:", state.adventureSettings.adventureType);
      setError(null);
 
      if (remainingPoints !== 0) {
@@ -397,7 +373,7 @@ export function CharacterCreation() {
          toast({ title: "Stat Allocation Incomplete", description: statError, variant: "destructive"});
          return;
      }
-     setStatError(null);
+     setStatError(null); 
 
      if (!formIsValid) {
          let errorMessages = "Please correct the highlighted fields.";
@@ -411,19 +387,18 @@ export function CharacterCreation() {
      const finalName = data.name;
      let finalClass = "";
      if (state.adventureSettings.adventureType === "Immersed") {
-        // For Immersed (Original), class is conceptually the playerCharacterConcept or role.
-        // For Immersed (Existing), class would be derived by AI (this path bypasses CharacterCreation)
-        finalClass = state.character?.class || state.adventureSettings.playerCharacterConcept || "Immersed Protagonist";
-     } else { // Randomized or Custom
-        finalClass = data.class || "Adventurer";
+        finalClass = data.class || state.adventureSettings.playerCharacterConcept || "Immersed Protagonist";
+     } else { 
+        finalClass = data.class || "Adventurer"; 
      }
 
      const finalTraits: string[] = data.traits?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? [];
      const finalKnowledge: string[] = data.knowledge?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? [];
      const finalBackground = data.background ?? "";
-     const finalDescription = data.description || ""; // This would be the AI-elaborated one if generated
-     // Use AI generated description if available, otherwise use the one from the form (which might be user-input or AI-modified)
-     const finalAiGeneratedDescription = state.character?.aiGeneratedDescription || (data.creationType === "text" && resultFromAI?.detailedDescription ? resultFromAI.detailedDescription : undefined);
+     const finalDescription = data.description || ""; 
+     const finalAiGeneratedDescription = state.character?.aiGeneratedDescription && state.character.aiGeneratedDescription.length > finalDescription.length 
+                                            ? state.character.aiGeneratedDescription 
+                                            : undefined;
 
 
      const characterDataToDispatch: Partial<Character> = {
@@ -438,16 +413,17 @@ export function CharacterCreation() {
      };
      console.log("CharacterCreation: Dispatching CREATE_CHARACTER_AND_SETUP with payload:", characterDataToDispatch);
      dispatch({ type: "CREATE_CHARACTER_AND_SETUP", payload: characterDataToDispatch });
-     // Toast for success is handled by the reducer/game context potentially
      toast({ title: "Character Ready!", description: `Welcome, ${finalName}. Your adventure is being set up!` });
    };
 
   const isProceedButtonDisabled = useMemo(() => {
-    const nameField = watch("name"); // Watch the name field
-    const nameValid = !!nameField?.trim(); // Check if name is not empty
-    const isDisabled = isGenerating || isRandomizing || remainingPoints !== 0 || !!statError || !formIsValid || !nameValid;
-    // console.log("CharacterCreation: isProceedButtonDisabled check:", { isGenerating, isRandomizing, remainingPoints, statError, formIsValid, nameValid, isDisabled, errors });
-    return isDisabled;
+    const nameValid = !!watch("name")?.trim();
+    const generalDisabled = isGenerating || isRandomizing || remainingPoints !== 0 || !!statError;
+    
+    console.log("CharacterCreation: isProceedButtonDisabled Check ->", 
+        { isGenerating, isRandomizing, remainingPoints, statError, formIsValid, nameValid, errors }
+    );
+    return generalDisabled || !formIsValid || !nameValid;
   }, [isGenerating, isRandomizing, remainingPoints, statError, formIsValid, errors, watch]);
 
 
@@ -455,18 +431,16 @@ export function CharacterCreation() {
     dispatch({ type: "RESET_GAME" });
   };
 
-
-  // This is the crucial part for showing/hiding the main forms
   const showCharacterDefinitionForms =
     state.adventureSettings.adventureType !== "Immersed" ||
     (state.adventureSettings.adventureType === "Immersed" && state.adventureSettings.characterOriginType === "original");
 
-  console.log("CharacterCreation: showCharacterDefinitionForms is:", showCharacterDefinitionForms);
+  console.log("CharacterCreation: render - showCharacterDefinitionForms:", showCharacterDefinitionForms, 
+              "AdventureType:", state.adventureSettings.adventureType, 
+              "OriginType:", state.adventureSettings.characterOriginType);
 
 
   if (state.adventureSettings.adventureType === "Immersed" && state.adventureSettings.characterOriginType === "existing") {
-    // This screen should ideally not be reached if the flow from AdventureSetup is correct (direct to Gameplay).
-    // But as a fallback:
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <CardboardCard className="w-full max-w-md text-center">
@@ -477,9 +451,9 @@ export function CharacterCreation() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground">
-              Loading details for {state.adventureSettings.playerCharacterConcept || "your character"} from the {state.adventureSettings.universeName || "chosen universe"}...
+              Loading details for {state.adventureSettings.playerCharacterConcept || "your character"}...
             </p>
-            <p className="text-xs text-muted-foreground mt-2">(If this screen persists, please return to the Main Menu and try again.)</p>
+            <p className="text-xs text-muted-foreground mt-2">(If this screen persists, please return to the Main Menu.)</p>
           </CardContent>
           <CardFooter>
             <Button onClick={handleBackToMenu} className="w-full" variant="outline">
@@ -520,7 +494,7 @@ export function CharacterCreation() {
                             const newType = value as "basic" | "text";
                             setValue("creationType", newType, { shouldValidate: true });
                             setCreationType(newType);
-                            trigger(); // Re-validate form on tab change
+                            // No immediate trigger here, rely on the useEffect for reset and trigger
                         }} className="w-full">
                             <TabsList className="grid w-full grid-cols-2">
                                 <TabsTrigger value="basic">Basic Fields</TabsTrigger>
@@ -547,14 +521,11 @@ export function CharacterCreation() {
                             </TabsContent>
                         </Tabs>
                     ) : (
-                        // This case should ideally not be hit if Randomized/Custom,
-                        // as showCharacterDefinitionForms should be true.
-                        // If it's Immersed (Existing), this component isn't rendered.
                         <Alert>
                             <User className="h-4 w-4" />
                             <AlertTitle>Character Profile Information</AlertTitle>
                             <AlertDescription>
-                                {state.character?.aiGeneratedDescription || state.character?.description || "Character details are being prepared. Allocate stats below."}
+                                Core details for this character type are typically AI-generated or pre-defined for this adventure mode. Allocate stats below.
                             </AlertDescription>
                         </Alert>
                     )}
@@ -638,7 +609,7 @@ export function CharacterCreation() {
                                         variant="secondary"
                                         aria-label="Randomize All Character Fields and Stats"
                                         className="relative overflow-hidden w-full sm:w-auto"
-                                        disabled={isRandomizing || isGenerating}
+                                        disabled={isRandomizing || isGenerating || !showCharacterDefinitionForms} 
                                     >
                                         <RotateCcw className={`mr-2 h-4 w-4 ${isRandomizing ? 'animate-spin' : ''}`} />
                                         {isRandomizing ? 'Randomizing...' : 'Randomize All'}
@@ -646,9 +617,8 @@ export function CharacterCreation() {
                                     </Button>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                    <p>Generate a random character name, details, and stats.</p>
-                                    {state.adventureSettings.adventureType === "Immersed" && state.adventureSettings.characterOriginType === "original" &&
-                                     <p className="text-xs text-muted-foreground">(Universe and initial concept will be referenced if possible)</p>}
+                                    <p>Generate a random character name, details (if applicable), and stats.</p>
+                                    {!showCharacterDefinitionForms && <p className="text-xs text-muted-foreground">(Character details are pre-defined for this mode.)</p>}
                                 </TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
@@ -668,3 +638,4 @@ export function CharacterCreation() {
     </div>
   );
 }
+

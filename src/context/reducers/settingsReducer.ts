@@ -15,28 +15,31 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
         case "SET_ADVENTURE_SETTINGS": {
             const incomingPayload = action.payload;
             const currentAdventureTypeInState = state.adventureSettings.adventureType;
-
+            // Prioritize adventureType from payload if available, otherwise keep existing.
+            // This is crucial because AdventureSetup dispatches this with the type already determined.
             const finalAdventureType = incomingPayload.adventureType ?? currentAdventureTypeInState;
 
             if (!finalAdventureType) {
-                console.error("SettingsReducer: SET_ADVENTURE_SETTINGS - finalAdventureType is unexpectedly null/undefined. This may cause issues.", "Incoming Payload:", incomingPayload, "Current state type:", currentAdventureTypeInState);
-                // Potentially return state or a default error state if this is critical
+                console.error("SettingsReducer: SET_ADVENTURE_SETTINGS - finalAdventureType is unexpectedly null/undefined. This could lead to issues.", "Incoming Payload:", incomingPayload, "Current state type:", currentAdventureTypeInState);
             }
 
             const validatedDifficulty = VALID_ADVENTURE_DIFFICULTY_LEVELS.includes(incomingPayload.difficulty as DifficultyLevel)
                  ? incomingPayload.difficulty as DifficultyLevel
                  : state.adventureSettings.difficulty;
 
-            const newSettings: AdventureSettings = {
-                ...state.adventureSettings,
-                ...incomingPayload,
-                adventureType: finalAdventureType,
-                difficulty: validatedDifficulty,
-                characterOriginType: finalAdventureType === 'Immersed'
-                    ? (incomingPayload.characterOriginType ?? state.adventureSettings.characterOriginType ?? 'original')
-                    : undefined, // Explicitly undefined for non-Immersed types
+            let characterOriginTypeForUpdate: 'existing' | 'original' | undefined = undefined;
+            if (finalAdventureType === 'Immersed') {
+                characterOriginTypeForUpdate = incomingPayload.characterOriginType ?? state.adventureSettings.characterOriginType ?? 'original';
+            }
 
-                // Clear type-specific settings if the type changes or is not relevant
+            const newSettings: AdventureSettings = {
+                ...state.adventureSettings, 
+                ...incomingPayload,         
+                adventureType: finalAdventureType, 
+                difficulty: validatedDifficulty,
+                characterOriginType: characterOriginTypeForUpdate,
+
+                // Ensure Custom fields are only populated if type is Custom
                 worldType: finalAdventureType === 'Custom' ? (incomingPayload.worldType ?? state.adventureSettings.worldType ?? "") : "",
                 mainQuestline: finalAdventureType === 'Custom' ? (incomingPayload.mainQuestline ?? state.adventureSettings.mainQuestline ?? "") : "",
                 genreTheme: finalAdventureType === 'Custom' ? (incomingPayload.genreTheme ?? state.adventureSettings.genreTheme ?? "") : "",
@@ -44,10 +47,11 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
                 techLevel: finalAdventureType === 'Custom' ? (incomingPayload.techLevel ?? state.adventureSettings.techLevel ?? "") : "",
                 dominantTone: finalAdventureType === 'Custom' ? (incomingPayload.dominantTone ?? state.adventureSettings.dominantTone ?? "") : "",
                 startingSituation: finalAdventureType === 'Custom' ? (incomingPayload.startingSituation ?? state.adventureSettings.startingSituation ?? "") : "",
-                combatFrequency: finalAdventureType === 'Custom' ? (incomingPayload.combatFrequency ?? state.adventureSettings.combatFrequency ?? "Medium") : "Medium",
-                puzzleFrequency: finalAdventureType === 'Custom' ? (incomingPayload.puzzleFrequency ?? state.adventureSettings.puzzleFrequency ?? "Medium") : "Medium",
-                socialFocus: finalAdventureType === 'Custom' ? (incomingPayload.socialFocus ?? state.adventureSettings.socialFocus ?? "Medium") : "Medium",
+                combatFrequency: finalAdventureType === 'Custom' ? (incomingPayload.combatFrequency ?? state.adventureSettings.combatFrequency) : undefined,
+                puzzleFrequency: finalAdventureType === 'Custom' ? (incomingPayload.puzzleFrequency ?? state.adventureSettings.puzzleFrequency) : undefined,
+                socialFocus: finalAdventureType === 'Custom' ? (incomingPayload.socialFocus ?? state.adventureSettings.socialFocus) : undefined,
 
+                // Ensure Immersed fields are only populated if type is Immersed
                 universeName: finalAdventureType === 'Immersed' ? (incomingPayload.universeName ?? state.adventureSettings.universeName ?? "") : "",
                 playerCharacterConcept: finalAdventureType === 'Immersed' ? (incomingPayload.playerCharacterConcept ?? state.adventureSettings.playerCharacterConcept ?? "") : "",
             };
@@ -55,23 +59,23 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
             return { ...state, adventureSettings: newSettings };
         }
         case "SET_ADVENTURE_TYPE": {
-            console.log("SettingsReducer: Setting adventure type to", action.payload);
+            console.log("SettingsReducer: Setting adventure type to", action.payload, ". Resetting specific fields.");
             const preservedDifficulty = state.adventureSettings.difficulty || initialAdventureSettings.difficulty;
             const preservedPermadeath = state.adventureSettings.permanentDeath !== undefined
                 ? state.adventureSettings.permanentDeath
                 : initialAdventureSettings.permanentDeath;
 
-            // When setting adventure type, reset specific fields to initialAdventureSettings defaults
-            // and critically, set characterOriginType based on the new adventure type.
             return {
                 ...state,
                 adventureSettings: {
-                    ...initialAdventureSettings, // Reset to defaults first
+                    // Start with a clean slate for adventure-specific settings
+                    ...initialAdventureSettings, 
                     adventureType: action.payload, // Set the new type
+                    // Preserve general settings
                     difficulty: preservedDifficulty,
                     permanentDeath: preservedPermadeath,
-                    // If the new type is Immersed, default characterOriginType to 'original'.
-                    // If not Immersed, characterOriginType MUST be undefined.
+                    // Crucially, characterOriginType is ONLY relevant for "Immersed"
+                    // For Randomized/Custom, it MUST be undefined.
                     characterOriginType: action.payload === 'Immersed' ? 'original' : undefined,
                 }
             };
@@ -83,9 +87,10 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
         case "SET_USER_API_KEY":
             return { ...state, userGoogleAiApiKey: action.payload };
          case "RESET_GAME":
+             // Preserve theme and API key, reset adventure settings
              return {
                 ...state,
-                adventureSettings: { ...initialAdventureSettings }, // Reset adventure settings
+                adventureSettings: { ...initialAdventureSettings }, 
              };
          case "LOAD_ADVENTURE": {
              const settingsToLoad = action.payload.adventureSettings;
@@ -94,12 +99,19 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
                  : initialAdventureSettings.difficulty;
 
              const loadedAdventureType = settingsToLoad?.adventureType || null;
+             let loadedCharacterOriginType: 'existing' | 'original' | undefined = undefined;
+             if (loadedAdventureType === 'Immersed') {
+                loadedCharacterOriginType = settingsToLoad?.characterOriginType ?? 'original';
+             }
+
 
              const validatedSettings: AdventureSettings = {
                  ...initialAdventureSettings,
                  ...(settingsToLoad || {}),
                  adventureType: loadedAdventureType,
                  difficulty: validatedDifficulty,
+                 characterOriginType: loadedCharacterOriginType,
+
                 worldType: loadedAdventureType === 'Custom' ? (settingsToLoad?.worldType ?? "") : "",
                 mainQuestline: loadedAdventureType === 'Custom' ? (settingsToLoad?.mainQuestline ?? "") : "",
                 genreTheme: loadedAdventureType === 'Custom' ? (settingsToLoad?.genreTheme ?? "") : "",
@@ -107,13 +119,12 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
                 techLevel: loadedAdventureType === 'Custom' ? (settingsToLoad?.techLevel ?? "") : "",
                 dominantTone: loadedAdventureType === 'Custom' ? (settingsToLoad?.dominantTone ?? "") : "",
                 startingSituation: loadedAdventureType === 'Custom' ? (settingsToLoad?.startingSituation ?? "") : "",
-                combatFrequency: loadedAdventureType === 'Custom' ? (settingsToLoad?.combatFrequency ?? "Medium") : "Medium",
-                puzzleFrequency: loadedAdventureType === 'Custom' ? (settingsToLoad?.puzzleFrequency ?? "Medium") : "Medium",
-                socialFocus: loadedAdventureType === 'Custom' ? (settingsToLoad?.socialFocus ?? "Medium") : "Medium",
+                combatFrequency: loadedAdventureType === 'Custom' ? (settingsToLoad?.combatFrequency) : undefined,
+                puzzleFrequency: loadedAdventureType === 'Custom' ? (settingsToLoad?.puzzleFrequency) : undefined,
+                socialFocus: loadedAdventureType === 'Custom' ? (settingsToLoad?.socialFocus) : undefined,
 
                 universeName: loadedAdventureType === 'Immersed' ? (settingsToLoad?.universeName ?? "") : "",
                 playerCharacterConcept: loadedAdventureType === 'Immersed' ? (settingsToLoad?.playerCharacterConcept ?? "") : "",
-                characterOriginType: loadedAdventureType === 'Immersed' ? (settingsToLoad?.characterOriginType ?? 'original') : undefined,
              };
              console.log("SettingsReducer: Loaded adventure settings:", JSON.stringify(validatedSettings));
              return {
@@ -125,3 +136,4 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
             return state;
     }
 }
+

@@ -23,8 +23,8 @@ import {
 import type { AdventureSettings, DifficultyLevel, AdventureType, GenreTheme, MagicSystem, TechLevel, DominantTone, CombatFrequency, PuzzleFrequency, SocialFocus } from "@/types/adventure-types";
 import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "@/lib/constants";
 import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
-import type { Character } from "@/types/character-types";
-import { initialCharacterState } from "@/context/game-initial-state"; // For creating character structure
+import type { Character, CharacterStats } from "@/types/character-types";
+import { initialCharacterState, initialAdventureSettings as defaultInitialAdventureSettings } from "@/context/game-initial-state"; // For creating character structure
 import { calculateMaxStamina, calculateMaxMana, getStarterSkillsForClass, calculateXpToNextLevel } from "@/lib/gameUtils";
 
 
@@ -32,35 +32,46 @@ export function AdventureSetup() {
   const { state, dispatch } = useGame();
   const { toast } = useToast();
   
+  // This should always reflect the type chosen from MainMenu
   const adventureTypeFromContext = state.adventureSettings.adventureType;
 
-  const [permanentDeath, setPermanentDeath] = useState<boolean>(state.adventureSettings.permanentDeath);
-  const [worldType, setWorldType] = useState<string>(state.adventureSettings.worldType ?? "");
-  const [mainQuestline, setMainQuestline] = useState<string>(state.adventureSettings.mainQuestline ?? "");
-  const [difficulty, setDifficulty] = useState<DifficultyLevel>(state.adventureSettings.difficulty ?? "Normal");
+  // Initialize local state from context or defaults
+  const [permanentDeath, setPermanentDeath] = useState<boolean>(state.adventureSettings.permanentDeath ?? defaultInitialAdventureSettings.permanentDeath);
+  const [difficulty, setDifficulty] = useState<DifficultyLevel>(state.adventureSettings.difficulty ?? defaultInitialAdventureSettings.difficulty);
+  
+  // Custom Adventure State
+  const [worldType, setWorldType] = useState<string>(state.adventureSettings.worldType ?? defaultInitialAdventureSettings.worldType ?? "");
+  const [mainQuestline, setMainQuestline] = useState<string>(state.adventureSettings.mainQuestline ?? defaultInitialAdventureSettings.mainQuestline ?? "");
+  const [genreTheme, setGenreTheme] = useState<GenreTheme>(state.adventureSettings.genreTheme ?? defaultInitialAdventureSettings.genreTheme ?? "");
+  const [magicSystem, setMagicSystem] = useState<MagicSystem>(state.adventureSettings.magicSystem ?? defaultInitialAdventureSettings.magicSystem ?? "");
+  const [techLevel, setTechLevel] = useState<TechLevel>(state.adventureSettings.techLevel ?? defaultInitialAdventureSettings.techLevel ?? "");
+  const [dominantTone, setDominantTone] = useState<DominantTone>(state.adventureSettings.dominantTone ?? defaultInitialAdventureSettings.dominantTone ?? "");
+  const [startingSituation, setStartingSituation] = useState<string>(state.adventureSettings.startingSituation ?? defaultInitialAdventureSettings.startingSituation ?? "");
+  const [combatFrequency, setCombatFrequency] = useState<CombatFrequency>(state.adventureSettings.combatFrequency ?? defaultInitialAdventureSettings.combatFrequency ?? "Medium");
+  const [puzzleFrequency, setPuzzleFrequency] = useState<PuzzleFrequency>(state.adventureSettings.puzzleFrequency ?? defaultInitialAdventureSettings.puzzleFrequency ?? "Medium");
+  const [socialFocus, setSocialFocus] = useState<SocialFocus>(state.adventureSettings.socialFocus ?? defaultInitialAdventureSettings.socialFocus ?? "Medium");
   
   // Immersed Adventure State
-  const [universeName, setUniverseName] = useState<string>(state.adventureSettings.universeName ?? "");
-  const [playerCharacterConcept, setPlayerCharacterConcept] = useState<string>(state.adventureSettings.playerCharacterConcept ?? ""); // Stores existing name OR original concept
-  const [characterOriginType, setCharacterOriginType] = useState<'existing' | 'original'>(state.adventureSettings.characterOriginType ?? 'original');
+  const [universeName, setUniverseName] = useState<string>(state.adventureSettings.universeName ?? defaultInitialAdventureSettings.universeName ?? "");
+  const [playerCharacterConcept, setPlayerCharacterConcept] = useState<string>(state.adventureSettings.playerCharacterConcept ?? defaultInitialAdventureSettings.playerCharacterConcept ?? "");
+  // Initialize characterOriginType from context, which should be 'original' or undefined (not 'existing')
+  // if coming from MainMenu for an Immersed adventure for the first time.
+  const [characterOriginType, setCharacterOriginType] = useState<'existing' | 'original'>(
+    state.adventureSettings.adventureType === "Immersed" 
+      ? (state.adventureSettings.characterOriginType ?? 'original') 
+      : 'original' // Default for non-Immersed, though it won't be used
+  );
   
-  // New state for custom adventure fields
-  const [genreTheme, setGenreTheme] = useState<GenreTheme>(state.adventureSettings.genreTheme ?? "");
-  const [magicSystem, setMagicSystem] = useState<MagicSystem>(state.adventureSettings.magicSystem ?? "");
-  const [techLevel, setTechLevel] = useState<TechLevel>(state.adventureSettings.techLevel ?? "");
-  const [dominantTone, setDominantTone] = useState<DominantTone>(state.adventureSettings.dominantTone ?? "");
-  const [startingSituation, setStartingSituation] = useState<string>(state.adventureSettings.startingSituation ?? "");
-  const [combatFrequency, setCombatFrequency] = useState<CombatFrequency>(state.adventureSettings.combatFrequency ?? "Medium");
-  const [puzzleFrequency, setPuzzleFrequency] = useState<PuzzleFrequency>(state.adventureSettings.puzzleFrequency ?? "Medium");
-  const [socialFocus, setSocialFocus] = useState<SocialFocus>(state.adventureSettings.socialFocus ?? "Medium");
-
   const [customError, setCustomError] = useState<string | null>(null);
   const [isLoadingImmersedCharacter, setIsLoadingImmersedCharacter] = useState(false);
 
-
   useEffect(() => {
-    setPermanentDeath(state.adventureSettings.permanentDeath);
-    setDifficulty(state.adventureSettings.difficulty ?? "Normal");
+    console.log("AdventureSetup: Context adventureSettings changed or component mounted. adventureTypeFromContext:", adventureTypeFromContext);
+    console.log("AdventureSetup: state.adventureSettings from context:", JSON.stringify(state.adventureSettings));
+
+    setPermanentDeath(state.adventureSettings.permanentDeath ?? defaultInitialAdventureSettings.permanentDeath);
+    setDifficulty(state.adventureSettings.difficulty ?? defaultInitialAdventureSettings.difficulty);
+
     if (adventureTypeFromContext === "Custom") {
       setWorldType(state.adventureSettings.worldType ?? "");
       setMainQuestline(state.adventureSettings.mainQuestline ?? "");
@@ -75,8 +86,10 @@ export function AdventureSetup() {
     } else if (adventureTypeFromContext === "Immersed") {
       setUniverseName(state.adventureSettings.universeName ?? "");
       setPlayerCharacterConcept(state.adventureSettings.playerCharacterConcept ?? "");
+      // When adventureType is Immersed, sync characterOriginType from context, defaulting to 'original'
       setCharacterOriginType(state.adventureSettings.characterOriginType ?? 'original');
     }
+    setCustomError(null); 
   }, [state.adventureSettings, adventureTypeFromContext]);
 
 
@@ -95,7 +108,7 @@ export function AdventureSetup() {
              setCustomError("Existing Character's Name is required."); return false;
         }
         if (characterOriginType === 'original' && !playerCharacterConcept.trim()) {
-            setCustomError("Original Character Concept is required."); return false;
+            setCustomError("Original Character Concept/Role is required."); return false;
         }
      }
      setCustomError(null);
@@ -107,20 +120,20 @@ export function AdventureSetup() {
      setCustomError(null);
 
     if (!adventureTypeFromContext) {
-        toast({ title: "Adventure Type Missing", description: "Please return to main menu.", variant: "destructive" });
+        toast({ title: "Adventure Type Missing", description: "Please return to main menu and select an adventure type.", variant: "destructive" });
         dispatch({ type: "SET_GAME_STATUS", payload: "MainMenu" });
         return;
     }
 
      if (!validateSettings()) {
-         toast({ title: "Settings Required", description: customError || `Please fill all details.`, variant: "destructive" });
+         toast({ title: "Settings Incomplete", description: customError || `Please fill all required details for ${adventureTypeFromContext} adventure.`, variant: "destructive" });
          return;
      }
 
      const finalDifficulty = VALID_ADVENTURE_DIFFICULTY_LEVELS.includes(difficulty) ? difficulty : "Normal";
 
     const settingsPayload: AdventureSettings = { 
-      adventureType: adventureTypeFromContext,
+      adventureType: adventureTypeFromContext, // This is crucial, must come from context
       permanentDeath,
       difficulty: finalDifficulty,
       worldType: adventureTypeFromContext === "Custom" ? worldType : undefined,
@@ -130,19 +143,18 @@ export function AdventureSetup() {
       techLevel: adventureTypeFromContext === "Custom" ? techLevel : undefined,
       dominantTone: adventureTypeFromContext === "Custom" ? dominantTone : undefined,
       startingSituation: adventureTypeFromContext === "Custom" ? startingSituation : undefined,
-      combatFrequency: adventureTypeFromContext === "Custom" ? combatFrequency : "Medium",
-      puzzleFrequency: adventureTypeFromContext === "Custom" ? puzzleFrequency : "Medium",
-      socialFocus: adventureTypeFromContext === "Custom" ? socialFocus : "Medium",
+      combatFrequency: adventureTypeFromContext === "Custom" ? combatFrequency : undefined,
+      puzzleFrequency: adventureTypeFromContext === "Custom" ? puzzleFrequency : undefined,
+      socialFocus: adventureTypeFromContext === "Custom" ? socialFocus : undefined,
       universeName: adventureTypeFromContext === "Immersed" ? universeName : undefined,
       playerCharacterConcept: adventureTypeFromContext === "Immersed" ? playerCharacterConcept : undefined,
+      // Ensure characterOriginType is ONLY set for Immersed, otherwise it's undefined.
       characterOriginType: adventureTypeFromContext === "Immersed" ? characterOriginType : undefined,
     };
-
+    
+    console.log("AdventureSetup: Dispatching SET_ADVENTURE_SETTINGS with payload:", JSON.stringify(settingsPayload));
     dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload });
 
-    // Flow Logic:
-    // 1. Immersed (Existing Character): AI generates character, then directly to Gameplay.
-    // 2. Randomized, Custom, Immersed (Original Character): Proceed to CharacterCreation.
     if (adventureTypeFromContext === "Immersed" && characterOriginType === "existing") {
         setIsLoadingImmersedCharacter(true);
         toast({ title: "Fetching Character Lore...", description: `Preparing ${playerCharacterConcept} from ${universeName}...` });
@@ -154,19 +166,28 @@ export function AdventureSetup() {
                  playerCharacterConcept: playerCharacterConcept 
             });
 
-            const baseStats = { ...initialCharacterState.stats };
-            const finalStats = { ...baseStats }; 
+            const baseStats = { ...initialCharacterState.stats }; 
+            const randomStr = Math.floor(Math.random() * 5) + 3; 
+            const randomSta = Math.floor(Math.random() * 5) + 3; 
+            const randomAgi = 15 - randomStr - randomSta;       
+            
+            const finalStats: CharacterStats = { 
+                ...baseStats, 
+                strength: randomStr,
+                stamina: randomSta,
+                agility: Math.max(1, randomAgi), 
+            }; 
 
             const newCharacter: Character = {
-                ...initialCharacterState,
+                ...initialCharacterState, 
                 name: playerCharacterConcept, 
-                description: aiProfile.detailedDescription || `Playing as ${playerCharacterConcept} in ${universeName}.`,
+                description: aiProfile.detailedDescription || `Playing as ${playerCharacterConcept} from the universe of ${universeName}.`,
                 class: aiProfile.inferredClass || "Immersed Protagonist", 
                 traits: aiProfile.inferredTraits || [],
                 knowledge: aiProfile.inferredKnowledge || [],
-                background: aiProfile.inferredBackground || `From the universe of ${universeName}.`,
+                background: aiProfile.inferredBackground || `A character from the universe of ${universeName}.`,
                 stats: finalStats,
-                aiGeneratedDescription: aiProfile.detailedDescription,
+                aiGeneratedDescription: aiProfile.detailedDescription, 
                 maxStamina: calculateMaxStamina(finalStats),
                 currentStamina: calculateMaxStamina(finalStats),
                 maxMana: calculateMaxMana(finalStats, aiProfile.inferredKnowledge || []),
@@ -177,8 +198,9 @@ export function AdventureSetup() {
                 skillTreeStage: 0,
             };
             
+            console.log("AdventureSetup: Dispatching SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY");
             dispatch({ type: "SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY", payload: { character: newCharacter, adventureSettings: settingsPayload } });
-            toast({ title: "Adventure Starting!", description: `Stepping into the shoes of ${playerCharacterConcept} in ${universeName}!` });
+            toast({ title: "Adventure Starting!", description: `Stepping into the shoes of ${playerCharacterConcept} in the universe of ${universeName}!` });
 
         } catch (err) {
             console.error("Failed to generate immersed character profile:", err);
@@ -187,33 +209,30 @@ export function AdventureSetup() {
             setIsLoadingImmersedCharacter(false);
         }
     } else { 
-        // For Randomized, Custom, or Immersed (Original Character)
+        console.log("AdventureSetup: Proceeding to CharacterCreation for type:", adventureTypeFromContext);
         dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
-        let descriptionToast = `Proceeding to character creation for your ${adventureTypeFromContext} adventure (${finalDifficulty}).`;
+        let descriptionToast = `Proceeding to character creation for your ${adventureTypeFromContext} adventure. Difficulty: ${finalDifficulty}.`;
         if (adventureTypeFromContext === "Randomized") {
-            descriptionToast = `Preparing a randomized ${finalDifficulty} adventure. Time to create your hero!`;
+            descriptionToast = `Preparing a randomized adventure at ${finalDifficulty} difficulty. Time to create your hero!`;
         } else if (adventureTypeFromContext === "Immersed" && characterOriginType === "original") {
-            descriptionToast = `Entering the universe of ${universeName}. Let's create your original character!`;
+            descriptionToast = `Entering the universe of ${universeName}. Let's create your original character for this ${finalDifficulty} adventure!`;
         }
-        toast({ title: "Setup Complete!", description: descriptionToast });
+        toast({ title: "Adventure Setup Complete!", description: descriptionToast });
     }
   };
 
    const handleBack = () => {
-    dispatch({ type: "RESET_GAME" });
+    dispatch({ type: "RESET_GAME" }); 
   };
 
-   useEffect(() => {
-      if (adventureTypeFromContext) setCustomError(null);
-   }, [adventureTypeFromContext]);
 
   if (!adventureTypeFromContext) {
     return (
         <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
              <CardboardCard className="w-full max-w-md text-center">
                 <CardHeader> <CardTitle className="text-2xl flex items-center justify-center gap-2"><AlertTriangle className="w-6 h-6 text-destructive"/> Error</CardTitle> </CardHeader>
-                <CardContent> <p className="text-muted-foreground">Adventure type not selected. Please return to main menu.</p> </CardContent>
-                <CardFooter> <Button onClick={() => dispatch({ type: "RESET_GAME" })} className="w-full"> Back to Main Menu </Button> </CardFooter>
+                <CardContent> <p className="text-muted-foreground">Adventure type not selected. Please return to the main menu and choose an adventure type.</p> </CardContent>
+                <CardFooter> <Button onClick={handleBack} className="w-full"> Back to Main Menu </Button> </CardFooter>
              </CardboardCard>
         </div>
     );
@@ -221,9 +240,9 @@ export function AdventureSetup() {
 
   const getAdventureTypeIcon = () => {
     switch(adventureTypeFromContext) {
-        case "Randomized": return <Dices className="w-5 h-5"/>;
-        case "Custom": return <Swords className="w-5 h-5"/>;
-        case "Immersed": return <Sparkles className="w-5 h-5"/>;
+        case "Randomized": return <Dices className="w-5 h-5 text-green-500"/>;
+        case "Custom": return <Swords className="w-5 h-5 text-blue-500"/>;
+        case "Immersed": return <Sparkles className="w-5 h-5 text-purple-500"/>;
         default: return <Settings className="w-5 h-5"/>;
     }
   }
@@ -242,16 +261,21 @@ export function AdventureSetup() {
       <CardboardCard className="w-full max-w-2xl shadow-xl border-2 border-foreground/20">
         <CardHeader className="border-b border-foreground/10 pb-4">
           <CardTitle className="text-3xl font-bold text-center flex items-center justify-center gap-2"> <Settings className="w-7 h-7"/> Adventure Setup </CardTitle>
-           <p className="text-sm text-muted-foreground text-center flex items-center justify-center gap-1.5 mt-1"> Selected Type: {getAdventureTypeIcon()} <span className="font-medium">{adventureTypeFromContext}</span> </p>
+           <p className="text-sm text-muted-foreground text-center flex items-center justify-center gap-1.5 mt-1"> 
+             Selected Type: {getAdventureTypeIcon()} <span className="font-medium">{adventureTypeFromContext}</span> 
+           </p>
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
           {customError && ( <Alert variant="destructive"> <AlertDescription>{customError}</AlertDescription> </Alert> )}
+
+          {adventureTypeFromContext === "Randomized" && (
+             <div className="space-y-4 pt-2 text-center"> <p className="text-sm text-muted-foreground italic">A unique world, quests, and challenges will be generated based on your character.</p> </div>
+          )}
 
           {adventureTypeFromContext === "Custom" && (
             <div className="space-y-4 border-t border-foreground/10 pt-6 mt-0">
                <h3 className="text-xl font-semibold mb-4 border-b pb-2">Customize Your Adventure</h3>
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   {/* Column 1 */}
                    <div className="space-y-4">
                        <div className="space-y-2">
                            <Label htmlFor="worldType" className="flex items-center gap-1"><Globe className="w-4 h-4"/> World Type</Label>
@@ -264,7 +288,7 @@ export function AdventureSetup() {
                         <div className="space-y-2">
                             <Label htmlFor="genreTheme" className="flex items-center gap-1"><BookOpen className="w-4 h-4"/> Genre/Theme</Label>
                             <Select value={genreTheme} onValueChange={(v) => setGenreTheme(v as GenreTheme)}>
-                                <SelectTrigger id="genreTheme"><SelectValue placeholder="Select genre..." /></SelectTrigger>
+                                <SelectTrigger id="genreTheme" className={customError && !genreTheme ? 'border-destructive' : ''}><SelectValue placeholder="Select genre..." /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="High Fantasy">High Fantasy</SelectItem><SelectItem value="Dark Fantasy">Dark Fantasy</SelectItem>
                                     <SelectItem value="Sci-Fi (Cyberpunk)">Sci-Fi (Cyberpunk)</SelectItem><SelectItem value="Sci-Fi (Space Opera)">Sci-Fi (Space Opera)</SelectItem>
@@ -276,7 +300,7 @@ export function AdventureSetup() {
                        <div className="space-y-2">
                             <Label htmlFor="magicSystem" className="flex items-center gap-1"><Sparkles className="w-4 h-4"/> Magic System</Label>
                             <Select value={magicSystem} onValueChange={(v) => setMagicSystem(v as MagicSystem)}>
-                                <SelectTrigger id="magicSystem"><SelectValue placeholder="Select magic system..." /></SelectTrigger>
+                                <SelectTrigger id="magicSystem" className={customError && !magicSystem ? 'border-destructive' : ''}><SelectValue placeholder="Select magic system..." /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="High Magic (Common & Powerful)">High Magic</SelectItem><SelectItem value="Low Magic (Rare & Subtle)">Low Magic</SelectItem>
                                     <SelectItem value="Elemental Magic">Elemental Magic</SelectItem><SelectItem value="Psionics">Psionics</SelectItem><SelectItem value="No Magic">No Magic</SelectItem>
@@ -288,12 +312,11 @@ export function AdventureSetup() {
                             <Input id="startingSituation" value={startingSituation} onChange={(e) => setStartingSituation(e.target.value)} placeholder="e.g., Waking up with amnesia" className={customError && !startingSituation.trim() ? 'border-destructive' : ''}/>
                        </div>
                    </div>
-                   {/* Column 2 */}
                    <div className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="techLevel" className="flex items-center gap-1"><Atom className="w-4 h-4"/> Technological Level</Label>
                             <Select value={techLevel} onValueChange={(v) => setTechLevel(v as TechLevel)}>
-                                <SelectTrigger id="techLevel"><SelectValue placeholder="Select tech level..." /></SelectTrigger>
+                                <SelectTrigger id="techLevel" className={customError && !techLevel ? 'border-destructive' : ''}><SelectValue placeholder="Select tech level..." /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="Primitive">Primitive</SelectItem><SelectItem value="Medieval">Medieval</SelectItem>
                                     <SelectItem value="Renaissance">Renaissance</SelectItem><SelectItem value="Industrial">Industrial</SelectItem>
@@ -304,7 +327,7 @@ export function AdventureSetup() {
                        <div className="space-y-2">
                             <Label htmlFor="dominantTone" className="flex items-center gap-1"><Drama className="w-4 h-4"/> Dominant Tone</Label>
                             <Select value={dominantTone} onValueChange={(v) => setDominantTone(v as DominantTone)}>
-                                <SelectTrigger id="dominantTone"><SelectValue placeholder="Select tone..." /></SelectTrigger>
+                                <SelectTrigger id="dominantTone" className={customError && !dominantTone ? 'border-destructive' : ''}><SelectValue placeholder="Select tone..." /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="Heroic & Optimistic">Heroic & Optimistic</SelectItem><SelectItem value="Grim & Perilous">Grim & Perilous</SelectItem>
                                     <SelectItem value="Mysterious & Eerie">Mysterious & Eerie</SelectItem><SelectItem value="Comedic & Lighthearted">Comedic & Lighthearted</SelectItem>
@@ -364,7 +387,7 @@ export function AdventureSetup() {
                     </div>
                     <div className="flex items-center space-x-2">
                         <RadioGroupItem value="original" id="origin-original" />
-                        <Label htmlFor="origin-original" className="flex items-center gap-1 cursor-pointer"><UserPlus className="w-4 h-4"/> Create Original Character in Universe</Label>
+                        <Label htmlFor="origin-original" className="flex items-center gap-1 cursor-pointer"><UserPlus className="w-4 h-4"/> Create Original Character</Label>
                     </div>
                 </RadioGroup>
 
@@ -381,10 +404,7 @@ export function AdventureSetup() {
                 </div>
             </div>
           )}
-          {adventureTypeFromContext === "Randomized" && (
-             <div className="space-y-4 pt-2 text-center"> <p className="text-sm text-muted-foreground italic">A unique world, quests, and challenges will be generated based on your character.</p> </div>
-          )}
-
+          
            <div className="space-y-4 border-t border-foreground/10 pt-6">
                 <Label htmlFor="difficulty-select" className="text-xl font-semibold flex items-center gap-2"><ShieldAlert className="w-5 h-5"/>Select Difficulty</Label>
                 <Select value={difficulty} onValueChange={(value) => setDifficulty(value as DifficultyLevel)}>
