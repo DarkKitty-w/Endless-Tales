@@ -95,6 +95,18 @@ const NarrateAdventureInputSchema = z.object({
   turnCount: z.number().describe('The current turn number.'),
 });
 
+// Adding boolean flags for adventure type to the input schema for the prompt
+const NarrateAdventurePromptInputSchema = NarrateAdventureInputSchema.extend({
+  character: NarrateAdventureInputSchema.shape.character.extend({
+    reputationString: z.string().optional(),
+    npcRelationshipsString: z.string().optional(),
+  }),
+  isCustomAdventure: z.boolean().optional(),
+  isRandomizedAdventure: z.boolean().optional(),
+  isImmersedAdventure: z.boolean().optional(),
+});
+
+
 const NarrateAdventureOutputSchema = z.object({
   narration: z.string().describe('The next segment of the story.'),
   updatedGameState: z.string().describe('The updated game state.'),
@@ -180,7 +192,7 @@ async function processDevCommand(input: NarrateAdventureInput): Promise<NarrateA
 
 const narrateAdventurePrompt = ai.definePrompt({
   name: 'narrateAdventurePrompt',
-  input: { schema: NarrateAdventureInputSchema }, // Schema remains the same, transformation happens in the flow
+  input: { schema: NarrateAdventurePromptInputSchema }, // Use the extended schema
   output: { schema: NarrateAdventureOutputSchema },
   prompt: `You are a creative Game Master AI for the text adventure "Endless Tales". Your task is to narrate the next segment of the story.
 
@@ -203,7 +215,7 @@ const narrateAdventurePrompt = ai.definePrompt({
 *   Difficulty: {{{adventureSettings.difficulty}}}
 *   Permadeath: {{{adventureSettings.permanentDeath}}}
 *   Adventure Type: {{{adventureSettings.adventureType}}}
-{{#if (eq adventureSettings.adventureType "Custom")}}
+{{#if isCustomAdventure}}
 *   World: {{{adventureSettings.worldType}}}
 *   Main Quest: {{{adventureSettings.mainQuestline}}}
 *   Genre/Theme: {{{adventureSettings.genreTheme}}}
@@ -214,13 +226,13 @@ const narrateAdventurePrompt = ai.definePrompt({
 *   Combat Frequency: {{{adventureSettings.combatFrequency}}}
 *   Puzzle Frequency: {{{adventureSettings.puzzleFrequency}}}
 *   Social Focus: {{{adventureSettings.socialFocus}}}
-{{else if (eq adventureSettings.adventureType "Immersed")}}
+{{else if isImmersedAdventure}}
 *   Universe: {{{adventureSettings.universeName}}}
 *   Character Role/Concept: {{{adventureSettings.playerCharacterConcept}}} (Origin: {{{adventureSettings.characterOriginType}}})
-*   **INSTRUCTION (Immersed):** The narrative MUST strongly adhere to the lore, characters, and tone of the specified 'Universe'. 
+*   **INSTRUCTION (Immersed):** The narrative MUST strongly adhere to the lore, characters, and tone of the specified 'Universe'.
     *   If character origin is 'existing' AND this is Turn 1: **Attempt to start the narration at a recognizable and pivotal early point in this character's known story or a logical starting point for them within their established narrative.**
     *   Avoid class-based skill trees, XP, and standard leveling for Immersed mode; character development, new abilities, or status changes should be purely narrative-driven and logical within the universe.
-{{else if (eq adventureSettings.adventureType "Randomized")}}
+{{else if isRandomizedAdventure}}
 *   **INSTRUCTION (Randomized):** Focus the narration on establishing a unique setting, initial challenge, or short-term goal derived directly from the character's class, background, traits, or knowledge. Use these details to make the randomized world feel tailored to the player character, especially in early turns.
 {{/if}}
 *   Previous Narration (if any): {{{previousNarration}}}
@@ -264,21 +276,32 @@ const narrateAdventurePrompt = ai.definePrompt({
 const narrateAdventureFlow = ai.defineFlow(
   {
     name: 'narrateAdventureFlow',
-    inputSchema: NarrateAdventureInputSchema,
+    inputSchema: NarrateAdventureInputSchema, // Original schema for the flow input
     outputSchema: NarrateAdventureOutputSchema,
   },
   async input => {
     // Pre-process data for the prompt
-    const reputationString = JSON.stringify(input.character.reputation);
-    const npcRelationshipsString = JSON.stringify(input.character.npcRelationships);
+    const reputationString = Object.keys(input.character.reputation).length > 0 
+        ? JSON.stringify(input.character.reputation) 
+        : "";
+    const npcRelationshipsString = Object.keys(input.character.npcRelationships).length > 0 
+        ? JSON.stringify(input.character.npcRelationships) 
+        : "";
+
+    const isCustomAdventure = input.adventureSettings.adventureType === "Custom";
+    const isRandomizedAdventure = input.adventureSettings.adventureType === "Randomized";
+    const isImmersedAdventure = input.adventureSettings.adventureType === "Immersed";
 
     const promptInput = {
       ...input,
       character: {
         ...input.character,
-        reputationString: Object.keys(input.character.reputation).length > 0 ? reputationString : "", // Pass empty string if object is empty
-        npcRelationshipsString: Object.keys(input.character.npcRelationships).length > 0 ? npcRelationshipsString : "", // Pass empty string if object is empty
+        reputationString,
+        npcRelationshipsString,
       },
+      isCustomAdventure,
+      isRandomizedAdventure,
+      isImmersedAdventure,
     };
 
     console.log("Sending to narrateAdventurePrompt:", JSON.stringify(promptInput, null, 2));
@@ -294,3 +317,4 @@ const narrateAdventureFlow = ai.defineFlow(
   }
 );
 
+    
