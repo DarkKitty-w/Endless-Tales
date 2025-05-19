@@ -1,3 +1,4 @@
+
 // src/components/game/LeftPanel.tsx
 "use client";
 
@@ -9,14 +10,14 @@ import { useGame } from "@/context/GameContext";
 import { CharacterDisplay } from "@/components/game/CharacterDisplay";
 import { InventoryDisplay } from "@/components/game/InventoryDisplay";
 import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay";
-import { CardboardCard, CardContent } from "@/components/game/CardboardCard"; // Removed unused header/title
+import { CardboardCard, CardContent } from "@/components/game/CardboardCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { Label } from "@/components/ui/label";
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip"; // Added TooltipProvider
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import {
-    Award, Users, HeartPulse, CalendarClock, Milestone, Backpack, Workflow, Loader2, User, BarChartBig
+    Award, Users, HeartPulse, CalendarClock, Milestone, Backpack, Workflow, Loader2, User
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
@@ -39,12 +40,14 @@ export function LeftPanel({
 }: LeftPanelProps) {
     const { state } = useGame();
     const showSkillsTab = state.adventureSettings.adventureType !== "Immersed";
+    const initialTab = "character";
+    const gridColsClass = showSkillsTab ? "grid-cols-4" : "grid-cols-3";
+
 
     return (
         <div className="hidden md:flex flex-col w-80 lg:w-96 p-4 border-r border-foreground/10 bg-card/50 h-full">
-            {/* Main Tabs for Left Panel Sections */}
-            <Tabs defaultValue="character" className="flex-grow flex flex-col min-h-0 h-full">
-                <TabsList className="flex-none grid w-full grid-cols-3 h-12">
+            <Tabs defaultValue={initialTab} className="flex-grow flex flex-col min-h-0 h-full">
+                <TabsList className={`flex-none grid w-full ${gridColsClass} h-12`}>
                     <TabsTrigger value="character" className="flex items-center gap-1.5 text-xs sm:text-sm">
                         <User className="w-4 h-4"/> Character
                     </TabsTrigger>
@@ -62,21 +65,17 @@ export function LeftPanel({
                 </TabsList>
                 
 
-                {/* Tab Content Area */}
                 <div className="flex-grow overflow-hidden mt-2">
-                    {/* Character Tab */}
                     <TabsContent value="character" className="h-full m-0">
                          <ScrollArea className="h-full pr-3">
                             <CharacterDisplay />
                         </ScrollArea>
                     </TabsContent>
 
-                    {/* Progression Tab */}
                     <TabsContent value="progression" className="h-full m-0">
                          <ScrollArea className="h-full pr-3">
                             <CardboardCard className="bg-transparent shadow-none border-0">
                                 <CardContent className="pt-4 pb-4 text-sm space-y-3">
-                                    {/* Level and XP */}
                                      <TooltipProvider delayDuration={100}>
                                         <Tooltip>
                                             <TooltipTrigger className="w-full cursor-help text-left">
@@ -100,21 +99,18 @@ export function LeftPanel({
                                      </TooltipProvider>
 
                                     <Separator />
-                                    {/* Reputation */}
                                     <div className="space-y-1">
                                         <Label className="text-sm font-medium flex items-center gap-1 mb-1"><Users className="w-3.5 h-3.5"/> Reputation:</Label>
                                         {renderReputation(character.reputation)}
                                     </div>
 
                                     <Separator />
-                                    {/* Relationships */}
                                     <div className="space-y-1">
                                         <Label className="text-sm font-medium flex items-center gap-1 mb-1"><HeartPulse className="w-3.5 h-3.5"/> Relationships:</Label>
                                         {renderNpcRelationships(character.npcRelationships)}
                                     </div>
 
                                     <Separator />
-                                     {/* Turn Count */}
                                     <div className="flex justify-between items-center">
                                          <Label className="text-sm font-medium flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5"/> Turn:</Label>
                                          <span className="font-bold text-base">{turnCount}</span>
@@ -124,16 +120,12 @@ export function LeftPanel({
                          </ScrollArea>
                     </TabsContent>
 
-                    {/* Inventory Tab */}
                     <TabsContent value="inventory" className="h-full m-0">
-                        {/* InventoryDisplay handles its own scrolling */}
                         <InventoryDisplay />
                     </TabsContent>
 
-                    {/* Skills Tab */}
                     {showSkillsTab && (
                      <TabsContent value="skills" className="h-full m-0">
-                         {/* SkillTreeDisplay handles its own scrolling */}
                          {character.skillTree && !isGeneratingSkillTree ? (
                              <SkillTreeDisplay skillTree={character.skillTree} learnedSkills={character.learnedSkills} currentStage={character.skillTreeStage}/>
                          ) : (
@@ -144,7 +136,7 @@ export function LeftPanel({
                                          Generating skill tree...
                                      </>
                                  ) : (
-                                      "No skill tree available."
+                                      state.adventureSettings.adventureType === "Immersed" ? "Skill progression is narrative-driven in Immersed mode." : "No skill tree available."
                                  )}
                              </div>
                          )}

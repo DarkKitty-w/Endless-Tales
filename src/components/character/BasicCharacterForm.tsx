@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -5,9 +6,8 @@ import { UseFormRegister, FieldErrors } from 'react-hook-form';
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { ShieldQuestion } from 'lucide-react'; // Example icon
+import type { AdventureType } from '@/types/adventure-types'; // Import AdventureType
 
-// Define a type for the form data this component handles
-// This should match the relevant parts of the FormData type in CharacterCreation.tsx
 interface BasicFormData {
   name: string;
   class?: string;
@@ -17,16 +17,15 @@ interface BasicFormData {
 }
 
 interface BasicCharacterFormProps {
-  register: UseFormRegister<BasicFormData>; // Use the specific form data type
+  register: UseFormRegister<BasicFormData>;
   errors: FieldErrors<BasicFormData>;
-  adventureType: string | null;
+  adventureType: AdventureType | null; // Use the imported AdventureType
 }
 
 export function BasicCharacterForm({ register, errors, adventureType }: BasicCharacterFormProps) {
   return (
     <>
       <h3 className="text-lg font-medium mb-3 border-b pb-2">Define Details</h3>
-      {/* Name Input */}
        <div className="space-y-2">
             <Label htmlFor="name" className="text-lg font-semibold">Character Name</Label>
             <Input
@@ -38,7 +37,8 @@ export function BasicCharacterForm({ register, errors, adventureType }: BasicCha
             />
             {errors.name && <p className="text-sm text-destructive mt-1">{errors.name.message}</p>}
         </div>
-      {/* Class Input */}
+
+      {/* Class Input - Conditionally render based on adventureType */}
       {adventureType !== "Immersed" && (
         <div className="space-y-2">
           <Label htmlFor="class" className="flex items-center gap-1">
@@ -54,7 +54,7 @@ export function BasicCharacterForm({ register, errors, adventureType }: BasicCha
           {errors.class && <p className="text-sm text-destructive mt-1">{errors.class.message}</p>}
         </div>
       )}
-      {/* Traits Input */}
+
       <div className="space-y-2">
         <Label htmlFor="traits">Traits (comma-separated, max 5)</Label>
         <Input
@@ -66,7 +66,7 @@ export function BasicCharacterForm({ register, errors, adventureType }: BasicCha
         />
         {errors.traits && <p className="text-sm text-destructive mt-1">{errors.traits.message as string}</p>}
       </div>
-      {/* Knowledge Input */}
+
       <div className="space-y-2">
         <Label htmlFor="knowledge">Knowledge (comma-separated, max 5)</Label>
         <Input
@@ -78,7 +78,7 @@ export function BasicCharacterForm({ register, errors, adventureType }: BasicCha
         />
         {errors.knowledge && <p className="text-sm text-destructive mt-1">{errors.knowledge.message as string}</p>}
       </div>
-      {/* Background Input */}
+
       <div className="space-y-2">
         <Label htmlFor="background">Background Story (brief)</Label>
         <Input

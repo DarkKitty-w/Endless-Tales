@@ -1,3 +1,4 @@
+
 // src/components/gameplay/MobileSheet.tsx
 "use client";
 
@@ -10,20 +11,20 @@ import {
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-  SheetFooter,
+  SheetFooter, // Ensure SheetFooter is imported if used
 } from "@/components/ui/sheet";
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
-import { Label } from "@/components/ui/label"; // Corrected import
+import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
 import { User, Settings, Backpack, Workflow, Award, Users, HeartPulse, CalendarClock, Milestone, Loader2 } from 'lucide-react';
 import { CharacterDisplay } from "@/components/game/CharacterDisplay";
 import { InventoryDisplay } from "@/components/game/InventoryDisplay";
 import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay";
-import { useGame } from "@/context/GameContext"; // Import useGame
+import { useGame } from "@/context/GameContext";
 
 interface MobileSheetProps {
     character: Character;
@@ -46,10 +47,10 @@ export function MobileSheet({
 }: MobileSheetProps) {
     const { state } = useGame();
     const showSkillsTab = state.adventureSettings.adventureType !== "Immersed";
+
     return (
-        <TooltipProvider> {/* Wrap with TooltipProvider */}
+        <TooltipProvider>
             <div className="md:hidden flex justify-between items-center mb-2 border-b pb-2">
-                {/* Mobile Profile Trigger (Character + Progression) */}
                 <Sheet>
                     <SheetTrigger asChild>
                         <Button variant="ghost" size="sm"><User className="w-4 h-4 mr-1.5" /> Profile</Button>
@@ -59,10 +60,8 @@ export function MobileSheet({
                             <SheetTitle>Character & Progression</SheetTitle>
                         </SheetHeader>
                         <ScrollArea className="flex-grow p-4">
-                            {/* Display Character Info */}
                             <CharacterDisplay />
                             <Separator className="my-4" />
-                            {/* Display Progression Info */}
                             <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><Milestone className="w-4 h-4" /> Progression</h3>
                             <div className="space-y-3 text-sm">
                                 <Tooltip>
@@ -88,11 +87,10 @@ export function MobileSheet({
                      </SheetContent>
                  </Sheet>
                  <div className="flex gap-1">
-                     {/* Mobile Inventory/Skills Trigger */}
                      <Sheet>
                         <SheetTrigger asChild>
                              <Button variant="ghost" size="sm">
-                                {showSkillsTab ? <><Backpack className="w-4 h-4 mr-1.5"/>Inv. & Skills</> : <><Backpack className="w-4 h-4 mr-1.5"/>Inventory</>}
+                                <Backpack className="w-4 h-4 mr-1.5"/>{showSkillsTab ? "Inv. & Skills" : "Inventory"}
                              </Button>
                         </SheetTrigger>
                          <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
@@ -115,7 +113,7 @@ export function MobileSheet({
                                                  <SkillTreeDisplay skillTree={character.skillTree} learnedSkills={character.learnedSkills} currentStage={character.skillTreeStage}/>
                                              ) : (
                                                  <div className="flex items-center justify-center h-full text-muted-foreground italic p-4">
-                                                     {isGeneratingSkillTree ? <><Loader2 className="h-4 w-4 animate-spin mr-2"/>Generating skill tree...</> : "No skill tree."}
+                                                     {isGeneratingSkillTree ? <><Loader2 className="h-4 w-4 animate-spin mr-2"/>Generating skill tree...</> : "No skill tree available."}
                                                  </div>
                                              )}
                                             </TabsContent>
@@ -125,17 +123,13 @@ export function MobileSheet({
                                      <InventoryDisplay />
                                  )}
                              </div>
-                             <SheetFooter className="p-4 border-t bg-background mt-auto">
-                                {/* Add relevant mobile actions here if needed */}
-                            </SheetFooter>
+                            {/* Removed SheetFooter from here as it's not standard for bottom sheets with Tabs */}
                        </SheetContent>
                     </Sheet>
-                     {/* Mobile Settings Trigger */}
                      <Sheet>
                         <SheetTrigger asChild>
                             <Button variant="ghost" size="icon" onClick={onSettingsOpen}><Settings className="h-5 w-5" /><span className="sr-only">Settings</span></Button>
                         </SheetTrigger>
-                        {/* SettingsPanel is rendered by parent using the Sheet open state managed there */}
                     </Sheet>
                  </div>
             </div>
