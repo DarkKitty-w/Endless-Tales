@@ -32,7 +32,7 @@ export function AdventureSetup() {
   const { state, dispatch } = useGame();
   const { toast } = useToast();
   
-  const adventureType = state.adventureSettings.adventureType;
+  const adventureTypeFromContext = state.adventureSettings.adventureType;
 
   const [permanentDeath, setPermanentDeath] = useState<boolean>(state.adventureSettings.permanentDeath);
   const [worldType, setWorldType] = useState<string>(state.adventureSettings.worldType ?? "");
@@ -61,7 +61,7 @@ export function AdventureSetup() {
   useEffect(() => {
     setPermanentDeath(state.adventureSettings.permanentDeath);
     setDifficulty(state.adventureSettings.difficulty ?? "Normal");
-    if (adventureType === "Custom") {
+    if (adventureTypeFromContext === "Custom") {
       setWorldType(state.adventureSettings.worldType ?? "");
       setMainQuestline(state.adventureSettings.mainQuestline ?? "");
       setGenreTheme(state.adventureSettings.genreTheme ?? "");
@@ -72,16 +72,16 @@ export function AdventureSetup() {
       setCombatFrequency(state.adventureSettings.combatFrequency ?? "Medium");
       setPuzzleFrequency(state.adventureSettings.puzzleFrequency ?? "Medium");
       setSocialFocus(state.adventureSettings.socialFocus ?? "Medium");
-    } else if (adventureType === "Immersed") {
+    } else if (adventureTypeFromContext === "Immersed") {
       setUniverseName(state.adventureSettings.universeName ?? "");
       setPlayerCharacterConcept(state.adventureSettings.playerCharacterConcept ?? "");
       setCharacterOriginType(state.adventureSettings.characterOriginType ?? 'original');
     }
-  }, [state.adventureSettings, adventureType]);
+  }, [state.adventureSettings, adventureTypeFromContext]);
 
 
   const validateSettings = (): boolean => {
-     if (adventureType === "Custom") {
+     if (adventureTypeFromContext === "Custom") {
         if (!worldType.trim()) { setCustomError("World Type is required."); return false; }
         if (!mainQuestline.trim()) { setCustomError("Main Questline is required."); return false; }
         if (!genreTheme) { setCustomError("Genre/Theme is required."); return false; }
@@ -89,7 +89,7 @@ export function AdventureSetup() {
         if (!techLevel) { setCustomError("Technological Level is required."); return false; }
         if (!dominantTone) { setCustomError("Dominant Tone is required."); return false; }
         if (!startingSituation.trim()) { setCustomError("Starting Situation is required."); return false; }
-     } else if (adventureType === "Immersed") {
+     } else if (adventureTypeFromContext === "Immersed") {
         if (!universeName.trim()) { setCustomError("Universe Name is required."); return false; }
         if (characterOriginType === 'existing' && !playerCharacterConcept.trim()) {
              setCustomError("Existing Character's Name is required."); return false;
@@ -106,7 +106,7 @@ export function AdventureSetup() {
   const handleStartAdventure = async () => {
      setCustomError(null);
 
-    if (!adventureType) {
+    if (!adventureTypeFromContext) {
         toast({ title: "Adventure Type Missing", description: "Please return to main menu.", variant: "destructive" });
         dispatch({ type: "SET_GAME_STATUS", payload: "MainMenu" });
         return;
@@ -120,32 +120,33 @@ export function AdventureSetup() {
      const finalDifficulty = VALID_ADVENTURE_DIFFICULTY_LEVELS.includes(difficulty) ? difficulty : "Normal";
 
     const settingsPayload: AdventureSettings = { 
-      adventureType,
+      adventureType: adventureTypeFromContext,
       permanentDeath,
       difficulty: finalDifficulty,
-      worldType: adventureType === "Custom" ? worldType : undefined,
-      mainQuestline: adventureType === "Custom" ? mainQuestline : undefined,
-      genreTheme: adventureType === "Custom" ? genreTheme : undefined,
-      magicSystem: adventureType === "Custom" ? magicSystem : undefined,
-      techLevel: adventureType === "Custom" ? techLevel : undefined,
-      dominantTone: adventureType === "Custom" ? dominantTone : undefined,
-      startingSituation: adventureType === "Custom" ? startingSituation : undefined,
-      combatFrequency: adventureType === "Custom" ? combatFrequency : undefined,
-      puzzleFrequency: adventureType === "Custom" ? puzzleFrequency : undefined,
-      socialFocus: adventureType === "Custom" ? socialFocus : undefined,
-      universeName: adventureType === "Immersed" ? universeName : undefined,
-      playerCharacterConcept: adventureType === "Immersed" ? playerCharacterConcept : undefined,
-      characterOriginType: adventureType === "Immersed" ? characterOriginType : undefined,
+      worldType: adventureTypeFromContext === "Custom" ? worldType : undefined,
+      mainQuestline: adventureTypeFromContext === "Custom" ? mainQuestline : undefined,
+      genreTheme: adventureTypeFromContext === "Custom" ? genreTheme : undefined,
+      magicSystem: adventureTypeFromContext === "Custom" ? magicSystem : undefined,
+      techLevel: adventureTypeFromContext === "Custom" ? techLevel : undefined,
+      dominantTone: adventureTypeFromContext === "Custom" ? dominantTone : undefined,
+      startingSituation: adventureTypeFromContext === "Custom" ? startingSituation : undefined,
+      combatFrequency: adventureTypeFromContext === "Custom" ? combatFrequency : "Medium",
+      puzzleFrequency: adventureTypeFromContext === "Custom" ? puzzleFrequency : "Medium",
+      socialFocus: adventureTypeFromContext === "Custom" ? socialFocus : "Medium",
+      universeName: adventureTypeFromContext === "Immersed" ? universeName : undefined,
+      playerCharacterConcept: adventureTypeFromContext === "Immersed" ? playerCharacterConcept : undefined,
+      characterOriginType: adventureTypeFromContext === "Immersed" ? characterOriginType : undefined,
     };
 
     dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload });
 
-    if (adventureType === "Immersed" && characterOriginType === "existing") {
+    // Flow Logic:
+    // 1. Immersed (Existing Character): AI generates character, then directly to Gameplay.
+    // 2. Randomized, Custom, Immersed (Original Character): Proceed to CharacterCreation.
+    if (adventureTypeFromContext === "Immersed" && characterOriginType === "existing") {
         setIsLoadingImmersedCharacter(true);
         toast({ title: "Fetching Character Lore...", description: `Preparing ${playerCharacterConcept} from ${universeName}...` });
         try {
-            // For an existing character, 'playerCharacterConcept' IS the character's name.
-            // 'characterDescription' field in AI input can be brief or just the name again.
             const aiProfile: GenerateCharacterDescriptionOutput = await generateCharacterDescription({
                  characterDescription: playerCharacterConcept, 
                  isImmersedMode: true,
@@ -153,7 +154,7 @@ export function AdventureSetup() {
                  playerCharacterConcept: playerCharacterConcept 
             });
 
-            const baseStats = { ...initialCharacterState.stats }; // Start with base, AI might suggest overrides later
+            const baseStats = { ...initialCharacterState.stats };
             const finalStats = { ...baseStats }; 
 
             const newCharacter: Character = {
@@ -172,13 +173,12 @@ export function AdventureSetup() {
                 currentMana: calculateMaxMana(finalStats, aiProfile.inferredKnowledge || []),
                 learnedSkills: getStarterSkillsForClass(aiProfile.inferredClass || "Immersed Protagonist"),
                 xpToNextLevel: calculateXpToNextLevel(1),
-                skillTree: null, // Immersed characters usually don't use the standard skill tree
+                skillTree: null, 
                 skillTreeStage: 0,
             };
             
             dispatch({ type: "SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY", payload: { character: newCharacter, adventureSettings: settingsPayload } });
             toast({ title: "Adventure Starting!", description: `Stepping into the shoes of ${playerCharacterConcept} in ${universeName}!` });
-            // Game state will transition to "Gameplay" in the reducer for this action.
 
         } catch (err) {
             console.error("Failed to generate immersed character profile:", err);
@@ -186,12 +186,14 @@ export function AdventureSetup() {
         } finally {
             setIsLoadingImmersedCharacter(false);
         }
-    } else { // Randomized, Custom, or Immersed (Original Character)
-        // These paths proceed to CharacterCreation or start gameplay with default/randomized character
+    } else { 
+        // For Randomized, Custom, or Immersed (Original Character)
         dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
-        let descriptionToast = `Proceeding to character creation for ${adventureType} adventure (${finalDifficulty}).`;
-        if (adventureType === "Randomized") {
-            descriptionToast = `Preparing a randomized ${finalDifficulty} adventure...`;
+        let descriptionToast = `Proceeding to character creation for your ${adventureTypeFromContext} adventure (${finalDifficulty}).`;
+        if (adventureTypeFromContext === "Randomized") {
+            descriptionToast = `Preparing a randomized ${finalDifficulty} adventure. Time to create your hero!`;
+        } else if (adventureTypeFromContext === "Immersed" && characterOriginType === "original") {
+            descriptionToast = `Entering the universe of ${universeName}. Let's create your original character!`;
         }
         toast({ title: "Setup Complete!", description: descriptionToast });
     }
@@ -202,10 +204,10 @@ export function AdventureSetup() {
   };
 
    useEffect(() => {
-      if (adventureType) setCustomError(null);
-   }, [adventureType]);
+      if (adventureTypeFromContext) setCustomError(null);
+   }, [adventureTypeFromContext]);
 
-  if (!adventureType) {
+  if (!adventureTypeFromContext) {
     return (
         <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
              <CardboardCard className="w-full max-w-md text-center">
@@ -218,7 +220,7 @@ export function AdventureSetup() {
   }
 
   const getAdventureTypeIcon = () => {
-    switch(adventureType) {
+    switch(adventureTypeFromContext) {
         case "Randomized": return <Dices className="w-5 h-5"/>;
         case "Custom": return <Swords className="w-5 h-5"/>;
         case "Immersed": return <Sparkles className="w-5 h-5"/>;
@@ -226,12 +228,13 @@ export function AdventureSetup() {
     }
   }
 
-  const proceedButtonText = (adventureType === "Immersed" && characterOriginType === "existing") 
+  const proceedButtonText = (adventureTypeFromContext === "Immersed" && characterOriginType === "existing") 
                             ? "Start Adventure" 
                             : "Proceed to Character Creation";
+                            
   const isProceedDisabled = customError !== null || isLoadingImmersedCharacter ||
-                            (adventureType === 'Custom' && (!worldType.trim() || !mainQuestline.trim() || !genreTheme || !magicSystem || !techLevel || !dominantTone || !startingSituation.trim() )) ||
-                            (adventureType === 'Immersed' && (!universeName.trim() || !playerCharacterConcept.trim()));
+                            (adventureTypeFromContext === 'Custom' && (!worldType.trim() || !mainQuestline.trim() || !genreTheme || !magicSystem || !techLevel || !dominantTone || !startingSituation.trim() )) ||
+                            (adventureTypeFromContext === 'Immersed' && (!universeName.trim() || !playerCharacterConcept.trim()));
 
 
   return (
@@ -239,12 +242,12 @@ export function AdventureSetup() {
       <CardboardCard className="w-full max-w-2xl shadow-xl border-2 border-foreground/20">
         <CardHeader className="border-b border-foreground/10 pb-4">
           <CardTitle className="text-3xl font-bold text-center flex items-center justify-center gap-2"> <Settings className="w-7 h-7"/> Adventure Setup </CardTitle>
-           <p className="text-sm text-muted-foreground text-center flex items-center justify-center gap-1.5 mt-1"> Selected Type: {getAdventureTypeIcon()} <span className="font-medium">{adventureType}</span> </p>
+           <p className="text-sm text-muted-foreground text-center flex items-center justify-center gap-1.5 mt-1"> Selected Type: {getAdventureTypeIcon()} <span className="font-medium">{adventureTypeFromContext}</span> </p>
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
           {customError && ( <Alert variant="destructive"> <AlertDescription>{customError}</AlertDescription> </Alert> )}
 
-          {adventureType === "Custom" && (
+          {adventureTypeFromContext === "Custom" && (
             <div className="space-y-4 border-t border-foreground/10 pt-6 mt-0">
                <h3 className="text-xl font-semibold mb-4 border-b pb-2">Customize Your Adventure</h3>
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -342,7 +345,7 @@ export function AdventureSetup() {
                </div>
             </div>
           )}
-          {adventureType === "Immersed" && (
+          {adventureTypeFromContext === "Immersed" && (
             <div className="space-y-4 border-t border-foreground/10 pt-6 mt-0">
                <h3 className="text-xl font-semibold mb-4 border-b pb-2">Immersed Adventure Details</h3>
                <div className="space-y-2">
@@ -352,7 +355,7 @@ export function AdventureSetup() {
                 
                 <RadioGroup value={characterOriginType} onValueChange={(value) => {
                     setCharacterOriginType(value as 'existing' | 'original');
-                    setPlayerCharacterConcept(""); // Clear concept when origin type changes
+                    setPlayerCharacterConcept(""); 
                 }} className="space-y-2">
                     <Label className="text-base font-medium">Character Origin:</Label>
                     <div className="flex items-center space-x-2">
@@ -378,7 +381,7 @@ export function AdventureSetup() {
                 </div>
             </div>
           )}
-          {adventureType === "Randomized" && (
+          {adventureTypeFromContext === "Randomized" && (
              <div className="space-y-4 pt-2 text-center"> <p className="text-sm text-muted-foreground italic">A unique world, quests, and challenges will be generated based on your character.</p> </div>
           )}
 
@@ -418,3 +421,4 @@ export function AdventureSetup() {
     </div>
   );
 }
+
