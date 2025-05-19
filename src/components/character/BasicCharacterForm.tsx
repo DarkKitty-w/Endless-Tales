@@ -10,7 +10,7 @@ import type { AdventureType } from '@/types/adventure-types'; // Import Adventur
 
 interface BasicFormData {
   name: string;
-  class?: string;
+  class?: string; // Class is optional as it's hidden for Immersed mode
   traits?: string;
   knowledge?: string;
   background?: string;
@@ -23,6 +23,8 @@ interface BasicCharacterFormProps {
 }
 
 export function BasicCharacterForm({ register, errors, adventureType }: BasicCharacterFormProps) {
+  const isImmersedMode = adventureType === "Immersed";
+
   return (
     <>
       <h3 className="text-lg font-medium mb-3 border-b pb-2">Define Details</h3>
@@ -39,7 +41,7 @@ export function BasicCharacterForm({ register, errors, adventureType }: BasicCha
         </div>
 
       {/* Class Input - Conditionally render based on adventureType */}
-      {adventureType !== "Immersed" && (
+      {!isImmersedMode && (
         <div className="space-y-2">
           <Label htmlFor="class" className="flex items-center gap-1">
             <ShieldQuestion className="w-4 h-4 text-muted-foreground" /> Class

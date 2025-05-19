@@ -38,21 +38,19 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
                 playerCharacterConcept: currentType === 'Immersed' ? (action.payload.playerCharacterConcept ?? state.adventureSettings.playerCharacterConcept) : "",
                 characterOriginType: currentType === 'Immersed' ? (action.payload.characterOriginType ?? state.adventureSettings.characterOriginType) : undefined,
             };
+            console.log("SettingsReducer: Updated adventure settings:", newSettings);
             return { ...state, adventureSettings: newSettings };
         }
         case "SET_ADVENTURE_TYPE":
             console.log("SettingsReducer: Setting adventure type to", action.payload);
-            // When adventure type changes, reset all specific fields to their initial defaults
-            // to avoid carrying over settings from a previously selected different type.
             return {
                 ...state,
                 adventureSettings: {
-                    ...initialAdventureSettings, // Start with all defaults
-                    adventureType: action.payload, // Set the new type
-                    // Preserve general settings that are not type-specific
+                    ...initialAdventureSettings, 
+                    adventureType: action.payload, 
                     difficulty: state.adventureSettings.difficulty,
                     permanentDeath: state.adventureSettings.permanentDeath,
-                    characterOriginType: action.payload === 'Immersed' ? 'original' : undefined, // Default for Immersed
+                    characterOriginType: action.payload === 'Immersed' ? 'original' : undefined,
                 }
             };
         case "SET_THEME_ID":
@@ -63,8 +61,8 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
             return { ...state, userGoogleAiApiKey: action.payload };
          case "RESET_GAME":
              return {
-                ...state, // Preserve theme, mode, API key from current settings state
-                adventureSettings: { ...initialAdventureSettings }, // Reset adventure settings only
+                ...state, 
+                adventureSettings: { ...initialAdventureSettings }, 
              };
          case "LOAD_ADVENTURE": {
              const settingsToLoad = action.payload.adventureSettings;
@@ -75,11 +73,10 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
              const loadedAdventureType = settingsToLoad?.adventureType || null;
 
              const validatedSettings: AdventureSettings = {
-                 ...initialAdventureSettings, // Start with defaults
-                 ...(settingsToLoad || {}), // Spread loaded settings
+                 ...initialAdventureSettings, 
+                 ...(settingsToLoad || {}), 
                  adventureType: loadedAdventureType,
                  difficulty: validatedDifficulty,
-                 // Ensure specific fields are correctly loaded or defaulted based on the loaded adventureType
                 worldType: loadedAdventureType === 'Custom' ? (settingsToLoad?.worldType ?? "") : "",
                 mainQuestline: loadedAdventureType === 'Custom' ? (settingsToLoad?.mainQuestline ?? "") : "",
                 genreTheme: loadedAdventureType === 'Custom' ? (settingsToLoad?.genreTheme ?? "") : "",
@@ -94,6 +91,7 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
                 playerCharacterConcept: loadedAdventureType === 'Immersed' ? (settingsToLoad?.playerCharacterConcept ?? "") : "",
                 characterOriginType: loadedAdventureType === 'Immersed' ? (settingsToLoad?.characterOriginType ?? 'original') : undefined,
              };
+             console.log("SettingsReducer: Loaded adventure settings:", validatedSettings);
              return {
                 ...state,
                  adventureSettings: validatedSettings

@@ -13,16 +13,16 @@ import {z} from 'genkit';
 
 // --- Zod Schemas (Internal - Not Exported) ---
 const CharacterClasses = z.enum([
-    "Warrior", "Mage", "Rogue", "Scholar", "Hunter", "Healer", "Bard", "Artisan", "Noble", "Commoner", "Adventurer", "Protagonist", "Immersed Protagonist", // Added Immersed Protagonist
+    "Warrior", "Mage", "Rogue", "Scholar", "Hunter", "Healer", "Bard", "Artisan", "Noble", "Commoner", "Adventurer", "Protagonist", "Immersed Protagonist",
 ]).default("Adventurer");
 
 const GenerateCharacterDescriptionInputSchema = z.object({
   characterDescription: z
     .string()
-    .describe("A free-text description of the character's appearance, personality, and backstory. For Immersed mode, this includes the character concept, existing character name, or original character role."),
+    .describe("For Immersed mode, this includes the character concept, existing character name, or original character role. For other modes, it's the free-text description from the user."),
   isImmersedMode: z.boolean().optional().describe("Flag to indicate if this generation is for an Immersed adventure. Default false."),
   universeName: z.string().optional().describe("For Immersed mode: The name of the universe the character belongs to."),
-  playerCharacterConcept: z.string().optional().describe("For Immersed mode: The player's specific character concept, existing character name, or original character role within that universe.") 
+  playerCharacterConcept: z.string().optional().describe("For Immersed mode: The player's specific character concept, existing character name, or original character role within that universe. This helps the AI understand if it's an existing character or an original one.") 
 });
 
 const GenerateCharacterDescriptionOutputSchema = z.object({
@@ -33,8 +33,6 @@ const GenerateCharacterDescriptionOutputSchema = z.object({
   inferredTraits: z.array(z.string()).max(5).describe("A list of up to 5 key personality traits inferred from the description (e.g., Brave, Curious, Stern)."),
   inferredKnowledge: z.array(z.string()).max(5).describe("A list of up to 5 distinct areas of knowledge or skills inferred (e.g., Herbalism, Swordplay, Ancient History). For Immersed mode, these should be lore-appropriate."),
   inferredBackground: z.string().max(100).describe("A brief background summary inferred from the description (e.g., Exiled Noble, Village Blacksmith, Mysterious Wanderer). For Immersed mode, this should be lore-appropriate."),
-  // Optional: Suggested stats for Immersed mode (if AI is to define them)
-  // suggestedStats: z.object({ strength: z.number(), stamina: z.number(), agility: z.number(), intellect: z.number(), wisdom: z.number(), charisma: z.number() }).optional().describe("Suggested base stats for the character, especially for Immersed mode."),
 });
 
 // --- Exported Types (Derived from internal schemas) ---
@@ -57,28 +55,31 @@ const prompt = ai.definePrompt({
 {{#if isImmersedMode}}
 **Context: IMMERSED ADVENTURE MODE**
 *   Universe: {{{universeName}}}
-*   Player's Character Input (could be an existing character's name OR an original character concept/role): {{{playerCharacterConcept}}}
-*   User's Additional Description Text (elaborates on the concept/character): {{{characterDescription}}}
+*   Player's Character Input (This is what the player entered - it could be an existing character's name OR an original character concept/role): {{{playerCharacterConcept}}}
+*   User's Additional Description Text (This is any extra text the user provided in a description box, which might elaborate on the 'Player's Character Input'): {{{characterDescription}}}
 
-Based on the provided universe, character input, and any additional description:
-1.  **Elaborate:** Write a detailed character profile that fits the character within the specified '{{{universeName}}}' universe. Capture appearance, personality, and potential backstory hints relevant to the lore. If the 'Player's Character Input' appears to be a known character from this universe, prioritize established lore. If it's an original concept, develop it creatively within the universe's rules. **This elaborated text should be the main content of the 'detailedDescription' field.**
-2.  **Infer Archetype/Role:** Determine the most fitting archetype or role.
-    *   If 'Player's Character Input' is a known character: Use their established role (e.g., Jedi Knight, Sorcerer Supreme, Captain of the Enterprise).
-    *   If 'Player's Character Input' is an original concept: Infer a fitting role within the '{{{universeName}}}' universe (e.g., Rebel Spy, Aspiring Mage, Starship Engineer).
-    *   If unclear, default to 'Immersed Protagonist'. Store this in 'inferredClass'. Avoid generic game classes like 'Warrior' unless it's a direct fit for the universe's terminology.
-3.  **Infer Traits:** Identify and list up to 5 key personality traits. Prioritize lore-accurate traits for existing characters. Store these in 'inferredTraits'.
-4.  **Infer Knowledge/Skills:** Identify and list up to 5 distinct areas of knowledge or key skills relevant to the character and universe. Prioritize lore-accurate knowledge for existing characters. Store these in 'inferredKnowledge'.
-5.  **Infer Background:** Summarize the character's likely background or origin story within the '{{{universeName}}}' lore in a brief phrase (max 100 characters). Prioritize lore-accurate background for existing characters. Store this in 'inferredBackground'.
+Based on the provided universe, the 'Player's Character Input', and any 'User's Additional Description Text':
+1.  **Elaborate:** Write a detailed character profile that fits the character within the specified '{{{universeName}}}' universe. 
+    *   If the 'Player's Character Input' strongly suggests a known, established character from this universe (e.g., "Luke Skywalker" in "Star Wars"), prioritize established lore for appearance, personality, backstory, and typical role.
+    *   If the 'Player's Character Input' seems like an original concept or a more generic role (e.g., "a rebel spy", "a new student at Hogwarts"), develop it creatively within the universe's rules, using both 'Player's Character Input' and 'User's Additional Description Text' for guidance.
+    *   **This elaborated text should be the main content of the 'detailedDescription' field.**
+2.  **Infer Archetype/Role (inferredClass):** Determine the most fitting archetype or role.
+    *   If 'Player's Character Input' is a known character: Use their established role (e.g., "Jedi Knight", "Sorcerer Supreme", "Captain of the Enterprise").
+    *   If 'Player's Character Input' is an original concept: Infer a fitting role within the '{{{universeName}}}' universe (e.g., "Rebel Spy", "Aspiring Mage", "Starship Engineer").
+    *   If very unclear or too generic, default to 'Immersed Protagonist'. Store this in 'inferredClass'. Avoid generic game classes like 'Warrior' unless it's a direct fit for the universe's terminology and the character concept.
+3.  **Infer Traits (inferredTraits):** Identify and list up to 5 key personality traits. Prioritize lore-accurate traits for existing characters.
+4.  **Infer Knowledge/Skills (inferredKnowledge):** Identify and list up to 5 distinct areas of knowledge or key skills relevant to the character and universe. Prioritize lore-accurate knowledge for existing characters.
+5.  **Infer Background (inferredBackground):** Summarize the character's likely background or origin story within the '{{{universeName}}}' lore in a brief phrase (max 100 characters). Prioritize lore-accurate background for existing characters.
 {{else}}
 **Context: STANDARD ADVENTURE MODE**
 Based on the provided character description:
-1.  **Elaborate:** Write a detailed character profile that expands on the user's description, capturing appearance, personality, and potential backstory hints. **This elaborated text should be the main content of the 'detailedDescription' field.**
-2.  **Infer Class:** Determine the most fitting character class from the list [Warrior, Mage, Rogue, Scholar, Hunter, Healer, Bard, Artisan, Noble, Commoner, Adventurer]. Prioritize specific classes if strongly suggested, otherwise default to 'Adventurer'. Store this in 'inferredClass'.
-3.  **Infer Traits:** Identify and list up to 5 distinct personality traits evident in the description. Store these as an array of strings in 'inferredTraits'.
-4.  **Infer Knowledge/Skills:** Identify and list up to 5 distinct areas of knowledge or key skills mentioned or strongly implied. Store these as an array of strings in 'inferredKnowledge'.
-5.  **Infer Background:** Summarize the character's likely background or origin story in a brief phrase (max 100 characters). Store this in 'inferredBackground'.
+1.  **Elaborate (detailedDescription):** Write a detailed character profile that expands on the user's description, capturing appearance, personality, and potential backstory hints.
+2.  **Infer Class (inferredClass):** Determine the most fitting character class from the list [Warrior, Mage, Rogue, Scholar, Hunter, Healer, Bard, Artisan, Noble, Commoner, Adventurer]. Prioritize specific classes if strongly suggested, otherwise default to 'Adventurer'.
+3.  **Infer Traits (inferredTraits):** Identify and list up to 5 distinct personality traits evident in the description.
+4.  **Infer Knowledge/Skills (inferredKnowledge):** Identify and list up to 5 distinct areas of knowledge or key skills mentioned or strongly implied.
+5.  **Infer Background (inferredBackground):** Summarize the character's likely background or origin story in a brief phrase (max 100 characters).
 
-**User's Character Description / Additional Text:**
+**User's Character Description:**
 {{{characterDescription}}}
 {{/if}}
 
@@ -97,17 +98,14 @@ const generateCharacterDescriptionFlow = ai.defineFlow<
     outputSchema: GenerateCharacterDescriptionOutputSchema,
   },
   async (input) => {
-    // The input.characterDescription will contain the main text (concept or full description)
-    // The input.playerCharacterConcept is supplementary for Immersed mode if the main description is short or just a name.
-    // The prompt now handles using playerCharacterConcept as the primary reference for Immersed if characterDescription is brief.
-    console.log("Sending to generateCharacterDescriptionPrompt (Immersed Flow):", JSON.stringify(input, null, 2));
+    console.log("Sending to generateCharacterDescriptionPrompt:", JSON.stringify(input, null, 2));
     const { output } = await prompt(input);
 
     if (!output || !output.detailedDescription) {
         console.error("AI description generation failed to return a valid output.", output);
          return {
             detailedDescription: `AI generation failed. Could not elaborate on: "${input.characterDescription.substring(0, 100)}..."`,
-            inferredClass: input.isImmersedMode ? "Immersed Protagonist" : "Adventurer", // Default fallback
+            inferredClass: input.isImmersedMode ? "Immersed Protagonist" : "Adventurer",
             inferredTraits: [],
             inferredKnowledge: [],
             inferredBackground: "Unknown",
@@ -117,16 +115,21 @@ const generateCharacterDescriptionFlow = ai.defineFlow<
     output.inferredKnowledge = Array.isArray(output.inferredKnowledge) ? output.inferredKnowledge : [];
     
     const defaultClass = input.isImmersedMode ? "Immersed Protagonist" : "Adventurer";
-    // Ensure class is valid or default, considering Immersed mode
     try {
-        output.inferredClass = CharacterClasses.parse(output.inferredClass || defaultClass);
+        // For Immersed mode, the inferredClass might be a specific role not in CharacterClasses enum.
+        // We accept it as a string from the AI. For non-Immersed, we parse against the enum.
+        if (!input.isImmersedMode) {
+            output.inferredClass = CharacterClasses.parse(output.inferredClass || defaultClass);
+        } else {
+            // Accept any string for Immersed mode class/role or default if empty
+            output.inferredClass = output.inferredClass || defaultClass;
+        }
     } catch (e) {
-        console.warn(`AI returned an invalid class "${output.inferredClass}", defaulting to "${defaultClass}". Error: ${e}`);
+        console.warn(`AI returned an invalid class "${output.inferredClass}" for non-Immersed mode, defaulting to "${defaultClass}". Error: ${e}`);
         output.inferredClass = defaultClass;
     }
 
-
-    console.log("Received from generateCharacterDescriptionPrompt (Immersed Flow):", JSON.stringify(output, null, 2));
+    console.log("Received from generateCharacterDescriptionPrompt:", JSON.stringify(output, null, 2));
     return output;
   }
 );

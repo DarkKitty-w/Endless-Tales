@@ -41,7 +41,7 @@ export function AdventureSetup() {
   
   // Immersed Adventure State
   const [universeName, setUniverseName] = useState<string>(state.adventureSettings.universeName ?? "");
-  const [playerCharacterConcept, setPlayerCharacterConcept] = useState<string>(state.adventureSettings.playerCharacterConcept ?? "");
+  const [playerCharacterConcept, setPlayerCharacterConcept] = useState<string>(state.adventureSettings.playerCharacterConcept ?? ""); // Stores existing name OR original concept
   const [characterOriginType, setCharacterOriginType] = useState<'existing' | 'original'>(state.adventureSettings.characterOriginType ?? 'original');
   
   // New state for custom adventure fields
@@ -119,7 +119,7 @@ export function AdventureSetup() {
 
      const finalDifficulty = VALID_ADVENTURE_DIFFICULTY_LEVELS.includes(difficulty) ? difficulty : "Normal";
 
-    const settingsPayload: AdventureSettings = { // Make it full AdventureSettings
+    const settingsPayload: AdventureSettings = { 
       adventureType,
       permanentDeath,
       difficulty: finalDifficulty,
@@ -144,25 +144,23 @@ export function AdventureSetup() {
         setIsLoadingImmersedCharacter(true);
         toast({ title: "Fetching Character Lore...", description: `Preparing ${playerCharacterConcept} from ${universeName}...` });
         try {
+            // For an existing character, 'playerCharacterConcept' IS the character's name.
+            // 'characterDescription' field in AI input can be brief or just the name again.
             const aiProfile: GenerateCharacterDescriptionOutput = await generateCharacterDescription({
-                 characterDescription: playerCharacterConcept, // This is the existing character's name
+                 characterDescription: playerCharacterConcept, 
                  isImmersedMode: true,
                  universeName: universeName,
-                 playerCharacterConcept: playerCharacterConcept // Pass it here as well for the AI prompt
+                 playerCharacterConcept: playerCharacterConcept 
             });
 
-            const baseStats = aiProfile.inferredClass // Using inferredClass as a proxy for role-based stats or a default
-                ? { ...initialCharacterState.stats } // Start with base, AI might suggest overrides
-                : { ...initialCharacterState.stats }; // Fallback
-
-            // Let's assume AI might provide stat suggestions in future, for now use defaults or simple logic
-            const finalStats = { ...baseStats }; // Placeholder for more complex AI stat suggestion later
+            const baseStats = { ...initialCharacterState.stats }; // Start with base, AI might suggest overrides later
+            const finalStats = { ...baseStats }; 
 
             const newCharacter: Character = {
                 ...initialCharacterState,
-                name: playerCharacterConcept, // Use the character's name
+                name: playerCharacterConcept, 
                 description: aiProfile.detailedDescription || `Playing as ${playerCharacterConcept} in ${universeName}.`,
-                class: aiProfile.inferredClass || "Immersed Protagonist", // Use inferred role or a generic one
+                class: aiProfile.inferredClass || "Immersed Protagonist", 
                 traits: aiProfile.inferredTraits || [],
                 knowledge: aiProfile.inferredKnowledge || [],
                 background: aiProfile.inferredBackground || `From the universe of ${universeName}.`,
@@ -172,38 +170,35 @@ export function AdventureSetup() {
                 currentStamina: calculateMaxStamina(finalStats),
                 maxMana: calculateMaxMana(finalStats, aiProfile.inferredKnowledge || []),
                 currentMana: calculateMaxMana(finalStats, aiProfile.inferredKnowledge || []),
-                learnedSkills: getStarterSkillsForClass(aiProfile.inferredClass || "Immersed Protagonist"), // Get skills based on inferred role
-                xpToNextLevel: calculateXpToNextLevel(1), // Standard XP for level 1
+                learnedSkills: getStarterSkillsForClass(aiProfile.inferredClass || "Immersed Protagonist"),
+                xpToNextLevel: calculateXpToNextLevel(1),
+                skillTree: null, // Immersed characters usually don't use the standard skill tree
+                skillTreeStage: 0,
             };
             
             dispatch({ type: "SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY", payload: { character: newCharacter, adventureSettings: settingsPayload } });
             toast({ title: "Adventure Starting!", description: `Stepping into the shoes of ${playerCharacterConcept} in ${universeName}!` });
+            // Game state will transition to "Gameplay" in the reducer for this action.
 
         } catch (err) {
             console.error("Failed to generate immersed character profile:", err);
             toast({ title: "Character Profile Error", description: "Could not retrieve character details. Please try again or define an original character.", variant: "destructive" });
-            setIsLoadingImmersedCharacter(false);
-            return;
         } finally {
             setIsLoadingImmersedCharacter(false);
         }
     } else { // Randomized, Custom, or Immersed (Original Character)
-        // These paths go through CharacterCreation
-        dispatch({ type: "CREATE_CHARACTER_AND_SETUP", payload: { class: adventureType === "Immersed" ? "Immersed Protagonist" : "Adventurer" } }); // Pass a default class for non-existing immersed
+        // These paths proceed to CharacterCreation or start gameplay with default/randomized character
+        dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
         let descriptionToast = `Proceeding to character creation for ${adventureType} adventure (${finalDifficulty}).`;
+        if (adventureType === "Randomized") {
+            descriptionToast = `Preparing a randomized ${finalDifficulty} adventure...`;
+        }
         toast({ title: "Setup Complete!", description: descriptionToast });
     }
   };
 
    const handleBack = () => {
-    // If coming from CharacterCreation (e.g. user went back from adventure setup to char creation then back to menu)
-    // or if directly from MainMenu selecting an adventure type.
-    // We want to go back to the screen that makes sense.
-    // If character exists, likely means they came from CharacterCreation to here.
-    // If no character, they likely came from MainMenu.
-    // However, SET_ADVENTURE_TYPE in MainMenu now also calls RESET_GAME first,
-    // which clears the character. So, going back to MainMenu is simplest.
-    dispatch({ type: "SET_GAME_STATUS", payload: "MainMenu" });
+    dispatch({ type: "RESET_GAME" });
   };
 
    useEffect(() => {
@@ -355,7 +350,10 @@ export function AdventureSetup() {
                    <Input id="universeName" value={universeName} onChange={(e) => setUniverseName(e.target.value)} placeholder="e.g., Star Wars, Lord of the Rings, Hogwarts" className={customError && !universeName.trim() ? 'border-destructive' : ''}/>
                 </div>
                 
-                <RadioGroup value={characterOriginType} onValueChange={(value) => setCharacterOriginType(value as 'existing' | 'original')} className="space-y-2">
+                <RadioGroup value={characterOriginType} onValueChange={(value) => {
+                    setCharacterOriginType(value as 'existing' | 'original');
+                    setPlayerCharacterConcept(""); // Clear concept when origin type changes
+                }} className="space-y-2">
                     <Label className="text-base font-medium">Character Origin:</Label>
                     <div className="flex items-center space-x-2">
                         <RadioGroupItem value="existing" id="origin-existing" />
@@ -420,4 +418,3 @@ export function AdventureSetup() {
     </div>
   );
 }
-
