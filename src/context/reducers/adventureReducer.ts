@@ -1,38 +1,90 @@
+
 // src/context/reducers/adventureReducer.ts
 import type { GameState } from "@/types/game-types";
 import type { StoryLogEntry, SavedAdventure } from "@/types/adventure-types";
 import type { Action } from "../game-actions";
-import { initialAdventureSettings, initialState } from "../game-initial-state";
-import { calculateMaxStamina, calculateMaxMana, generateAdventureId } from "@/lib/gameUtils";
+import { initialAdventureSettings, initialState, initialCharacterState, initialInventory } from "../game-initial-state";
+import { generateAdventureId } from "@/lib/gameUtils";
 import { updateGameStateString } from "@/lib/game-state-utils";
+import { SAVED_ADVENTURES_KEY } from "@/lib/constants";
+import { characterReducer } from "./characterReducer";
 
 export function adventureReducer(state: GameState, action: Action): GameState {
     switch (action.type) {
         case "SET_GAME_STATUS":
+            console.log("AdventureReducer: Setting game status to", action.payload);
             return { ...state, status: action.payload };
 
-        case "START_GAMEPLAY": {
-            // This action primarily sets up the initial game state string and adventure ID.
-            // Character and inventory initialization are handled by their respective reducers.
-            if (!state.character || !state.adventureSettings.adventureType) {
-                console.error("Cannot start gameplay: Missing character or adventure type.");
-                return state;
+        case "CREATE_CHARACTER_AND_SETUP": {
+            console.log("AdventureReducer: CREATE_CHARACTER_AND_SETUP. Payload:", JSON.stringify(action.payload).substring(0, 200));
+            // Create the character using the characterReducer
+            const newCharacter = characterReducer(null, { type: "CREATE_CHARACTER", payload: action.payload });
+
+            if (!newCharacter) {
+                console.error("AdventureReducer: Failed to create character in CREATE_CHARACTER_AND_SETUP. Character object is null.");
+                return state; // Return current state or an error state if preferred
             }
-            const adventureId = state.currentAdventureId || generateAdventureId();
-            const turnCount = state.currentAdventureId ? state.turnCount : 0; // Use loaded turn count if resuming
-            const initialGameState = state.currentAdventureId
-                ? state.currentGameStateString // Use existing if resuming
-                : updateGameStateString("", state.character, state.inventory, turnCount); // Generate new if starting
+            console.log("AdventureReducer: Character successfully created:", newCharacter.name, "Class:", newCharacter.class);
+
+            if (!state.adventureSettings.adventureType) {
+                console.error("AdventureReducer: AdventureType is null in CREATE_CHARACTER_AND_SETUP. Cannot proceed to AdventureSetup. Staying on CharacterCreation.");
+                return { ...state, character: newCharacter, status: "CharacterCreation" }; // Stay on char creation but with the new char
+            }
+
+            console.log("AdventureReducer: Character created & adventure type is set. Transitioning to AdventureSetup. Adventure Type:", state.adventureSettings.adventureType);
+            const currentInventory = [...initialInventory]; // Always start with fresh initial inventory for a new setup
 
             return {
                 ...state,
+                character: newCharacter,
+                inventory: currentInventory,
+                status: "AdventureSetup",
+                currentAdventureId: generateAdventureId(), // Always generate a new ID for a new setup
+                storyLog: [],
+                currentNarration: null,
+                adventureSummary: null,
+                turnCount: 0,
+                currentGameStateString: "Preparing for adventure setup...",
+            };
+        }
+
+
+        case "START_GAMEPLAY": {
+            console.log("AdventureReducer: START_GAMEPLAY called.");
+            if (!state.character) {
+                console.error("AdventureReducer: Cannot start gameplay: Character is null.");
+                return { ...state, status: "CharacterCreation" }; // Redirect to character creation
+            }
+            if (!state.adventureSettings.adventureType) {
+                console.error("AdventureReducer: Cannot start gameplay: Adventure type is not set.");
+                return { ...state, status: "AdventureSetup" }; // Go back to setup
+            }
+
+            // If currentAdventureId is already set (e.g. from loading a game), we might be resuming.
+            // However, START_GAMEPLAY is typically for a fresh start after AdventureSetup.
+            // Let's assume START_GAMEPLAY implies a new session or a reset for the current adventureId.
+            const adventureId = state.currentAdventureId || generateAdventureId(); // Ensure an ID exists
+            const turnCount = 0; // Gameplay always starts at turn 0 for this action
+            const currentInventory = [...initialInventory]; // Always start with initial inventory
+
+            const initialGameState = updateGameStateString(
+                "The adventure is about to begin...",
+                state.character,
+                currentInventory,
+                turnCount
+            );
+
+            console.log("AdventureReducer: Starting gameplay. Adventure ID:", adventureId, "Turn:", turnCount, "Inventory items:", currentInventory.length);
+            return {
+                ...state,
                 status: "Gameplay",
-                storyLog: state.currentAdventureId ? state.storyLog : [],
-                currentNarration: state.currentAdventureId ? state.currentNarration : null,
+                inventory: currentInventory,
+                storyLog: [], // Fresh story log
+                currentNarration: null,
                 adventureSummary: null,
                 currentGameStateString: initialGameState,
-                currentAdventureId: adventureId,
-                isGeneratingSkillTree: state.currentAdventureId ? state.isGeneratingSkillTree : false,
+                currentAdventureId: adventureId, // Ensure this is set/confirmed
+                isGeneratingSkillTree: false, // Reset this, will be triggered if needed
                 turnCount: turnCount,
             };
         }
@@ -40,50 +92,44 @@ export function adventureReducer(state: GameState, action: Action): GameState {
         case "UPDATE_NARRATION": {
             const newLogEntry: StoryLogEntry = { ...action.payload, timestamp: action.payload.timestamp || Date.now() };
             const newLog = [...state.storyLog, newLogEntry];
-            const newTurnCount = state.turnCount + 1; // Increment turn count here
+            const newTurnCount = state.turnCount + 1;
 
-            // The character and inventory states used here should already be updated by their respective reducers
-            const charAfterNarration = state.character; // Assume characterReducer already updated
-            const inventoryAfterNarration = state.inventory; // Assume inventoryReducer already updated
+            const charAfterNarration = state.character;
+            const inventoryAfterNarration = state.inventory;
 
             if (!charAfterNarration) {
-                 console.error("UPDATE_NARRATION: Character state is null, cannot update game state string.");
-                 return { // Return minimally updated state
+                 console.error("AdventureReducer: UPDATE_NARRATION: Character state is null.");
+                 return {
                      ...state,
                      currentNarration: newLogEntry,
                      storyLog: newLog,
                      turnCount: newTurnCount,
                  };
             }
-
+            const updatedGameState = updateGameStateString(action.payload.updatedGameState, charAfterNarration, inventoryAfterNarration, newTurnCount);
             return {
                 ...state,
                 currentNarration: newLogEntry,
                 storyLog: newLog,
-                currentGameStateString: updateGameStateString(action.payload.updatedGameState, charAfterNarration, inventoryAfterNarration, newTurnCount),
+                currentGameStateString: updatedGameState,
                 turnCount: newTurnCount,
             };
         }
 
         case "UPDATE_CRAFTING_RESULT": {
-            // This action primarily updates the narration and game state string after crafting.
-            // Inventory changes are handled by the inventoryReducer.
-             const { narration, newGameStateString: providedGameState } = action.payload;
+            const { narration, newGameStateString: providedGameState } = action.payload;
             const newTurnCount = state.turnCount + 1;
 
             if (!state.character) {
-                 console.error("UPDATE_CRAFTING_RESULT: Character state is null.");
+                 console.error("AdventureReducer: UPDATE_CRAFTING_RESULT: Character state is null.");
                  return { ...state, turnCount: newTurnCount };
             }
-
-             const finalGameStateString = updateGameStateString(providedGameState || state.currentGameStateString, state.character, state.inventory, newTurnCount); // Use latest inventory/char state
-
+             const finalGameStateString = updateGameStateString(providedGameState || state.currentGameStateString, state.character, state.inventory, newTurnCount);
              const craftingLogEntry: StoryLogEntry = {
                  narration: narration,
                  updatedGameState: finalGameStateString,
                  timestamp: Date.now(),
              };
-
              return {
                  ...state,
                  storyLog: [...state.storyLog, craftingLogEntry],
@@ -93,8 +139,9 @@ export function adventureReducer(state: GameState, action: Action): GameState {
              };
         }
 
-        case "INCREMENT_TURN": // Could potentially be removed if UPDATE_NARRATION always handles turn increment
-            return { ...state, turnCount: state.turnCount + 1 };
+        case "INCREMENT_TURN":
+            const incrementedTurn = state.turnCount + 1;
+            return { ...state, turnCount: incrementedTurn };
 
         case "SET_SKILL_TREE_GENERATING":
              return { ...state, isGeneratingSkillTree: action.payload };
@@ -107,18 +154,12 @@ export function adventureReducer(state: GameState, action: Action): GameState {
              let finalTurnCount = state.turnCount;
 
              if (action.payload.finalNarration && (!state.currentNarration || action.payload.finalNarration.narration !== state.currentNarration.narration)) {
-                // Logic to apply final narration updates to character state (should ideally be done in characterReducer if possible)
-                // This might involve temporary state or passing the final narration details to characterReducer
-                // For now, we assume characterReducer handles updates based on narration actions implicitly before END_ADVENTURE is dispatched.
                  const finalEntry: StoryLogEntry = { ...action.payload.finalNarration, timestamp: action.payload.finalNarration.timestamp || Date.now() };
                  finalLog.push(finalEntry);
-                 finalGameState = action.payload.finalNarration.updatedGameState;
+                 finalCharacterState = state.character;
+                 finalInventoryState = state.inventory;
                  finalTurnCount += 1;
-                 // Re-fetch potentially updated character/inventory state
-                 finalCharacterState = state.character; // Assuming characterReducer handled updates
-                 finalInventoryState = state.inventory; // Assuming inventoryReducer handled updates
-                 finalGameState = updateGameStateString(finalGameState, finalCharacterState, finalInventoryState, finalTurnCount);
-                 console.log("Applied final narration updates before ending.");
+                 finalGameState = updateGameStateString(action.payload.finalNarration.updatedGameState, finalCharacterState, finalInventoryState, finalTurnCount);
              }
 
              let updatedSavedAdventures = state.savedAdventures;
@@ -127,19 +168,19 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                      id: state.currentAdventureId,
                      saveTimestamp: Date.now(),
                      characterName: finalCharacterState.name,
-                     character: finalCharacterState, // Save the potentially updated character
+                     character: finalCharacterState,
                      adventureSettings: state.adventureSettings,
                      storyLog: finalLog,
-                     currentGameStateString: finalGameState, // Save the final game state string
-                     inventory: finalInventoryState, // Save the potentially updated inventory
+                     currentGameStateString: finalGameState,
+                     inventory: finalInventoryState,
                      statusBeforeSave: "AdventureSummary",
                      adventureSummary: action.payload.summary,
                      turnCount: finalTurnCount,
                  };
                  updatedSavedAdventures = state.savedAdventures.filter(adv => adv.id !== endedAdventure.id);
                  updatedSavedAdventures.push(endedAdventure);
-                 // Persistence logic moved outside reducer (e.g., in context or middleware)
-                 console.log("Adventure ended, state prepared for saving.");
+                 localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(updatedSavedAdventures));
+                 console.log("AdventureReducer: Adventure ended and saved. ID:", state.currentAdventureId);
              }
 
              return {
@@ -151,40 +192,72 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                  inventory: finalInventoryState,
                  turnCount: finalTurnCount,
                  currentNarration: null,
-                 savedAdventures: updatedSavedAdventures, // Keep the updated save list in state
+                 savedAdventures: updatedSavedAdventures,
                  isGeneratingSkillTree: false,
              };
         }
+
+        case "LOAD_SAVED_ADVENTURES":
+            return { ...state, savedAdventures: action.payload };
+
+        case "SAVE_CURRENT_ADVENTURE": {
+            if (!state.character || !state.currentAdventureId || state.status !== "Gameplay") {
+              console.warn("AdventureReducer: Cannot save - No active character, adventure ID, or not in Gameplay.");
+              return state;
+            }
+            const currentSave: SavedAdventure = {
+              id: state.currentAdventureId,
+              saveTimestamp: Date.now(),
+              characterName: state.character.name,
+              character: state.character,
+              adventureSettings: state.adventureSettings,
+              storyLog: state.storyLog,
+              currentGameStateString: updateGameStateString(state.currentGameStateString, state.character, state.inventory, state.turnCount),
+              inventory: state.inventory,
+              statusBeforeSave: state.status,
+              adventureSummary: state.adventureSummary,
+              turnCount: state.turnCount,
+            };
+            const savesWithoutCurrent = state.savedAdventures.filter(adv => adv.id !== currentSave.id);
+            const newSaves = [...savesWithoutCurrent, currentSave];
+            localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(newSaves));
+            return { ...state, savedAdventures: newSaves };
+          }
+
         case "LOAD_ADVENTURE": {
             const adventureToLoad = state.savedAdventures.find(adv => adv.id === action.payload);
             if (!adventureToLoad) {
-                console.error(`Adventure with ID ${action.payload} not found.`);
+                console.error(`AdventureReducer: Adventure with ID ${action.payload} not found.`);
                 return state;
             }
-
-             // Validate loaded data (some validation might be in specific reducers too)
-             const validatedStoryLog = Array.isArray(adventureToLoad.storyLog) ? adventureToLoad.storyLog : [];
-             const validatedTurnCount = typeof adventureToLoad.turnCount === 'number' ? adventureToLoad.turnCount : 0;
-             const validatedCharacter = adventureToLoad.character; // Assume characterReducer handles validation
-             const validatedInventory = adventureToLoad.inventory; // Assume inventoryReducer handles validation
-             const validatedGameStateString = adventureToLoad.currentGameStateString || updateGameStateString("", validatedCharacter, validatedInventory, validatedTurnCount);
-
-             const loadedStatus = adventureToLoad.statusBeforeSave === "AdventureSummary" ? "AdventureSummary" : "Gameplay";
-
+            console.log("AdventureReducer: Loading adventure. ID:", action.payload);
+            const statusToLoad = adventureToLoad.statusBeforeSave || (adventureToLoad.adventureSummary ? "AdventureSummary" : "Gameplay");
              return {
-                 ...state, // Keep existing saves, theme, etc.
-                 status: loadedStatus,
-                 character: validatedCharacter, // Set by characterReducer
-                 adventureSettings: adventureToLoad.adventureSettings, // Set by settingsReducer
-                 storyLog: validatedStoryLog,
-                 inventory: validatedInventory, // Set by inventoryReducer
-                 turnCount: validatedTurnCount,
-                 currentGameStateString: validatedGameStateString,
-                 currentNarration: validatedStoryLog.length > 0 ? validatedStoryLog[validatedStoryLog.length - 1] : null,
+                 ...initialState,
+                 savedAdventures: state.savedAdventures,
+                 selectedThemeId: state.selectedThemeId,
+                 isDarkMode: state.isDarkMode,
+                 userGoogleAiApiKey: state.userGoogleAiApiKey,
+
+                 status: statusToLoad,
+                 character: adventureToLoad.character,
+                 adventureSettings: adventureToLoad.adventureSettings,
+                 storyLog: adventureToLoad.storyLog,
+                 inventory: adventureToLoad.inventory,
+                 turnCount: adventureToLoad.turnCount || 0,
+                 currentGameStateString: adventureToLoad.currentGameStateString,
+                 currentNarration: adventureToLoad.storyLog.length > 0 ? adventureToLoad.storyLog[adventureToLoad.storyLog.length - 1] : null,
                  adventureSummary: adventureToLoad.adventureSummary,
                  currentAdventureId: adventureToLoad.id,
-                 isGeneratingSkillTree: false, // Reset on load
+                 isGeneratingSkillTree: false,
              };
+         }
+
+        case "DELETE_ADVENTURE": {
+            const filteredSaves = state.savedAdventures.filter(adv => adv.id !== action.payload);
+            localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(filteredSaves));
+            console.log("AdventureReducer: Adventure deleted. ID:", action.payload);
+            return { ...state, savedAdventures: filteredSaves };
          }
         default:
             return state;
