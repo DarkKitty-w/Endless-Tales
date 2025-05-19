@@ -180,7 +180,7 @@ async function processDevCommand(input: NarrateAdventureInput): Promise<NarrateA
 
 const narrateAdventurePrompt = ai.definePrompt({
   name: 'narrateAdventurePrompt',
-  input: { schema: NarrateAdventureInputSchema },
+  input: { schema: NarrateAdventureInputSchema }, // Schema remains the same, transformation happens in the flow
   output: { schema: NarrateAdventureOutputSchema },
   prompt: `You are a creative Game Master AI for the text adventure "Endless Tales". Your task is to narrate the next segment of the story.
 
@@ -195,8 +195,8 @@ const narrateAdventurePrompt = ai.definePrompt({
 *   Resources: Stamina {{character.currentStamina}}/{{character.maxStamina}}, Mana {{character.currentMana}}/{{character.maxMana}}
 *   Level: {{character.level}} (XP: {{character.xp}}/{{character.xpToNextLevel}})
 *   Learned Skills: {{#if character.learnedSkills}}{{#each character.learnedSkills}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{else}}None{{/if}}
-*   Reputation: {{#if character.reputation}}{{{JSONstringify character.reputation}}}{{else}}None{{/if}}
-*   NPC Relationships: {{#if character.npcRelationships}}{{{JSONstringify character.npcRelationships}}}{{else}}None{{/if}}
+*   Reputation: {{#if character.reputationString}}{{character.reputationString}}{{else}}None{{/if}}
+*   NPC Relationships: {{#if character.npcRelationshipsString}}{{character.npcRelationshipsString}}{{else}}None{{/if}}
 
 **Game Settings & Context:**
 *   Turn: {{{turnCount}}}
@@ -261,18 +261,28 @@ const narrateAdventurePrompt = ai.definePrompt({
 `,
 });
 
-const narrateAdventureFlow = ai.defineFlow<
-  typeof NarrateAdventureInputSchema,
-  typeof NarrateAdventureOutputSchema
->(
+const narrateAdventureFlow = ai.defineFlow(
   {
     name: 'narrateAdventureFlow',
     inputSchema: NarrateAdventureInputSchema,
     outputSchema: NarrateAdventureOutputSchema,
   },
   async input => {
-    console.log("Sending to narrateAdventurePrompt:", JSON.stringify(input, null, 2));
-    const {output} = await narrateAdventurePrompt(input);
+    // Pre-process data for the prompt
+    const reputationString = JSON.stringify(input.character.reputation);
+    const npcRelationshipsString = JSON.stringify(input.character.npcRelationships);
+
+    const promptInput = {
+      ...input,
+      character: {
+        ...input.character,
+        reputationString: Object.keys(input.character.reputation).length > 0 ? reputationString : "", // Pass empty string if object is empty
+        npcRelationshipsString: Object.keys(input.character.npcRelationships).length > 0 ? npcRelationshipsString : "", // Pass empty string if object is empty
+      },
+    };
+
+    console.log("Sending to narrateAdventurePrompt:", JSON.stringify(promptInput, null, 2));
+    const {output} = await narrateAdventurePrompt(promptInput);
     console.log("Received from narrateAdventurePrompt:", JSON.stringify(output, null, 2));
      if (!output) {
         return {
