@@ -1,5 +1,5 @@
 // src/context/reducers/settingsReducer.ts
-import type { AdventureSettings, DifficultyLevel } from "@/types/adventure-types";
+import type { AdventureSettings, DifficultyLevel, AdventureType } from "@/types/adventure-types";
 import type { GameState } from "@/types/game-types";
 import type { Action } from "../game-actions";
 import { initialAdventureSettings } from "../game-initial-state";
@@ -28,6 +28,20 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
             };
             return { ...state, adventureSettings: newSettings };
         }
+        case "SET_ADVENTURE_TYPE":
+            console.log("SettingsReducer: Setting adventure type to", action.payload);
+            return {
+                ...state,
+                adventureSettings: {
+                    ...state.adventureSettings,
+                    adventureType: action.payload,
+                    // Reset type-specific fields when adventure type changes to ensure clean state
+                    worldType: action.payload === 'Custom' ? state.adventureSettings.worldType : "",
+                    mainQuestline: action.payload === 'Custom' ? state.adventureSettings.mainQuestline : "",
+                    universeName: action.payload === 'Immersed' ? state.adventureSettings.universeName : "",
+                    playerCharacterConcept: action.payload === 'Immersed' ? state.adventureSettings.playerCharacterConcept : "",
+                }
+            };
         case "SET_THEME_ID":
             return { ...state, selectedThemeId: action.payload };
         case "SET_DARK_MODE":
@@ -36,8 +50,8 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
             return { ...state, userGoogleAiApiKey: action.payload };
          case "RESET_GAME":
              return {
-                ...state,
-                adventureSettings: { ...initialAdventureSettings },
+                ...state, // Preserve theme, mode, API key from current settings state
+                adventureSettings: { ...initialAdventureSettings }, // Reset adventure settings only
              };
          case "LOAD_ADVENTURE": {
              const settingsToLoad = action.payload.adventureSettings;
@@ -46,10 +60,10 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
                  : initialAdventureSettings.difficulty;
 
              const validatedSettings: AdventureSettings = {
-                 ...initialAdventureSettings,
+                 ...initialAdventureSettings, // Start with defaults
                  ...(settingsToLoad || {}), // Spread loaded settings
                  difficulty: validatedDifficulty,
-                 // Ensure specific fields are correctly loaded or defaulted
+                 // Ensure specific fields are correctly loaded or defaulted based on the loaded adventureType
                 worldType: settingsToLoad?.adventureType === 'Custom' ? (settingsToLoad.worldType ?? "") : "",
                 mainQuestline: settingsToLoad?.adventureType === 'Custom' ? (settingsToLoad.mainQuestline ?? "") : "",
                 universeName: settingsToLoad?.adventureType === 'Immersed' ? (settingsToLoad.universeName ?? "") : "",
