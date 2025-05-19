@@ -10,7 +10,7 @@ import { useGame } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Wand2, RotateCcw, User, Save, AlertCircle, CheckCircle } from "lucide-react";
+import { Wand2, RotateCcw, User, Save, AlertCircle, CheckCircle, LogOut } from "lucide-react"; // Added LogOut for back button
 import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -65,10 +65,8 @@ const combinedSchema = z.discriminatedUnion("creationType", [
   basicCreationSchema,
   textCreationSchema,
 ]).superRefine((data, ctx) => {
-  // RELY ON currentGlobalAdventureType, DO NOT CALL useGame() or other hooks here
   const currentAdventureTypeForValidation = currentGlobalAdventureType;
   console.log("Zod superRefine - currentAdventureTypeForValidation:", currentAdventureTypeForValidation);
-
 
   if (currentAdventureTypeForValidation !== "Immersed") {
     if (data.creationType === "basic") {
@@ -80,7 +78,6 @@ const combinedSchema = z.discriminatedUnion("creationType", [
         });
       }
     }
-    // For "text" creation in non-Immersed mode, description is vital for AI to infer class etc.
     if (data.creationType === "text") {
         if (!data.description || data.description.trim().length < 10) {
              ctx.addIssue({
@@ -90,15 +87,14 @@ const combinedSchema = z.discriminatedUnion("creationType", [
              });
         }
     }
-  } else { // Immersed Mode
-      // In Immersed mode, description is still useful for AI, especially if playerCharacterConcept is not very detailed.
-      // Let's make it required for text mode even in Immersed, but the prompt for AI will use playerCharacterConcept if description is minimal.
+  } else {
       if (data.creationType === "text" && (!data.description || data.description.trim().length < 10) ) {
-          ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: "Description (min 10 chars) is recommended for AI profile generation, even in Immersed mode.",
-              path: ["description"],
-          });
+          // Optional: still suggest a description for Immersed AI profile
+          // ctx.addIssue({
+          //     code: z.ZodIssueCode.custom,
+          //     message: "Description (min 10 chars) is recommended for AI profile generation, even in Immersed mode.",
+          //     path: ["description"],
+          // });
       }
   }
 });
@@ -117,7 +113,7 @@ const staticDefaultValues: Partial<FormData> = {
 
 
 export function CharacterCreation() {
-  const { state, dispatch } = useGame(); // Correctly used here
+  const { state, dispatch } = useGame();
   const { toast } = useToast();
   const [creationType, setCreationType] = useState<"basic" | "text">("basic");
 
@@ -130,8 +126,9 @@ export function CharacterCreation() {
   const [stats, setStats] = useState<CharacterStats>(() => {
     const characterStats = state.character?.stats;
     const initial = characterStats ? { ...defaultInitialStats, ...characterStats } : { ...defaultInitialStats };
-     // Ensure the initial sum matches TOTAL_STAT_POINTS if loaded from context, otherwise reset to default
-     if (initial.strength + initial.stamina + initial.agility !== TOTAL_STAT_POINTS) {
+     if (initial.strength + initial.stamina + initial.agility > TOTAL_STAT_POINTS ||
+         initial.strength < MIN_STAT_VALUE || initial.stamina < MIN_STAT_VALUE || initial.agility < MIN_STAT_VALUE ) {
+        // If loaded stats are invalid, reset to a valid distribution
         return { ...defaultInitialStats };
     }
     return initial;
@@ -148,7 +145,7 @@ export function CharacterCreation() {
 
   const { register, handleSubmit, formState, reset, watch, setValue, trigger, getValues } = useForm<FormData>({
      resolver: zodResolver(combinedSchema),
-     mode: "onChange",
+     mode: "onChange", // Changed to onChange for more responsive validation
      defaultValues: staticDefaultValues
    });
    const { errors, isValid: formIsValid, isDirty } = formState;
@@ -160,25 +157,23 @@ export function CharacterCreation() {
     const adventureType = state.adventureSettings?.adventureType;
     const character = state.character;
 
-    // Get current values to preserve user input if fields are not meant to be overwritten by context
     const currentFormValues = getValues();
 
     const newFormValues: Partial<FormData> = {
-      creationType: creationType, // Reflect current tab
+      creationType: creationType,
       name: character?.name ?? currentFormValues.name ?? "",
-      class: adventureType === "Immersed" ? "" : (character?.class || currentFormValues.class || "Adventurer"),
+      class: adventureType === "Immersed" ? "" : (character?.class || currentFormValues.class || (creationType === "basic" ? "Adventurer" : "")),
       traits: character?.traits?.join(', ') ?? currentFormValues.traits ?? "",
       knowledge: character?.knowledge?.join(', ') ?? currentFormValues.knowledge ?? "",
       background: character?.background ?? currentFormValues.background ?? "",
       description: character?.description ?? character?.aiGeneratedDescription ?? currentFormValues.description ?? "",
     };
-     console.log("CharacterCreation: Resetting form with values:", newFormValues);
-    reset(newFormValues, { keepDirty: true, keepValues: true }); // Keep dirty state and values not explicitly reset
-    trigger(); // Re-validate after reset
+    console.log("CharacterCreation: Resetting form with values:", newFormValues);
+    reset(newFormValues, { keepDirty: false, keepValues: false });
+    trigger();
   }, [state.character, state.adventureSettings.adventureType, creationType, reset, getValues, trigger]);
 
 
-   // Effect to update currentGlobalAdventureType and handle class field for Immersed mode
    useEffect(() => {
      currentGlobalAdventureType = state.adventureSettings.adventureType;
      const currentClassValue = getValues("class");
@@ -189,13 +184,12 @@ export function CharacterCreation() {
              setValue("class", "", { shouldValidate: true, shouldDirty: false });
          }
      } else {
-         // If not Immersed and class is empty (e.g., switched from Immersed), set default
          if (!currentClassValue && currentCreationTypeValue === "basic") {
              setValue("class", "Adventurer", { shouldValidate: true, shouldDirty: false });
          }
      }
      console.log("CharacterCreation: adventureType/creationType effect - currentGlobalAdventureType set to:", currentGlobalAdventureType, "Triggering validation.");
-     trigger(); // Re-validate after potential class change
+     trigger();
    }, [state.adventureSettings.adventureType, creationType, setValue, getValues, trigger, watch]);
 
 
@@ -207,14 +201,14 @@ export function CharacterCreation() {
     if (newRemaining < 0) setStatError(`${Math.abs(newRemaining)} point(s) over limit.`);
     else if (newRemaining > 0) setStatError(`${newRemaining} point(s) remaining.`);
     else setStatError(null);
-    trigger(); // Trigger form validation which includes stat points check
+    trigger();
   }, [calculateRemainingPoints, trigger]);
 
 
   const randomizeStats = useCallback(() => {
     let pointsLeft = TOTAL_STAT_POINTS;
     const newAllocatedStats: Pick<CharacterStats, 'strength' | 'stamina' | 'agility'> = { strength: MIN_STAT_VALUE, stamina: MIN_STAT_VALUE, agility: MIN_STAT_VALUE };
-    pointsLeft -= (MIN_STAT_VALUE * 3); // Account for minimums
+    pointsLeft -= (MIN_STAT_VALUE * 3);
     const allocatedStatKeys: (keyof typeof newAllocatedStats)[] = ['strength', 'stamina', 'agility'];
 
     while (pointsLeft > 0) {
@@ -225,21 +219,19 @@ export function CharacterCreation() {
         pointsLeft--;
     }
 
-    // Correction logic if total doesn't sum up exactly to TOTAL_STAT_POINTS due to MAX_STAT_VALUE limits
     let currentTotal = newAllocatedStats.strength + newAllocatedStats.stamina + newAllocatedStats.agility;
     if (currentTotal !== TOTAL_STAT_POINTS) {
         let diff = TOTAL_STAT_POINTS - currentTotal;
-        const sortedByVal = allocatedStatKeys.sort((a, b) => newAllocatedStats[a] - newAllocatedStats[b]); // Sort for adjustment
+        const sortedByVal = allocatedStatKeys.sort((a, b) => newAllocatedStats[a] - newAllocatedStats[b]);
 
         while (diff !== 0 && sortedByVal.length > 0) {
-            const keyToAdjust = diff > 0 ? sortedByVal[0] : sortedByVal[sortedByVal.length - 1]; // Add to lowest, remove from highest
+            const keyToAdjust = diff > 0 ? sortedByVal[0] : sortedByVal[sortedByVal.length - 1];
             const change = Math.sign(diff);
 
             if ((change > 0 && newAllocatedStats[keyToAdjust] < MAX_STAT_VALUE) || (change < 0 && newAllocatedStats[keyToAdjust] > MIN_STAT_VALUE)) {
                 newAllocatedStats[keyToAdjust] += change;
                 diff -= change;
             } else {
-                // Remove key if it can't be adjusted further in this direction
                 if (diff > 0) sortedByVal.shift();
                 else sortedByVal.pop();
             }
@@ -247,7 +239,7 @@ export function CharacterCreation() {
     }
     const finalStats: CharacterStats = { ...defaultInitialStats, ...newAllocatedStats };
     handleStatChange(finalStats);
-}, [handleStatChange, defaultInitialStats]); // Removed defaultInitialStats as it's stable
+}, [handleStatChange]);
 
 
  const randomizeAll = useCallback(async () => {
@@ -280,9 +272,8 @@ export function CharacterCreation() {
          defaultDataForReset.traits = randomTraitsPool.sort(() => 0.5 - Math.random()).slice(0, Math.floor(Math.random() * 3) + 1).join(', ');
          defaultDataForReset.knowledge = randomKnowledgePool.sort(() => 0.5 - Math.random()).slice(0, Math.floor(Math.random() * 3) + 1).join(', ');
          defaultDataForReset.background = randomBackgrounds[Math.floor(Math.random() * randomBackgrounds.length)];
-     } else { // Text mode
+     } else {
          defaultDataForReset.description = randomDescriptions[Math.floor(Math.random() * randomDescriptions.length)];
-         // For text mode, AI will infer these, but we can set a sensible default class for non-Immersed
          defaultDataForReset.class = state.adventureSettings.adventureType === "Immersed" ? "" : "Adventurer";
      }
      reset(defaultDataForReset as FormData);
@@ -291,13 +282,13 @@ export function CharacterCreation() {
      setIsRandomizing(false);
      setRandomizationComplete(true);
      setTimeout(() => setRandomizationComplete(false), 1000);
-     trigger(); // Trigger validation after setting values
+     trigger();
  }, [creationType, reset, randomizeStats, trigger, state.adventureSettings.adventureType, watch]);
 
 
   const handleGenerateDescription = useCallback(async () => {
      console.log("CharacterCreation: handleGenerateDescription called");
-     await trigger(["name", "description"]); // Validate relevant fields first
+     await trigger(["name", "description"]);
      const currentDescValue = getValues("description");
      const currentName = getValues("name");
      const currentAdventureType = state.adventureSettings.adventureType;
@@ -312,12 +303,11 @@ export function CharacterCreation() {
              toast({ title: "Input Required", description: "Name and either Description (min 10 chars) or Character Concept (from Adventure Setup) required for Immersed AI profile.", variant: "destructive" });
              return;
          }
-         // If description is short but concept exists, use the concept for AI
          if ((!currentDescValue || currentDescValue.length < 10) && playerConcept?.trim()) {
             descriptionToUseForAI = `Character: ${playerConcept}. Name: ${currentName}. Universe: ${state.adventureSettings.universeName || 'a specified universe'}.`;
             console.log("CharacterCreation: Using player concept for Immersed AI:", descriptionToUseForAI);
          }
-     } else { // Not Immersed
+     } else {
          if (!currentName?.trim()) {
              toast({ title: "Name Required", description: "Please enter a character name.", variant: "destructive" });
              return;
@@ -344,7 +334,7 @@ export function CharacterCreation() {
 
         dispatch({ type: "SET_AI_DESCRIPTION", payload: result.detailedDescription });
         toast({ title: "AI Profile Generated!", description: "Character details updated."});
-        trigger(); // Re-validate all fields after AI updates
+        trigger();
      } catch (err) {
        console.error("CharacterCreation: AI generation failed:", err);
        setError("Failed to generate profile. The AI might be busy or encountered an error.");
@@ -366,7 +356,7 @@ export function CharacterCreation() {
          toast({ title: "Stat Allocation Incomplete", description: statError, variant: "destructive"});
          return;
      }
-     setStatError(null); // Clear error if points are fine
+     setStatError(null);
 
      if (!formIsValid) {
          let errorMessages = "Please correct the highlighted fields.";
@@ -380,35 +370,33 @@ export function CharacterCreation() {
      const finalName = data.name;
      let finalClass = data.class || "";
      if (state.adventureSettings.adventureType !== "Immersed") {
-        finalClass = data.class || "Adventurer"; // Ensure a class for non-Immersed
+        finalClass = data.class || "Adventurer";
      } else {
-        finalClass = ""; // No class for Immersed mode
+        finalClass = "";
      }
 
      const finalTraits: string[] = data.traits?.split(',').map((t: string) => t.trim()).filter(Boolean) ?? [];
      const finalKnowledge: string[] = data.knowledge?.split(',').map((k: string) => k.trim()).filter(Boolean) ?? [];
      const finalBackground = data.background ?? "";
      const finalDescription = data.description || "";
-     // Use AI generated description if text mode was used and AI generation happened, otherwise use user's input
      const finalAiGeneratedDescription = (data.creationType === "text" && state.character?.aiGeneratedDescription) ? state.character.aiGeneratedDescription : (data.creationType === "text" ? finalDescription : undefined);
 
 
      const characterDataToDispatch: Partial<Character> = {
          name: finalName,
          class: finalClass,
-         description: finalDescription, // Store user's direct input if text mode, or basic description
+         description: finalDescription,
          traits: finalTraits,
          knowledge: finalKnowledge,
          background: finalBackground,
          stats: stats,
-         aiGeneratedDescription: finalAiGeneratedDescription, // This will hold the AI's output if generated
+         aiGeneratedDescription: finalAiGeneratedDescription,
      };
      console.log("CharacterCreation: Dispatching CREATE_CHARACTER_AND_SETUP with payload:", characterDataToDispatch);
      dispatch({ type: "CREATE_CHARACTER_AND_SETUP", payload: characterDataToDispatch });
      toast({ title: "Character Ready!", description: `Welcome, ${finalName}. Adventure awaits!` });
    };
 
-   // Memoized value for the proceed button's disabled state
     const proceedButtonDisabled = useMemo(() => {
         const nameField = watch("name");
         const nameValid = !!nameField?.trim();
@@ -417,8 +405,12 @@ export function CharacterCreation() {
             isGenerating, isRandomizing, remainingPoints, statError, formIsValid, nameValid, calculatedIsDisabled: isDisabled, errors
         });
         return isDisabled;
-    }, [isGenerating, isRandomizing, remainingPoints, statError, formIsValid, errors, watch("name")]); // Minimal dependencies
+    }, [isGenerating, isRandomizing, remainingPoints, statError, formIsValid, errors, watch("name")]);
 
+
+  const handleBackToMenu = () => {
+    dispatch({ type: "RESET_GAME" });
+  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
@@ -526,39 +518,52 @@ export function CharacterCreation() {
 
                 </CardContent>
                 <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t border-foreground/10">
-                    <TooltipProvider>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    type="button"
-                                    onClick={randomizeAll}
-                                    variant="secondary"
-                                    aria-label="Randomize All Character Fields and Stats"
-                                    className="relative overflow-hidden w-full sm:w-auto"
-                                    disabled={isRandomizing || isGenerating}
-                                >
-                                    <RotateCcw className={`mr-2 h-4 w-4 ${isRandomizing ? 'animate-spin' : ''}`} />
-                                    {isRandomizing ? 'Randomizing...' : 'Randomize Everything'}
-                                    <CheckCircle className={`absolute right-2 h-4 w-4 text-green-500 transition-opacity duration-500 ${randomizationComplete ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: randomizationComplete ? '300ms' : '0ms' }} />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                <p>Generate a completely random character based on the selected creation type.</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </TooltipProvider>
                     <Button
-                        type="submit"
-                        className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
-                        disabled={proceedButtonDisabled}
-                        aria-label="Save character and proceed to adventure setup"
+                        type="button"
+                        onClick={handleBackToMenu}
+                        variant="outline"
+                        aria-label="Back to Main Menu"
+                        className="w-full sm:w-auto"
                     >
-                        <Save className="mr-2 h-4 w-4" />
-                        Proceed to Adventure Setup
+                        <LogOut className="mr-2 h-4 w-4" />
+                        Back to Main Menu
                     </Button>
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        onClick={randomizeAll}
+                                        variant="secondary"
+                                        aria-label="Randomize All Character Fields and Stats"
+                                        className="relative overflow-hidden w-full sm:w-auto"
+                                        disabled={isRandomizing || isGenerating}
+                                    >
+                                        <RotateCcw className={`mr-2 h-4 w-4 ${isRandomizing ? 'animate-spin' : ''}`} />
+                                        {isRandomizing ? 'Randomizing...' : 'Randomize All'}
+                                        <CheckCircle className={`absolute right-2 h-4 w-4 text-green-500 transition-opacity duration-500 ${randomizationComplete ? 'opacity-100' : 'opacity-0'}`} style={{ transitionDelay: randomizationComplete ? '300ms' : '0ms' }} />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>Generate a completely random character based on the selected creation type.</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                        <Button
+                            type="submit"
+                            className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"
+                            disabled={proceedButtonDisabled}
+                            aria-label="Save character and proceed to adventure setup"
+                        >
+                            <Save className="mr-2 h-4 w-4" />
+                            Proceed to Adventure Setup
+                        </Button>
+                    </div>
                 </CardFooter>
             </CardboardCard>
         </form>
     </div>
   );
 }
+
