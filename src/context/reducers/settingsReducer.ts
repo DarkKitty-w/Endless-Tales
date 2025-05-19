@@ -13,68 +13,66 @@ type SettingsState = Pick<GameState, 'adventureSettings' | 'selectedThemeId' | '
 export function settingsReducer(state: SettingsState, action: Action): SettingsState {
     switch (action.type) {
         case "SET_ADVENTURE_SETTINGS": {
-            const validatedDifficulty = VALID_ADVENTURE_DIFFICULTY_LEVELS.includes(action.payload.difficulty as DifficultyLevel)
-                 ? action.payload.difficulty as DifficultyLevel
-                 : state.adventureSettings.difficulty;
+            const incomingPayload = action.payload;
+            const currentAdventureTypeInState = state.adventureSettings.adventureType;
 
-            const currentType = action.payload.adventureType ?? state.adventureSettings.adventureType;
+            const finalAdventureType = incomingPayload.adventureType ?? currentAdventureTypeInState;
+
+            if (!finalAdventureType) {
+                console.error("SettingsReducer: SET_ADVENTURE_SETTINGS - finalAdventureType is unexpectedly null/undefined. This may cause issues.", "Incoming Payload:", incomingPayload, "Current state type:", currentAdventureTypeInState);
+                // Potentially return state or a default error state if this is critical
+            }
+
+            const validatedDifficulty = VALID_ADVENTURE_DIFFICULTY_LEVELS.includes(incomingPayload.difficulty as DifficultyLevel)
+                 ? incomingPayload.difficulty as DifficultyLevel
+                 : state.adventureSettings.difficulty;
 
             const newSettings: AdventureSettings = {
                 ...state.adventureSettings,
-                ...action.payload,
-                adventureType: currentType,
+                ...incomingPayload,
+                adventureType: finalAdventureType,
                 difficulty: validatedDifficulty,
-                // Ensure type-specific settings are only set if the type matches
-                worldType: currentType === 'Custom' ? (action.payload.worldType ?? state.adventureSettings.worldType) : "",
-                mainQuestline: currentType === 'Custom' ? (action.payload.mainQuestline ?? state.adventureSettings.mainQuestline) : "",
-                genreTheme: currentType === 'Custom' ? (action.payload.genreTheme ?? state.adventureSettings.genreTheme) : "",
-                magicSystem: currentType === 'Custom' ? (action.payload.magicSystem ?? state.adventureSettings.magicSystem) : "",
-                techLevel: currentType === 'Custom' ? (action.payload.techLevel ?? state.adventureSettings.techLevel) : "",
-                dominantTone: currentType === 'Custom' ? (action.payload.dominantTone ?? state.adventureSettings.dominantTone) : "",
-                startingSituation: currentType === 'Custom' ? (action.payload.startingSituation ?? state.adventureSettings.startingSituation) : "",
-                combatFrequency: currentType === 'Custom' ? (action.payload.combatFrequency ?? state.adventureSettings.combatFrequency) : "Medium",
-                puzzleFrequency: currentType === 'Custom' ? (action.payload.puzzleFrequency ?? state.adventureSettings.puzzleFrequency) : "Medium",
-                socialFocus: currentType === 'Custom' ? (action.payload.socialFocus ?? state.adventureSettings.socialFocus) : "Medium",
+                characterOriginType: finalAdventureType === 'Immersed'
+                    ? (incomingPayload.characterOriginType ?? state.adventureSettings.characterOriginType ?? 'original')
+                    : undefined, // Explicitly undefined for non-Immersed types
 
-                universeName: currentType === 'Immersed' ? (action.payload.universeName ?? state.adventureSettings.universeName) : "",
-                playerCharacterConcept: currentType === 'Immersed' ? (action.payload.playerCharacterConcept ?? state.adventureSettings.playerCharacterConcept) : "",
-                characterOriginType: currentType === 'Immersed' ? (action.payload.characterOriginType ?? state.adventureSettings.characterOriginType) : undefined,
+                // Clear type-specific settings if the type changes or is not relevant
+                worldType: finalAdventureType === 'Custom' ? (incomingPayload.worldType ?? state.adventureSettings.worldType ?? "") : "",
+                mainQuestline: finalAdventureType === 'Custom' ? (incomingPayload.mainQuestline ?? state.adventureSettings.mainQuestline ?? "") : "",
+                genreTheme: finalAdventureType === 'Custom' ? (incomingPayload.genreTheme ?? state.adventureSettings.genreTheme ?? "") : "",
+                magicSystem: finalAdventureType === 'Custom' ? (incomingPayload.magicSystem ?? state.adventureSettings.magicSystem ?? "") : "",
+                techLevel: finalAdventureType === 'Custom' ? (incomingPayload.techLevel ?? state.adventureSettings.techLevel ?? "") : "",
+                dominantTone: finalAdventureType === 'Custom' ? (incomingPayload.dominantTone ?? state.adventureSettings.dominantTone ?? "") : "",
+                startingSituation: finalAdventureType === 'Custom' ? (incomingPayload.startingSituation ?? state.adventureSettings.startingSituation ?? "") : "",
+                combatFrequency: finalAdventureType === 'Custom' ? (incomingPayload.combatFrequency ?? state.adventureSettings.combatFrequency ?? "Medium") : "Medium",
+                puzzleFrequency: finalAdventureType === 'Custom' ? (incomingPayload.puzzleFrequency ?? state.adventureSettings.puzzleFrequency ?? "Medium") : "Medium",
+                socialFocus: finalAdventureType === 'Custom' ? (incomingPayload.socialFocus ?? state.adventureSettings.socialFocus ?? "Medium") : "Medium",
+
+                universeName: finalAdventureType === 'Immersed' ? (incomingPayload.universeName ?? state.adventureSettings.universeName ?? "") : "",
+                playerCharacterConcept: finalAdventureType === 'Immersed' ? (incomingPayload.playerCharacterConcept ?? state.adventureSettings.playerCharacterConcept ?? "") : "",
             };
-            console.log("SettingsReducer: Updated adventure settings:", JSON.stringify(newSettings));
+            console.log("SettingsReducer: SET_ADVENTURE_SETTINGS. Final settings being applied:", JSON.stringify(newSettings));
             return { ...state, adventureSettings: newSettings };
         }
         case "SET_ADVENTURE_TYPE": {
             console.log("SettingsReducer: Setting adventure type to", action.payload);
-            // Preserve general settings like difficulty and permadeath from the *current* state
-            // if they exist, otherwise use defaults from initialAdventureSettings.
             const preservedDifficulty = state.adventureSettings.difficulty || initialAdventureSettings.difficulty;
             const preservedPermadeath = state.adventureSettings.permanentDeath !== undefined
                 ? state.adventureSettings.permanentDeath
                 : initialAdventureSettings.permanentDeath;
 
+            // When setting adventure type, reset specific fields to initialAdventureSettings defaults
+            // and critically, set characterOriginType based on the new adventure type.
             return {
                 ...state,
                 adventureSettings: {
-                    ...initialAdventureSettings, // Start from a clean slate for type-specific fields
+                    ...initialAdventureSettings, // Reset to defaults first
                     adventureType: action.payload, // Set the new type
                     difficulty: preservedDifficulty,
                     permanentDeath: preservedPermadeath,
-                    // Crucially: characterOriginType should ONLY be set if the new type is "Immersed".
-                    // Otherwise, it MUST be undefined to ensure CharacterCreation forms show for Randomized/Custom.
-                    characterOriginType: action.payload === 'Immersed' ? 'original' : undefined, // Default to 'original' for Immersed, undefined otherwise
-                    // Clear out other type-specific fields explicitly
-                    worldType: "",
-                    mainQuestline: "",
-                    genreTheme: "",
-                    magicSystem: "",
-                    techLevel: "",
-                    dominantTone: "",
-                    startingSituation: "",
-                    combatFrequency: "Medium",
-                    puzzleFrequency: "Medium",
-                    socialFocus: "Medium",
-                    universeName: "",
-                    playerCharacterConcept: "",
+                    // If the new type is Immersed, default characterOriginType to 'original'.
+                    // If not Immersed, characterOriginType MUST be undefined.
+                    characterOriginType: action.payload === 'Immersed' ? 'original' : undefined,
                 }
             };
         }
@@ -87,7 +85,7 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
          case "RESET_GAME":
              return {
                 ...state,
-                adventureSettings: { ...initialAdventureSettings },
+                adventureSettings: { ...initialAdventureSettings }, // Reset adventure settings
              };
          case "LOAD_ADVENTURE": {
              const settingsToLoad = action.payload.adventureSettings;
@@ -102,7 +100,6 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
                  ...(settingsToLoad || {}),
                  adventureType: loadedAdventureType,
                  difficulty: validatedDifficulty,
-                // Ensure conditional settings are correctly loaded or defaulted
                 worldType: loadedAdventureType === 'Custom' ? (settingsToLoad?.worldType ?? "") : "",
                 mainQuestline: loadedAdventureType === 'Custom' ? (settingsToLoad?.mainQuestline ?? "") : "",
                 genreTheme: loadedAdventureType === 'Custom' ? (settingsToLoad?.genreTheme ?? "") : "",
@@ -128,4 +125,3 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
             return state;
     }
 }
-
