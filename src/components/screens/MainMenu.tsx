@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useGame } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Play, Users, Settings, Sparkles, FolderClock, ChevronDown } from "lucide-react"; // Import Users icon for Co-op & ChevronDown
+import { Play, Users, Settings, Sparkles, FolderClock, ChevronDown, Info } from "lucide-react";
 import { SettingsPanel } from '@/components/screens/SettingsPanel';
 import {
   Sheet,
@@ -19,23 +19,28 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import type { AdventureType } from "@/types/adventure-types";
+import Image from 'next/image';
 
 export function MainMenu() {
   const { dispatch } = useGame();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
-   // Add useEffect for logging
    useEffect(() => {
      console.log("MainMenu component mounted.");
    }, []);
 
-  const handleNewGame = (adventureType: AdventureType) => {
-    console.log(`MainMenu: Handling New ${adventureType} Adventure button click.`);
-    dispatch({ type: "RESET_GAME" });
-    dispatch({ type: "SET_ADVENTURE_TYPE", payload: adventureType }); // Set the adventure type
-    dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
+  const handleNewGameFlow = (adventureType: AdventureType) => {
+    console.log(`MainMenu: Starting new game flow for type: ${adventureType}`);
+    dispatch({ type: "RESET_GAME" }); // Reset game state first
+    dispatch({ type: "SET_ADVENTURE_TYPE", payload: adventureType }); // Set the specific adventure type
+
+    // For "Immersed" and "Custom", go to AdventureSetup first.
+    // For "Randomized", user goes to CharacterCreation after AdventureSetup (or directly if no setup needed for randomized).
+    // Current logic: all types that need setup go to AdventureSetup. Randomized might have minimal setup.
+    dispatch({ type: "SET_GAME_STATUS", payload: "AdventureSetup" });
   };
 
   const handleViewSaved = () => {
@@ -46,7 +51,6 @@ export function MainMenu() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background relative">
-       {/* Settings Button - Top Right */}
        <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
         <SheetTrigger asChild>
            <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-10">
@@ -54,7 +58,6 @@ export function MainMenu() {
               <span className="sr-only">Open Settings</span>
            </Button>
         </SheetTrigger>
-        {/* Render SettingsPanel inside SheetContent */}
         <SheetContent side="right">
            <SheetHeader className="p-4 border-b">
               <SheetTitle>Settings</SheetTitle>
@@ -70,39 +73,44 @@ export function MainMenu() {
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 pt-6">
-            {/* New Adventure Dropdown Button */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground w-full">
                   <Play className="mr-2 h-5 w-5" /> Start New Adventure <ChevronDown className="ml-auto h-4 w-4 opacity-70" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-[calc(100%-2rem)] sm:w-[364px] max-w-md"> {/* Match card width approx */}
-                <DropdownMenuItem onClick={() => handleNewGame("Randomized")} className="cursor-pointer">
-                  <Play className="mr-2 h-4 w-4" /> Solo Adventure (Randomized)
+              <DropdownMenuContent className="w-[calc(100%-2rem)] sm:w-[364px] max-w-md">
+                <DropdownMenuItem onClick={() => handleNewGameFlow("Randomized")} className="cursor-pointer">
+                  <Play className="mr-2 h-4 w-4" /> Randomized Adventure
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleNewGame("Custom")} className="cursor-pointer">
-                  <Users className="mr-2 h-4 w-4" /> Custom Adventure
+                <DropdownMenuItem onClick={() => handleNewGameFlow("Custom")} className="cursor-pointer">
+                  <Settings className="mr-2 h-4 w-4" /> Custom Adventure
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleNewGame("Immersed")} className="cursor-pointer">
+                <DropdownMenuItem onClick={() => handleNewGameFlow("Immersed")} className="cursor-pointer">
                   <Sparkles className="mr-2 h-4 w-4" /> Immersed Adventure
                 </DropdownMenuItem>
+                 <DropdownMenuSeparator />
                  <DropdownMenuItem disabled className="cursor-not-allowed opacity-50">
                   <Users className="mr-2 h-4 w-4" /> Co-op Adventure (Coming Soon)
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
-            {/* View Saved Adventures Button */}
             <Button size="lg" onClick={handleViewSaved} variant="secondary" className="w-full">
               <FolderClock className="mr-2 h-5 w-5" /> View Saved Adventures
             </Button>
         </CardContent>
         <CardFooter className="pt-4 justify-center flex-col items-center">
            <p className="text-xs text-muted-foreground mb-2">v0.1.0 - Alpha</p>
-           <a href='https://ko-fi.com/K3K31ELFCW' target='_blank' rel="noopener noreferrer">
-            <img height='36' style={{border: '0px', height: '36px'}} src='https://storage.ko-fi.com/cdn/kofi5.png?v=6' alt='Buy Me a Coffee at ko-fi.com' />
-           </a>
+            <a href='https://ko-fi.com/K3K31ELFCW' target='_blank' rel="noopener noreferrer">
+                <Image
+                    src='https://storage.ko-fi.com/cdn/kofi5.png?v=6'
+                    alt='Buy Me a Coffee at ko-fi.com'
+                    width={150} // Specify a reasonable width
+                    height={36} // Specify height to maintain aspect ratio
+                    style={{border: '0px', height: '36px', width: 'auto'}} // width auto to respect aspect ratio
+                />
+            </a>
         </CardFooter>
       </CardboardCard>
        <footer className="mt-8 text-sm text-muted-foreground text-center">

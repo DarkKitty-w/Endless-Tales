@@ -25,51 +25,31 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             }
             console.log("AdventureReducer: Character successfully created:", newCharacter.name, "Class:", newCharacter.class);
 
-            // If Immersed Original character, go directly to Gameplay
-            if (state.adventureSettings.adventureType === "Immersed" && state.adventureSettings.characterOriginType === 'original') {
-                const adventureId = state.currentAdventureId || generateAdventureId();
-                const turnCount = 0;
-                const currentInventory = [...initialInventory];
-                const initialGameState = updateGameStateString(
-                    `Starting adventure for ${newCharacter.name} in ${state.adventureSettings.universeName || 'the chosen universe'}...`,
-                    newCharacter,
-                    currentInventory,
-                    turnCount
-                );
-                 console.log("AdventureReducer: Immersed (Original) - proceeding directly to Gameplay. Adventure ID:", adventureId);
-                return {
-                    ...state,
-                    character: newCharacter,
-                    status: "Gameplay",
-                    currentAdventureId: adventureId,
-                    inventory: currentInventory,
-                    storyLog: [],
-                    turnCount: turnCount,
-                    currentNarration: null,
-                    adventureSummary: null,
-                    currentGameStateString: initialGameState,
-                    isGeneratingSkillTree: false, // Immersed usually doesn't use class-based skill trees this way
-                };
-            }
-
-            // For Randomized and Custom, or if Immersed Existing somehow hits this (shouldn't), proceed to AdventureSetup
-            if (!state.adventureSettings.adventureType) {
-                console.error("AdventureReducer: AdventureType is null in CREATE_CHARACTER_AND_SETUP. Cannot proceed to AdventureSetup. Staying on CharacterCreation.");
-                return { ...state, character: newCharacter, status: "CharacterCreation" };
-            }
-
-            console.log("AdventureReducer: Character created. Transitioning to AdventureSetup. Adventure Type:", state.adventureSettings.adventureType);
+            // For Randomized, Custom, or Immersed (Original Character)
+            // This action implies character creation is done, so proceed to gameplay setup.
+            const adventureId = state.currentAdventureId || generateAdventureId();
+            const turnCount = 0;
+            const currentInventory = [...initialInventory];
+            const initialGameState = updateGameStateString(
+                `Starting adventure for ${newCharacter.name}...`,
+                newCharacter,
+                currentInventory,
+                turnCount
+            );
+            console.log("AdventureReducer: Character created. Transitioning to Gameplay. Adventure ID:", adventureId, "Adventure Type:", state.adventureSettings.adventureType);
             return {
                 ...state,
                 character: newCharacter,
-                inventory: [...initialInventory], // Fresh inventory for these paths
-                status: "AdventureSetup",
-                currentAdventureId: generateAdventureId(),
+                status: "Gameplay", // Directly to gameplay as setup is done or handled by specific type
+                currentAdventureId: adventureId,
+                inventory: currentInventory,
                 storyLog: [],
+                turnCount: turnCount,
                 currentNarration: null,
                 adventureSummary: null,
-                turnCount: 0,
-                currentGameStateString: "Preparing for adventure setup...",
+                currentGameStateString: initialGameState,
+                // Skill tree generation will be triggered in Gameplay.tsx useEffect if needed
+                isGeneratingSkillTree: state.adventureSettings.adventureType !== "Immersed" && !newCharacter.skillTree,
             };
         }
         
@@ -101,7 +81,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                 adventureSummary: null,
                 currentGameStateString: initialGameState,
                 currentAdventureId: adventureId,
-                isGeneratingSkillTree: false,
+                isGeneratingSkillTree: false, // Immersed characters might not use standard skill trees
                 turnCount: turnCount,
             };
         }
@@ -109,46 +89,35 @@ export function adventureReducer(state: GameState, action: Action): GameState {
         case "START_GAMEPLAY": {
             console.log("AdventureReducer: START_GAMEPLAY called.");
             if (!state.character) {
-                console.error("AdventureReducer: Cannot start gameplay: Character is null.");
-                // Dispatch an error or navigate to a safe state like CharacterCreation if appropriate.
-                // For now, returning to CharacterCreation.
-                return { ...state, status: "CharacterCreation", character: null, adventureSettings: {...initialAdventureSettings} }; // Reset character and settings
+                console.error("AdventureReducer: Cannot start gameplay: Character is null. Resetting to Main Menu.");
+                return { ...initialState, savedAdventures: state.savedAdventures, selectedThemeId: state.selectedThemeId, isDarkMode: state.isDarkMode, userGoogleAiApiKey: state.userGoogleAiApiKey };
             }
             if (!state.adventureSettings.adventureType) {
-                console.error("AdventureReducer: Cannot start gameplay: Adventure type is not set.");
-                 return { ...state, status: "MainMenu" }; // Go back to main menu
+                console.error("AdventureReducer: Cannot start gameplay: Adventure type is not set. Resetting to Main Menu.");
+                 return { ...initialState, savedAdventures: state.savedAdventures, selectedThemeId: state.selectedThemeId, isDarkMode: state.isDarkMode, userGoogleAiApiKey: state.userGoogleAiApiKey };
             }
 
-            // This check is important: if it's an Immersed (Existing) character, this action might be redundant
-            // as SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY should have handled it.
-            if (state.adventureSettings.adventureType === "Immersed" && state.adventureSettings.characterOriginType === "existing") {
-                console.warn("AdventureReducer: START_GAMEPLAY called for Immersed (Existing) character. This path should ideally be handled by SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY. Ensuring status is Gameplay.");
-                // Just ensure status is Gameplay, character and settings should already be correct from the other action.
-                return { ...state, status: "Gameplay" };
-            }
-
+            // This action is more of a "confirmation" or final step after all setups are done.
+            // Character and specific adventure settings should already be in place.
             const adventureId = state.currentAdventureId || generateAdventureId(); 
-            const turnCount = 0; 
+            const turnCount = state.turnCount > 0 ? state.turnCount : 0;  // Preserve turn count if loading a game that used START_GAMEPLAY
             const currentInventory = state.inventory.length > 0 ? state.inventory : [...initialInventory];
 
             const initialGameState = updateGameStateString(
-                "The adventure is about to begin...",
+                state.storyLog.length > 0 ? state.currentGameStateString : "The adventure is about to begin...",
                 state.character,
                 currentInventory,
                 turnCount
             );
 
-            console.log("AdventureReducer: Starting gameplay. Adventure ID:", adventureId, "Turn:", turnCount, "Inventory items:", currentInventory.length);
+            console.log("AdventureReducer: Ensuring gameplay state. Adventure ID:", adventureId, "Turn:", turnCount);
             return {
                 ...state,
                 status: "Gameplay",
                 inventory: currentInventory,
-                storyLog: [], 
-                currentNarration: null,
-                adventureSummary: null,
                 currentGameStateString: initialGameState,
                 currentAdventureId: adventureId, 
-                isGeneratingSkillTree: state.adventureSettings.adventureType !== "Immersed" && !state.character.skillTree,
+                isGeneratingSkillTree: state.adventureSettings.adventureType !== "Immersed" && !state.character.skillTree && !state.isGeneratingSkillTree,
                 turnCount: turnCount,
             };
         }
@@ -158,8 +127,8 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             const newLog = [...state.storyLog, newLogEntry];
             const newTurnCount = state.turnCount + 1;
 
-            const charAfterNarration = state.character;
-            const inventoryAfterNarration = state.inventory;
+            const charAfterNarration = state.character; // Character state is updated by characterReducer
+            const inventoryAfterNarration = state.inventory; // Inventory state is updated by inventoryReducer
 
             if (!charAfterNarration) {
                  console.error("AdventureReducer: UPDATE_NARRATION: Character state is null.");
@@ -297,13 +266,12 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             console.log("AdventureReducer: Loading adventure. ID:", action.payload);
             const statusToLoad = adventureToLoad.statusBeforeSave || (adventureToLoad.adventureSummary ? "AdventureSummary" : "Gameplay");
              return {
-                 ...initialState, // Start with a clean base to avoid merging unexpected old state
-                 savedAdventures: state.savedAdventures, // Persist the list of all saved adventures
-                 selectedThemeId: state.selectedThemeId, // Persist theme settings
-                 isDarkMode: state.isDarkMode,           // Persist theme settings
-                 userGoogleAiApiKey: state.userGoogleAiApiKey, // Persist API key
+                 ...initialState, 
+                 savedAdventures: state.savedAdventures, 
+                 selectedThemeId: state.selectedThemeId, 
+                 isDarkMode: state.isDarkMode,           
+                 userGoogleAiApiKey: state.userGoogleAiApiKey, 
 
-                 // Load the specific adventure's state
                  status: statusToLoad,
                  character: adventureToLoad.character,
                  adventureSettings: adventureToLoad.adventureSettings,
@@ -314,7 +282,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                  currentNarration: adventureToLoad.storyLog.length > 0 ? adventureToLoad.storyLog[adventureToLoad.storyLog.length - 1] : null,
                  adventureSummary: adventureToLoad.adventureSummary,
                  currentAdventureId: adventureToLoad.id,
-                 isGeneratingSkillTree: false, // Reset this, will trigger if needed
+                 isGeneratingSkillTree: false, 
              };
          }
 
@@ -328,4 +296,3 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             return state;
     }
 }
-
