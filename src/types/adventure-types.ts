@@ -1,3 +1,4 @@
+
 // src/types/adventure-types.ts
 
 import type { GameStatus } from "./game-types"; // Assuming GameStatus stays in the main types file for now
@@ -11,6 +12,15 @@ export type DifficultyLevel = "Trivial" | "Easy" | "Normal" | "Hard" | "Very Har
 /** Defines the possible types of adventures. */
 export type AdventureType = "Randomized" | "Custom" | "Immersed" | null;
 
+// Define types for the new custom adventure options
+export type GenreTheme = "High Fantasy" | "Dark Fantasy" | "Sci-Fi (Cyberpunk)" | "Sci-Fi (Space Opera)" | "Post-Apocalyptic" | "Horror" | "Mystery" | "Urban Fantasy" | "";
+export type MagicSystem = "High Magic (Common & Powerful)" | "Low Magic (Rare & Subtle)" | "Elemental Magic" | "Psionics" | "No Magic" | "";
+export type TechLevel = "Primitive" | "Medieval" | "Renaissance" | "Industrial" | "Modern" | "Futuristic" | "";
+export type DominantTone = "Heroic & Optimistic" | "Grim & Perilous" | "Mysterious & Eerie" | "Comedic & Lighthearted" | "Serious & Political" | "";
+export type CombatFrequency = "High" | "Medium" | "Low" | "None (Focus on Puzzles/Social)" | "";
+export type PuzzleFrequency = "High" | "Medium" | "Low" | "";
+export type SocialFocus = "High (Many NPCs, Dialogue Choices)" | "Medium" | "Low (More Exploration/Combat)" | "";
+
 
 /** Settings for the current adventure. */
 export interface AdventureSettings {
@@ -20,6 +30,14 @@ export interface AdventureSettings {
   // Fields for Custom Adventure
   worldType?: string;
   mainQuestline?: string;
+  genreTheme?: GenreTheme;
+  magicSystem?: MagicSystem;
+  techLevel?: TechLevel;
+  dominantTone?: DominantTone;
+  startingSituation?: string; // Text input
+  combatFrequency?: CombatFrequency;
+  puzzleFrequency?: PuzzleFrequency;
+  socialFocus?: SocialFocus;
   // Fields for Immersed Adventure
   universeName?: string;
   playerCharacterConcept?: string; // Can be an existing character name or a concept for a new one

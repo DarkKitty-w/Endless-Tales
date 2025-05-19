@@ -1,3 +1,4 @@
+
 // src/context/game-initial-state.ts
 
 import type { GameState } from "@/types/game-types";
@@ -60,8 +61,18 @@ export const initialAdventureSettings: AdventureSettings = {
     adventureType: null,
     permanentDeath: true,
     difficulty: "Normal" as DifficultyLevel,
+    // Custom Adventure Fields
     worldType: "",
     mainQuestline: "",
+    genreTheme: "",
+    magicSystem: "",
+    techLevel: "",
+    dominantTone: "",
+    startingSituation: "",
+    combatFrequency: "Medium",
+    puzzleFrequency: "Medium",
+    socialFocus: "Medium",
+    // Immersed Adventure Fields
     universeName: "",
     playerCharacterConcept: "",
 };

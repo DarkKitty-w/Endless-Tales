@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview An AI agent that narrates the story of a text adventure game based on player actions and game state.
@@ -12,9 +13,13 @@ import type {
   CharacterStats,
   Reputation,
   NpcRelationships,
+  ReputationChange,
+  NpcRelationshipChange,
 } from '@/types/character-types';
 import type {DifficultyLevel} from '@/types/game-types';
 import {SkillSchema} from '@/ai/schemas/skill-schema';
+import type { GenreTheme, MagicSystem, TechLevel, DominantTone, CombatFrequency, PuzzleFrequency, SocialFocus } from '@/types/adventure-types'; // Import new types
+
 
 // Schemas
 const BranchingChoiceSchema = z.object({
@@ -72,8 +77,18 @@ const NarrateAdventureInputSchema = z.object({
     difficulty: z.string().describe('The difficulty level of the adventure.'),
     permanentDeath: z.boolean().describe('Whether permanent death is enabled.'),
     adventureType: z.string().describe('The type of adventure (Randomized, Custom).'),
+    // Custom Adventure Fields
     worldType: z.string().optional().describe('The type of world for custom adventures.'),
     mainQuestline: z.string().optional().describe('The main questline for custom adventures.'),
+    genreTheme: z.string().optional().describe('The genre/theme for custom adventures.'),
+    magicSystem: z.string().optional().describe('The magic system for custom adventures.'),
+    techLevel: z.string().optional().describe('The technological level for custom adventures.'),
+    dominantTone: z.string().optional().describe('The dominant tone for custom adventures.'),
+    startingSituation: z.string().optional().describe('The starting situation for custom adventures.'),
+    combatFrequency: z.string().optional().describe('The combat frequency for custom adventures.'),
+    puzzleFrequency: z.string().optional().describe('The puzzle frequency for custom adventures.'),
+    socialFocus: z.string().optional().describe('The social interaction focus for custom adventures.'),
+    // Immersed Adventure Fields
     universeName: z.string().optional().describe('The universe the immersed adventure takes place in'),
     playerCharacterConcept: z.string().optional().describe('Optional: A brief description of the character in an immersed adventure'),
   }),
@@ -83,6 +98,23 @@ const NarrateAdventureInputSchema = z.object({
 const NarrateAdventureOutputSchema = z.object({
   narration: z.string().describe('The next segment of the story.'),
   updatedGameState: z.string().describe('The updated game state.'),
+  // Optional character progression fields
+  updatedStats: z.object({
+    strength: z.number().optional(),
+    stamina: z.number().optional(),
+    agility: z.number().optional(),
+    intellect: z.number().optional(),
+    wisdom: z.number().optional(),
+    charisma: z.number().optional(),
+  }).optional().describe("Optional: Updated stats if they changed. Only include changed stats."),
+  updatedTraits: z.array(z.string()).optional().describe("Optional: Complete new list of traits if any were gained or lost."),
+  updatedKnowledge: z.array(z.string()).optional().describe("Optional: Complete new list of knowledge areas if any were gained or lost."),
+  progressedToStage: z.number().optional().describe("Optional: The new skill stage (0-4) if the character progressed."),
+  staminaChange: z.number().optional().describe("Optional: Change in current stamina (negative for cost, positive for gain)."),
+  manaChange: z.number().optional().describe("Optional: Change in current mana (negative for cost, positive for gain)."),
+  xpGained: z.number().optional().describe("Optional: Amount of XP gained from the action/event."),
+  reputationChange: z.object({ faction: z.string(), change: z.number() }).optional().describe("Optional: Change in reputation with a faction."),
+  npcRelationshipChange: z.object({ npcName: z.string(), change: z.number() }).optional().describe("Optional: Change in relationship with an NPC."),
   suggestedClassChange: z.string().optional().describe("Optional: Suggest a different class name **only if the AI detects the player's actions consistently align with a different class.**"),
   gainedSkill: SkillSchema.optional().describe("Optional: Details of a new skill **only if the character learned a new skill.**"),
   branchingChoices: z.array(BranchingChoiceSchema).length(4).optional().describe("Optional: Always 4 significant choices presented to the player, **only if relevant narrative branches occurred.**"),
@@ -100,71 +132,156 @@ export async function narrateAdventure(
   // Check for Developer Mode
   if (input.character.class === 'admin000') {
     console.log("Developer Mode detected. Bypassing AI narration.");
-    // Bypassing AI Narration
-    const devNarration = `(Developer Mode) Player chose: "${input.playerChoice}". No AI Narration.`;
+    return processDevCommand(input); // Use helper for dev commands
+  }
+  // This will be the actual flow call, for now, it's the same as the prompt call
+  // This structure allows for pre/post-processing around the AI call if needed in the future.
+  const {output} = await narrateAdventurePrompt(input);
+  if (!output) {
+    // Handle the case where output is null or undefined, perhaps by returning a default error narration
+    console.error("AI narration failed to produce an output.");
     return {
-      narration: devNarration,
-      updatedGameState: input.gameState, // No actual game state change
-      // Intentionally omitting all other optional fields for dev mode
+      narration: "The mists of fate obscure your path... (AI narration error).",
+      updatedGameState: input.gameState, // Return original game state
     };
   }
-  return narrateAdventureFlow(input);
+  return output;
 }
 
 // --- Helper Function for Developer Commands ---
 async function processDevCommand(input: NarrateAdventureInput): Promise<NarrateAdventureOutput> {
-    const devNarration = `(Developer Mode) Processing developer command. Restrictions bypassed.`;
+    let devNarration = `(Developer Mode) Player chose: "${input.playerChoice}".`;
+    const command = input.playerChoice.trim().toLowerCase();
+    const parts = command.split(' ');
+    const baseCommand = parts[0];
+    const value = parts.length > 1 ? parts.slice(1).join(' ') : undefined;
+
+    // Initialize changes to be returned, similar to AI output structure
+    let updatedStats: Partial<CharacterStats> | undefined;
+    let xpGained: number | undefined;
+    let progressedToStage: number | undefined;
+    // Simulate inventory changes for dev commands
+    // This is a placeholder; real inventory changes would need more complex logic
+    // or direct dispatch in the Gameplay component after this returns.
+
+    if (baseCommand === '/xp' && value) {
+        const amount = parseInt(value, 10);
+        if (!isNaN(amount)) {
+            xpGained = amount;
+            devNarration += ` Granted ${amount} XP.`;
+        } else {
+            devNarration += " - Invalid XP amount.";
+        }
+    } else if (baseCommand === '/stage' && value) {
+        const stageNum = parseInt(value, 10);
+        if (!isNaN(stageNum) && stageNum >= 0 && stageNum <= 4) {
+            progressedToStage = stageNum;
+            devNarration += ` Set skill stage to ${stageNum}.`;
+        } else {
+            devNarration += " - Invalid stage number (0-4).";
+        }
+    } else if (baseCommand === '/additem' && value) {
+        // For dev mode, we'll just narrate. Actual item addition happens in reducer.
+        devNarration += ` Attempted to add item: ${value}.`;
+    } else if (baseCommand === '/removeitem' && value) {
+        devNarration += ` Attempted to remove item: ${value}.`;
+    } else {
+        devNarration += " Action processed in developer mode. Restrictions bypassed.";
+    }
+
     return {
         narration: devNarration,
-        updatedGameState: input.gameState, // No actual game state change
-        // Intentionally omitting all other optional fields for dev mode
+        updatedGameState: `${input.gameState} (Dev Action: ${input.playerChoice})`, // Simplified state update
+        xpGained,
+        progressedToStage,
+        updatedStats,
     };
 }
+
 
 // --- Internal Prompt and Flow Definitions ---
 const narrateAdventurePrompt = ai.definePrompt({
   name: 'narrateAdventurePrompt',
   input: { schema: NarrateAdventureInputSchema },
   output: { schema: NarrateAdventureOutputSchema },
-  prompt: `You are a creative Game Master AI for the text adventure "Endless Tales". Your task is to narrate the next segment of the story based on the player's choice, current game state, and adventure settings.
- 
-  Here's the context:
-  *   **Player's Name:** {{{character.name}}}
-  *   **Character Description:** {{{character.description}}} (Traits: {{{character.traits}}}, Knowledge: {{{character.knowledge}}}, Background: {{{character.background}}})
-  *   **Stats:** STR: {{{character.stats.strength}}}, STA: {{{character.stats.stamina}}}, AGI: {{{character.stats.agility}}}, INT: {{{character.stats.intellect}}}, WIS: {{{character.stats.wisdom}}}, CHA: {{{character.stats.charisma}}}
-  *   **Current Turn:** {{{turnCount}}}
-  *   **Learned Skills:** {{{character.learnedSkills}}}
-  *   **Current Game State:** {{{gameState}}}
-  *   **Player's Choice:** {{{playerChoice}}}
-  *   **Previous Narration (if any):** {{{previousNarration}}}
- 
- **Requirements:**
- 1.  **Narrative Continuation:** Craft an engaging narrative that seamlessly continues the story from the 'previousNarration' (if it exists) and logically follows the 'playerChoice' within the existing 'gameState'. Consider the character's stats, skills, traits, and the overall world setting to ensure consistency and plausibility.
- 2.  **Logical Progression, Resource Costs & Restrictions:**
-  *   **Evaluate Feasibility:** Assess if the action is logically possible. *Actions tied to higher skill stages should only be possible if the character has reached that stage.* Harder difficulties might make certain actions less feasible initially.
-  *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output \`staminaChange\`, \`manaChange\` **only if they changed**.
-  *   **Block Impossible Actions:** Prevent universe-breaking actions (e.g., "destroy the universe", "teleport to another dimension") unless EXTREME justification exists in gameState AND skill stage is high. Simple reality-bending ("become king", "control time") is also typically Impossible without justification.
-  *   **Narrate Failure Reason:** If blocked/failed, explain why (lack of skill, resources, item, stage, reputation, **NPC relationships**, difficulty, etc.).
-  *   **Skill-based Progression:** Very powerful actions require high milestones AND skill stages.
- 3.  **Incorporate Dice Rolls:** Interpret dice roll results (e.g., "(Difficulty: Hard, Dice Roll Result: 75/100)") contextually. High rolls succeed, low rolls fail, adjusted by **game difficulty**. Narrate the degree of success/failure. Success might grant more XP or better reputation/relationship changes. Failure might have negative consequences, potentially more severe on higher difficulties.
- 4.  **Consequences, Resources, XP, Reputation, Relationships & Character Progression:**
-  *   **Resource Changes:** If current stamina or mana changed, include staminaChange or manaChange. **Do not include if unchanged.**
-  *   **XP Awards:** If the action was significant (overcame challenge, clever solution, quest progress), award XP via \`xpGained\` (adjust based on **difficulty** - harder challenges grant more). **Only include if XP was gained.**
-  *   **Reputation Changes:** If the action affects a faction's view, include \`reputationChange\`. **Only include if reputation changed.**
-  *   **NPC Relationship Changes:** If the action affects an NPC's view, include \`npcRelationshipChange\`. **Only include if relationship changed.**
- 5.  **Update Game State String:** Modify the 'gameState' string (passed as input) to reflect **ALL** changes from the action (location, new inventory, NPC moods, time, quest progress, milestones, character status like 'Injured', 'Blessed'). **It MUST include the current Turn count, which is always {{{turnCount}}} + 1.**
- 6.  **Dynamic Events & Branching:** Occasionally, introduce dynamic world events (via \`dynamicEventTriggered\`) or present the player with **EXACTLY 4** meaningful branching choices (via \`branchingChoices\`) if the narrative allows for significant divergence. These choices should have hints.
- 7.  **Tone:** Maintain a consistent tone suitable for the adventure type and difficulty. Be descriptive and engaging.
- 
- *   'narration' and 'updatedGameState' are **REQUIRED**.
- *   All other fields are **OPTIONAL** and should **ONLY** be included if their corresponding event actually occurred (e.g., include xpGained only if XP was actually awarded).
- *   If including \`branchingChoices\`, ensure the array contains **exactly 4** choices.
- *   Ensure the 'updatedGameState' string contains the correct turn count.
- 
- Example Output (Success with XP and branching choices):
- `,
+  prompt: `You are a creative Game Master AI for the text adventure "Endless Tales". Your task is to narrate the next segment of the story.
+
+**Character Details:**
+*   Name: {{{character.name}}}
+*   Class: {{{character.class}}} (Skill Stage: {{{character.skillTreeStage}}}/4 - {{character.skillTreeSummary.className}}{{character.skillTreeSummary.availableSkillsAtCurrentStage.[0]}} )
+*   Description: {{#if character.aiGeneratedDescription}}{{character.aiGeneratedDescription}}{{else}}{{character.description}}{{/if}}
+*   Traits: {{#if character.traits}}{{{character.traits}}}{{else}}None{{/if}}
+*   Knowledge: {{#if character.knowledge}}{{{character.knowledge}}}{{else}}None{{/if}}
+*   Background: {{{character.background}}}
+*   Stats: STR {{{character.stats.strength}}}, STA {{{character.stats.stamina}}}, AGI {{{character.stats.agility}}}, INT {{{character.stats.intellect}}}, WIS {{{character.stats.wisdom}}}, CHA {{{character.stats.charisma}}}
+*   Resources: Stamina {{character.currentStamina}}/{{character.maxStamina}}, Mana {{character.currentMana}}/{{character.maxMana}}
+*   Level: {{character.level}} (XP: {{character.xp}}/{{character.xpToNextLevel}})
+*   Learned Skills: {{#if character.learnedSkills}}{{{character.learnedSkills}}}{{else}}None{{/if}}
+*   Reputation: {{#if character.reputation}}{{{JSONstringify character.reputation}}}{{else}}None{{/if}}
+*   NPC Relationships: {{#if character.npcRelationships}}{{{JSONstringify character.npcRelationships}}}{{else}}None{{/if}}
+
+**Game Settings & Context:**
+*   Turn: {{{turnCount}}}
+*   Difficulty: {{{adventureSettings.difficulty}}}
+*   Permadeath: {{{adventureSettings.permanentDeath}}}
+*   Adventure Type: {{{adventureSettings.adventureType}}}
+{{#if (eq adventureSettings.adventureType "Custom")}}
+*   World: {{{adventureSettings.worldType}}}
+*   Main Quest: {{{adventureSettings.mainQuestline}}}
+*   Genre/Theme: {{{adventureSettings.genreTheme}}}
+*   Magic System: {{{adventureSettings.magicSystem}}}
+*   Tech Level: {{{adventureSettings.techLevel}}}
+*   Dominant Tone: {{{adventureSettings.dominantTone}}}
+*   Starting Situation: {{{adventureSettings.startingSituation}}}
+*   Combat Frequency: {{{adventureSettings.combatFrequency}}}
+*   Puzzle Frequency: {{{adventureSettings.puzzleFrequency}}}
+*   Social Focus: {{{adventureSettings.socialFocus}}}
+{{else if (eq adventureSettings.adventureType "Immersed")}}
+*   Universe: {{{adventureSettings.universeName}}}
+*   Character Concept: {{{adventureSettings.playerCharacterConcept}}}
+*   **INSTRUCTION (Immersed):** The narrative should strongly adhere to the lore, characters, and tone of the specified 'Universe'. The player's 'Character Concept' should be integrated naturally. Avoid class-based skill trees or progression for Immersed mode; character development should be narrative-driven.
+{{else if (eq adventureSettings.adventureType "Randomized")}}
+*   **INSTRUCTION (Randomized):** Focus the narration on establishing a unique setting, initial challenge, or short-term goal derived directly from the character's class, background, traits, or knowledge. Use these details to make the randomized world feel tailored to the player character, especially in early turns.
+{{/if}}
+*   Previous Narration (if any): {{{previousNarration}}}
+*   Current Game State: {{{gameState}}}
+
+**Player's Chosen Action:**
+{{{playerChoice}}} (This may include dice roll results like "(Difficulty: Normal, Dice Roll Result: 15/20)")
+
+**Your Task & Output Requirements:**
+
+1.  **Narrative Continuation:** Craft an engaging narrative that seamlessly continues the story, logically following the 'playerChoice' within the 'gameState'. Consider all character details, game settings, and the specific instructions for the adventure type.
+2.  **Logical Progression, Resource Costs & Restrictions:**
+    *   **Evaluate Feasibility:** Assess if the action is logically possible. *Actions tied to higher skill stages should only be possible if the character has reached that stage (unless in Immersed mode).* Harder difficulties might make certain actions less feasible initially.
+    *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output \`staminaChange\`, \`manaChange\` **only if they changed**.
+    *   **Block Impossible Actions:** Prevent universe-breaking actions (e.g., "destroy the universe", "teleport to another dimension") unless EXTREME justification exists in gameState AND skill stage is high (if applicable). Simple reality-bending ("become king", "control time") is also typically Impossible without justification.
+    *   **Narrate Failure Reason:** If blocked/failed, explain why (lack of skill, resources, item, stage, reputation, **NPC relationships**, difficulty, etc.).
+    *   **Skill-based Progression:** Very powerful actions require high milestones AND skill stages (not applicable for Immersed mode).
+3.  **Incorporate Dice Rolls:** Interpret dice roll results (e.g., "(Difficulty: Hard, Dice Roll Result: 75/100)") contextually. High rolls succeed, low rolls fail, adjusted by **game difficulty**. Narrate the degree of success/failure. Success might grant more XP or better reputation/relationship changes. Failure might have negative consequences, potentially more severe on higher difficulties.
+4.  **Consequences, Resources, XP, Reputation, Relationships & Character Progression:**
+    *   **Resource Changes:** If current stamina or mana changed, include \`staminaChange\` or \`manaChange\`. **Do not include if unchanged.**
+    *   **XP Awards:** If the action was significant (overcame challenge, clever solution, quest progress), award XP via \`xpGained\` (adjust based on **difficulty** - harder challenges grant more). **Only include if XP was gained.**
+    *   **Reputation Changes:** If the action affects a faction's view, include \`reputationChange\`. **Only include if reputation changed.**
+    *   **NPC Relationship Changes:** If the action affects an NPC's view, include \`npcRelationshipChange\`. **Only include if relationship changed.**
+    *   **Character Progression (Optional):** If events lead to development:
+        *   Include \`updatedStats\`, \`updatedTraits\`, \`updatedKnowledge\`. **Only include if they changed.**
+        *   **Skill Stage Progression:** Include \`progressedToStage\` **only if milestones warrant advancement (not for Immersed mode).**
+        *   **Class Change Suggestion:** Include \`suggestedClassChange\` **only if actions strongly align elsewhere (not for Immersed mode).**
+        *   **Gaining Skills:** Include \`gainedSkill\` **only if appropriate (not for Immersed mode).**
+5.  **Update Game State String:** Modify the 'gameState' string (passed as input) to reflect **ALL** changes from the action (location, new inventory, NPC moods, time, quest progress, milestones, character status like 'Injured', 'Blessed'). **It MUST include the current Turn count, which is always {{{turnCount}}} + 1.**
+6.  **Dynamic Events & Branching:** Occasionally, introduce dynamic world events (via \`dynamicEventTriggered\`) or present the player with **EXACTLY 4** meaningful branching choices (via \`branchingChoices\`) if the narrative allows for significant divergence. These choices should have hints.
+7.  **Tone:** Maintain a consistent tone suitable for the adventure type and difficulty. Be descriptive and engaging.
+
+**Output Format:** Respond ONLY with the JSON object matching the NarrateAdventureOutput schema.
+*   'narration' and 'updatedGameState' are **REQUIRED**.
+*   All other fields are **OPTIONAL** and should **ONLY** be included if their corresponding event actually occurred (e.g., include xpGained only if XP was actually awarded).
+*   If including \`branchingChoices\`, ensure the array contains **exactly 4** choices.
+*   Ensure the 'updatedGameState' string contains the correct turn count.
+`,
 });
 
+//This is the actual flow.
 const narrateAdventureFlow = ai.defineFlow<
   typeof NarrateAdventureInputSchema,
   typeof NarrateAdventureOutputSchema
@@ -179,6 +296,13 @@ const narrateAdventureFlow = ai.defineFlow<
     console.log("Sending to narrateAdventurePrompt:", JSON.stringify(input, null, 2)); // Log the input being sent
     const {output} = await narrateAdventurePrompt(input);
     console.log("Received from narrateAdventurePrompt:", JSON.stringify(output, null, 2)); // Log the output received
+     if (!output) {
+        // Fallback if AI returns nothing
+        return {
+            narration: "The AI seems to be pondering... or perhaps napping. (No output received)",
+            updatedGameState: input.gameState, // Return original game state
+        };
+    }
     return output;
   }
 );
