@@ -36,6 +36,7 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
                 socialFocus: currentType === 'Custom' ? (action.payload.socialFocus ?? state.adventureSettings.socialFocus) : "Medium",
                 universeName: currentType === 'Immersed' ? (action.payload.universeName ?? state.adventureSettings.universeName) : "",
                 playerCharacterConcept: currentType === 'Immersed' ? (action.payload.playerCharacterConcept ?? state.adventureSettings.playerCharacterConcept) : "",
+                characterOriginType: currentType === 'Immersed' ? (action.payload.characterOriginType ?? state.adventureSettings.characterOriginType) : undefined,
             };
             return { ...state, adventureSettings: newSettings };
         }
@@ -51,6 +52,7 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
                     // Preserve general settings that are not type-specific
                     difficulty: state.adventureSettings.difficulty,
                     permanentDeath: state.adventureSettings.permanentDeath,
+                    characterOriginType: action.payload === 'Immersed' ? 'original' : undefined, // Default for Immersed
                 }
             };
         case "SET_THEME_ID":
@@ -90,6 +92,7 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
                 socialFocus: loadedAdventureType === 'Custom' ? (settingsToLoad?.socialFocus ?? "Medium") : "Medium",
                 universeName: loadedAdventureType === 'Immersed' ? (settingsToLoad?.universeName ?? "") : "",
                 playerCharacterConcept: loadedAdventureType === 'Immersed' ? (settingsToLoad?.playerCharacterConcept ?? "") : "",
+                characterOriginType: loadedAdventureType === 'Immersed' ? (settingsToLoad?.characterOriginType ?? 'original') : undefined,
              };
              return {
                 ...state,
@@ -100,3 +103,4 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
             return state;
     }
 }
+

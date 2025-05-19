@@ -41,6 +41,7 @@ export interface AdventureSettings {
   // Fields for Immersed Adventure
   universeName?: string;
   playerCharacterConcept?: string; // Can be an existing character name or a concept for a new one
+  characterOriginType?: 'existing' | 'original'; // New field for Immersed mode
 }
 
 /** Represents a single entry in the adventure's story log. */
@@ -80,3 +81,4 @@ export interface SavedAdventure {
     adventureSummary?: string | null;
     turnCount?: number;
 }
+

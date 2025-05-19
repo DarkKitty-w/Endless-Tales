@@ -61,7 +61,7 @@ export const initialAdventureSettings: AdventureSettings = {
     adventureType: null,
     permanentDeath: true,
     difficulty: "Normal" as DifficultyLevel,
-    // Custom Adventure Fields
+    // Fields for Custom Adventure
     worldType: "",
     mainQuestline: "",
     genreTheme: "",
@@ -72,9 +72,10 @@ export const initialAdventureSettings: AdventureSettings = {
     combatFrequency: "Medium",
     puzzleFrequency: "Medium",
     socialFocus: "Medium",
-    // Immersed Adventure Fields
+    // Fields for Immersed Adventure
     universeName: "",
     playerCharacterConcept: "",
+    characterOriginType: 'original', // Default to original character for Immersed
 };
 
 /** The overall initial state for the GameContext. */
@@ -95,3 +96,4 @@ export const initialState: GameState = {
   isDarkMode: false, // Default mode (will be checked against system pref on load)
   userGoogleAiApiKey: null, // Initialize user API key
 };
+

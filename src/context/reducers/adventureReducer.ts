@@ -17,34 +17,86 @@ export function adventureReducer(state: GameState, action: Action): GameState {
 
         case "CREATE_CHARACTER_AND_SETUP": {
             console.log("AdventureReducer: CREATE_CHARACTER_AND_SETUP. Payload:", JSON.stringify(action.payload).substring(0, 200));
-            // Create the character using the characterReducer
             const newCharacter = characterReducer(null, { type: "CREATE_CHARACTER", payload: action.payload });
 
             if (!newCharacter) {
                 console.error("AdventureReducer: Failed to create character in CREATE_CHARACTER_AND_SETUP. Character object is null.");
-                return state; // Return current state or an error state if preferred
+                return state;
             }
             console.log("AdventureReducer: Character successfully created:", newCharacter.name, "Class:", newCharacter.class);
 
             if (!state.adventureSettings.adventureType) {
                 console.error("AdventureReducer: AdventureType is null in CREATE_CHARACTER_AND_SETUP. Cannot proceed to AdventureSetup. Staying on CharacterCreation.");
-                return { ...state, character: newCharacter, status: "CharacterCreation" }; // Stay on char creation but with the new char
+                return { ...state, character: newCharacter, status: "CharacterCreation" };
             }
 
             console.log("AdventureReducer: Character created & adventure type is set. Transitioning to AdventureSetup. Adventure Type:", state.adventureSettings.adventureType);
-            const currentInventory = [...initialInventory]; // Always start with fresh initial inventory for a new setup
-
+            
+            // For Immersed (Original Character) path, we transition to CharacterCreation from AdventureSetup
+            // So, START_GAMEPLAY will handle inventory and new adventure ID later.
+            // For Randomized/Custom, this action effectively moves to AdventureSetup.
+            if (state.adventureSettings.adventureType === "Immersed" && state.adventureSettings.characterOriginType === 'original') {
+                // If original immersed, character creation is the next step, so we set character and status.
+                // AdventureSetup will then transition to CharacterCreation page.
+                 return {
+                    ...state,
+                    character: newCharacter, // Character object will be more fleshed out in CharacterCreation screen
+                    status: "CharacterCreation", // Go to CharacterCreation for original immersed
+                    // currentAdventureId will be set when actual gameplay starts or in CharacterCreation if needed for AI.
+                    // For now, let's ensure it's null or a fresh one if this path leads to a new setup phase.
+                    currentAdventureId: state.currentAdventureId || generateAdventureId(), // Can generate here or let CharacterCreation handle
+                    inventory: [...initialInventory], // Start with fresh inventory for this path
+                    storyLog: [],
+                    turnCount: 0,
+                 };
+            }
+            // For Randomized and Custom, this action (from CharacterCreation) means we are ready for AdventureSetup.
+            // AdventureSetup screen will handle its own state and then call START_GAMEPLAY.
+            // The current logic of setting character in state and then transitioning to AdventureSetup is generally okay.
             return {
                 ...state,
                 character: newCharacter,
-                inventory: currentInventory,
+                inventory: [...initialInventory],
                 status: "AdventureSetup",
-                currentAdventureId: generateAdventureId(), // Always generate a new ID for a new setup
+                currentAdventureId: generateAdventureId(),
                 storyLog: [],
                 currentNarration: null,
                 adventureSummary: null,
                 turnCount: 0,
                 currentGameStateString: "Preparing for adventure setup...",
+            };
+        }
+        
+        case "SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY": {
+            const { character: immersedCharacter, adventureSettings: immersedSettings } = action.payload;
+            if (!immersedCharacter || !immersedSettings || immersedSettings.adventureType !== "Immersed") {
+                console.error("AdventureReducer: Invalid payload for SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY");
+                return state;
+            }
+            console.log("AdventureReducer: Setting Immersed (Existing) Character and starting gameplay:", immersedCharacter.name);
+            const adventureId = generateAdventureId();
+            const turnCount = 0;
+            const currentInventory = [...initialInventory]; // Existing characters also start with basic items
+
+            const initialGameState = updateGameStateString(
+                "The adventure for " + immersedCharacter.name + " is about to begin...",
+                immersedCharacter,
+                currentInventory,
+                turnCount
+            );
+            return {
+                ...state,
+                status: "Gameplay",
+                character: immersedCharacter,
+                adventureSettings: immersedSettings,
+                inventory: currentInventory,
+                storyLog: [],
+                currentNarration: null,
+                adventureSummary: null,
+                currentGameStateString: initialGameState,
+                currentAdventureId: adventureId,
+                isGeneratingSkillTree: false, // Immersed characters might not use this system
+                turnCount: turnCount,
             };
         }
 
@@ -53,19 +105,24 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             console.log("AdventureReducer: START_GAMEPLAY called.");
             if (!state.character) {
                 console.error("AdventureReducer: Cannot start gameplay: Character is null.");
-                return { ...state, status: "CharacterCreation" }; // Redirect to character creation
+                return { ...state, status: "CharacterCreation" }; 
             }
             if (!state.adventureSettings.adventureType) {
                 console.error("AdventureReducer: Cannot start gameplay: Adventure type is not set.");
-                return { ...state, status: "AdventureSetup" }; // Go back to setup
+                return { ...state, status: "AdventureSetup" }; 
+            }
+            if (state.adventureSettings.adventureType === "Immersed" && state.adventureSettings.characterOriginType === "existing") {
+                console.warn("AdventureReducer: START_GAMEPLAY called for Immersed (Existing) character. This should be handled by SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY. Ignoring redundant call or investigate flow.");
+                // This case should ideally not be hit if the flow from AdventureSetup is correct for existing immersed.
+                // If it is hit, it implies the character was already set up by SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY.
+                // We can just ensure status is Gameplay.
+                return { ...state, status: "Gameplay" };
             }
 
-            // If currentAdventureId is already set (e.g. from loading a game), we might be resuming.
-            // However, START_GAMEPLAY is typically for a fresh start after AdventureSetup.
-            // Let's assume START_GAMEPLAY implies a new session or a reset for the current adventureId.
-            const adventureId = state.currentAdventureId || generateAdventureId(); // Ensure an ID exists
-            const turnCount = 0; // Gameplay always starts at turn 0 for this action
-            const currentInventory = [...initialInventory]; // Always start with initial inventory
+
+            const adventureId = state.currentAdventureId || generateAdventureId(); 
+            const turnCount = 0; 
+            const currentInventory = state.inventory.length > 0 ? state.inventory : [...initialInventory]; // Use existing if any, else initial
 
             const initialGameState = updateGameStateString(
                 "The adventure is about to begin...",
@@ -79,12 +136,12 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                 ...state,
                 status: "Gameplay",
                 inventory: currentInventory,
-                storyLog: [], // Fresh story log
+                storyLog: [], 
                 currentNarration: null,
                 adventureSummary: null,
                 currentGameStateString: initialGameState,
-                currentAdventureId: adventureId, // Ensure this is set/confirmed
-                isGeneratingSkillTree: false, // Reset this, will be triggered if needed
+                currentAdventureId: adventureId, 
+                isGeneratingSkillTree: state.adventureSettings.adventureType !== "Immersed" && !state.character.skillTree, // Trigger if not Immersed and no tree
                 turnCount: turnCount,
             };
         }
@@ -263,3 +320,4 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             return state;
     }
 }
+

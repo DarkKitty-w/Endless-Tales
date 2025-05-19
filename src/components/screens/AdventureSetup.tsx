@@ -8,8 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings, Globe, ScrollText, ShieldAlert, Sparkles, AlertTriangle, BookOpen, Atom, Drama, Lightbulb, Users as UsersIcon, Puzzle, Mic2 } from "lucide-react"; // Added new icons
+import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings, Globe, ScrollText, ShieldAlert, Sparkles, AlertTriangle, BookOpen, Atom, Drama, Lightbulb, Users as UsersIcon, Puzzle, Mic2, UserPlus, UserCheck, Loader2 } from "lucide-react"; // Added new icons
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -21,6 +22,11 @@ import {
   } from "@/components/ui/select"
 import type { AdventureSettings, DifficultyLevel, AdventureType, GenreTheme, MagicSystem, TechLevel, DominantTone, CombatFrequency, PuzzleFrequency, SocialFocus } from "@/types/adventure-types";
 import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "@/lib/constants";
+import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
+import type { Character } from "@/types/character-types";
+import { initialCharacterState } from "@/context/game-initial-state"; // For creating character structure
+import { calculateMaxStamina, calculateMaxMana, getStarterSkillsForClass, calculateXpToNextLevel } from "@/lib/gameUtils";
+
 
 export function AdventureSetup() {
   const { state, dispatch } = useGame();
@@ -32,8 +38,11 @@ export function AdventureSetup() {
   const [worldType, setWorldType] = useState<string>(state.adventureSettings.worldType ?? "");
   const [mainQuestline, setMainQuestline] = useState<string>(state.adventureSettings.mainQuestline ?? "");
   const [difficulty, setDifficulty] = useState<DifficultyLevel>(state.adventureSettings.difficulty ?? "Normal");
+  
+  // Immersed Adventure State
   const [universeName, setUniverseName] = useState<string>(state.adventureSettings.universeName ?? "");
   const [playerCharacterConcept, setPlayerCharacterConcept] = useState<string>(state.adventureSettings.playerCharacterConcept ?? "");
+  const [characterOriginType, setCharacterOriginType] = useState<'existing' | 'original'>(state.adventureSettings.characterOriginType ?? 'original');
   
   // New state for custom adventure fields
   const [genreTheme, setGenreTheme] = useState<GenreTheme>(state.adventureSettings.genreTheme ?? "");
@@ -46,6 +55,8 @@ export function AdventureSetup() {
   const [socialFocus, setSocialFocus] = useState<SocialFocus>(state.adventureSettings.socialFocus ?? "Medium");
 
   const [customError, setCustomError] = useState<string | null>(null);
+  const [isLoadingImmersedCharacter, setIsLoadingImmersedCharacter] = useState(false);
+
 
   useEffect(() => {
     setPermanentDeath(state.adventureSettings.permanentDeath);
@@ -64,6 +75,7 @@ export function AdventureSetup() {
     } else if (adventureType === "Immersed") {
       setUniverseName(state.adventureSettings.universeName ?? "");
       setPlayerCharacterConcept(state.adventureSettings.playerCharacterConcept ?? "");
+      setCharacterOriginType(state.adventureSettings.characterOriginType ?? 'original');
     }
   }, [state.adventureSettings, adventureType]);
 
@@ -77,17 +89,21 @@ export function AdventureSetup() {
         if (!techLevel) { setCustomError("Technological Level is required."); return false; }
         if (!dominantTone) { setCustomError("Dominant Tone is required."); return false; }
         if (!startingSituation.trim()) { setCustomError("Starting Situation is required."); return false; }
-        // Frequency fields have defaults, so strict check might not be needed unless "" is invalid
      } else if (adventureType === "Immersed") {
         if (!universeName.trim()) { setCustomError("Universe Name is required."); return false; }
-        if (!playerCharacterConcept.trim()) { setCustomError("Character Concept is required."); return false; }
+        if (characterOriginType === 'existing' && !playerCharacterConcept.trim()) {
+             setCustomError("Existing Character's Name is required."); return false;
+        }
+        if (characterOriginType === 'original' && !playerCharacterConcept.trim()) {
+            setCustomError("Original Character Concept is required."); return false;
+        }
      }
      setCustomError(null);
      return true;
   };
 
 
-  const handleStartAdventure = () => {
+  const handleStartAdventure = async () => {
      setCustomError(null);
 
     if (!adventureType) {
@@ -103,30 +119,91 @@ export function AdventureSetup() {
 
      const finalDifficulty = VALID_ADVENTURE_DIFFICULTY_LEVELS.includes(difficulty) ? difficulty : "Normal";
 
-    const settingsPayload: Partial<AdventureSettings> = {
+    const settingsPayload: AdventureSettings = { // Make it full AdventureSettings
       adventureType,
       permanentDeath,
       difficulty: finalDifficulty,
-      ...(adventureType === "Custom" && { 
-          worldType, mainQuestline, genreTheme, magicSystem, techLevel, dominantTone, startingSituation, combatFrequency, puzzleFrequency, socialFocus
-      }),
-      ...(adventureType === "Immersed" && { universeName, playerCharacterConcept }),
+      worldType: adventureType === "Custom" ? worldType : undefined,
+      mainQuestline: adventureType === "Custom" ? mainQuestline : undefined,
+      genreTheme: adventureType === "Custom" ? genreTheme : undefined,
+      magicSystem: adventureType === "Custom" ? magicSystem : undefined,
+      techLevel: adventureType === "Custom" ? techLevel : undefined,
+      dominantTone: adventureType === "Custom" ? dominantTone : undefined,
+      startingSituation: adventureType === "Custom" ? startingSituation : undefined,
+      combatFrequency: adventureType === "Custom" ? combatFrequency : undefined,
+      puzzleFrequency: adventureType === "Custom" ? puzzleFrequency : undefined,
+      socialFocus: adventureType === "Custom" ? socialFocus : undefined,
+      universeName: adventureType === "Immersed" ? universeName : undefined,
+      playerCharacterConcept: adventureType === "Immersed" ? playerCharacterConcept : undefined,
+      characterOriginType: adventureType === "Immersed" ? characterOriginType : undefined,
     };
 
     dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload });
-    dispatch({ type: "START_GAMEPLAY" });
 
-    let descriptionToast = `Starting ${adventureType} adventure (${finalDifficulty}).`;
-    if (adventureType === "Custom") {
-      descriptionToast = `Starting Custom adventure in ${worldType} (${genreTheme}) with quest "${mainQuestline}" (${finalDifficulty}).`;
-    } else if (adventureType === "Immersed") {
-      descriptionToast = `Starting Immersed journey in ${universeName} as ${playerCharacterConcept} (${finalDifficulty}).`;
+    if (adventureType === "Immersed" && characterOriginType === "existing") {
+        setIsLoadingImmersedCharacter(true);
+        toast({ title: "Fetching Character Lore...", description: `Preparing ${playerCharacterConcept} from ${universeName}...` });
+        try {
+            const aiProfile: GenerateCharacterDescriptionOutput = await generateCharacterDescription({
+                 characterDescription: playerCharacterConcept, // This is the existing character's name
+                 isImmersedMode: true,
+                 universeName: universeName,
+                 playerCharacterConcept: playerCharacterConcept // Pass it here as well for the AI prompt
+            });
+
+            const baseStats = aiProfile.inferredClass // Using inferredClass as a proxy for role-based stats or a default
+                ? { ...initialCharacterState.stats } // Start with base, AI might suggest overrides
+                : { ...initialCharacterState.stats }; // Fallback
+
+            // Let's assume AI might provide stat suggestions in future, for now use defaults or simple logic
+            const finalStats = { ...baseStats }; // Placeholder for more complex AI stat suggestion later
+
+            const newCharacter: Character = {
+                ...initialCharacterState,
+                name: playerCharacterConcept, // Use the character's name
+                description: aiProfile.detailedDescription || `Playing as ${playerCharacterConcept} in ${universeName}.`,
+                class: aiProfile.inferredClass || "Immersed Protagonist", // Use inferred role or a generic one
+                traits: aiProfile.inferredTraits || [],
+                knowledge: aiProfile.inferredKnowledge || [],
+                background: aiProfile.inferredBackground || `From the universe of ${universeName}.`,
+                stats: finalStats,
+                aiGeneratedDescription: aiProfile.detailedDescription,
+                maxStamina: calculateMaxStamina(finalStats),
+                currentStamina: calculateMaxStamina(finalStats),
+                maxMana: calculateMaxMana(finalStats, aiProfile.inferredKnowledge || []),
+                currentMana: calculateMaxMana(finalStats, aiProfile.inferredKnowledge || []),
+                learnedSkills: getStarterSkillsForClass(aiProfile.inferredClass || "Immersed Protagonist"), // Get skills based on inferred role
+                xpToNextLevel: calculateXpToNextLevel(1), // Standard XP for level 1
+            };
+            
+            dispatch({ type: "SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY", payload: { character: newCharacter, adventureSettings: settingsPayload } });
+            toast({ title: "Adventure Starting!", description: `Stepping into the shoes of ${playerCharacterConcept} in ${universeName}!` });
+
+        } catch (err) {
+            console.error("Failed to generate immersed character profile:", err);
+            toast({ title: "Character Profile Error", description: "Could not retrieve character details. Please try again or define an original character.", variant: "destructive" });
+            setIsLoadingImmersedCharacter(false);
+            return;
+        } finally {
+            setIsLoadingImmersedCharacter(false);
+        }
+    } else { // Randomized, Custom, or Immersed (Original Character)
+        // These paths go through CharacterCreation
+        dispatch({ type: "CREATE_CHARACTER_AND_SETUP", payload: { class: adventureType === "Immersed" ? "Immersed Protagonist" : "Adventurer" } }); // Pass a default class for non-existing immersed
+        let descriptionToast = `Proceeding to character creation for ${adventureType} adventure (${finalDifficulty}).`;
+        toast({ title: "Setup Complete!", description: descriptionToast });
     }
-    toast({ title: "Adventure Starting!", description: descriptionToast });
   };
 
    const handleBack = () => {
-    dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
+    // If coming from CharacterCreation (e.g. user went back from adventure setup to char creation then back to menu)
+    // or if directly from MainMenu selecting an adventure type.
+    // We want to go back to the screen that makes sense.
+    // If character exists, likely means they came from CharacterCreation to here.
+    // If no character, they likely came from MainMenu.
+    // However, SET_ADVENTURE_TYPE in MainMenu now also calls RESET_GAME first,
+    // which clears the character. So, going back to MainMenu is simplest.
+    dispatch({ type: "SET_GAME_STATUS", payload: "MainMenu" });
   };
 
    useEffect(() => {
@@ -153,6 +230,14 @@ export function AdventureSetup() {
         default: return <Settings className="w-5 h-5"/>;
     }
   }
+
+  const proceedButtonText = (adventureType === "Immersed" && characterOriginType === "existing") 
+                            ? "Start Adventure" 
+                            : "Proceed to Character Creation";
+  const isProceedDisabled = customError !== null || isLoadingImmersedCharacter ||
+                            (adventureType === 'Custom' && (!worldType.trim() || !mainQuestline.trim() || !genreTheme || !magicSystem || !techLevel || !dominantTone || !startingSituation.trim() )) ||
+                            (adventureType === 'Immersed' && (!universeName.trim() || !playerCharacterConcept.trim()));
+
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
@@ -264,14 +349,34 @@ export function AdventureSetup() {
           )}
           {adventureType === "Immersed" && (
             <div className="space-y-4 border-t border-foreground/10 pt-6 mt-0">
-               <h3 className="text-lg font-medium mb-3 border-b pb-2">Immersed Adventure Details</h3>
+               <h3 className="text-xl font-semibold mb-4 border-b pb-2">Immersed Adventure Details</h3>
                <div className="space-y-2">
                    <Label htmlFor="universeName" className="flex items-center gap-1"><Sparkles className="w-4 h-4"/> Universe Name</Label>
-                   <Input id="universeName" value={universeName} onChange={(e) => setUniverseName(e.target.value)} placeholder="e.g., Star Wars, Lord of the Rings" className={customError && !universeName.trim() ? 'border-destructive' : ''}/>
+                   <Input id="universeName" value={universeName} onChange={(e) => setUniverseName(e.target.value)} placeholder="e.g., Star Wars, Lord of the Rings, Hogwarts" className={customError && !universeName.trim() ? 'border-destructive' : ''}/>
                 </div>
+                
+                <RadioGroup value={characterOriginType} onValueChange={(value) => setCharacterOriginType(value as 'existing' | 'original')} className="space-y-2">
+                    <Label className="text-base font-medium">Character Origin:</Label>
+                    <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="existing" id="origin-existing" />
+                        <Label htmlFor="origin-existing" className="flex items-center gap-1 cursor-pointer"><UserCheck className="w-4 h-4"/> Play as Existing Character</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="original" id="origin-original" />
+                        <Label htmlFor="origin-original" className="flex items-center gap-1 cursor-pointer"><UserPlus className="w-4 h-4"/> Create Original Character in Universe</Label>
+                    </div>
+                </RadioGroup>
+
                <div className="space-y-2">
-                    <Label htmlFor="playerCharacterConcept" className="flex items-center gap-1"><ScrollText className="w-4 h-4"/> Your Character Concept</Label>
-                   <Input id="playerCharacterConcept" value={playerCharacterConcept} onChange={(e) => setPlayerCharacterConcept(e.target.value)} placeholder="e.g., A young Jedi Padawan" className={customError && !playerCharacterConcept.trim() ? 'border-destructive' : ''}/>
+                    <Label htmlFor="playerCharacterConcept" className="flex items-center gap-1"><ScrollText className="w-4 h-4"/> 
+                        {characterOriginType === 'existing' ? "Existing Character's Name" : "Your Original Character Concept/Role"}
+                    </Label>
+                   <Input 
+                    id="playerCharacterConcept" 
+                    value={playerCharacterConcept} 
+                    onChange={(e) => setPlayerCharacterConcept(e.target.value)} 
+                    placeholder={characterOriginType === 'existing' ? "e.g., Harry Potter, Luke Skywalker" : "e.g., A rebel pilot, a new student at Hogwarts"} 
+                    className={customError && !playerCharacterConcept.trim() ? 'border-destructive' : ''}/>
                 </div>
             </div>
           )}
@@ -305,10 +410,14 @@ export function AdventureSetup() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t border-foreground/10">
-           <Button variant="outline" onClick={handleBack}> <ArrowLeft className="mr-2 h-4 w-4" /> Back to Character </Button>
-           <Button onClick={handleStartAdventure} disabled={ customError !== null || (adventureType === 'Custom' && (!worldType.trim() || !mainQuestline.trim() || !genreTheme || !magicSystem || !techLevel || !dominantTone || !startingSituation.trim() )) || (adventureType === 'Immersed' && (!universeName.trim() || !playerCharacterConcept.trim())) } className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto" aria-label="Start Adventure"> <Play className="mr-2 h-4 w-4" /> Start Adventure </Button>
+           <Button variant="outline" onClick={handleBack} disabled={isLoadingImmersedCharacter}> <ArrowLeft className="mr-2 h-4 w-4" /> Back to Main Menu </Button>
+           <Button onClick={handleStartAdventure} disabled={isProceedDisabled} className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"> 
+            {isLoadingImmersedCharacter && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoadingImmersedCharacter ? "Preparing Character..." : proceedButtonText}
+           </Button>
         </CardFooter>
       </CardboardCard>
     </div>
   );
 }
+

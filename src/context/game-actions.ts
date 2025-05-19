@@ -1,3 +1,4 @@
+
 // src/context/game-actions.ts
 import type { GameStatus, GameState } from "@/types/game-types"; // Import GameStatus from main game types
 import type {
@@ -15,7 +16,8 @@ import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel,
 export type Action =
   | { type: "SET_GAME_STATUS"; payload: GameStatus }
   | { type: "CREATE_CHARACTER"; payload: Partial<Character> }
-  | { type: "CREATE_CHARACTER_AND_SETUP"; payload: Partial<Character> } // New action
+  | { type: "CREATE_CHARACTER_AND_SETUP"; payload: Partial<Character> } 
+  | { type: "SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY"; payload: { character: Character, adventureSettings: AdventureSettings } } // New action for Immersed Existing
   | { type: "UPDATE_CHARACTER"; payload: Partial<Character> }
   | { type: "SET_AI_DESCRIPTION"; payload: string }
   | { type: "SET_ADVENTURE_SETTINGS"; payload: Partial<AdventureSettings> }
@@ -45,4 +47,5 @@ export type Action =
   | { type: "SET_USER_API_KEY"; payload: string | null } // Action for user API key
   | { type: "UPDATE_CRAFTING_RESULT"; payload: { narration: string; consumedItems: string[]; craftedItem: InventoryItem | null; newGameStateString: string } }
   | { type: "SET_ADVENTURE_TYPE", payload: AdventureType };
+
 
