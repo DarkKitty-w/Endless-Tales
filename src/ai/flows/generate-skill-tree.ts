@@ -84,6 +84,20 @@ const generateSkillTreePrompt = ai.definePrompt({
 `,
 });
 
+const createFallbackSkillTree = (className: string): GenerateSkillTreeOutput => {
+    console.warn(`generateSkillTreeFlow: Creating fallback skill tree for class "${className}".`);
+    return {
+        className: className,
+        stages: [
+            { stage: 0, stageName: "Potential", skills: [] },
+            { stage: 1, stageName: "Novice", skills: [{ name: "Basic Combat Training", description: "Improves general combat readiness."}] },
+            { stage: 2, stageName: "Apprentice", skills: [{ name: "Focused Study", description: "Allows deeper understanding of class abilities."}] },
+            { stage: 3, stageName: "Adept", skills: [{ name: "Power Surge", description: "Temporarily boosts effectiveness."}] },
+            { stage: 4, stageName: "Master", skills: [{ name: "Ultimate Focus", description: "Unlocks true potential."}] },
+        ]
+    };
+};
+
 // Genkit Flow Definition
 const generateSkillTreeFlow = ai.defineFlow<
   typeof GenerateSkillTreeInputSchema,
@@ -99,46 +113,54 @@ const generateSkillTreeFlow = ai.defineFlow<
      let output: GenerateSkillTreeOutput | undefined;
      let attempt = 0;
      const maxAttempts = 3;
+     let lastError: any = null;
 
      while (attempt < maxAttempts && !output) {
         attempt++;
-        console.log(`generateSkillTreeFlow: AI call attempt ${attempt}...`);
+        console.log(`generateSkillTreeFlow: AI call attempt ${attempt} for class "${input.characterClass}"...`);
         try {
             const result = await generateSkillTreePrompt(input);
             output = result.output;
 
              if (!output || !output.className || !Array.isArray(output.stages) || output.stages.length !== 5) {
-                 throw new Error(`AI returned invalid skill tree structure (attempt ${attempt}).`);
+                 throw new Error(`AI returned invalid skill tree structure (attempt ${attempt}). Missing className, stages, or stages length not 5. Received: ${JSON.stringify(output)}`);
              }
              for (const stage of output.stages) {
                  if (stage.stage === undefined || stage.stage < 0 || stage.stage > 4) throw new Error(`AI returned invalid stage number: ${stage.stage} (attempt ${attempt}).`);
                  if (!stage.stageName) throw new Error(`AI returned invalid structure for stage ${stage.stage} (missing stageName, attempt ${attempt}).`);
-                 if (stage.stage === 0 && (!stage.skills || stage.skills.length !== 0)) throw new Error(`AI returned invalid structure for stage 0 (skills array must be empty, attempt ${attempt}).`);
-                 if (stage.stage > 0 && (!stage.skills || stage.skills.length < 1 || stage.skills.length > 3)) throw new Error(`AI returned invalid skill count for stage ${stage.stage} (must be 1-3, attempt ${attempt}).`);
-                 if (stage.stage > 0 && stage.skills) {
+                 if (stage.stage === 0 && (!stage.skills || stage.skills.length !== 0)) throw new Error(`AI returned invalid structure for stage 0 (skills array must be empty, attempt ${attempt}). Actual skills: ${JSON.stringify(stage.skills)}`);
+                 if (stage.stage > 0 && (!stage.skills || stage.skills.length < 0 || stage.skills.length > 3)) throw new Error(`AI returned invalid skill count for stage ${stage.stage} (must be 0-3, attempt ${attempt}). Actual skills: ${JSON.stringify(stage.skills)}`); // Allow 0 skills for higher stages too
+                 if (stage.skills) { // Check if skills array exists before iterating
                     for(const skill of stage.skills) {
-                        if (!skill.name || !skill.description) throw new Error(`AI returned invalid skill definition in stage ${stage.stage} (attempt ${attempt}).`);
+                        if (!skill.name || !skill.description) throw new Error(`AI returned invalid skill definition in stage ${stage.stage} (missing name or description, attempt ${attempt}). Skill: ${JSON.stringify(skill)}`);
                         if (skill.manaCost !== undefined && typeof skill.manaCost !== 'number') throw new Error(`AI returned invalid manaCost for skill "${skill.name}" (attempt ${attempt}).`);
                         if (skill.staminaCost !== undefined && typeof skill.staminaCost !== 'number') throw new Error(`AI returned invalid staminaCost for skill "${skill.name}" (attempt ${attempt}).`);
                     }
                  }
              }
              const stage0 = output.stages.find(s => s.stage === 0);
-             if (!stage0 || !stage0.stageName || stage0.skills.length !== 0) throw new Error("AI failed to generate a valid Stage 0 (attempt ${attempt}).");
+             if (!stage0 || !stage0.stageName || (stage0.skills && stage0.skills.length !== 0) ) throw new Error(`AI failed to generate a valid Stage 0 (attempt ${attempt}). Stage 0 skills: ${JSON.stringify(stage0?.skills)}`);
 
         } catch (err: any) {
-            console.error(`Skill tree generation attempt ${attempt} failed:`, err.message);
+            console.error(`Skill tree generation attempt ${attempt} for class "${input.characterClass}" failed:`, err.message);
+            lastError = err;
+            output = undefined; // Ensure output is reset to retry
             if (attempt >= maxAttempts) {
-                 throw new Error(`Failed to generate valid skill tree for class "${input.characterClass}" after ${maxAttempts} attempts. Last error: ${err.message}`);
+                 console.error(`Failed to generate valid skill tree for class "${input.characterClass}" after ${maxAttempts} attempts. Last error: ${err.message}. Returning fallback.`);
+                 return createFallbackSkillTree(input.characterClass);
             }
-            await new Promise(resolve => setTimeout(resolve, 500 * attempt));
+            await new Promise(resolve => setTimeout(resolve, 500 * attempt)); // Exponential backoff
         }
      }
 
      if (!output) {
-        throw new Error(`Skill tree generation failed for class "${input.characterClass}" after all attempts.`);
+        // This case should ideally be handled by the fallback in the loop,
+        // but as a final safeguard:
+        console.error(`generateSkillTreeFlow: Skill tree generation ultimately failed for class "${input.characterClass}" after all attempts and no output was defined. Returning fallback. Last error: ${lastError?.message}`);
+        return createFallbackSkillTree(input.characterClass);
      }
-     console.log("generateSkillTreeFlow: Received valid skill tree from prompt:", JSON.stringify(output, null, 2));
+     console.log(`generateSkillTreeFlow: Received valid skill tree from prompt for class "${input.characterClass}":`, JSON.stringify(output, null, 2).substring(0, 500) + "...");
      return output;
   }
 );
+

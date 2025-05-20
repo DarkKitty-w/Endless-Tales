@@ -130,23 +130,72 @@ export async function narrateAdventure(
   console.log(`NarrateAdventure AI Flow: Called for Turn ${input.turnCount}, Action: "${input.playerChoice.substring(0,50)}..."`);
   if (input.character.class === 'admin000') {
     console.log("NarrateAdventure AI Flow: Developer Mode detected. Bypassing AI narration.");
-    // Assuming processDevCommand is defined elsewhere or you'll adapt it.
-    // For now, returning a simple dev response:
-     return {
-        narration: `(Dev Mode) Action: ${input.playerChoice}`,
-        updatedGameState: `${input.gameState} (Dev Action processed)`
-     };
+    return processDevCommand(input);
   }
   return narrateAdventureFlow(input);
 }
 
-// Helper function for developer commands (if needed by the flow directly)
-// function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput { ... }
+// Helper function for developer commands
+function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput {
+    let devNarration = `(Developer Mode) Player chose: "${input.playerChoice}".`;
+    const command = input.playerChoice.trim().toLowerCase();
+    const parts = command.split(' ');
+    const baseCommand = parts[0];
+    const value = parts.length > 1 ? parts.slice(1).join(' ') : undefined;
+
+    let xpGained: number | undefined;
+    let progressedToStage: number | undefined;
+    let healthChange: number | undefined;
+    let updatedTraits: string[] | undefined;
+    let updatedKnowledge: string[] | undefined;
+    let gainedSkill: z.infer<typeof SkillSchema> | undefined;
+
+    if (baseCommand === '/xp' && value) {
+        const amount = parseInt(value, 10);
+        if (!isNaN(amount)) { xpGained = amount; devNarration += ` Granted ${amount} XP.`; }
+        else { devNarration += " - Invalid XP amount."; }
+    } else if (baseCommand === '/stage' && value) {
+        const stageNum = parseInt(value, 10);
+        if (!isNaN(stageNum) && stageNum >= 0 && stageNum <= 4) { progressedToStage = stageNum; devNarration += ` Set skill stage to ${stageNum}.`; }
+        else { devNarration += " - Invalid stage number (0-4)."; }
+    } else if (baseCommand === '/health' && value && input.character) {
+        const amount = parseInt(value, 10);
+        if (!isNaN(amount)) {
+            const newHealth = Math.max(0, Math.min(input.character.maxHealth, input.character.currentHealth + amount));
+            healthChange = newHealth - input.character.currentHealth;
+            devNarration += ` Adjusted health by ${healthChange}. New health: ${newHealth}.`;
+        } else {
+            devNarration += " - Invalid health amount.";
+        }
+    } else if (baseCommand === '/addtrait' && value && input.character) {
+        updatedTraits = [...(input.character.traits || []), value];
+        devNarration += ` Added trait: ${value}.`;
+    } else if (baseCommand === '/addknowledge' && value && input.character) {
+        updatedKnowledge = [...(input.character.knowledge || []), value];
+        devNarration += ` Added knowledge: ${value}.`;
+    } else if (baseCommand === '/addskill' && value && input.character) {
+        gainedSkill = { name: value, description: "Developer added skill" }; // Removed type
+        devNarration += ` Added skill: ${value}.`;
+    } else {
+        devNarration += " Action processed. Dev restrictions bypassed.";
+    }
+
+    return {
+        narration: devNarration,
+        updatedGameState: `${input.gameState} (Dev Action: ${input.playerChoice}, Turn: ${input.turnCount + 1})`,
+        xpGained,
+        progressedToStage,
+        healthChange,
+        updatedTraits,
+        updatedKnowledge,
+        gainedSkill,
+    };
+}
 
 
 const narrateAdventurePrompt = ai.definePrompt({
   name: 'narrateAdventurePrompt',
-  input: { schema: NarrateAdventureInputSchema }, 
+  input: { schema: NarrateAdventureInputSchema },
   output: { schema: NarrateAdventureOutputSchema },
   prompt: `You are a creative Game Master AI for the text adventure "Endless Tales". Your task is to narrate the next segment of the story.
 
@@ -232,13 +281,13 @@ const narrateAdventurePrompt = ai.definePrompt({
 const narrateAdventureFlow = ai.defineFlow(
   {
     name: 'narrateAdventureFlow',
-    inputSchema: NarrateAdventureInputSchema, 
+    inputSchema: NarrateAdventureInputSchema,
     outputSchema: NarrateAdventureOutputSchema,
   },
-  async (input: NarrateAdventureInput) => {
-    const { character, adventureSettings, turnCount, playerChoice } = input;
-    console.log(`narrateAdventureFlow: Processing Turn ${turnCount} for ${character.name}. Action: "${playerChoice.substring(0,100)}..."`);
-    
+  async (input: NarrateAdventureInput): Promise<NarrateAdventureOutput> => {
+    const { character, adventureSettings, turnCount, playerChoice, gameState, previousNarration } = input;
+    console.log(`narrateAdventureFlow: START - Processing Turn ${turnCount} for ${character.name}. Action: "${playerChoice.substring(0,100)}..."`);
+
     const promptInput = {
       ...input,
       character: {
@@ -252,7 +301,7 @@ const narrateAdventureFlow = ai.defineFlow(
     };
 
     console.log("narrateAdventureFlow: Sending to narrateAdventurePrompt with full input:", JSON.stringify(promptInput, null, 2).substring(0, 1000) + "...");
-    
+
     let output: NarrateAdventureOutput | undefined;
     try {
         const result = await narrateAdventurePrompt(promptInput);
@@ -260,21 +309,34 @@ const narrateAdventureFlow = ai.defineFlow(
         console.log("narrateAdventureFlow: Received from narrateAdventurePrompt:", JSON.stringify(output, null, 2).substring(0, 1000) + "...");
     } catch (e: any) {
         console.error("narrateAdventureFlow: ERROR calling narrateAdventurePrompt", e);
+        // Construct a fallback output if the AI call fails
+        const fallbackNarration = `The threads of fate are tangled. The AI narrator is momentarily speechless regarding your attempt to "${playerChoice.substring(0,50)}...". (AI Error: ${e.message || 'Unknown AI error'}) Try a different approach?`;
+        const fallbackGameState = `${gameState} (AI Narrator Error - Turn: ${turnCount + 1})`;
         output = {
-            narration: `The AI seems to be struggling with the weight of the world... (Error: ${e.message || 'Unknown AI error'})`,
-            updatedGameState: input.gameState, // Return old game state on error
+            narration: fallbackNarration,
+            updatedGameState: fallbackGameState,
         };
     }
-
 
      if (!output || !output.narration || !output.updatedGameState) {
-        console.error("narrateAdventureFlow: AI returned undefined or incomplete output. Fallback initiated.");
+        console.error("narrateAdventureFlow: AI returned undefined or incomplete output even after potential catch. Fallback initiated.");
         const fallbackNarration = `The threads of fate are tangled. The AI narrator is momentarily speechless regarding "${playerChoice.substring(0,50)}...". Try a different approach?`;
+        const fallbackGameState = `${input.gameState} (AI Narrator Error - Turn: ${turnCount + 1})`;
         return {
             narration: fallbackNarration,
-            updatedGameState: `${input.gameState} (AI Narrator Error - Turn: ${turnCount + 1})`,
+            updatedGameState: fallbackGameState,
         };
     }
+
+    // Ensure updatedGameState always includes the correct turn count if AI forgets
+    if (!output.updatedGameState.includes(`Turn: ${turnCount + 1}`)) {
+        console.warn("narrateAdventureFlow: AI output for updatedGameState did not include the correct turn count. Appending it.");
+        output.updatedGameState = `${output.updatedGameState.replace(/Turn: \d+/g, '').trim()}\nTurn: ${turnCount + 1}`;
+    }
+
+
+    console.log(`narrateAdventureFlow: END - Successfully processed Turn ${turnCount} for ${character.name}.`);
     return output;
   }
 );
+
