@@ -92,7 +92,10 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
                      <div className="space-y-2">
                         <Label className="flex items-center gap-1"><Paintbrush className="w-4 h-4"/> Color Theme</Label>
                          <div className="flex flex-wrap gap-2"> {/* Changed from grid to flex-wrap */}
-                             {THEMES.map(theme => (
+                             {THEMES.map(theme => {
+                                const primaryColor = `hsl(${theme.light['--primary']})`;
+                                const accentColor = `hsl(${theme.light['--accent']})`;
+                                return (
                                  <Button
                                      key={theme.id}
                                      variant="outline"
@@ -103,21 +106,17 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
                                      )}
                                      onClick={() => handleThemeChange(theme.id)}
                                  >
-                                     <div className="w-4 h-4 rounded-sm mr-2 border shrink-0 flex overflow-hidden">
-                                        <div 
-                                            className="w-1/2 h-full" 
-                                            style={{ backgroundColor: `hsl(${theme.light['--primary']})` }}
-                                            aria-hidden="true"
-                                        />
-                                        <div 
-                                            className="w-1/2 h-full" 
-                                            style={{ backgroundColor: `hsl(${theme.light['--accent']})` }}
-                                            aria-hidden="true"
-                                        />
-                                     </div>
+                                     <div
+                                        className="w-4 h-4 rounded-sm mr-2 border shrink-0"
+                                        style={{
+                                            background: `linear-gradient(to bottom right, ${primaryColor} 0%, ${primaryColor} 50%, ${accentColor} 50%, ${accentColor} 100%)`
+                                        }}
+                                        aria-hidden="true"
+                                     />
                                      {theme.name}
                                  </Button>
-                             ))}
+                                );
+                            })}
                          </div>
                          <p className="text-xs text-muted-foreground">Select a visual theme for the interface.</p>
                      </div>
