@@ -4,8 +4,9 @@
 
 import React from "react";
 import type {
-    Character, Reputation, NpcRelationships, InventoryItem, SkillTree, Skill
+    Character, Reputation, NpcRelationships
 } from '@/types/game-types';
+import type { InventoryItem } from '@/types/inventory-types';
 import { useGame } from "@/context/GameContext";
 import { CharacterDisplay } from "@/components/game/CharacterDisplay";
 import { InventoryDisplay } from "@/components/game/InventoryDisplay";
@@ -41,31 +42,30 @@ export function LeftPanel({
     const { state } = useGame();
     const showSkillsTab = state.adventureSettings.adventureType !== "Immersed";
     const initialTab = "character";
-    // const gridColsClass = showSkillsTab ? "grid-cols-4" : "grid-cols-3";
-
 
     return (
         <div className="hidden md:flex flex-col w-80 lg:w-96 p-4 border-r border-foreground/10 bg-card/50 h-full">
             <Tabs defaultValue={initialTab} className="flex-grow flex flex-col min-h-0 h-full">
-                <TabsList className="flex-none flex flex-wrap w-full justify-start gap-1 p-1 mb-2">
-                    <TabsTrigger value="character" className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 text-xs sm:text-sm px-2.5 py-1.5 h-9">
+                {/* Restored closer to default TabsList styling, adding flex-wrap and ensuring min-height */}
+                <TabsList className="inline-flex flex-wrap w-full justify-start items-center gap-1 p-1 mb-2 rounded-md bg-muted text-muted-foreground min-h-[2.5rem] h-auto">
+                    <TabsTrigger value="character" className="flex-initial flex items-center justify-center gap-1.5 text-xs sm:text-sm px-2.5 py-1.5 h-9">
                         <User className="w-4 h-4"/> Character
                     </TabsTrigger>
-                    <TabsTrigger value="progression" className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 text-xs sm:text-sm px-2.5 py-1.5 h-9">
+                    <TabsTrigger value="progression" className="flex-initial flex items-center justify-center gap-1.5 text-xs sm:text-sm px-2.5 py-1.5 h-9">
                         <Milestone className="w-4 h-4"/> Progression
                     </TabsTrigger>
-                    <TabsTrigger value="inventory" className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 text-xs sm:text-sm px-2.5 py-1.5 h-9">
+                    <TabsTrigger value="inventory" className="flex-initial flex items-center justify-center gap-1.5 text-xs sm:text-sm px-2.5 py-1.5 h-9">
                         <Backpack className="w-4 h-4"/> Inventory
                     </TabsTrigger>
                     {showSkillsTab && (
-                        <TabsTrigger value="skills" className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 text-xs sm:text-sm px-2.5 py-1.5 h-9">
+                        <TabsTrigger value="skills" className="flex-initial flex items-center justify-center gap-1.5 text-xs sm:text-sm px-2.5 py-1.5 h-9">
                             <Workflow className="w-4 h-4"/> Skills
                         </TabsTrigger>
                     )}
                 </TabsList>
                 
 
-                <div className="flex-grow overflow-hidden mt-0">
+                <div className="flex-grow overflow-hidden mt-0"> {/* This div ensures the content area below tabs takes remaining space */}
                     <TabsContent value="character" className="h-full m-0">
                          <ScrollArea className="h-full pr-3">
                             <CharacterDisplay />
@@ -147,4 +147,4 @@ export function LeftPanel({
         </div>
     );
 }
-
+    
