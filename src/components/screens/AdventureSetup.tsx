@@ -23,8 +23,8 @@ import {
 import type { AdventureSettings, DifficultyLevel, AdventureType, GenreTheme, MagicSystem, TechLevel, DominantTone, CombatFrequency, PuzzleFrequency, SocialFocus } from "@/types/adventure-types";
 import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "@/lib/constants";
 import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
-import { suggestExistingCharacters } from "@/ai/flows/suggest-existing-characters"; // Import new AI flow
-import { suggestOriginalCharacterConcepts } from "@/ai/flows/suggest-original-character-concepts"; // Import new AI flow
+import { suggestExistingCharacters } from "@/ai/flows/suggest-existing-characters"; 
+import { suggestOriginalCharacterConcepts } from "@/ai/flows/suggest-original-character-concepts"; 
 import type { Character, CharacterStats } from "@/types/character-types";
 import { initialCharacterState, initialAdventureSettings as defaultInitialAdventureSettings } from "@/context/game-initial-state";
 import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, getStarterSkillsForClass, calculateXpToNextLevel } from "@/lib/gameUtils";
@@ -46,9 +46,9 @@ export function AdventureSetup() {
   const [techLevel, setTechLevel] = useState<TechLevel>(state.adventureSettings.techLevel ?? defaultInitialAdventureSettings.techLevel ?? "");
   const [dominantTone, setDominantTone] = useState<DominantTone>(state.adventureSettings.dominantTone ?? defaultInitialAdventureSettings.dominantTone ?? "");
   const [startingSituation, setStartingSituation] = useState<string>(state.adventureSettings.startingSituation ?? defaultInitialAdventureSettings.startingSituation ?? "");
-  const [combatFrequency, setCombatFrequency] = useState<CombatFrequency>(state.adventureSettings.combatFrequency ?? defaultInitialAdventureSettings.combatFrequency ?? "Medium");
-  const [puzzleFrequency, setPuzzleFrequency] = useState<PuzzleFrequency>(state.adventureSettings.puzzleFrequency ?? defaultInitialAdventureSettings.puzzleFrequency ?? "Medium");
-  const [socialFocus, setSocialFocus] = useState<SocialFocus>(state.adventureSettings.socialFocus ?? defaultInitialAdventureSettings.socialFocus ?? "Medium");
+  const [combatFrequency, setCombatFrequency] = useState<CombatFrequency>(state.adventureSettings.combatFrequency ?? "Medium");
+  const [puzzleFrequency, setPuzzleFrequency] = useState<PuzzleFrequency>(state.adventureSettings.puzzleFrequency ?? "Medium");
+  const [socialFocus, setSocialFocus] = useState<SocialFocus>(state.adventureSettings.socialFocus ?? "Medium");
   
   const [universeName, setUniverseName] = useState<string>(state.adventureSettings.universeName ?? defaultInitialAdventureSettings.universeName ?? "");
   const [playerCharacterConcept, setPlayerCharacterConcept] = useState<string>(state.adventureSettings.playerCharacterConcept ?? defaultInitialAdventureSettings.playerCharacterConcept ?? "");
@@ -60,7 +60,7 @@ export function AdventureSetup() {
   
   const [customError, setCustomError] = useState<string | null>(null);
   const [isLoadingImmersedCharacter, setIsLoadingImmersedCharacter] = useState(false);
-  const [isSuggestingNameLoading, setIsSuggestingNameLoading] = useState(false); // New state for suggestion loading
+  const [isSuggestingNameLoading, setIsSuggestingNameLoading] = useState(false); 
 
   useEffect(() => {
     console.log("AdventureSetup: Context adventureSettings changed or component mounted. adventureTypeFromContext:", adventureTypeFromContext);
@@ -119,23 +119,30 @@ export function AdventureSetup() {
     setIsSuggestingNameLoading(true);
     setCustomError(null);
     try {
+      let suggestions: string[] = [];
       if (characterOriginType === 'existing') {
         const result = await suggestExistingCharacters({ universeName });
-        if (result.suggestedNames && result.suggestedNames.length > 0) {
-          setPlayerCharacterConcept(result.suggestedNames[0]); // Use the first suggestion
-          toast({ title: "Suggestion Applied!", description: `Suggested: ${result.suggestedNames[0]}` });
-        } else {
-          toast({ title: "No Suggestions", description: "Could not find suggestions for this universe.", variant: "default" });
-        }
+        suggestions = result.suggestedNames || [];
       } else { // 'original'
         const result = await suggestOriginalCharacterConcepts({ universeName });
-        if (result.suggestedConcepts && result.suggestedConcepts.length > 0) {
-          setPlayerCharacterConcept(result.suggestedConcepts[0]); // Use the first suggestion
-          toast({ title: "Suggestion Applied!", description: `Suggested: ${result.suggestedConcepts[0]}` });
-        } else {
-          toast({ title: "No Suggestions", description: "Could not generate concepts for this universe.", variant: "default" });
-        }
+        suggestions = result.suggestedConcepts || [];
       }
+
+      if (suggestions.length > 0) {
+        let newSuggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
+        // If there's more than one suggestion and the new one is the same as current, try to pick another
+        if (suggestions.length > 1 && newSuggestion === playerCharacterConcept) {
+          const otherSuggestions = suggestions.filter(s => s !== playerCharacterConcept);
+          if (otherSuggestions.length > 0) {
+            newSuggestion = otherSuggestions[Math.floor(Math.random() * otherSuggestions.length)];
+          }
+        }
+        setPlayerCharacterConcept(newSuggestion);
+        toast({ title: "Suggestion Applied!", description: `Suggested: ${newSuggestion}` });
+      } else {
+        toast({ title: "No Suggestions", description: "Could not find suggestions for this universe.", variant: "default" });
+      }
+
     } catch (err) {
       console.error("AdventureSetup: Failed to get name/concept suggestion:", err);
       toast({ title: "Suggestion Error", description: "Could not fetch suggestions at this time.", variant: "destructive" });
@@ -181,19 +188,20 @@ export function AdventureSetup() {
     };
     
     console.log("AdventureSetup: Dispatching SET_ADVENTURE_SETTINGS with payload:", JSON.stringify(settingsPayload));
-    dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload });
+    
 
     if (adventureTypeFromContext === "Immersed" && characterOriginType === "existing") {
         setIsLoadingImmersedCharacter(true);
+        dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload }); // Dispatch settings first
         toast({ title: "Fetching Character Lore...", description: `Preparing ${playerCharacterConcept} from ${universeName}...` });
         try {
             const aiProfile: GenerateCharacterDescriptionOutput = await generateCharacterDescription({
-                 characterDescription: playerCharacterConcept, // This is the character's name
+                 characterDescription: playerCharacterConcept, 
                  isImmersedMode: true,
                  universeName: universeName,
-                 playerCharacterConcept: playerCharacterConcept // Pass character's name again for consistency in AI prompt
+                 playerCharacterConcept: playerCharacterConcept 
             });
-
+            
             const baseStats = { ...initialCharacterState.stats }; 
             const randomStr = Math.floor(Math.random() * 5) + 3; 
             const randomSta = Math.floor(Math.random() * 5) + 3; 
@@ -240,7 +248,7 @@ export function AdventureSetup() {
         }
     } else { 
         // For Randomized, Custom, or Immersed (Original Character)
-        console.log("AdventureSetup: Proceeding to CharacterCreation for type:", adventureTypeFromContext);
+        dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload });
         dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" }); 
         let descriptionToast = `Proceeding to character creation for your ${adventureTypeFromContext} adventure. Difficulty: ${finalDifficulty}.`;
         if (adventureTypeFromContext === "Randomized") {

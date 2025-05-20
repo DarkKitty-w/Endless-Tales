@@ -9,14 +9,14 @@
  */
 
 import {ai}from '@/ai/ai-instance';
-import {z} from 'genkit';
+import {z}from 'genkit';
 
 const SuggestExistingCharactersInputSchema = z.object({
   universeName: z.string().describe('The name of the fictional universe (e.g., Star Wars, Harry Potter).'),
 });
 
 const SuggestExistingCharactersOutputSchema = z.object({
-  suggestedNames: z.array(z.string()).max(5).describe('An array of 3-5 suggested existing character names from the universe.'),
+  suggestedNames: z.array(z.string()).min(1).max(5).describe('An array of 1-5 suggested existing character names from the universe.'),
 });
 
 export type SuggestExistingCharactersInput = z.infer<typeof SuggestExistingCharactersInputSchema>;
@@ -44,7 +44,15 @@ const suggestExistingCharactersFlow = ai.defineFlow(
   },
   async (input) => {
     console.log("suggestExistingCharactersFlow: Input received:", input);
-    const {output} = await prompt(input);
+    let output: SuggestExistingCharactersOutput | undefined;
+    try {
+        const result = await prompt(input);
+        output = result.output;
+    } catch (e) {
+        console.error("suggestExistingCharactersFlow: Error calling prompt:", e);
+        output = undefined;
+    }
+
     if (!output || !Array.isArray(output.suggestedNames) || output.suggestedNames.length === 0) {
       console.warn("suggestExistingCharactersFlow: AI did not return valid suggestions. Returning fallback.");
       // Fallback in case AI fails
