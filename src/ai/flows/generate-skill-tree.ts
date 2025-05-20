@@ -97,7 +97,7 @@ const generateSkillTreeFlow = ai.defineFlow<
     outputSchema: GenerateSkillTreeOutputSchema,
   },
   async (input) => {
-     console.log("Sending to generateSkillTreePrompt:", JSON.stringify(input, null, 2));
+     console.log("generateSkillTreeFlow: Sending to generateSkillTreePrompt:", JSON.stringify(input, null, 2));
      let output: GenerateSkillTreeOutput | undefined;
      let errorOccurred = false;
      let attempt = 0;
@@ -105,6 +105,7 @@ const generateSkillTreeFlow = ai.defineFlow<
 
      while (attempt < maxAttempts && !output) {
         attempt++;
+        console.log(`generateSkillTreeFlow: AI call attempt ${attempt}...`);
         try {
             const result = await generateSkillTreePrompt(input);
             output = result.output;
@@ -167,7 +168,8 @@ const generateSkillTreeFlow = ai.defineFlow<
         throw new Error(`Skill tree generation failed for class "${input.characterClass}".`);
      }
 
-     console.log("Received valid skill tree from generateSkillTreePrompt:", JSON.stringify(output, null, 2));
+     console.log("generateSkillTreeFlow: Received valid skill tree from generateSkillTreePrompt:", JSON.stringify(output, null, 2));
      return output; // Return the validated output
   }
 );
+

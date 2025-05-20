@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview An AI agent that narrates the story of a text adventure game based on player actions and game state.
@@ -129,6 +128,7 @@ export type NarrateAdventureOutput = z.infer<typeof NarrateAdventureOutputSchema
 export async function narrateAdventure(
   input: NarrateAdventureInput
 ): Promise<NarrateAdventureOutput> {
+  console.log("narrateAdventure: Function called with input:", JSON.stringify(input, null, 2).substring(0, 500) + "...");
   if (input.character.class === 'admin000') {
     console.log("Developer Mode detected. Bypassing AI narration.");
     return processDevCommand(input);
@@ -233,7 +233,7 @@ const narrateAdventurePrompt = ai.definePrompt({
 1.  **Narrative Continuation:** Craft an engaging narrative that seamlessly continues the story, logically following the 'playerChoice' within the 'gameState'. Consider all character details, game settings, and the specific instructions for the adventure type.
 2.  **Logical Progression, Resource Costs & Restrictions:**
     *   **Evaluate Feasibility:** Assess if the action is logically possible. *Actions tied to higher skill stages (if applicable, i.e., not Immersed mode) should only be possible if the character has reached that stage.* Harder difficulties might make certain actions less feasible initially.
-    *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (action stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output \`staminaChange\` (for action stamina), \`manaChange\` **only if they changed**. **Health changes (\`healthChange\`) are separate and should be determined by damage/healing in the narrative.**
+    *   **Check Learned Skills & Resources:** Verify if a used skill is learned and if enough resources (action stamina/mana) are available. Narrate failure reasons (not learned, insufficient resources). Calculate costs and output \`staminaChange\`, \`manaChange\` **only if they changed**.
     *   **Block Impossible Actions:** Prevent universe-breaking actions (e.g., "destroy the universe", "teleport to another dimension") unless EXTREME justification exists in gameState AND skill stage is high (if applicable). Simple reality-bending ("become king", "control time") is also typically Impossible without justification.
     *   **Narrate Failure Reason:** If blocked/failed, explain why (lack of skill, resources, item, stage, reputation, **NPC relationships**, difficulty, etc.).
     *   **Skill-based Progression (Not for Immersed):** Very powerful actions require high milestones AND skill stages.
@@ -241,7 +241,7 @@ const narrateAdventurePrompt = ai.definePrompt({
 4.  **Consequences, Resources, XP, Reputation, Relationships & Character Progression:**
     *   **Health Changes:** If the character takes damage or is healed, include \`healthChange\`. **Only include if health changed.**
     *   **Resource Changes (Action Stamina/Mana):** If current action stamina or mana changed, include \`staminaChange\` or \`manaChange\`. **Do not include if unchanged.**
-    *   **XP Awards (Not for Immersed):** If the action was significant, award XP via \`xpGained\` (adjust based on **difficulty**). **Only include if XP was gained.**
+    *   **XP Awards (Not for Immersed):** If the action was significant, award XP via \`xpGained\`. **Only include if XP was gained.**
     *   **Reputation Changes:** If the action affects a faction's view, include \`reputationChange\`. **Only include if reputation changed.**
     *   **NPC Relationship Changes:** If the action affects an NPC's view, include \`npcRelationshipChange\`. **Only include if relationship changed.**
     *   **Character Progression (Optional, narrative for Immersed):** If events lead to development:
@@ -269,10 +269,20 @@ const narrateAdventureFlow = ai.defineFlow(
     outputSchema: NarrateAdventureOutputSchema,
   },
   async (input: NarrateAdventureInput) => {
-    console.log("Sending to narrateAdventurePrompt:", JSON.stringify(input, null, 2));
-    const {output} = await narrateAdventurePrompt(input);
-    console.log("Received from narrateAdventurePrompt:", JSON.stringify(output, null, 2));
+    console.log("narrateAdventureFlow: Starting with input keys:", Object.keys(input));
+    const promptInput = {
+      ...input,
+      character: {
+        ...input.character,
+        reputationString: input.character.reputationString || "None",
+        npcRelationshipsString: input.character.npcRelationshipsString || "None",
+      }
+    };
+    console.log("narrateAdventureFlow: Sending to narrateAdventurePrompt:", JSON.stringify(promptInput, null, 2).substring(0, 500) + "...");
+    const {output} = await narrateAdventurePrompt(promptInput);
+    console.log("narrateAdventureFlow: Received from narrateAdventurePrompt:", JSON.stringify(output, null, 2).substring(0, 500) + "...");
      if (!output) {
+        console.error("narrateAdventureFlow: AI returned undefined output.");
         return {
             narration: "The AI seems to be pondering... or perhaps napping. (No output received)",
             updatedGameState: input.gameState,
@@ -281,3 +291,4 @@ const narrateAdventureFlow = ai.defineFlow(
     return output;
   }
 );
+
