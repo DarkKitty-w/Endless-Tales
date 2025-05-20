@@ -49,74 +49,6 @@ const localGetDiceRollFunction = (diceType: string): (() => number) | null => {
 };
 // --- End Dice Roller Service ---
 
-// Helper function to process developer commands
-function processDevCommand(input: {
-    character: Character;
-    playerChoice: string;
-    gameState: string;
-    adventureSettings: AdventureSettings;
-    turnCount: number;
-}): NarrateAdventureOutput {
-    let devNarration = `(Developer Mode) Player chose: "${input.playerChoice}".`;
-    const command = input.playerChoice.trim().toLowerCase();
-    const parts = command.split(' ');
-    const baseCommand = parts[0];
-    const value = parts.length > 1 ? parts.slice(1).join(' ') : undefined;
-
-    let xpGained: number | undefined;
-    let progressedToStage: number | undefined;
-    let healthChange: number | undefined;
-    let updatedTraits: string[] | undefined;
-    let updatedKnowledge: string[] | undefined;
-    let gainedSkill: Skill | undefined;
-    let reputationChange: { faction: string, change: number } | undefined;
-    let npcRelationshipChange: { npcName: string, change: number } | undefined;
-    
-    if (baseCommand === '/xp' && value) {
-        const amount = parseInt(value, 10);
-        if (!isNaN(amount)) { xpGained = amount; devNarration += ` Granted ${amount} XP.`; }
-        else { devNarration += " - Invalid XP amount."; }
-    } else if (baseCommand === '/stage' && value) {
-        const stageNum = parseInt(value, 10);
-        if (!isNaN(stageNum) && stageNum >= 0 && stageNum <= 4) { progressedToStage = stageNum; devNarration += ` Set skill stage to ${stageNum}.`; }
-        else { devNarration += " - Invalid stage number (0-4)."; }
-    } else if (baseCommand === '/health' && value && input.character) {
-        const amount = parseInt(value, 10);
-        if (!isNaN(amount)) {
-            const newHealth = Math.max(0, Math.min(input.character.maxHealth, input.character.currentHealth + amount));
-            healthChange = newHealth - input.character.currentHealth; // Calculate the actual change
-            devNarration += ` Adjusted health by ${healthChange}. New health: ${newHealth}.`;
-        } else {
-            devNarration += " - Invalid health amount.";
-        }
-    } else if (baseCommand === '/addtrait' && value && input.character) {
-        updatedTraits = [...(input.character.traits || []), value];
-        devNarration += ` Added trait: ${value}.`;
-    } else if (baseCommand === '/addknowledge' && value && input.character) {
-        updatedKnowledge = [...(input.character.knowledge || []), value];
-        devNarration += ` Added knowledge: ${value}.`;
-    } else if (baseCommand === '/addskill' && value && input.character) {
-        gainedSkill = { name: value, description: "Developer added skill", type: "Learned" };
-        devNarration += ` Added skill: ${value}.`;
-    } else {
-        devNarration += " Action processed. Dev restrictions bypassed.";
-    }
-
-    return {
-        narration: devNarration,
-        updatedGameState: `${input.gameState} (Dev Action: ${input.playerChoice}, Turn: ${input.turnCount + 1})`,
-        xpGained,
-        progressedToStage,
-        healthChange,
-        updatedTraits,
-        updatedKnowledge,
-        gainedSkill,
-        reputationChange,
-        npcRelationshipChange,
-    };
-}
-
-
 export function Gameplay() {
     const { state, dispatch } = useGame();
     const { toast } = useToast();
@@ -143,7 +75,10 @@ export function Gameplay() {
     const [branchingChoices, setBranchingChoices] = useState<NarrateAdventureOutput['branchingChoices']>([]);
     const [isCraftingDialogOpen, setIsCraftingDialogOpen] = useState(false);
     const [isDesktopSettingsOpen, setIsDesktopSettingsOpen] = useState(false);
-    const initialSetupAttemptedRef = useRef(false);
+    
+    // Ref to track if initial setup for the current adventure ID has been attempted
+    const initialSetupAttemptedRef = useRef<Record<string, boolean>>({});
+
 
     const isMobile = useIsMobile();
 
@@ -156,37 +91,43 @@ export function Gameplay() {
 
     const triggerSkillTreeGeneration = useCallback(async (charClass: string | undefined) => {
         if (!charClass || adventureSettings.adventureType === "Immersed") {
-            console.log("Gameplay: Skill tree generation skipped for Immersed or no class.");
+            console.log("Gameplay: Skill tree generation skipped (Immersed or no class).");
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false });
-            // setLocalIsGeneratingSkillTree(false); // This will be handled by the useEffect sync
-            return null; // Return null or a specific indicator of no generation
+            return null;
         }
         if (character && character.skillTree && character.skillTree.className === charClass) {
             console.log("Gameplay: Skill tree already exists and matches class. Skipping generation.");
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false });
-             // setLocalIsGeneratingSkillTree(false);
-            return character.skillTree; // Return existing skill tree
+            return character.skillTree;
         }
         
         console.log("Gameplay: Triggering skill tree generation for class:", charClass);
-        // setLocalIsGeneratingSkillTree(true); // Handled by useEffect sync
         dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: true });
+        setLocalIsGeneratingSkillTree(true);
         setError(null);
         toast({ title: "Generating Skill Tree...", description: `Crafting abilities for the ${charClass} class...`, duration: 3000 });
+        
         try {
             const skillTreeResult = await generateSkillTree({ characterClass: charClass });
-            dispatch({ type: "SET_SKILL_TREE", payload: { class: charClass, skillTree: skillTreeResult } });
-            toast({ title: "Skill Tree Generated!", description: `The path of the ${charClass} is set.` });
-            return skillTreeResult;
+            if (skillTreeResult) { // Ensure result is not null from fallback
+                dispatch({ type: "SET_SKILL_TREE", payload: { class: charClass, skillTree: skillTreeResult } });
+                toast({ title: "Skill Tree Generated!", description: `The path of the ${charClass} is set.` });
+                return skillTreeResult;
+            } else {
+                console.error("Gameplay: Skill tree generation returned null/undefined even after AI flow.");
+                setError(`Skill Tree Error: Failed to receive skill tree data. Using default progression.`);
+                toast({ title: "Skill Tree Error", description: "Could not generate skill tree. Default progression used.", variant: "destructive" });
+                return null;
+            }
         } catch (err: any) {
-            console.error("Gameplay: Failed to generate skill tree:", err);
+            console.error("Gameplay: Error during triggerSkillTreeGeneration:", err);
             setError(`Skill Tree Error: ${err.message}. Using default progression.`);
-            toast({ title: "Skill Tree Error", description: "Could not generate skill tree. Proceeding without class-specific skills.", variant: "destructive" });
-            return null; // Indicate failure
+            toast({ title: "Skill Tree Error", description: "Could not generate skill tree. Default progression used.", variant: "destructive" });
+            return null; 
         } finally {
             console.log("Gameplay: Skill tree generation process finished.");
-            // setLocalIsGeneratingSkillTree(false); // Handled by useEffect sync
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false });
+            setLocalIsGeneratingSkillTree(false);
         }
     }, [dispatch, toast, adventureSettings.adventureType, character]);
 
@@ -227,7 +168,10 @@ export function Gameplay() {
     const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
         if (!character) {
             toast({ title: "Error", description: "Character data is missing.", variant: "destructive" });
-            if (isInitialAction) setIsInitialLoading(false);
+            if (isInitialAction) {
+                 console.log("Gameplay: handlePlayerAction - Character missing, setting isInitialLoading to false.");
+                 setIsInitialLoading(false);
+            }
             return;
         }
         if (isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || localIsGeneratingSkillTree || isCraftingLoading) {
@@ -236,10 +180,13 @@ export function Gameplay() {
             toast({ description: reason, variant: "default", duration: 1500 });
             return;
         }
-        console.log(`Gameplay: Handling player action: "${action}", Initial: ${isInitialAction}`);
+        console.log(`Gameplay: Handling player action: "${action.substring(0,50)}...", Initial: ${isInitialAction}`);
         
-        if (isInitialAction) setIsInitialLoading(true);
-        setIsLoading(true); // This applies for subsequent actions too
+        if (isInitialAction) {
+            console.log("Gameplay: handlePlayerAction - Initial action, setting isInitialLoading to true.");
+            setIsInitialLoading(true);
+        }
+        setIsLoading(true); 
         setError(null); setDiceResult(null); setDiceType("None"); setBranchingChoices([]);
         
         let actionWithDice = action;
@@ -251,7 +198,9 @@ export function Gameplay() {
         const isPassiveAction = ["look", "look around", "check inventory", "check status", "check relationships", "check reputation", "begin the adventure by looking around."].includes(actionLower);
 
         try {
+            console.log("Gameplay: handlePlayerAction - Attempting action logic.");
             if (character.class === 'admin000') {
+                console.log("Gameplay: handlePlayerAction - Admin mode detected.");
                 const devOutput = processDevCommand({character, playerChoice: action, gameState: currentGameStateString, adventureSettings, turnCount});
                 dispatch({ type: "UPDATE_NARRATION", payload: { narration: devOutput.narration, updatedGameState: devOutput.updatedGameState, timestamp: Date.now(), ...devOutput } });
                 if (devOutput.xpGained) dispatch({type: 'GRANT_XP', payload: devOutput.xpGained});
@@ -260,7 +209,7 @@ export function Gameplay() {
                 if (devOutput.updatedTraits) dispatch({ type: 'UPDATE_CHARACTER', payload: { traits: devOutput.updatedTraits } });
                 if (devOutput.updatedKnowledge) dispatch({ type: 'UPDATE_CHARACTER', payload: { knowledge: devOutput.updatedKnowledge } });
                 if (devOutput.gainedSkill) dispatch({ type: 'UPDATE_CHARACTER', payload: { learnedSkills: [...character.learnedSkills, devOutput.gainedSkill] } });
-                return;
+                return; // Exits after dev command
             }
 
             if (!isInitialAction && !isPassiveAction) {
@@ -286,7 +235,7 @@ export function Gameplay() {
                 if (assessedDifficulty === "Impossible") {
                     setError(`Action seems impossible: ${assessmentResult.reasoning} Try something else.`);
                     toast({ title: "Action Impossible", description: assessmentResult.reasoning, variant: "destructive", duration: 4000 });
-                    return;
+                    return; // Exits if impossible
                 }
             } else {
                 requiresRoll = false; assessedDifficulty = "Trivial"; setDiceType("None");
@@ -304,7 +253,7 @@ export function Gameplay() {
                 } else { actionWithDice += ` (Difficulty: ${assessedDifficulty}, Roll: ${roll})`; }
                 await new Promise(resolve => setTimeout(resolve, 100));
                 setIsRollingDice(false);
-                await new Promise(resolve => setTimeout(resolve, 1400));
+                await new Promise(resolve => setTimeout(resolve, 1400)); // Allow toast to be seen
                 setDiceResult(null);
             } else if (!isPassiveAction && assessedDifficulty !== "Impossible" && diceType !== 'None') {
                 actionWithDice += ` (Difficulty: ${assessedDifficulty}, No Roll Required)`;
@@ -342,9 +291,13 @@ export function Gameplay() {
                 isImmersedAdventure: adventureSettings.adventureType === "Immersed",
             };
 
-            const narrationResult = await narrateAdventure(inputForAI); // No more retry loop here, flow handles it
+            console.log("Gameplay: handlePlayerAction - Calling narrateAdventure AI flow.");
+            const narrationResult = await narrateAdventure(inputForAI);
+            console.log("Gameplay: handlePlayerAction - narrateAdventure AI flow returned.");
+
 
             if (narrationResult) {
+                console.log("Gameplay: handlePlayerAction - Narration result received, dispatching UPDATE_NARRATION.");
                  dispatch({ type: "UPDATE_NARRATION", payload: { ...narrationResult, timestamp: Date.now() } });
                 setBranchingChoices(narrationResult.branchingChoices ?? []);
                 if (narrationResult.dynamicEventTriggered) toast({ title: "Dynamic Event!", description: narrationResult.dynamicEventTriggered, duration: 4000, className: "border-purple-500" });
@@ -358,7 +311,7 @@ export function Gameplay() {
                  if (narrationResult.gainedSkill) toast({ title: "Skill Learned!", description: `You gained: ${narrationResult.gainedSkill.name}!`, duration: 4000 });
                  if (narrationResult.suggestedClassChange && narrationResult.suggestedClassChange !== character.class && adventureSettings.adventureType !== "Immersed") setPendingClassChange(narrationResult.suggestedClassChange);
 
-                if (narrationResult.isCharacterDefeated && character.currentHealth <=0) {
+                if (narrationResult.isCharacterDefeated && character.currentHealth <=0) { // Re-check currentHealth after potential healthChange in narrationResult
                     if (adventureSettings.permanentDeath) {
                         await handleEndAdventure({ ...narrationResult, timestamp: Date.now() }, true);
                     } else {
@@ -367,24 +320,29 @@ export function Gameplay() {
                     }
                 }
             } else {
-                 // This case should ideally be caught by the flow returning a fallback
+                 console.error("Gameplay: handlePlayerAction - Narration result was null/undefined from AI flow.");
                  setError("Narration failed: AI did not return a valid response. Try a different action.");
                  toast({title: "Narration Error", description: "AI failed to respond. Please try again.", variant: "destructive"});
             }
         } catch (err: any) {
-            console.error("Gameplay: Uncaught error in handlePlayerAction:", err);
+            console.error("Gameplay: Uncaught error in handlePlayerAction's try block:", err);
             setError(`An unexpected error occurred: ${err.message}`);
             toast({title: "Unexpected Error", description: "Something went wrong processing your action.", variant: "destructive"});
         } finally {
+            console.log("Gameplay: handlePlayerAction - Entering finally block.");
             setIsLoading(false);
-            if (isInitialAction) setIsInitialLoading(false);
+            if (isInitialAction) {
+                console.log("Gameplay: handlePlayerAction - Initial action finished, setting isInitialLoading to false.");
+                setIsInitialLoading(false);
+            }
             if (isAssessingDifficulty) setIsAssessingDifficulty(false);
             if (isRollingDice) setIsRollingDice(false);
+            console.log("Gameplay: handlePlayerAction - Exiting finally block. isInitialLoading:", isInitialLoading, "isLoading:", isLoading);
         }
     }, [
         character, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice,
         localIsGeneratingSkillTree, currentGameStateString, currentNarration, storyLog, adventureSettings, turnCount,
-        dispatch, toast, handleEndAdventure, isCraftingLoading
+        dispatch, toast, handleEndAdventure, isCraftingLoading // isInitialLoading is managed internally now
     ]);
 
     const handleSaveGame = useCallback(async () => {
@@ -433,17 +391,21 @@ export function Gameplay() {
          
          toast({ title: `Becoming a ${newClass}...`, description: "Generating new skill path...", duration: 2000 });
          try {
-            // setLocalIsGeneratingSkillTree(true); // This will be handled by context/useEffect sync
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: true });
+            setLocalIsGeneratingSkillTree(true);
              const newSkillTree = await generateSkillTree({ characterClass: newClass });
-             dispatch({ type: "CHANGE_CLASS_AND_RESET_SKILLS", payload: { newClass, newSkillTree } });
-             toast({ title: `Class Changed to ${newClass}!`, description: "Your abilities and progression have been reset." });
+             if (newSkillTree) { // Check if skill tree was successfully generated (not null)
+                 dispatch({ type: "CHANGE_CLASS_AND_RESET_SKILLS", payload: { newClass, newSkillTree } });
+                 toast({ title: `Class Changed to ${newClass}!`, description: "Your abilities and progression have been reset." });
+             } else {
+                 toast({ title: "Class Change Failed", description: `Could not generate skill tree for ${newClass}. Class change aborted.`, variant: "destructive" });
+             }
          } catch (err: any) {
              console.error("Gameplay: Class change error:", err);
              toast({ title: "Class Change Error", description: `Could not generate skill tree for ${newClass}. Class change aborted.`, variant: "destructive" });
          } finally {
-             // setLocalIsGeneratingSkillTree(false); // Handled by context/useEffect sync
              dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false });
+             setLocalIsGeneratingSkillTree(false);
          }
      }, [character, dispatch, toast, localIsGeneratingSkillTree, adventureSettings.adventureType]);
 
@@ -463,64 +425,81 @@ export function Gameplay() {
         toast({ title: "Suggestion", description: `Try: "${suggestion}"`, duration: 3000 });
     }, [isLoading, isEnding, isSaving, character, toast]);
 
+
     useEffect(() => {
-        console.log("Gameplay: Initial Setup Effect triggered. adventureId:", currentAdventureId, "initialSetupAttempted:", initialSetupAttemptedRef.current);
-        if (state.status !== "Gameplay" || !character || initialSetupAttemptedRef.current) {
-            if (initialSetupAttemptedRef.current) {
-                console.log("Gameplay: Initial setup already attempted or conditions not met. Skipping.");
-            } else {
-                console.log("Gameplay Effect: Not in Gameplay status or no character. Clearing initial loading if set.");
-                if (isInitialLoading) setIsInitialLoading(false); // Clear loading if we skip setup
+        console.log("Gameplay: Initial Setup Effect triggered. Adventure ID:", currentAdventureId);
+    
+        if (state.status !== "Gameplay" || !character || !currentAdventureId) {
+            console.log("Gameplay: Initial setup conditions not met (status, character, or adventureId missing). currentAdventureId:", currentAdventureId, "initialSetupAttemptedRef:", initialSetupAttemptedRef.current[currentAdventureId!]);
+            if (isInitialLoading && (!character || state.status !== "Gameplay")) {
+                console.log("Gameplay: Not in gameplay or no character, setting isInitialLoading to false.");
+                setIsInitialLoading(false);
             }
             return;
         }
     
-        async function performInitialSetup() {
-            console.log("Gameplay: Running performInitialSetup. Character:", character?.name, "Class:", character?.class, "Existing SkillTree:", !!character?.skillTree);
+        // If setup for this adventure ID has already been attempted, skip
+        if (initialSetupAttemptedRef.current[currentAdventureId]) {
+            console.log(`Gameplay: Initial setup already attempted for adventure ${currentAdventureId}. Skipping.`);
+             if (isInitialLoading && storyLog.length > 0) { // Ensure loading is false if log exists
+                setIsInitialLoading(false);
+            }
+            return;
+        }
+    
+        const performInitialSetup = async () => {
+            console.log(`Gameplay: Performing initial setup for adventure ${currentAdventureId}.`);
             let skillTreeIsReady = adventureSettings.adventureType === "Immersed" || (character && !!character.skillTree);
     
-            if (!skillTreeIsReady && adventureSettings.adventureType !== "Immersed" && character?.class) {
-                console.log("Gameplay: Skill tree needed and not present. Calling triggerSkillTreeGeneration for class:", character.class);
+            if (!skillTreeIsReady && !(localIsGeneratingSkillTree || contextIsGeneratingSkillTree)) {
+                console.log("Gameplay: Skill tree needed and not present/generating. Calling triggerSkillTreeGeneration for class:", character.class);
                 await triggerSkillTreeGeneration(character.class);
-                // After attempt, re-check from global state because dispatch updates context
-                const currentGlobalState = state; // Assuming useGame() provides the latest state
-                skillTreeIsReady = !!currentGlobalState.character?.skillTree || adventureSettings.adventureType === "Immersed";
+                // Re-fetch character from context to see if skill tree was updated
+                const updatedCharacter = state.character; // This might not be updated immediately if dispatch is async. Consider alternative.
+                skillTreeIsReady = adventureSettings.adventureType === "Immersed" || (updatedCharacter && !!updatedCharacter.skillTree);
                 console.log("Gameplay: Skill tree generation attempt complete. Skill tree ready:", skillTreeIsReady);
-
-            } else if (localIsGeneratingSkillTree || contextIsGeneratingSkillTree) {
-                console.log("Gameplay: Skill tree is currently generating, waiting for it to complete before initial narration.");
-                return; // Wait for skill tree generation to finish
+            } else {
+                console.log("Gameplay: Skill tree ready or not needed, or already generating. SkillTreeIsReady:", skillTreeIsReady, "LocalGen:", localIsGeneratingSkillTree, "ContextGen:", contextIsGeneratingSkillTree);
             }
     
-            // Proceed to initial narration if skill tree is ready and no story log yet
-            if (skillTreeIsReady && storyLog.length === 0 && !isLoading) {
-                console.log("Gameplay: Skill tree ready and no story log. Performing initial narration.");
+            if (skillTreeIsReady && storyLog.length === 0 && !isInitialLoading && !isLoading) {
+                console.log("Gameplay: Conditions met for initial narration. Calling handlePlayerAction.");
                 await handlePlayerAction("Begin the adventure by looking around.", true);
             } else if (storyLog.length > 0 && isInitialLoading) {
                 console.log("Gameplay: Story log exists. Clearing initial loading flag.");
                 setIsInitialLoading(false);
-            } else if (!skillTreeIsReady && isInitialLoading && adventureSettings.adventureType !== "Immersed"){
-                console.log("Gameplay: Skill tree not ready yet, initial loading continues.");
-            } else if (isInitialLoading) { // Catch-all to ensure isInitialLoading is eventually false
-                console.log("Gameplay: Other condition, clearing initial loading flag.");
-                setIsInitialLoading(false);
+            } else if (!skillTreeIsReady && isInitialLoading && adventureSettings.adventureType !== "Immersed" && !(localIsGeneratingSkillTree || contextIsGeneratingSkillTree)) {
+                console.log("Gameplay: Skill tree still not ready and not generating, initial loading continues. This might be an issue.");
+            } else if (isInitialLoading && !isLoading && !(localIsGeneratingSkillTree || contextIsGeneratingSkillTree) ) {
+                 console.log("Gameplay: Other condition, but initial loading is true and no other process is active. Setting isInitialLoading to false.");
+                 setIsInitialLoading(false); // Ensure it gets unset if conditions for narration aren't met but nothing else is loading
             }
-        }
+            
+            // Mark setup as attempted for this adventure ID *after* the attempt
+            initialSetupAttemptedRef.current[currentAdventureId] = true;
+            console.log(`Gameplay: Marked initial setup as attempted for adventure ${currentAdventureId}.`);
+        };
     
         performInitialSetup();
-        initialSetupAttemptedRef.current = true; // Mark as attempted for this adventure ID
     
     }, [
-        state.status, character, currentAdventureId, adventureSettings.adventureType, 
-        storyLog.length, isLoading, isInitialLoading, 
-        triggerSkillTreeGeneration, handlePlayerAction,
-        localIsGeneratingSkillTree, contextIsGeneratingSkillTree, state // Added full state
+        state, // Using full state to react to character/skillTree updates from context
+        currentAdventureId, 
+        character, // Direct dependency
+        storyLog.length, 
+        isInitialLoading, 
+        isLoading, 
+        localIsGeneratingSkillTree, 
+        contextIsGeneratingSkillTree,
+        adventureSettings.adventureType, 
+        triggerSkillTreeGeneration, 
+        handlePlayerAction
     ]);
-
+    
+    // Reset initial loading flag if adventure ID changes (new game or loaded game)
     useEffect(() => {
-        initialSetupAttemptedRef.current = false;
-        setIsInitialLoading(true); // Reset for new adventure
-        console.log("Gameplay: New adventure ID detected or component mounted. Resetting initialSetupAttemptedRef and isInitialLoading.");
+        setIsInitialLoading(true);
+        console.log("Gameplay: currentAdventureId changed or component mounted. Resetting isInitialLoading to true. New ID:", currentAdventureId);
     }, [currentAdventureId]);
 
 
@@ -538,7 +517,7 @@ export function Gameplay() {
         return ( <ul className="list-none pl-0"> {Object.entries(rels).map(([npcName, score]) => ( <li key={npcName} className="flex justify-between items-center text-xs"> <span>{npcName}:</span> <span className={`font-medium ${score > 20 ? 'text-green-600' : score < -20 ? 'text-destructive' : ''}`}>{score}</span> </li> ))} </ul> );
     }, []);
 
-    const anyLoading = isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || localIsGeneratingSkillTree || isCraftingLoading || isInitialLoading;
+    const anyLoading = isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || localIsGeneratingSkillTree || contextIsGeneratingSkillTree || isCraftingLoading || isInitialLoading;
 
     return (
         <TooltipProvider>
@@ -548,7 +527,7 @@ export function Gameplay() {
                      <MobileSheet character={character} inventory={inventory} isGeneratingSkillTree={localIsGeneratingSkillTree || contextIsGeneratingSkillTree} turnCount={turnCount} renderReputation={renderReputation} renderNpcRelationships={renderNpcRelationships} onSettingsOpen={() => setIsDesktopSettingsOpen(true)} />
                     <NarrationDisplay storyLog={storyLog} isLoading={isLoading} isAssessingDifficulty={isAssessingDifficulty} isRollingDice={isRollingDice} isGeneratingSkillTree={localIsGeneratingSkillTree || contextIsGeneratingSkillTree} isEnding={isEnding} isSaving={isSaving} isCraftingLoading={isCraftingLoading} diceResult={diceResult} diceType={diceType} error={error} branchingChoices={branchingChoices} handlePlayerAction={handlePlayerAction} isInitialLoading={isInitialLoading} />
                     <ActionInput onSubmit={handlePlayerAction} onSuggest={handleSuggestAction} onCraft={() => setIsCraftingDialogOpen(true)} disabled={anyLoading} />
-                    <GameplayActions onSave={handleSaveGame} onAbandon={handleGoBack} onEnd={() => handleEndAdventure(undefined, character.currentHealth <= 0)} onSettings={() => setIsDesktopSettingsOpen(true)} disabled={isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || localIsGeneratingSkillTree || contextIsGeneratingSkillTree || isCraftingLoading} isMobile={isMobile} currentAdventureId={currentAdventureId} />
+                    <GameplayActions onSave={handleSaveGame} onAbandon={handleGoBack} onEnd={() => handleEndAdventure(undefined, character.currentHealth <= 0)} onSettings={() => setIsDesktopSettingsOpen(true)} disabled={anyLoading} isMobile={isMobile} currentAdventureId={currentAdventureId} />
                     <ClassChangeDialog isOpen={!!pendingClassChange} onOpenChange={(open) => !open && setPendingClassChange(null)} character={character} pendingClassChange={pendingClassChange} onConfirm={handleConfirmClassChange} />
                     <CraftingDialog isOpen={isCraftingDialogOpen} onOpenChange={setIsCraftingDialogOpen} inventory={inventory} onCraft={handleCrafting} />
                     <Sheet open={isDesktopSettingsOpen} onOpenChange={setIsDesktopSettingsOpen}>
