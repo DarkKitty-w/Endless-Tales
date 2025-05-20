@@ -30,9 +30,10 @@ const prompt = ai.definePrompt({
   name: 'suggestExistingCharactersPrompt',
   input: { schema: SuggestExistingCharactersInputSchema },
   output: { schema: SuggestExistingCharactersOutputSchema },
-  prompt: `You are a creative assistant. Given the fictional universe "{{{universeName}}}", please suggest 3 to 5 well-known existing character names from this universe.
-Focus on main or iconic characters.
-Return *only* an array of strings with the names.`,
+  prompt: `You are a creative assistant specializing in fictional universes. For the universe "{{{universeName}}}", please suggest 3 to 5 *different* and well-known existing character names.
+Include a mix of protagonists, antagonists (if they could plausibly be player characters in some context), and important supporting characters.
+Prioritize characters that a player might realistically want to embody in an adventure.
+Return *only* an array of strings with the names. Example for Harry Potter: ["Harry Potter", "Hermione Granger", "Ron Weasley", "Draco Malfoy", "Luna Lovegood"]`,
 });
 
 const suggestExistingCharactersFlow = ai.defineFlow(
@@ -57,3 +58,4 @@ const suggestExistingCharactersFlow = ai.defineFlow(
     return output;
   }
 );
+
