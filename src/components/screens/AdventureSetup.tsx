@@ -32,14 +32,11 @@ export function AdventureSetup() {
   const { state, dispatch } = useGame();
   const { toast } = useToast();
   
-  // This should always reflect the type chosen from MainMenu
   const adventureTypeFromContext = state.adventureSettings.adventureType;
 
-  // Initialize local state from context or defaults
   const [permanentDeath, setPermanentDeath] = useState<boolean>(state.adventureSettings.permanentDeath ?? defaultInitialAdventureSettings.permanentDeath);
   const [difficulty, setDifficulty] = useState<DifficultyLevel>(state.adventureSettings.difficulty ?? defaultInitialAdventureSettings.difficulty);
   
-  // Custom Adventure State
   const [worldType, setWorldType] = useState<string>(state.adventureSettings.worldType ?? defaultInitialAdventureSettings.worldType ?? "");
   const [mainQuestline, setMainQuestline] = useState<string>(state.adventureSettings.mainQuestline ?? defaultInitialAdventureSettings.mainQuestline ?? "");
   const [genreTheme, setGenreTheme] = useState<GenreTheme>(state.adventureSettings.genreTheme ?? defaultInitialAdventureSettings.genreTheme ?? "");
@@ -51,15 +48,12 @@ export function AdventureSetup() {
   const [puzzleFrequency, setPuzzleFrequency] = useState<PuzzleFrequency>(state.adventureSettings.puzzleFrequency ?? defaultInitialAdventureSettings.puzzleFrequency ?? "Medium");
   const [socialFocus, setSocialFocus] = useState<SocialFocus>(state.adventureSettings.socialFocus ?? defaultInitialAdventureSettings.socialFocus ?? "Medium");
   
-  // Immersed Adventure State
   const [universeName, setUniverseName] = useState<string>(state.adventureSettings.universeName ?? defaultInitialAdventureSettings.universeName ?? "");
   const [playerCharacterConcept, setPlayerCharacterConcept] = useState<string>(state.adventureSettings.playerCharacterConcept ?? defaultInitialAdventureSettings.playerCharacterConcept ?? "");
-  // Initialize characterOriginType from context, which should be 'original' or undefined (not 'existing')
-  // if coming from MainMenu for an Immersed adventure for the first time.
   const [characterOriginType, setCharacterOriginType] = useState<'existing' | 'original'>(
     state.adventureSettings.adventureType === "Immersed" 
       ? (state.adventureSettings.characterOriginType ?? 'original') 
-      : 'original' // Default for non-Immersed, though it won't be used
+      : 'original' 
   );
   
   const [customError, setCustomError] = useState<string | null>(null);
@@ -86,7 +80,6 @@ export function AdventureSetup() {
     } else if (adventureTypeFromContext === "Immersed") {
       setUniverseName(state.adventureSettings.universeName ?? "");
       setPlayerCharacterConcept(state.adventureSettings.playerCharacterConcept ?? "");
-      // When adventureType is Immersed, sync characterOriginType from context, defaulting to 'original'
       setCharacterOriginType(state.adventureSettings.characterOriginType ?? 'original');
     }
     setCustomError(null); 
@@ -117,7 +110,7 @@ export function AdventureSetup() {
 
 
   const handleStartAdventure = async () => {
-     setCustomError(null);
+    setCustomError(null);
 
     if (!adventureTypeFromContext) {
         toast({ title: "Adventure Type Missing", description: "Please return to main menu and select an adventure type.", variant: "destructive" });
@@ -125,15 +118,15 @@ export function AdventureSetup() {
         return;
     }
 
-     if (!validateSettings()) {
-         toast({ title: "Settings Incomplete", description: customError || `Please fill all required details for ${adventureTypeFromContext} adventure.`, variant: "destructive" });
-         return;
-     }
+    if (!validateSettings()) {
+        toast({ title: "Settings Incomplete", description: customError || `Please fill all required details for ${adventureTypeFromContext} adventure.`, variant: "destructive" });
+        return;
+    }
 
-     const finalDifficulty = VALID_ADVENTURE_DIFFICULTY_LEVELS.includes(difficulty) ? difficulty : "Normal";
+    const finalDifficulty = VALID_ADVENTURE_DIFFICULTY_LEVELS.includes(difficulty) ? difficulty : "Normal";
 
     const settingsPayload: AdventureSettings = { 
-      adventureType: adventureTypeFromContext, // This is crucial, must come from context
+      adventureType: adventureTypeFromContext,
       permanentDeath,
       difficulty: finalDifficulty,
       worldType: adventureTypeFromContext === "Custom" ? worldType : undefined,
@@ -148,7 +141,6 @@ export function AdventureSetup() {
       socialFocus: adventureTypeFromContext === "Custom" ? socialFocus : undefined,
       universeName: adventureTypeFromContext === "Immersed" ? universeName : undefined,
       playerCharacterConcept: adventureTypeFromContext === "Immersed" ? playerCharacterConcept : undefined,
-      // Ensure characterOriginType is ONLY set for Immersed, otherwise it's undefined.
       characterOriginType: adventureTypeFromContext === "Immersed" ? characterOriginType : undefined,
     };
     
@@ -198,19 +190,20 @@ export function AdventureSetup() {
                 skillTreeStage: 0,
             };
             
-            console.log("AdventureSetup: Dispatching SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY");
+            console.log("AdventureSetup: Dispatching SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY for existing character.");
             dispatch({ type: "SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY", payload: { character: newCharacter, adventureSettings: settingsPayload } });
             toast({ title: "Adventure Starting!", description: `Stepping into the shoes of ${playerCharacterConcept} in the universe of ${universeName}!` });
 
         } catch (err) {
-            console.error("Failed to generate immersed character profile:", err);
+            console.error("AdventureSetup: Failed to generate immersed character profile:", err);
             toast({ title: "Character Profile Error", description: "Could not retrieve character details. Please try again or define an original character.", variant: "destructive" });
         } finally {
             setIsLoadingImmersedCharacter(false);
         }
     } else { 
+        // For Randomized, Custom, or Immersed (Original Character)
         console.log("AdventureSetup: Proceeding to CharacterCreation for type:", adventureTypeFromContext);
-        dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
+        dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" }); // Ensure this line is present and active
         let descriptionToast = `Proceeding to character creation for your ${adventureTypeFromContext} adventure. Difficulty: ${finalDifficulty}.`;
         if (adventureTypeFromContext === "Randomized") {
             descriptionToast = `Preparing a randomized adventure at ${finalDifficulty} difficulty. Time to create your hero!`;
