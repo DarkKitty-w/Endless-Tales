@@ -148,7 +148,8 @@ export function NarrationDisplay({
                 </CardTitle>
             </CardHeader>
             <ScrollArea ref={scrollAreaRef} className="flex-1 pb-2 scrollbar scrollbar-thumb-primary scrollbar-track-input">
-                <CardContent className="h-full px-4 pt-4">
+                {/* Removed h-full from CardContent to allow natural content height */}
+                <CardContent className="px-4 pt-4"> 
                     {isInitialLoading && storyLog.length === 0 ? (
                         <div className="space-y-4 py-4">
                             <div className="flex items-center justify-center py-4 text-muted-foreground">
