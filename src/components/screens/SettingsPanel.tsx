@@ -1,4 +1,3 @@
-
 // src/components/screens/SettingsPanel.tsx
 "use client";
 
@@ -99,16 +98,23 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
                                      variant="outline"
                                      size="sm"
                                      className={cn(
-                                         "justify-start h-auto py-1.5 px-2 text-xs", // Adjusted padding for better fit
+                                         "justify-start h-auto py-1.5 px-2 text-xs items-center", // Adjusted padding for better fit, items-center
                                          selectedThemeId === theme.id && "ring-2 ring-ring ring-offset-2 ring-offset-background"
                                      )}
                                      onClick={() => handleThemeChange(theme.id)}
                                  >
-                                     <span
-                                         className="w-3 h-3 rounded-sm mr-2 border shrink-0" // Added shrink-0
-                                         style={{ backgroundColor: `hsl(${theme.light['--accent']})` }}
-                                         aria-hidden="true"
-                                     ></span>
+                                     <div className="w-4 h-4 rounded-sm mr-2 border shrink-0 flex overflow-hidden">
+                                        <div 
+                                            className="w-1/2 h-full" 
+                                            style={{ backgroundColor: `hsl(${theme.light['--primary']})` }}
+                                            aria-hidden="true"
+                                        />
+                                        <div 
+                                            className="w-1/2 h-full" 
+                                            style={{ backgroundColor: `hsl(${theme.light['--accent']})` }}
+                                            aria-hidden="true"
+                                        />
+                                     </div>
                                      {theme.name}
                                  </Button>
                              ))}
