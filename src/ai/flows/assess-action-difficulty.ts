@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview An AI agent that assesses the difficulty of a player action in a text adventure game.
@@ -10,24 +11,16 @@
 
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
-import type { DifficultyLevel } from '@/types/game-types'; // Import type
+import type { DifficultyLevel } from '@/types/game-types'; 
 
-// --- Zod Schemas (Internal - Not Exported) ---
-// Using the enum from game-types for consistency
 const DifficultyLevelSchema = z.enum([
-    "Trivial",
-    "Easy",
-    "Normal",
-    "Hard",
-    "Very Hard",
-    "Impossible",
+    "Trivial", "Easy", "Normal", "Hard", "Very Hard", "Impossible",
 ]);
-
 
 const AssessActionDifficultyInputSchema = z.object({
     playerAction: z.string().describe('The action the player wants to perform.'),
-    characterCapabilities: z.string().describe("A summary of the character's relevant stats, skills, traits, knowledge, and equipment."),
-    characterClass: z.string().optional().describe("The character's class. Used for special checks like developer mode."), // Added character class
+    characterCapabilities: z.string().describe("A summary of the character's relevant stats (Strength, Stamina, Wisdom), skills, traits, knowledge, equipment, health, action stamina, and mana."), // Updated stats
+    characterClass: z.string().optional().describe("The character's class. Used for special checks like developer mode."),
     currentSituation: z.string().describe('A brief description of the immediate environment, ongoing events, and any relevant obstacles or NPCs.'),
     gameStateSummary: z.string().describe('Broader context including location, major quest progress, significant items, and achieved milestones.'),
     gameDifficulty: z.string().describe("The overall game difficulty setting (e.g., Easy, Normal, Hard, Nightmare). This should influence the baseline difficulty."),
@@ -40,15 +33,11 @@ const AssessActionDifficultyOutputSchema = z.object({
     suggestedDice: z.enum(["d6", "d10", "d20", "d100", "None"]).describe('The suggested type of die to roll based on difficulty (None if Trivial or Impossible).'),
 });
 
-// --- Exported Types (Derived from internal schemas) ---
-// Re-exporting DifficultyLevel from game-types for external use if needed elsewhere
 export type { DifficultyLevel };
 export type AssessActionDifficultyInput = z.infer<typeof AssessActionDifficultyInputSchema>;
 export type AssessActionDifficultyOutput = z.infer<typeof AssessActionDifficultyOutputSchema>;
 
-// --- Exported Async Function ---
 export async function assessActionDifficulty(input: AssessActionDifficultyInput): Promise<AssessActionDifficultyOutput> {
-  // Check for Developer Mode
   if (input.characterClass === 'admin000') {
     console.log("Developer Mode detected in assessActionDifficulty. Skipping AI assessment.");
     return {
@@ -60,7 +49,6 @@ export async function assessActionDifficulty(input: AssessActionDifficultyInput)
   return assessActionDifficultyFlow(input);
 }
 
-// --- Internal Prompt and Flow Definitions ---
 const assessActionDifficultyPrompt = ai.definePrompt({
   name: 'assessActionDifficultyPrompt',
   input: { schema: AssessActionDifficultyInputSchema },
@@ -72,7 +60,7 @@ const assessActionDifficultyPrompt = ai.definePrompt({
 
 Consider the following factors:
 1.  **Player Action:** What is the player *specifically* trying to achieve?
-2.  **Character Capabilities:** {{{characterCapabilities}}} - Does the character possess the necessary strength, agility, knowledge, skills, traits, or items mentioned here? High relevant stats/skills make actions easier, low stats make them harder. Specific knowledge (e.g., Magic) enables related actions. Traits (e.g., Brave, Cautious) might influence feasibility or approach.
+2.  **Character Capabilities:** {{{characterCapabilities}}} - Does the character possess the necessary Strength (for physical actions), Stamina (for health resilience), Wisdom (for mental/magical tasks), knowledge, skills, traits, or items mentioned here? High relevant stats/skills make actions easier, low stats make them harder. Specific knowledge (e.g., Magic) enables related actions. Traits (e.g., Brave, Cautious) might influence feasibility or approach. Current health, action stamina, and mana levels are also critical.
 3.  **Current Situation:** {{{currentSituation}}} - What are the immediate obstacles? Is the environment helpful or hindering? Are there NPCs involved, and what is their disposition?
 4.  **Game State Summary:** {{{gameStateSummary}}} - Has the character achieved milestones that make this action more plausible (e.g., "Mastered Basic Magic", "Gained Noble Title")? Does their inventory contain something crucial?
 5.  **Plausibility:** Is the action physically possible within the game's established reality? Actions like "fly to the moon" or "destroy the mountain with a punch" are generally impossible unless specific high-level milestones/items are mentioned in the game state. Actions like "become king instantly" or "control time" are Impossible without EXTREME justification in the gameStateSummary (e.g., "Possesses the Crown of Ages").
@@ -105,28 +93,17 @@ const assessActionDifficultyFlow = ai.defineFlow<
     outputSchema: AssessActionDifficultyOutputSchema,
   },
   async (input) => {
-     // Developer mode check is now handled in the exported wrapper function
      console.log("Sending to assessActionDifficultyPrompt:", JSON.stringify(input, null, 2));
      const {output} = await assessActionDifficultyPrompt(input);
 
      if (!output || !output.difficulty || !output.reasoning || !output.suggestedDice) {
         console.error("AI difficulty assessment output missing or invalid:", output);
-        // Fallback based on game difficulty if AI fails
         let fallbackDifficulty: DifficultyLevel = "Normal";
         let fallbackDice: "d6" | "d10" | "d20" | "d100" | "None" = "d10";
         switch(input.gameDifficulty?.toLowerCase()) {
-            case 'easy':
-                fallbackDifficulty = "Easy";
-                fallbackDice = "d6";
-                break;
-            case 'hard':
-            case 'nightmare':
-                fallbackDifficulty = "Hard";
-                fallbackDice = "d20";
-                break;
-            default: // Normal or unknown
-                fallbackDifficulty = "Normal";
-                fallbackDice = "d10";
+            case 'easy': fallbackDifficulty = "Easy"; fallbackDice = "d6"; break;
+            case 'hard': case 'nightmare': fallbackDifficulty = "Hard"; fallbackDice = "d20"; break;
+            default: fallbackDifficulty = "Normal"; fallbackDice = "d10";
         }
         return {
             difficulty: fallbackDifficulty,
@@ -134,10 +111,7 @@ const assessActionDifficultyFlow = ai.defineFlow<
             suggestedDice: fallbackDice,
         };
      }
-
      console.log("Received from assessActionDifficultyPrompt:", JSON.stringify(output, null, 2));
      return output;
   }
 );
-
-    

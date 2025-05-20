@@ -2,12 +2,9 @@
 
 /** Represents the core statistical attributes of a character. */
 export interface CharacterStats {
-    strength: number;
-    stamina: number;
-    agility: number;
-    intellect: number;
-    wisdom: number;
-    charisma: number;
+    strength: number; // Affects action stamina pool
+    stamina: number;  // Affects Health Points (HP)
+    wisdom: number;   // Affects Mana pool and intellectual capabilities
 }
 
 /** Represents a single skill a character can possess or learn. */
@@ -62,7 +59,9 @@ export interface Character {
   aiGeneratedDescription?: string; // Separate storage for AI's expansion
 
   // Resource Pools
-  maxStamina: number;
+  maxHealth: number; // New: Represents HP, derived from Stamina stat
+  currentHealth: number; // New: Current HP
+  maxStamina: number; // Renamed from actionStamina, derived from Strength stat
   currentStamina: number;
   maxMana: number;
   currentMana: number;

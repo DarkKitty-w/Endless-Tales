@@ -1,4 +1,3 @@
-
 // src/context/game-initial-state.ts
 
 import type { GameState } from "@/types/game-types";
@@ -6,24 +5,22 @@ import type { Character, CharacterStats } from "@/types/character-types";
 import type { InventoryItem, ItemQuality } from "@/types/inventory-types";
 import type { AdventureSettings, DifficultyLevel, AdventureType } from "@/types/adventure-types";
 import {
-    calculateMaxStamina,
+    calculateMaxHealth, // Updated
+    calculateMaxActionStamina, // Updated
     calculateMaxMana,
     calculateXpToNextLevel,
     getStarterSkillsForClass
 } from "@/lib/gameUtils";
 import { TOTAL_STAT_POINTS, MIN_STAT_VALUE } from "@/lib/constants";
 
-/** Initial stats for a new character, ensuring they respect the total points. */
-const baseValue = Math.floor(TOTAL_STAT_POINTS / 3); // Divide points among STR, STA, AGI
-const remainder = TOTAL_STAT_POINTS % 3;
+// Default distribution for 3 allocatable stats (STR, STA, WIS)
+const pointsPerStat = Math.floor(TOTAL_STAT_POINTS / 3);
+const remainderPoints = TOTAL_STAT_POINTS % 3;
 
 export const initialCharacterStats: CharacterStats = {
-    strength: baseValue + (remainder > 0 ? 1 : 0), // Distribute remainder
-    stamina: baseValue + (remainder > 1 ? 1 : 0),
-    agility: baseValue,
-    intellect: MIN_STAT_VALUE, // Keep non-allocatable stats at min
-    wisdom: MIN_STAT_VALUE,
-    charisma: MIN_STAT_VALUE,
+    strength: pointsPerStat + (remainderPoints > 0 ? 1 : 0),
+    stamina: pointsPerStat + (remainderPoints > 1 ? 1 : 0),
+    wisdom: pointsPerStat,
 };
 
 /** Initial state for a new character. */
@@ -34,10 +31,12 @@ export const initialCharacterState: Character = {
   traits: [],
   knowledge: [],
   background: "",
-  stats: { ...initialCharacterStats }, // Use a copy of initialStats object
+  stats: { ...initialCharacterStats }, // Use a copy
   aiGeneratedDescription: undefined,
-  maxStamina: calculateMaxStamina(initialCharacterStats),
-  currentStamina: calculateMaxStamina(initialCharacterStats),
+  maxHealth: calculateMaxHealth(initialCharacterStats),
+  currentHealth: calculateMaxHealth(initialCharacterStats),
+  maxStamina: calculateMaxActionStamina(initialCharacterStats), // For physical actions
+  currentStamina: calculateMaxActionStamina(initialCharacterStats),
   maxMana: calculateMaxMana(initialCharacterStats, []),
   currentMana: calculateMaxMana(initialCharacterStats, []),
   level: 1,
@@ -47,7 +46,7 @@ export const initialCharacterState: Character = {
   npcRelationships: {},
   skillTree: null,
   skillTreeStage: 0,
-  learnedSkills: getStarterSkillsForClass("Adventurer"), // Assign default starter skills
+  learnedSkills: getStarterSkillsForClass("Adventurer"),
 };
 
 /** Default starting inventory items. */
@@ -61,7 +60,6 @@ export const initialAdventureSettings: AdventureSettings = {
     adventureType: null,
     permanentDeath: true,
     difficulty: "Normal" as DifficultyLevel,
-    // Fields for Custom Adventure
     worldType: "",
     mainQuestline: "",
     genreTheme: "",
@@ -72,28 +70,26 @@ export const initialAdventureSettings: AdventureSettings = {
     combatFrequency: "Medium",
     puzzleFrequency: "Medium",
     socialFocus: "Medium",
-    // Fields for Immersed Adventure
     universeName: "",
     playerCharacterConcept: "",
-    characterOriginType: 'original', // Default to original character for Immersed
+    characterOriginType: 'original',
 };
 
 /** The overall initial state for the GameContext. */
 export const initialState: GameState = {
   status: "MainMenu",
   character: null,
-  adventureSettings: { ...initialAdventureSettings }, // Use a copy
+  adventureSettings: { ...initialAdventureSettings },
   currentNarration: null,
   storyLog: [],
   adventureSummary: null,
   currentGameStateString: "The adventure is about to begin...",
-  inventory: [], // Start with empty inventory, populated on new game
+  inventory: [],
   savedAdventures: [],
   currentAdventureId: null,
   isGeneratingSkillTree: false,
   turnCount: 0,
-  selectedThemeId: 'cardboard', // Default theme
-  isDarkMode: false, // Default mode (will be checked against system pref on load)
-  userGoogleAiApiKey: null, // Initialize user API key
+  selectedThemeId: 'cardboard',
+  isDarkMode: false,
+  userGoogleAiApiKey: null,
 };
-

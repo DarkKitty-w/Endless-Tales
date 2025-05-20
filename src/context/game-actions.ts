@@ -1,28 +1,22 @@
-
 // src/context/game-actions.ts
-import type { GameStatus, GameState } from "@/types/game-types"; // Import GameStatus from main game types
+import type { GameStatus, GameState } from "@/types/game-types";
 import type {
-    Character,
-    SkillTree,
-    Skill,
-    ReputationChange,
-    NpcRelationshipChange,
-    CharacterStats, // Import CharacterStats
-} from "@/types/character-types"; // Import character-related types
-import type { InventoryItem } from "@/types/inventory-types"; // Import inventory types
-import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel, AdventureType } from "@/types/adventure-types"; // Import adventure types
+    Character, SkillTree, Skill, ReputationChange, NpcRelationshipChange, CharacterStats,
+} from "@/types/character-types";
+import type { InventoryItem } from "@/types/inventory-types";
+import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel, AdventureType } from "@/types/adventure-types";
 
 /** Defines all possible actions that can be dispatched to the game reducer. */
 export type Action =
   | { type: "SET_GAME_STATUS"; payload: GameStatus }
   | { type: "CREATE_CHARACTER"; payload: Partial<Character> }
   | { type: "CREATE_CHARACTER_AND_SETUP"; payload: Partial<Character> } 
-  | { type: "SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY"; payload: { character: Character, adventureSettings: AdventureSettings } } // New action for Immersed Existing
+  | { type: "SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY"; payload: { character: Character, adventureSettings: AdventureSettings } }
   | { type: "UPDATE_CHARACTER"; payload: Partial<Character> }
   | { type: "SET_AI_DESCRIPTION"; payload: string }
   | { type: "SET_ADVENTURE_SETTINGS"; payload: Partial<AdventureSettings> }
   | { type: "START_GAMEPLAY" }
-  | { type: "UPDATE_NARRATION"; payload: StoryLogEntry }
+  | { type: "UPDATE_NARRATION"; payload: StoryLogEntry & { isCharacterDefeated?: boolean } } // Added isCharacterDefeated
   | { type: "GRANT_XP"; payload: number }
   | { type: "LEVEL_UP"; payload: { newLevel: number; newXpToNextLevel: number } }
   | { type: "UPDATE_REPUTATION"; payload: ReputationChange }
@@ -32,8 +26,8 @@ export type Action =
   | { type: "RESET_GAME" }
   | { type: "LOAD_SAVED_ADVENTURES"; payload: SavedAdventure[] }
   | { type: "SAVE_CURRENT_ADVENTURE" }
-  | { type: "LOAD_ADVENTURE"; payload: string }
-  | { type: "DELETE_ADVENTURE"; payload: string }
+  | { type: "LOAD_ADVENTURE"; payload: string } // Payload is the adventure ID
+  | { type: "DELETE_ADVENTURE"; payload: string } // Payload is the adventure ID
   | { type: "SET_SKILL_TREE_GENERATING"; payload: boolean }
   | { type: "SET_SKILL_TREE"; payload: { class: string; skillTree: SkillTree } }
   | { type: "CHANGE_CLASS_AND_RESET_SKILLS"; payload: { newClass: string; newSkillTree: SkillTree } }
@@ -44,8 +38,7 @@ export type Action =
   | { type: "UPDATE_INVENTORY"; payload: InventoryItem[] }
   | { type: "SET_THEME_ID"; payload: string }
   | { type: "SET_DARK_MODE"; payload: boolean }
-  | { type: "SET_USER_API_KEY"; payload: string | null } // Action for user API key
+  | { type: "SET_USER_API_KEY"; payload: string | null }
   | { type: "UPDATE_CRAFTING_RESULT"; payload: { narration: string; consumedItems: string[]; craftedItem: InventoryItem | null; newGameStateString: string } }
-  | { type: "SET_ADVENTURE_TYPE", payload: AdventureType };
-
-
+  | { type: "SET_ADVENTURE_TYPE", payload: AdventureType }
+  | { type: "RESPAWN_CHARACTER"; payload?: { narrationMessage?: string } }; // New action for respawn

@@ -25,7 +25,7 @@ import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "@/lib/constants";
 import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
 import type { Character, CharacterStats } from "@/types/character-types";
 import { initialCharacterState, initialAdventureSettings as defaultInitialAdventureSettings } from "@/context/game-initial-state"; // For creating character structure
-import { calculateMaxStamina, calculateMaxMana, getStarterSkillsForClass, calculateXpToNextLevel } from "@/lib/gameUtils";
+import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, getStarterSkillsForClass, calculateXpToNextLevel } from "@/lib/gameUtils";
 
 
 export function AdventureSetup() {
@@ -161,13 +161,13 @@ export function AdventureSetup() {
             const baseStats = { ...initialCharacterState.stats }; 
             const randomStr = Math.floor(Math.random() * 5) + 3; 
             const randomSta = Math.floor(Math.random() * 5) + 3; 
-            const randomAgi = 15 - randomStr - randomSta;       
+            const randomWis = 15 - randomStr - randomSta;       
             
             const finalStats: CharacterStats = { 
                 ...baseStats, 
                 strength: randomStr,
                 stamina: randomSta,
-                agility: Math.max(1, randomAgi), 
+                wisdom: Math.max(1, randomWis), 
             }; 
 
             const newCharacter: Character = {
@@ -180,8 +180,10 @@ export function AdventureSetup() {
                 background: aiProfile.inferredBackground || `A character from the universe of ${universeName}.`,
                 stats: finalStats,
                 aiGeneratedDescription: aiProfile.detailedDescription, 
-                maxStamina: calculateMaxStamina(finalStats),
-                currentStamina: calculateMaxStamina(finalStats),
+                maxHealth: calculateMaxHealth(finalStats),
+                currentHealth: calculateMaxHealth(finalStats),
+                maxStamina: calculateMaxActionStamina(finalStats),
+                currentStamina: calculateMaxActionStamina(finalStats),
                 maxMana: calculateMaxMana(finalStats, aiProfile.inferredKnowledge || []),
                 currentMana: calculateMaxMana(finalStats, aiProfile.inferredKnowledge || []),
                 learnedSkills: getStarterSkillsForClass(aiProfile.inferredClass || "Immersed Protagonist"),
@@ -203,7 +205,7 @@ export function AdventureSetup() {
     } else { 
         // For Randomized, Custom, or Immersed (Original Character)
         console.log("AdventureSetup: Proceeding to CharacterCreation for type:", adventureTypeFromContext);
-        dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" }); // Ensure this line is present and active
+        dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" }); 
         let descriptionToast = `Proceeding to character creation for your ${adventureTypeFromContext} adventure. Difficulty: ${finalDifficulty}.`;
         if (adventureTypeFromContext === "Randomized") {
             descriptionToast = `Preparing a randomized adventure at ${finalDifficulty} difficulty. Time to create your hero!`;
@@ -352,8 +354,7 @@ export function AdventureSetup() {
                             <Select value={socialFocus} onValueChange={(v) => setSocialFocus(v as SocialFocus)}>
                                 <SelectTrigger id="socialFocus"><SelectValue placeholder="Select social focus..." /></SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="High (Many NPCs, Dialogue Choices)">High</SelectItem><SelectItem value="Medium">Medium</SelectItem>
-                                    <SelectItem value="Low (More Exploration/Combat)">Low</SelectItem>
+                                    <SelectItem value="High (Many NPCs, Dialogue Choices)">High</SelectItem><SelectItem value="Medium">Medium</SelectItem><SelectItem value="Low (More Exploration/Combat)">Low</SelectItem>
                                 </SelectContent>
                             </Select>
                        </div>
@@ -434,4 +435,3 @@ export function AdventureSetup() {
     </div>
   );
 }
-

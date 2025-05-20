@@ -1,28 +1,41 @@
 // src/lib/gameUtils.ts
 
-import type { CharacterStats, Skill } from "@/types/character-types"; // Import from character types
+import type { CharacterStats, Skill } from "@/types/character-types";
 
 /**
- * Calculates the maximum stamina based on character stats.
+ * Calculates the maximum Health Points (HP) based on character's Stamina stat.
  * @param stats - Character's core stats.
- * @returns The maximum stamina points.
+ * @returns The maximum HP.
  */
-export const calculateMaxStamina = (stats: CharacterStats): number => {
-    return Math.max(10, stats.stamina * 10 + 20); // Example calculation: base 20 + 10 per stamina point
+export const calculateMaxHealth = (stats: CharacterStats): number => {
+    // Example: Base HP + Stamina stat * multiplier
+    return Math.max(10, 20 + stats.stamina * 10);
 };
 
 /**
- * Calculates the maximum mana based on character stats and knowledge.
+ * Calculates the maximum Action Stamina (for physical actions) based on character's Strength stat.
+ * @param stats - Character's core stats.
+ * @returns The maximum action stamina points.
+ */
+export const calculateMaxActionStamina = (stats: CharacterStats): number => {
+    // Example: Base Action Stamina + Strength stat * multiplier
+    return Math.max(10, 30 + stats.strength * 5);
+};
+
+/**
+ * Calculates the maximum mana based on character's Wisdom stat and knowledge.
  * @param stats - Character's core stats.
  * @param knowledge - List of character's knowledge areas.
  * @returns The maximum mana points.
  */
 export const calculateMaxMana = (stats: CharacterStats, knowledge: string[]): number => {
     const baseMana = 10;
-    const intellectBonus = stats.intellect * 5; // Bonus from intellect
-    const knowledgeBonus = knowledge.includes("Magic") || knowledge.includes("Arcana") || knowledge.includes("Healing") ? 20 : 0; // Expanded check
-    return baseMana + intellectBonus + knowledgeBonus;
+    // Wisdom is now the primary stat for mana
+    const wisdomBonus = stats.wisdom * 10;
+    const knowledgeBonus = knowledge.some(k => ["Magic", "Arcana", "Healing", "Mysticism", "Lore"].includes(k)) ? 20 : 0;
+    return baseMana + wisdomBonus + knowledgeBonus;
 };
+
 
 /** Represents a universally available starter skill. */
 export const COMMON_STARTER_SKILL: Skill = { name: "Observe", description: "Carefully examine your surroundings.", type: 'Starter' };
@@ -30,44 +43,29 @@ export const COMMON_STARTER_SKILL: Skill = { name: "Observe", description: "Care
 /** Defines starter skills for different character classes. */
 export const CLASS_STARTER_SKILLS: Record<string, Skill[]> = {
     "Warrior": [
-        { name: "Basic Strike", description: "A simple physical attack.", type: 'Starter', staminaCost: 5 },
-        { name: "Shield Block", description: "Raise your shield to deflect an incoming attack.", type: 'Starter', staminaCost: 10 }
+        { name: "Power Strike", description: "A forceful attack consuming action stamina.", type: 'Starter', staminaCost: 10 },
+        { name: "Brace", description: "Prepare for an incoming blow, temporarily increasing resilience.", type: 'Starter', staminaCost: 5 }
     ],
     "Mage": [
-        { name: "Zap", description: "Hurl a small bolt of arcane energy.", type: 'Starter', manaCost: 5 },
-        { name: "Mana Shield", description: "Expend mana to create a temporary magical barrier.", type: 'Starter', manaCost: 10 }
+        { name: "Arcane Bolt", description: "Launch a bolt of magical energy.", type: 'Starter', manaCost: 10 },
+        { name: "Meditate", description: "Focus to slowly recover mana.", type: 'Starter' }
     ],
     "Rogue": [
-        { name: "Sneak", description: "Attempt to move silently or hide.", type: 'Starter', staminaCost: 5 },
-        { name: "Quick Strike", description: "A fast dagger attack.", type: 'Starter', staminaCost: 5 }
+        { name: "Swift Strike", description: "A quick attack that costs less action stamina.", type: 'Starter', staminaCost: 5 },
+        { name: "Stealth", description: "Attempt to become less conspicuous.", type: 'Starter', staminaCost: 5 }
     ],
-    "Scholar": [
-        { name: "Analyze", description: "Examine an object or creature for weaknesses or details.", type: 'Starter' },
-        { name: "Distract", description: "Use words or a minor illusion to divert attention.", type: 'Starter', manaCost: 5 }
+    "Scholar": [ // Wisdom-based class
+        { name: "Insightful Analysis", description: "Use wisdom to uncover hidden details or weaknesses.", type: 'Starter', manaCost: 5 },
+        { name: "Recall Lore", description: "Tap into your knowledge on a subject.", type: 'Starter' }
     ],
-    "Hunter": [
-        { name: "Track", description: "Look for signs of passage or nearby creatures.", type: 'Starter' },
-        { name: "Aimed Shot", description: "Take careful aim for a more accurate ranged attack.", type: 'Starter', staminaCost: 10 }
-    ],
-    "Healer": [
-        { name: "Minor Heal", description: "Restore a small amount of health.", type: 'Starter', manaCost: 10 },
-        { name: "Ward", description: "Place a protective ward against minor harm.", type: 'Starter', manaCost: 5 }
-    ],
-    "Bard": [
-        { name: "Inspire", description: "Bolster courage or morale with a short performance.", type: 'Starter', manaCost: 5 },
-        { name: "Distract", description: "Use music or performance to divert attention.", type: 'Starter', manaCost: 5 }
-    ],
-    "Tinkerer": [
-        { name: "Jury-Rig", description: "Attempt a temporary fix on a broken item.", type: 'Starter', staminaCost: 5 },
-        { name: "Identify Device", description: "Try to understand the function of a mechanism.", type: 'Starter' }
-    ],
-     "Adventurer": [ // Fallback for Adventurer or unknown classes
+     "Adventurer": [ 
         { name: "Basic Strike", description: "A simple physical attack.", type: 'Starter', staminaCost: 5 },
         { name: "First Aid", description: "Attempt to patch up minor wounds.", type: 'Starter', staminaCost: 10 }
     ],
-     "admin000": [ // Dev mode skills
+     "admin000": [ 
         { name: "Dev Power", description: "Access developer abilities.", type: 'Starter' },
     ],
+    // Add more classes and their Wisdom/Strength/Stamina based skills
 };
 
 /**
@@ -76,8 +74,7 @@ export const CLASS_STARTER_SKILLS: Record<string, Skill[]> = {
  * @returns An array of Skill objects, including the common 'Observe' skill.
  */
 export function getStarterSkillsForClass(className: string): Skill[] {
-    const classSkills = CLASS_STARTER_SKILLS[className] || CLASS_STARTER_SKILLS["Adventurer"]; // Use Adventurer as default
-    // Ensure Observe is always included and prevent duplicates if class already has it
+    const classSkills = CLASS_STARTER_SKILLS[className] || CLASS_STARTER_SKILLS["Adventurer"]; 
     const skills = [COMMON_STARTER_SKILL, ...classSkills];
     return Array.from(new Map(skills.map(skill => [skill.name, skill])).values());
 }
@@ -88,9 +85,7 @@ export function getStarterSkillsForClass(className: string): Skill[] {
  * @returns The total XP needed for the next level.
  */
 export const calculateXpToNextLevel = (currentLevel: number): number => {
-  // Example: Adjusted curve for slower early progression, then faster
   const baseXP = 100;
-  // More gradual increase for early levels, then steeper
   return Math.floor(baseXP + (currentLevel -1) * 50 + Math.pow(currentLevel -1, 2.2) * 10);
 };
 
