@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview An AI agent that generates a 4-stage skill tree for a given character class, including stage names.
@@ -15,30 +16,27 @@ import type { SkillTree, SkillTreeStage, Skill } from '@/types/game-types'; // I
 // Define input schema first
 const GenerateSkillTreeInputSchema = z.object({
   characterClass: z.string().describe('The character class for which to generate the skill tree (e.g., Warrior, Mage, Rogue, Scholar).'),
-  // Optional: Add character traits/knowledge for more tailored trees later
-  // characterTraits: z.array(z.string()).optional().describe("Character's defining traits."),
-  // characterKnowledge: z.array(z.string()).optional().describe("Character's areas of expertise."),
 });
 
 // Define the structure of a single skill
 const SkillSchema = z.object({
     name: z.string().describe("The name of the skill."),
     description: z.string().describe("A brief description of what the skill does or represents."),
-    manaCost: z.number().optional().describe("Mana cost to use the skill, if any."), // Add costs
-    staminaCost: z.number().optional().describe("Stamina cost to use the skill, if any."), // Add costs
+    manaCost: z.number().optional().describe("Mana cost to use the skill, if any."),
+    staminaCost: z.number().optional().describe("Stamina cost to use the skill, if any."),
 });
 
 // Define the structure of a skill tree stage
 const SkillTreeStageSchema = z.object({
-    stage: z.number().min(0).max(4).describe("The progression stage (0-4). Stage 0 is 'Potential'."), // Allow stage 0
-    stageName: z.string().describe("A thematic name for this stage (e.g., Apprentice, Adept, Master, Grandmaster). Stage 0 should be named 'Potential' or similar."), // Added stage name
-    skills: z.array(SkillSchema).min(0).max(3).describe("A list of 0-3 skills unlocked at this stage. Stage 0 has no skills."), // Define min/max skills per stage, 0 for stage 0
+    stage: z.number().min(0).max(4).describe("The progression stage (0-4). Stage 0 is 'Potential'."),
+    stageName: z.string().describe("A thematic name for this stage (e.g., Apprentice, Adept, Master, Grandmaster). Stage 0 should be named 'Potential' or similar."),
+    skills: z.array(SkillSchema).min(0).max(3).describe("A list of 0-3 skills unlocked at this stage. Stage 0 has no skills."),
 });
 
 // Define the final output schema (Skill Tree)
 const GenerateSkillTreeOutputSchema = z.object({
     className: z.string().describe("The character class this skill tree belongs to."),
-    stages: z.array(SkillTreeStageSchema).length(5).describe("An array containing exactly 5 skill tree stages (0-4)."), // Ensure 5 stages
+    stages: z.array(SkillTreeStageSchema).length(5).describe("An array containing exactly 5 skill tree stages (0-4)."),
 });
 
 // --- Exported Types (Derived from internal schemas) ---
@@ -47,7 +45,7 @@ export type GenerateSkillTreeOutput = z.infer<typeof GenerateSkillTreeOutputSche
 
 // --- Exported Async Function ---
 export async function generateSkillTree(input: GenerateSkillTreeInput): Promise<GenerateSkillTreeOutput> {
-  console.log("Initiating skill tree generation for class:", input.characterClass);
+  console.log("generateSkillTree AI Flow: Initiating skill tree generation for class:", input.characterClass);
   return generateSkillTreeFlow(input);
 }
 
@@ -55,7 +53,7 @@ export async function generateSkillTree(input: GenerateSkillTreeInput): Promise<
 const generateSkillTreePrompt = ai.definePrompt({
   name: 'generateSkillTreePrompt',
   input: { schema: GenerateSkillTreeInputSchema },
-  output: { schema: GenerateSkillTreeOutputSchema }, // Use the renamed schema
+  output: { schema: GenerateSkillTreeOutputSchema },
   prompt: `You are a creative game designer crafting skill trees for the text adventure "Endless Tales". Generate a unique and thematic 5-stage skill tree (stages 0 through 4) for the following character class:
 
 **Character Class:** {{{characterClass}}}
@@ -97,9 +95,8 @@ const generateSkillTreeFlow = ai.defineFlow<
     outputSchema: GenerateSkillTreeOutputSchema,
   },
   async (input) => {
-     console.log("generateSkillTreeFlow: Sending to generateSkillTreePrompt:", JSON.stringify(input, null, 2));
+     console.log("generateSkillTreeFlow: Sending to prompt with input:", JSON.stringify(input, null, 2));
      let output: GenerateSkillTreeOutput | undefined;
-     let errorOccurred = false;
      let attempt = 0;
      const maxAttempts = 3;
 
@@ -110,66 +107,38 @@ const generateSkillTreeFlow = ai.defineFlow<
             const result = await generateSkillTreePrompt(input);
             output = result.output;
 
-             // Basic validation of the output structure
-             if (!output || !output.className || !Array.isArray(output.stages) || output.stages.length !== 5) { // Expect 5 stages (0-4)
-                 throw new Error(`AI returned invalid skill tree structure (missing class, stages array, or incorrect stage count - expected 5). Got: ${JSON.stringify(output).substring(0,100)}`);
+             if (!output || !output.className || !Array.isArray(output.stages) || output.stages.length !== 5) {
+                 throw new Error(`AI returned invalid skill tree structure (attempt ${attempt}).`);
              }
              for (const stage of output.stages) {
-                 if (stage.stage === undefined || stage.stage < 0 || stage.stage > 4) {
-                     throw new Error(`AI returned invalid stage number: ${stage.stage}. Must be 0-4.`);
-                 }
-                 if (!stage.stageName) {
-                     throw new Error(`AI returned invalid structure for stage ${stage.stage} (missing stageName).`);
-                 }
-                 if (stage.stage === 0 && (!stage.skills || stage.skills.length !== 0)) {
-                     throw new Error(`AI returned invalid structure for stage 0 (skills array must be empty). Got: ${stage.skills?.length}`);
-                 }
-                 if (stage.stage > 0 && (!stage.skills || stage.skills.length < 1 || stage.skills.length > 3)) {
-                    throw new Error(`AI returned invalid skill count for stage ${stage.stage} (must be 1-3). Got: ${stage.skills?.length}`);
-                 }
-                 // Validate skills within stages > 0
+                 if (stage.stage === undefined || stage.stage < 0 || stage.stage > 4) throw new Error(`AI returned invalid stage number: ${stage.stage} (attempt ${attempt}).`);
+                 if (!stage.stageName) throw new Error(`AI returned invalid structure for stage ${stage.stage} (missing stageName, attempt ${attempt}).`);
+                 if (stage.stage === 0 && (!stage.skills || stage.skills.length !== 0)) throw new Error(`AI returned invalid structure for stage 0 (skills array must be empty, attempt ${attempt}).`);
+                 if (stage.stage > 0 && (!stage.skills || stage.skills.length < 1 || stage.skills.length > 3)) throw new Error(`AI returned invalid skill count for stage ${stage.stage} (must be 1-3, attempt ${attempt}).`);
                  if (stage.stage > 0 && stage.skills) {
                     for(const skill of stage.skills) {
-                        if (!skill.name || !skill.description) {
-                             throw new Error(`AI returned invalid skill definition in stage ${stage.stage} (missing name or description).`);
-                        }
-                        // Optional cost validation (check if number if present)
-                        if (skill.manaCost !== undefined && typeof skill.manaCost !== 'number') {
-                            throw new Error(`AI returned invalid manaCost type for skill "${skill.name}" in stage ${stage.stage}.`);
-                        }
-                        if (skill.staminaCost !== undefined && typeof skill.staminaCost !== 'number') {
-                             throw new Error(`AI returned invalid staminaCost type for skill "${skill.name}" in stage ${stage.stage}.`);
-                        }
+                        if (!skill.name || !skill.description) throw new Error(`AI returned invalid skill definition in stage ${stage.stage} (attempt ${attempt}).`);
+                        if (skill.manaCost !== undefined && typeof skill.manaCost !== 'number') throw new Error(`AI returned invalid manaCost for skill "${skill.name}" (attempt ${attempt}).`);
+                        if (skill.staminaCost !== undefined && typeof skill.staminaCost !== 'number') throw new Error(`AI returned invalid staminaCost for skill "${skill.name}" (attempt ${attempt}).`);
                     }
                  }
              }
-             // Ensure Stage 0 exists and has a proper name
              const stage0 = output.stages.find(s => s.stage === 0);
-             if (!stage0 || !stage0.stageName || stage0.skills.length !== 0) {
-                 throw new Error("AI failed to generate a valid Stage 0 (Potential/Initiate) with an empty skill list.");
-             }
-
+             if (!stage0 || !stage0.stageName || stage0.skills.length !== 0) throw new Error("AI failed to generate a valid Stage 0 (attempt ${attempt}).");
 
         } catch (err: any) {
-            console.error(`Skill tree generation attempt ${attempt} failed:`, err);
-            errorOccurred = true;
+            console.error(`Skill tree generation attempt ${attempt} failed:`, err.message);
             if (attempt >= maxAttempts) {
-                 // If all attempts fail, throw a more specific error or return a default/error state
                  throw new Error(`Failed to generate valid skill tree for class "${input.characterClass}" after ${maxAttempts} attempts. Last error: ${err.message}`);
             }
-            // Optional: Wait before retrying
             await new Promise(resolve => setTimeout(resolve, 500 * attempt));
         }
      }
 
-
      if (!output) {
-        // Should not happen if the loop completes and throws, but as a fallback
-        throw new Error(`Skill tree generation failed for class "${input.characterClass}".`);
+        throw new Error(`Skill tree generation failed for class "${input.characterClass}" after all attempts.`);
      }
-
-     console.log("generateSkillTreeFlow: Received valid skill tree from generateSkillTreePrompt:", JSON.stringify(output, null, 2));
-     return output; // Return the validated output
+     console.log("generateSkillTreeFlow: Received valid skill tree from prompt:", JSON.stringify(output, null, 2));
+     return output;
   }
 );
-

@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview An AI agent that narrates the story of a text adventure game based on player actions and game state.
@@ -28,7 +29,6 @@ const BranchingChoiceSchema = z.object({
     ),
 });
 
-// Updated Character input for the new stat system
 const CharacterInputForPromptSchema = z.object({
     name: z.string().describe("The character's name."),
     class: z.string().describe("The character's class (e.g., Warrior, Mage). For Immersed mode, this might be an archetype or role from the universe like \"Jedi Knight\" or \"Immersed Protagonist\"."),
@@ -36,7 +36,7 @@ const CharacterInputForPromptSchema = z.object({
     traits: z.array(z.string()).describe('A list of character traits.'),
     knowledge: z.array(z.string()).describe('A list of areas of knowledge.'),
     background: z.string().describe("The character's background."),
-    stats: z.object({ // Only STR, STA, WIS
+    stats: z.object({
       strength: z.number(),
       stamina: z.number(),
       wisdom: z.number(),
@@ -67,7 +67,7 @@ const CharacterInputForPromptSchema = z.object({
 
 
 const NarrateAdventureInputSchema = z.object({
-  character: CharacterInputForPromptSchema, // Use the updated character input schema
+  character: CharacterInputForPromptSchema,
   playerChoice: z.string().describe('The action the player chose to perform.'),
   gameState: z.string().describe('The current game state.'),
   previousNarration: z.string().optional().describe('The previous narration in the story.'),
@@ -90,7 +90,6 @@ const NarrateAdventureInputSchema = z.object({
     characterOriginType: z.enum(['existing', 'original']).optional().describe('For Immersed mode: Whether the character is existing or original.'),
   }),
   turnCount: z.number().describe('The current turn number.'),
-  // Boolean flags for prompt logic
   isCustomAdventure: z.boolean().optional(),
   isRandomizedAdventure: z.boolean().optional(),
   isImmersedAdventure: z.boolean().optional(),
@@ -100,7 +99,7 @@ const NarrateAdventureInputSchema = z.object({
 const NarrateAdventureOutputSchema = z.object({
   narration: z.string().describe('The next segment of the story.'),
   updatedGameState: z.string().describe('The updated game state.'),
-  updatedStats: z.object({ // Only STR, STA, WIS
+  updatedStats: z.object({
     strength: z.number().optional(),
     stamina: z.number().optional(),
     wisdom: z.number().optional(),
@@ -128,54 +127,22 @@ export type NarrateAdventureOutput = z.infer<typeof NarrateAdventureOutputSchema
 export async function narrateAdventure(
   input: NarrateAdventureInput
 ): Promise<NarrateAdventureOutput> {
-  console.log("narrateAdventure: Function called with input:", JSON.stringify(input, null, 2).substring(0, 500) + "...");
+  console.log(`NarrateAdventure AI Flow: Called for Turn ${input.turnCount}, Action: "${input.playerChoice.substring(0,50)}..."`);
   if (input.character.class === 'admin000') {
-    console.log("Developer Mode detected. Bypassing AI narration.");
-    return processDevCommand(input);
+    console.log("NarrateAdventure AI Flow: Developer Mode detected. Bypassing AI narration.");
+    // Assuming processDevCommand is defined elsewhere or you'll adapt it.
+    // For now, returning a simple dev response:
+     return {
+        narration: `(Dev Mode) Action: ${input.playerChoice}`,
+        updatedGameState: `${input.gameState} (Dev Action processed)`
+     };
   }
   return narrateAdventureFlow(input);
 }
 
-function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput {
-    let devNarration = `(Developer Mode) Player chose: "${input.playerChoice}".`;
-    const command = input.playerChoice.trim().toLowerCase();
-    const parts = command.split(' ');
-    const baseCommand = parts[0];
-    const value = parts.length > 1 ? parts.slice(1).join(' ') : undefined;
+// Helper function for developer commands (if needed by the flow directly)
+// function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput { ... }
 
-    let updatedStats: Partial<CharacterStats> | undefined;
-    let xpGained: number | undefined;
-    let progressedToStage: number | undefined;
-    let healthChange: number | undefined;
-
-    if (baseCommand === '/xp' && value) {
-        const amount = parseInt(value, 10);
-        if (!isNaN(amount)) { xpGained = amount; devNarration += ` Granted ${amount} XP.`; } 
-        else { devNarration += " - Invalid XP amount."; }
-    } else if (baseCommand === '/stage' && value) {
-        const stageNum = parseInt(value, 10);
-        if (!isNaN(stageNum) && stageNum >= 0 && stageNum <= 4) { progressedToStage = stageNum; devNarration += ` Set skill stage to ${stageNum}.`; } 
-        else { devNarration += " - Invalid stage number (0-4)."; }
-    } else if (baseCommand === '/additem' && value) {
-        devNarration += ` Attempted to add item: ${value}. (Dispatch ADD_ITEM in reducer)`;
-    } else if (baseCommand === '/removeitem' && value) {
-        devNarration += ` Attempted to remove item: ${value}. (Dispatch REMOVE_ITEM in reducer)`;
-    } else if (baseCommand === '/health' && value) {
-        const amount = parseInt(value, 10);
-        if (!isNaN(amount)) { healthChange = amount; devNarration += ` Changed health by ${amount}.`; }
-        else { devNarration += " - Invalid health amount."; }
-    } else {
-        devNarration += " Action processed in developer mode. Restrictions bypassed.";
-    }
-    return {
-        narration: devNarration,
-        updatedGameState: `${input.gameState} (Dev Action: ${input.playerChoice}, Turn: ${input.turnCount + 1})`,
-        xpGained,
-        progressedToStage,
-        updatedStats,
-        healthChange
-    };
-}
 
 const narrateAdventurePrompt = ai.definePrompt({
   name: 'narrateAdventurePrompt',
@@ -194,8 +161,8 @@ const narrateAdventurePrompt = ai.definePrompt({
 *   Resources: Health {{character.currentHealth}}/{{character.maxHealth}}, Action Stamina {{character.currentStamina}}/{{character.maxStamina}}, Mana {{character.currentMana}}/{{character.maxMana}}
 *   Level: {{character.level}} (XP: {{character.xp}}/{{character.xpToNextLevel}})
 *   Learned Skills: {{#if character.learnedSkills}}{{#each character.learnedSkills}}{{{this}}}{{#unless @last}}, {{/unless}}{{/each}}{{else}}None{{/if}}
-*   Reputation: {{#if character.reputationString}}{{character.reputationString}}{{else}}None{{/if}}
-*   NPC Relationships: {{#if character.npcRelationshipsString}}{{character.npcRelationshipsString}}{{else}}None{{/if}}
+*   Reputation: {{{character.reputationString}}}
+*   NPC Relationships: {{{character.npcRelationshipsString}}}
 
 **Game Settings & Context:**
 *   Turn: {{{turnCount}}}
@@ -269,26 +236,45 @@ const narrateAdventureFlow = ai.defineFlow(
     outputSchema: NarrateAdventureOutputSchema,
   },
   async (input: NarrateAdventureInput) => {
-    console.log("narrateAdventureFlow: Starting with input keys:", Object.keys(input));
+    const { character, adventureSettings, turnCount, playerChoice } = input;
+    console.log(`narrateAdventureFlow: Processing Turn ${turnCount} for ${character.name}. Action: "${playerChoice.substring(0,100)}..."`);
+    
     const promptInput = {
       ...input,
       character: {
-        ...input.character,
-        reputationString: input.character.reputationString || "None",
-        npcRelationshipsString: input.character.npcRelationshipsString || "None",
-      }
+        ...character,
+        reputationString: character.reputationString || "None specified",
+        npcRelationshipsString: character.npcRelationshipsString || "None specified",
+      },
+      isCustomAdventure: adventureSettings.adventureType === "Custom",
+      isRandomizedAdventure: adventureSettings.adventureType === "Randomized",
+      isImmersedAdventure: adventureSettings.adventureType === "Immersed",
     };
-    console.log("narrateAdventureFlow: Sending to narrateAdventurePrompt:", JSON.stringify(promptInput, null, 2).substring(0, 500) + "...");
-    const {output} = await narrateAdventurePrompt(promptInput);
-    console.log("narrateAdventureFlow: Received from narrateAdventurePrompt:", JSON.stringify(output, null, 2).substring(0, 500) + "...");
-     if (!output) {
-        console.error("narrateAdventureFlow: AI returned undefined output.");
+
+    console.log("narrateAdventureFlow: Sending to narrateAdventurePrompt with full input:", JSON.stringify(promptInput, null, 2).substring(0, 1000) + "...");
+    
+    let output: NarrateAdventureOutput | undefined;
+    try {
+        const result = await narrateAdventurePrompt(promptInput);
+        output = result.output;
+        console.log("narrateAdventureFlow: Received from narrateAdventurePrompt:", JSON.stringify(output, null, 2).substring(0, 1000) + "...");
+    } catch (e: any) {
+        console.error("narrateAdventureFlow: ERROR calling narrateAdventurePrompt", e);
+        output = {
+            narration: `The AI seems to be struggling with the weight of the world... (Error: ${e.message || 'Unknown AI error'})`,
+            updatedGameState: input.gameState, // Return old game state on error
+        };
+    }
+
+
+     if (!output || !output.narration || !output.updatedGameState) {
+        console.error("narrateAdventureFlow: AI returned undefined or incomplete output. Fallback initiated.");
+        const fallbackNarration = `The threads of fate are tangled. The AI narrator is momentarily speechless regarding "${playerChoice.substring(0,50)}...". Try a different approach?`;
         return {
-            narration: "The AI seems to be pondering... or perhaps napping. (No output received)",
-            updatedGameState: input.gameState,
+            narration: fallbackNarration,
+            updatedGameState: `${input.gameState} (AI Narrator Error - Turn: ${turnCount + 1})`,
         };
     }
     return output;
   }
 );
-
