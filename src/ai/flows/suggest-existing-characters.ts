@@ -1,0 +1,59 @@
+
+'use server';
+/**
+ * @fileOverview An AI agent that suggests existing character names for a given universe.
+ *
+ * - suggestExistingCharacters - A function that suggests character names.
+ * - SuggestExistingCharactersInput - The input type.
+ * - SuggestExistingCharactersOutput - The return type.
+ */
+
+import {ai}from '@/ai/ai-instance';
+import {z} from 'genkit';
+
+const SuggestExistingCharactersInputSchema = z.object({
+  universeName: z.string().describe('The name of the fictional universe (e.g., Star Wars, Harry Potter).'),
+});
+
+const SuggestExistingCharactersOutputSchema = z.object({
+  suggestedNames: z.array(z.string()).max(5).describe('An array of 3-5 suggested existing character names from the universe.'),
+});
+
+export type SuggestExistingCharactersInput = z.infer<typeof SuggestExistingCharactersInputSchema>;
+export type SuggestExistingCharactersOutput = z.infer<typeof SuggestExistingCharactersOutputSchema>;
+
+export async function suggestExistingCharacters(input: SuggestExistingCharactersInput): Promise<SuggestExistingCharactersOutput> {
+  return suggestExistingCharactersFlow(input);
+}
+
+const prompt = ai.definePrompt({
+  name: 'suggestExistingCharactersPrompt',
+  input: { schema: SuggestExistingCharactersInputSchema },
+  output: { schema: SuggestExistingCharactersOutputSchema },
+  prompt: `You are a creative assistant. Given the fictional universe "{{{universeName}}}", please suggest 3 to 5 well-known existing character names from this universe.
+Focus on main or iconic characters.
+Return *only* an array of strings with the names.`,
+});
+
+const suggestExistingCharactersFlow = ai.defineFlow(
+  {
+    name: 'suggestExistingCharactersFlow',
+    inputSchema: SuggestExistingCharactersInputSchema,
+    outputSchema: SuggestExistingCharactersOutputSchema,
+  },
+  async (input) => {
+    console.log("suggestExistingCharactersFlow: Input received:", input);
+    const {output} = await prompt(input);
+    if (!output || !Array.isArray(output.suggestedNames) || output.suggestedNames.length === 0) {
+      console.warn("suggestExistingCharactersFlow: AI did not return valid suggestions. Returning fallback.");
+      // Fallback in case AI fails
+      let fallbackName = "An Iconic Hero";
+      if (input.universeName?.toLowerCase().includes("star wars")) fallbackName = "Luke Skywalker";
+      else if (input.universeName?.toLowerCase().includes("harry potter")) fallbackName = "Harry Potter";
+      else if (input.universeName?.toLowerCase().includes("lord of the rings")) fallbackName = "Frodo Baggins";
+      return { suggestedNames: [fallbackName, "A Mysterious Stranger", "The Chosen One"] };
+    }
+    console.log("suggestExistingCharactersFlow: Output generated:", output);
+    return output;
+  }
+);

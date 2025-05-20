@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings, Globe, ScrollText, ShieldAlert, Sparkles, AlertTriangle, BookOpen, Atom, Drama, Lightbulb, Users as UsersIcon, Puzzle, Mic2, UserPlus, UserCheck, Loader2 } from "lucide-react"; // Added new icons
+import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings, Globe, ScrollText, ShieldAlert, Sparkles, AlertTriangle, BookOpen, Atom, Drama, Lightbulb as LightbulbIcon, Users as UsersIcon, Puzzle, Mic2, UserPlus, UserCheck, Loader2 } from "lucide-react"; // Added LightbulbIcon
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -23,8 +23,10 @@ import {
 import type { AdventureSettings, DifficultyLevel, AdventureType, GenreTheme, MagicSystem, TechLevel, DominantTone, CombatFrequency, PuzzleFrequency, SocialFocus } from "@/types/adventure-types";
 import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "@/lib/constants";
 import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
+import { suggestExistingCharacters } from "@/ai/flows/suggest-existing-characters"; // Import new AI flow
+import { suggestOriginalCharacterConcepts } from "@/ai/flows/suggest-original-character-concepts"; // Import new AI flow
 import type { Character, CharacterStats } from "@/types/character-types";
-import { initialCharacterState, initialAdventureSettings as defaultInitialAdventureSettings } from "@/context/game-initial-state"; // For creating character structure
+import { initialCharacterState, initialAdventureSettings as defaultInitialAdventureSettings } from "@/context/game-initial-state";
 import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, getStarterSkillsForClass, calculateXpToNextLevel } from "@/lib/gameUtils";
 
 
@@ -58,6 +60,7 @@ export function AdventureSetup() {
   
   const [customError, setCustomError] = useState<string | null>(null);
   const [isLoadingImmersedCharacter, setIsLoadingImmersedCharacter] = useState(false);
+  const [isSuggestingNameLoading, setIsSuggestingNameLoading] = useState(false); // New state for suggestion loading
 
   useEffect(() => {
     console.log("AdventureSetup: Context adventureSettings changed or component mounted. adventureTypeFromContext:", adventureTypeFromContext);
@@ -108,6 +111,39 @@ export function AdventureSetup() {
      return true;
   };
 
+  const handleSuggestName = async () => {
+    if (!universeName.trim()) {
+      toast({ title: "Universe Name Required", description: "Please enter a universe name to get suggestions.", variant: "destructive" });
+      return;
+    }
+    setIsSuggestingNameLoading(true);
+    setCustomError(null);
+    try {
+      if (characterOriginType === 'existing') {
+        const result = await suggestExistingCharacters({ universeName });
+        if (result.suggestedNames && result.suggestedNames.length > 0) {
+          setPlayerCharacterConcept(result.suggestedNames[0]); // Use the first suggestion
+          toast({ title: "Suggestion Applied!", description: `Suggested: ${result.suggestedNames[0]}` });
+        } else {
+          toast({ title: "No Suggestions", description: "Could not find suggestions for this universe.", variant: "default" });
+        }
+      } else { // 'original'
+        const result = await suggestOriginalCharacterConcepts({ universeName });
+        if (result.suggestedConcepts && result.suggestedConcepts.length > 0) {
+          setPlayerCharacterConcept(result.suggestedConcepts[0]); // Use the first suggestion
+          toast({ title: "Suggestion Applied!", description: `Suggested: ${result.suggestedConcepts[0]}` });
+        } else {
+          toast({ title: "No Suggestions", description: "Could not generate concepts for this universe.", variant: "default" });
+        }
+      }
+    } catch (err) {
+      console.error("AdventureSetup: Failed to get name/concept suggestion:", err);
+      toast({ title: "Suggestion Error", description: "Could not fetch suggestions at this time.", variant: "destructive" });
+    } finally {
+      setIsSuggestingNameLoading(false);
+    }
+  };
+
 
   const handleStartAdventure = async () => {
     setCustomError(null);
@@ -152,10 +188,10 @@ export function AdventureSetup() {
         toast({ title: "Fetching Character Lore...", description: `Preparing ${playerCharacterConcept} from ${universeName}...` });
         try {
             const aiProfile: GenerateCharacterDescriptionOutput = await generateCharacterDescription({
-                 characterDescription: playerCharacterConcept, 
+                 characterDescription: playerCharacterConcept, // This is the character's name
                  isImmersedMode: true,
                  universeName: universeName,
-                 playerCharacterConcept: playerCharacterConcept 
+                 playerCharacterConcept: playerCharacterConcept // Pass character's name again for consistency in AI prompt
             });
 
             const baseStats = { ...initialCharacterState.stats }; 
@@ -246,7 +282,7 @@ export function AdventureSetup() {
                             ? "Start Adventure" 
                             : "Proceed to Character Creation";
                             
-  const isProceedDisabled = customError !== null || isLoadingImmersedCharacter ||
+  const isProceedDisabled = customError !== null || isLoadingImmersedCharacter || isSuggestingNameLoading ||
                             (adventureTypeFromContext === 'Custom' && (!worldType.trim() || !mainQuestline.trim() || !genreTheme || !magicSystem || !techLevel || !dominantTone || !startingSituation.trim() )) ||
                             (adventureTypeFromContext === 'Immersed' && (!universeName.trim() || !playerCharacterConcept.trim()));
 
@@ -385,16 +421,28 @@ export function AdventureSetup() {
                     </div>
                 </RadioGroup>
 
-               <div className="space-y-2">
+               <div className="space-y-1">
                     <Label htmlFor="playerCharacterConcept" className="flex items-center gap-1"><ScrollText className="w-4 h-4"/> 
                         {characterOriginType === 'existing' ? "Existing Character's Name" : "Your Original Character Concept/Role"}
                     </Label>
-                   <Input 
-                    id="playerCharacterConcept" 
-                    value={playerCharacterConcept} 
-                    onChange={(e) => setPlayerCharacterConcept(e.target.value)} 
-                    placeholder={characterOriginType === 'existing' ? "e.g., Harry Potter, Luke Skywalker" : "e.g., A rebel pilot, a new student at Hogwarts"} 
-                    className={customError && !playerCharacterConcept.trim() ? 'border-destructive' : ''}/>
+                    <div className="flex items-center gap-2">
+                       <Input 
+                        id="playerCharacterConcept" 
+                        value={playerCharacterConcept} 
+                        onChange={(e) => setPlayerCharacterConcept(e.target.value)} 
+                        placeholder={characterOriginType === 'existing' ? "e.g., Harry Potter, Luke Skywalker" : "e.g., A rebel pilot, a new student at Hogwarts"} 
+                        className={`flex-grow ${customError && !playerCharacterConcept.trim() ? 'border-destructive' : ''}`}/>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={handleSuggestName}
+                          disabled={isSuggestingNameLoading || !universeName.trim()}
+                          aria-label="Suggest Character Name/Concept"
+                        >
+                          {isSuggestingNameLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LightbulbIcon className="h-4 w-4" />}
+                        </Button>
+                    </div>
                 </div>
             </div>
           )}
@@ -425,10 +473,10 @@ export function AdventureSetup() {
           </div>
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t border-foreground/10">
-           <Button variant="outline" onClick={handleBack} disabled={isLoadingImmersedCharacter}> <ArrowLeft className="mr-2 h-4 w-4" /> Back to Main Menu </Button>
+           <Button variant="outline" onClick={handleBack} disabled={isLoadingImmersedCharacter || isSuggestingNameLoading}> <ArrowLeft className="mr-2 h-4 w-4" /> Back to Main Menu </Button>
            <Button onClick={handleStartAdventure} disabled={isProceedDisabled} className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"> 
-            {isLoadingImmersedCharacter && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isLoadingImmersedCharacter ? "Preparing Character..." : proceedButtonText}
+            {(isLoadingImmersedCharacter || isSuggestingNameLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isLoadingImmersedCharacter ? "Preparing Character..." : (isSuggestingNameLoading ? "Suggesting..." : proceedButtonText)}
            </Button>
         </CardFooter>
       </CardboardCard>
