@@ -1,3 +1,4 @@
+
 // src/components/screens/SettingsPanel.tsx
 "use client";
 
@@ -13,12 +14,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input"; // Import Input
-import { Palette, Moon, Sun, Paintbrush, KeyRound, CheckCircle, XCircle } from "lucide-react"; // Added KeyRound and status icons
+import { Input } from "@/components/ui/input";
+import { Palette, Moon, Sun, Paintbrush, KeyRound, CheckCircle, XCircle } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { THEMES } from "@/lib/themes";
-import { useToast } from "@/hooks/use-toast"; // Import useToast
+import { useToast } from "@/hooks/use-toast";
 
 interface SettingsPanelProps {
     isOpen: boolean;
@@ -29,10 +30,9 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
     const { state, dispatch } = useGame();
     const { selectedThemeId, isDarkMode, userGoogleAiApiKey } = state;
     const [apiKeyInput, setApiKeyInput] = useState(userGoogleAiApiKey || "");
-    const { toast } = useToast(); // Initialize toast
+    const { toast } = useToast();
 
     useEffect(() => {
-        // Sync local input with global state if global state changes (e.g., loaded from storage)
         setApiKeyInput(userGoogleAiApiKey || "");
     }, [userGoogleAiApiKey]);
 
@@ -65,7 +65,7 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
 
     return (
         <SheetContent side="right" className="w-[90vw] sm:w-[400px] flex flex-col">
-            <SheetHeader className="border-b pb-4">
+            <SheetHeader className="p-4 border-b">
                 <SheetTitle className="flex items-center gap-2 text-xl">
                     <Palette className="w-5 h-5" /> Settings
                 </SheetTitle>
@@ -73,7 +73,7 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
                     Customize your game experience.
                 </SheetDescription>
             </SheetHeader>
-            <div className="flex-grow p-4 space-y-6 overflow-y-auto">
+            <div className="flex-grow p-3 space-y-4 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent"> {/* Reduced padding and spacing */}
                 {/* Appearance Section */}
                 <div className="space-y-4">
                      <h3 className="text-lg font-medium border-b pb-1">Appearance</h3>
@@ -92,21 +92,22 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
 
                      <div className="space-y-2">
                         <Label className="flex items-center gap-1"><Paintbrush className="w-4 h-4"/> Color Theme</Label>
-                         <div className="grid grid-cols-3 gap-2">
+                         <div className="flex flex-wrap gap-2"> {/* Changed from grid to flex-wrap */}
                              {THEMES.map(theme => (
                                  <Button
                                      key={theme.id}
                                      variant="outline"
                                      size="sm"
                                      className={cn(
-                                         "justify-start h-8 text-xs",
+                                         "justify-start h-auto py-1.5 px-2 text-xs", // Adjusted padding for better fit
                                          selectedThemeId === theme.id && "ring-2 ring-ring ring-offset-2 ring-offset-background"
                                      )}
                                      onClick={() => handleThemeChange(theme.id)}
                                  >
                                      <span
-                                         className="w-3 h-3 rounded-full mr-2 border"
+                                         className="w-3 h-3 rounded-sm mr-2 border shrink-0" // Added shrink-0
                                          style={{ backgroundColor: `hsl(${theme.light['--accent']})` }}
+                                         aria-hidden="true"
                                      ></span>
                                      {theme.name}
                                  </Button>
@@ -127,7 +128,7 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
                         <Label htmlFor="api-key-input">Google AI API Key</Label>
                         <Input
                             id="api-key-input"
-                            type="password" // Keep it as password for some obfuscation
+                            type="password"
                             value={apiKeyInput}
                             onChange={(e) => setApiKeyInput(e.target.value)}
                             placeholder="Enter your Google GenAI API Key"
@@ -163,7 +164,7 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
 
 
             </div>
-            <SheetFooter className="border-t pt-4">
+            <SheetFooter className="border-t pt-4 p-3"> {/* Added p-3 to footer as well */}
                 <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
             </SheetFooter>
         </SheetContent>
