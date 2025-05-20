@@ -17,6 +17,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Endless Tales', // Updated Title
   description: 'An AI-driven text adventure game.', // Updated Description
+  // Removed explicit icons configuration to rely on Next.js default behavior (e.g., app/icon.ico or app/favicon.ico)
 };
 
 export default function RootLayout({
