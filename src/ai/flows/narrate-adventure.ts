@@ -146,6 +146,8 @@ function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput
     let xpGained: number | undefined;
     let progressedToStage: number | undefined;
     let healthChange: number | undefined;
+    let staminaChange: number | undefined;
+    let manaChange: number | undefined;
     let updatedTraits: string[] | undefined;
     let updatedKnowledge: string[] | undefined;
     let gainedSkill: z.infer<typeof SkillSchema> | undefined;
@@ -167,6 +169,24 @@ function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput
         } else {
             devNarration += " - Invalid health amount.";
         }
+    } else if (baseCommand === '/stamina' && value && input.character) {
+        const amount = parseInt(value, 10);
+        if (!isNaN(amount)) {
+            const newStamina = Math.max(0, Math.min(input.character.maxStamina, input.character.currentStamina + amount));
+            staminaChange = newStamina - input.character.currentStamina;
+            devNarration += ` Adjusted action stamina by ${staminaChange}. New action stamina: ${newStamina}.`;
+        } else {
+            devNarration += " - Invalid action stamina amount.";
+        }
+    } else if (baseCommand === '/mana' && value && input.character) {
+        const amount = parseInt(value, 10);
+        if (!isNaN(amount)) {
+            const newMana = Math.max(0, Math.min(input.character.maxMana, input.character.currentMana + amount));
+            manaChange = newMana - input.character.currentMana;
+            devNarration += ` Adjusted mana by ${manaChange}. New mana: ${newMana}.`;
+        } else {
+            devNarration += " - Invalid mana amount.";
+        }
     } else if (baseCommand === '/addtrait' && value && input.character) {
         updatedTraits = [...(input.character.traits || []), value];
         devNarration += ` Added trait: ${value}.`;
@@ -174,7 +194,7 @@ function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput
         updatedKnowledge = [...(input.character.knowledge || []), value];
         devNarration += ` Added knowledge: ${value}.`;
     } else if (baseCommand === '/addskill' && value && input.character) {
-        gainedSkill = { name: value, description: "Developer added skill" };
+        gainedSkill = { name: value, description: "Developer added skill", type: 'Learned' };
         devNarration += ` Added skill: ${value}.`;
     } else {
         devNarration += " Action processed. Dev restrictions bypassed.";
@@ -186,6 +206,8 @@ function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput
         xpGained,
         progressedToStage,
         healthChange,
+        staminaChange,
+        manaChange,
         updatedTraits,
         updatedKnowledge,
         gainedSkill,
@@ -308,50 +330,39 @@ const narrateAdventureFlow = ai.defineFlow(
       isImmersedAdventure: adventureSettings.adventureType === "Immersed",
     };
 
-    console.log("narrateAdventureFlow: Sending to narrateAdventurePrompt with full input:", JSON.stringify(promptInput, null, 2).substring(0, 1000) + "...");
+    console.log("narrateAdventureFlow: Sending to narrateAdventurePrompt with full input:", JSON.stringify(promptInput, null, 2).substring(0, 2000) + "..."); // Increased log substring
 
     let output: NarrateAdventureOutput | undefined;
-    const genericChoices = [
+    const genericChoices: NarrateAdventureOutput['branchingChoices'] = [ // Ensure type safety
         { text: "Look around more closely.", consequenceHint: "May reveal new details." },
         { text: "Consider your next move carefully.", consequenceHint: "Take a moment to think." },
-        { text: "Check your inventory.", consequenceHint: "Review your belongings." },
-        { text: "Try a different approach.", consequenceHint: "Think outside the box." }
+        { text: "Check your inventory and status.", consequenceHint: "Review your belongings and condition." },
+        { text: "Rest here for a moment.", consequenceHint: "Regain composure or stamina." }
     ];
 
     try {
         const result = await narrateAdventurePrompt(promptInput);
         output = result.output;
-        console.log("narrateAdventureFlow: Received from narrateAdventurePrompt:", JSON.stringify(output, null, 2).substring(0, 1000) + "...");
+        console.log("narrateAdventureFlow: Received raw output from AI:", JSON.stringify(output, null, 2).substring(0, 2000) + "...");
 
-        // Validate branchingChoices
-        if (!output || !Array.isArray(output.branchingChoices) || output.branchingChoices.length !== 4) {
-            console.warn("narrateAdventureFlow: AI did not return 4 branching choices. Using fallback generic choices.");
-            if (output) { // If output exists but choices are wrong
-                output.branchingChoices = genericChoices;
-            } else { // If output is entirely missing
-                throw new Error("AI output was undefined after prompt call.");
-            }
+        // --- Robust Fallback and Validation ---
+        if (!output || !output.narration || !output.narration.trim() || !output.updatedGameState || !output.updatedGameState.trim()) {
+            console.error("narrateAdventureFlow: AI output is missing essential fields (narration or updatedGameState). Using fallback.");
+            throw new Error("AI output missing essential fields.");
+        }
+        if (!Array.isArray(output.branchingChoices) || output.branchingChoices.length !== 4 || output.branchingChoices.some(c => !c.text)) {
+            console.warn("narrateAdventureFlow: AI did not return 4 valid branching choices. Overwriting with generic choices.");
+            output.branchingChoices = genericChoices;
         }
 
     } catch (e: any) {
-        console.error("narrateAdventureFlow: ERROR calling narrateAdventurePrompt", e);
-        const fallbackNarration = `The threads of fate are tangled. The AI narrator is momentarily speechless regarding your attempt to "${playerChoice.substring(0,50)}...". (AI Error: ${e.message || 'Unknown AI error'}) Try a different approach?`;
-        const fallbackGameState = `${gameState} (AI Narrator Error - Turn: ${turnCount + 1})`;
+        console.error("narrateAdventureFlow: ERROR calling narrateAdventurePrompt or validating output:", e.message, e.stack);
+        const fallbackNarration = `The AI narrator is currently lost in thought regarding your attempt to "${playerChoice.substring(0,100)}...". The path ahead is momentarily obscured. (AI Error: ${e.message || 'Unknown AI error'}) Perhaps try a different approach or a general action like "look around"?`;
+        const fallbackGameState = `${gameState} (AI Narrator Error at Turn: ${turnCount + 1})`;
         output = {
             narration: fallbackNarration,
             updatedGameState: fallbackGameState,
-            branchingChoices: genericChoices, // Ensure fallback has choices
-        };
-    }
-
-     if (!output || !output.narration || !output.updatedGameState || !Array.isArray(output.branchingChoices) || output.branchingChoices.length !== 4) {
-        console.error("narrateAdventureFlow: AI returned undefined or incomplete output even after potential catch. Fallback initiated.");
-        const fallbackNarration = `The threads of fate are tangled. The AI narrator is momentarily speechless regarding "${playerChoice.substring(0,50)}...". Try a different approach?`;
-        const fallbackGameState = `${input.gameState} (AI Narrator Error - Turn: ${turnCount + 1})`;
-        return {
-            narration: fallbackNarration,
-            updatedGameState: fallbackGameState,
-            branchingChoices: genericChoices, // Ensure final fallback has choices
+            branchingChoices: genericChoices,
         };
     }
 
@@ -361,8 +372,8 @@ const narrateAdventureFlow = ai.defineFlow(
         output.updatedGameState = `${output.updatedGameState.replace(/Turn: \d+/g, '').trim()}\nTurn: ${turnCount + 1}`;
     }
 
-
-    console.log(`narrateAdventureFlow: END - Successfully processed Turn ${turnCount} for ${character.name}.`);
+    console.log(`narrateAdventureFlow: END - Successfully processed Turn ${turnCount} for ${character.name}. Final output:`, JSON.stringify(output, null, 2).substring(0, 1000) + "...");
     return output;
   }
 );
+

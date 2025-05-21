@@ -10,7 +10,7 @@ import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { BookCopy, CalendarClock, Loader2, Dices, Info, GitBranch, Hammer, Save, ShieldAlert } from "lucide-react"; // Added ShieldAlert
+import { BookCopy, CalendarClock, Loader2, Dices, Info, GitBranch, Hammer, Save, ShieldAlert } from "lucide-react";
 
 interface NarrationDisplayProps {
     storyLog: StoryLogEntry[];
@@ -75,14 +75,12 @@ export function NarrationDisplay({
             );
         }
 
-        if (error) {
-            // Check if it's an "impossible action" message from Gameplay.tsx
-            const isImpossibleActionError = error.startsWith("Game Master:") || error.startsWith("Narrator:");
+        if (error && !error.startsWith("Narrator:") && !error.startsWith("Game Master:")) { // Only show actual system errors
             return (
-                <Alert variant={isImpossibleActionError ? "default" : "destructive"} className="my-2 border-orange-500/50 bg-orange-50 dark:bg-orange-900/20">
-                     {isImpossibleActionError ? <ShieldAlert className="h-4 w-4 text-orange-600 dark:text-orange-400" /> : <Info className="h-4 w-4" />}
-                     <AlertTitle className={isImpossibleActionError ? "text-orange-700 dark:text-orange-300" : undefined}>{isImpossibleActionError ? "Action Update" : "Error"}</AlertTitle>
-                     <AlertDescription className={isImpossibleActionError ? "text-orange-600 dark:text-orange-400" : undefined}>{error}</AlertDescription>
+                <Alert variant="destructive" className="my-2">
+                     <Info className="h-4 w-4" />
+                     <AlertTitle>Error</AlertTitle>
+                     <AlertDescription>{error}</AlertDescription>
                 </Alert>
             );
         }
@@ -137,6 +135,7 @@ export function NarrationDisplay({
             return <p className="py-4 text-muted-foreground italic text-center text-sm">The story awaits your first command. What will you do?</p>;
         }
         // Message if not busy, no error, no choices, but log has entries (standard prompt for next action)
+        // This case might be less frequent now that choices are always expected
         if (!busy && !error && storyLog.length > 0 && (!branchingChoices || branchingChoices.length === 0)) {
             return <p className="py-2 text-muted-foreground italic text-center text-xs">What will you do next?</p>;
         }
@@ -152,7 +151,6 @@ export function NarrationDisplay({
                 </CardTitle>
             </CardHeader>
             <ScrollArea ref={scrollAreaRef} className="flex-1 pb-2 scrollbar scrollbar-thumb-primary scrollbar-track-input">
-                 {/* Removed h-full from CardContent to allow it to grow with content */}
                 <CardContent className="px-4 pt-4"> 
                     {isInitialLoading && storyLog.length === 0 ? (
                         <div className="space-y-4 py-4">
@@ -171,7 +169,17 @@ export function NarrationDisplay({
                                     <CalendarClock className="w-3 h-3" /> Turn {log.turnNumber || index + 1}
                                     <span className="ml-auto text-xs">({new Date(log.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})</span>
                                 </p>
-                                <p className="text-sm whitespace-pre-wrap mt-1 leading-relaxed">{log.narration}</p>
+                                 {/* Handle Narrator/Game Master specific messages differently if needed */}
+                                 {log.narration.startsWith("Narrator:") || log.narration.startsWith("Game Master:") ? (
+                                     <Alert variant="default" className="mt-1.5 border-orange-500/50 bg-orange-50 dark:bg-orange-900/20 text-sm">
+                                         <ShieldAlert className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+                                         <AlertDescription className="text-orange-700 dark:text-orange-300 whitespace-pre-wrap leading-relaxed">
+                                             {log.narration}
+                                         </AlertDescription>
+                                     </Alert>
+                                 ) : (
+                                     <p className="text-sm whitespace-pre-wrap mt-1 leading-relaxed">{log.narration}</p>
+                                 )}
                             </div>
                         ))
                     ) : null }
