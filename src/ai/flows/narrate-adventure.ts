@@ -7,8 +7,8 @@
  * - NarrateAdventureInput - The input type for the narrateAdventure function.
  * - NarrateAdventureOutput - The return type for the narrateAdventure function.
  */
-import {ai} from '@/ai/ai-instance';
-import {z} from 'genkit';
+import {ai}from '@/ai/ai-instance';
+import {z}from 'genkit';
 import type {
   CharacterStats,
   Reputation,
@@ -115,7 +115,7 @@ const NarrateAdventureOutputSchema = z.object({
   npcRelationshipChange: z.object({ npcName: z.string(), change: z.number() }).optional().describe("Optional: Change in relationship with an NPC."),
   suggestedClassChange: z.string().optional().describe("Optional: Suggest a different class name **only if the AI detects the player's actions consistently align with a different class (not applicable for Immersed mode).**"),
   gainedSkill: SkillSchema.optional().describe("Optional: Details of a new skill **only if the character learned a new skill (narrative-driven for Immersed mode).**"),
-  branchingChoices: z.array(BranchingChoiceSchema).length(4).optional().describe("Optional: Always 4 significant choices presented to the player, **only if relevant narrative branches occurred.**"),
+  branchingChoices: z.array(BranchingChoiceSchema).length(4).describe("ALWAYS provide 4 significant choices presented to the player."),
   dynamicEventTriggered: z.string().optional().describe("Optional: A brief description **only if a random or time-based dynamic world event occurred.**"),
   isCharacterDefeated: z.boolean().optional().describe("True if the character's health dropped to 0 or below or a death condition was met through narration."),
 });
@@ -174,7 +174,7 @@ function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput
         updatedKnowledge = [...(input.character.knowledge || []), value];
         devNarration += ` Added knowledge: ${value}.`;
     } else if (baseCommand === '/addskill' && value && input.character) {
-        gainedSkill = { name: value, description: "Developer added skill" }; // Removed type
+        gainedSkill = { name: value, description: "Developer added skill" };
         devNarration += ` Added skill: ${value}.`;
     } else {
         devNarration += " Action processed. Dev restrictions bypassed.";
@@ -189,6 +189,12 @@ function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput
         updatedTraits,
         updatedKnowledge,
         gainedSkill,
+        branchingChoices: [ // Provide generic choices for dev mode
+            { text: "Continue as planned." },
+            { text: "Inspect the environment." },
+            { text: "Check character status." },
+            { text: "Do something unexpected." }
+        ]
     };
 }
 
@@ -267,13 +273,15 @@ const narrateAdventurePrompt = ai.definePrompt({
         *   **Gaining Skills (Narrative for Immersed):** Include \`gainedSkill\` **only if appropriate.**
 5.  **Character Defeat:** If the narrative results in the character's Health (currentHealth) dropping to 0 or below, or any other condition that means the character is defeated/killed, you MUST set \`isCharacterDefeated: true\`. Otherwise, omit this field or set it to false.
 6.  **Update Game State String:** Modify the 'gameState' string to reflect **ALL** changes (location, inventory, NPC moods, time, quest progress, milestones, status like 'Injured'). **It MUST include the current Turn count, which is always {{{turnCount}}} + 1.**
-7.  **Dynamic Events & Branching:** Occasionally, introduce dynamic world events (via \`dynamicEventTriggered\`) or present the player with **EXACTLY 4** meaningful branching choices (via \`branchingChoices\`) if the narrative allows for significant divergence. These choices should have hints.
+7.  **Dynamic Events & Branching Choices:**
+    *   Optionally, introduce a dynamic world event via \`dynamicEventTriggered\`.
+    *   You MUST ALWAYS provide **EXACTLY 4** meaningful branching choices for the player via the \`branchingChoices\` field. These choices should reflect possible next actions, dialogues, or investigations. If the current narrative moment is very direct, ensure the choices still offer variety, perhaps including general exploration options (e.g., "Look around more closely", "Consider your options") or internal thoughts/reflections (e.g., "Focus on your main goal", "Recall what you know about this place"). Each choice MUST have a 'text' field and an optional 'consequenceHint'.
 8.  **Tone:** Maintain a consistent tone suitable for the adventure type and difficulty.
 
 **Output Format:** Respond ONLY with the JSON object matching the NarrateAdventureOutput schema.
 *   \`narration\` and \`updatedGameState\` are **REQUIRED**.
+*   \`branchingChoices\` is **REQUIRED** and MUST contain **exactly 4** choices.
 *   All other fields are **OPTIONAL** and should **ONLY** be included if their corresponding event actually occurred.
-*   If including \`branchingChoices\`, ensure the array contains **exactly 4** choices.
 *   Ensure the \`updatedGameState\` string contains the correct turn count.
 `,
 });
@@ -303,28 +311,47 @@ const narrateAdventureFlow = ai.defineFlow(
     console.log("narrateAdventureFlow: Sending to narrateAdventurePrompt with full input:", JSON.stringify(promptInput, null, 2).substring(0, 1000) + "...");
 
     let output: NarrateAdventureOutput | undefined;
+    const genericChoices = [
+        { text: "Look around more closely.", consequenceHint: "May reveal new details." },
+        { text: "Consider your next move carefully.", consequenceHint: "Take a moment to think." },
+        { text: "Check your inventory.", consequenceHint: "Review your belongings." },
+        { text: "Try a different approach.", consequenceHint: "Think outside the box." }
+    ];
+
     try {
         const result = await narrateAdventurePrompt(promptInput);
         output = result.output;
         console.log("narrateAdventureFlow: Received from narrateAdventurePrompt:", JSON.stringify(output, null, 2).substring(0, 1000) + "...");
+
+        // Validate branchingChoices
+        if (!output || !Array.isArray(output.branchingChoices) || output.branchingChoices.length !== 4) {
+            console.warn("narrateAdventureFlow: AI did not return 4 branching choices. Using fallback generic choices.");
+            if (output) { // If output exists but choices are wrong
+                output.branchingChoices = genericChoices;
+            } else { // If output is entirely missing
+                throw new Error("AI output was undefined after prompt call.");
+            }
+        }
+
     } catch (e: any) {
         console.error("narrateAdventureFlow: ERROR calling narrateAdventurePrompt", e);
-        // Construct a fallback output if the AI call fails
         const fallbackNarration = `The threads of fate are tangled. The AI narrator is momentarily speechless regarding your attempt to "${playerChoice.substring(0,50)}...". (AI Error: ${e.message || 'Unknown AI error'}) Try a different approach?`;
         const fallbackGameState = `${gameState} (AI Narrator Error - Turn: ${turnCount + 1})`;
         output = {
             narration: fallbackNarration,
             updatedGameState: fallbackGameState,
+            branchingChoices: genericChoices, // Ensure fallback has choices
         };
     }
 
-     if (!output || !output.narration || !output.updatedGameState) {
+     if (!output || !output.narration || !output.updatedGameState || !Array.isArray(output.branchingChoices) || output.branchingChoices.length !== 4) {
         console.error("narrateAdventureFlow: AI returned undefined or incomplete output even after potential catch. Fallback initiated.");
         const fallbackNarration = `The threads of fate are tangled. The AI narrator is momentarily speechless regarding "${playerChoice.substring(0,50)}...". Try a different approach?`;
         const fallbackGameState = `${input.gameState} (AI Narrator Error - Turn: ${turnCount + 1})`;
         return {
             narration: fallbackNarration,
             updatedGameState: fallbackGameState,
+            branchingChoices: genericChoices, // Ensure final fallback has choices
         };
     }
 
@@ -339,4 +366,3 @@ const narrateAdventureFlow = ai.defineFlow(
     return output;
   }
 );
-

@@ -103,7 +103,8 @@ export function NarrationDisplay({
             );
         }
 
-        if (!busy && branchingChoices && branchingChoices.length > 0) {
+        // Always render branching choices if available, even if busy with other minor things (not initial loading)
+        if (branchingChoices && branchingChoices.length > 0) {
             return (
                 <div className="py-2 mt-2 space-y-2 border-t border-dashed border-foreground/10 pt-3">
                     <h4 className="text-sm font-medium text-muted-foreground mb-1 flex items-center gap-1.5"><GitBranch className="w-4 h-4"/> Choose your path...</h4>
@@ -113,9 +114,9 @@ export function NarrationDisplay({
                                 key={index}
                                 variant="outline"
                                 size="sm"
-                                className="text-left justify-start h-auto py-1.5"
+                                className="text-left justify-start h-auto py-1.5 whitespace-normal" // Ensure text wraps and height adjusts
                                 onClick={() => handlePlayerAction(choice.text)}
-                                disabled={busy}
+                                disabled={busy} // Disable if any loading state is true
                             >
                                 <div className="flex flex-col items-start w-full">
                                     <span className="font-medium text-foreground">{choice.text}</span>
@@ -129,11 +130,11 @@ export function NarrationDisplay({
         }
         
         // Message if initial load finished, log still empty, and not busy with subsequent actions
-        if (!isInitialLoading && !isLoading && storyLog.length === 0 && !error && (!branchingChoices || branchingChoices.length === 0)) {
+        if (!isInitialLoading && !isLoading && storyLog.length === 0 && !error) {
             return <p className="py-4 text-muted-foreground italic text-center text-sm">The story awaits your first command. What will you do?</p>;
         }
         // Message if not busy, no error, no choices, but log has entries (standard prompt)
-        if (!busy && !error && (!branchingChoices || branchingChoices.length === 0) && storyLog.length > 0) {
+        if (!busy && !error && storyLog.length > 0) {
             return <p className="py-2 text-muted-foreground italic text-center text-xs">What will you do next?</p>;
         }
 
@@ -148,7 +149,6 @@ export function NarrationDisplay({
                 </CardTitle>
             </CardHeader>
             <ScrollArea ref={scrollAreaRef} className="flex-1 pb-2 scrollbar scrollbar-thumb-primary scrollbar-track-input">
-                {/* Removed h-full from CardContent to allow natural content height */}
                 <CardContent className="px-4 pt-4"> 
                     {isInitialLoading && storyLog.length === 0 ? (
                         <div className="space-y-4 py-4">
@@ -170,7 +170,7 @@ export function NarrationDisplay({
                                 <p className="text-sm whitespace-pre-wrap mt-1 leading-relaxed">{log.narration}</p>
                             </div>
                         ))
-                    ) : null } {/* Render nothing else specific if not initial loading and log is still empty, renderDynamicContent will handle it */}
+                    ) : null }
                     
                     {renderDynamicContent()}
                     <div ref={scrollEndRef} className="h-1" />
@@ -179,4 +179,3 @@ export function NarrationDisplay({
         </CardboardCard>
     );
 }
-
