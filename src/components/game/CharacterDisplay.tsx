@@ -45,7 +45,7 @@ export function CharacterDisplay() {
   };
 
   return (
-    <CardboardCard className="mb-4 sticky top-4 bg-card/90 backdrop-blur-sm z-10 border-2 border-foreground/20">
+    <CardboardCard className="mb-4 bg-card/90 backdrop-blur-sm border-2 border-foreground/20">
       <CardHeader className="pb-2 pt-4 border-b border-foreground/10">
         <CardTitle className="text-xl font-semibold flex items-center gap-2">
           <User className="w-5 h-5 text-primary"/> {character.name || "Unnamed Adventurer"}
@@ -85,7 +85,7 @@ export function CharacterDisplay() {
             <span className="text-sm font-medium">STR</span> <span className="text-lg font-bold">{character.stats.strength}</span>
           </div>
           <div className="flex flex-col items-center">
-             <TooltipProvider delayDuration={100}> <Tooltip> <TooltipTrigger> <HandDrawnStaminaIcon className="w-6 h-6 mb-1 text-green-600" /> </TooltipTrigger> <TooltipContent>Stamina (Stat)</TooltipContent> </Tooltip> </TooltipProvider>
+             <TooltipProvider delayDuration={100}> <Tooltip> <TooltipTrigger> <HandDrawnStaminaIcon className="w-6 h-6 mb-1 text-green-600" /> </TooltipTrigger> <TooltipContent>Stamina (HP)</TooltipContent> </Tooltip> </TooltipProvider>
             <span className="text-sm font-medium">STA</span> <span className="text-lg font-bold">{character.stats.stamina}</span>
           </div>
           <div className="flex flex-col items-center">
@@ -100,7 +100,7 @@ export function CharacterDisplay() {
           <TooltipProvider delayDuration={100}> <Tooltip> <TooltipTrigger className="w-full">
               <div className="flex items-center gap-2 mb-1">
                 <HeartPulse className="w-4 h-4 text-red-500" />
-                <span className="text-xs font-medium text-red-600 dark:text-red-400">Health</span>
+                <span className="text-xs font-medium text-red-600 dark:text-red-400">Health (from STA)</span>
                 <span className="ml-auto text-xs font-mono text-muted-foreground">{character.currentHealth} / {character.maxHealth}</span>
               </div>
               <Progress value={(character.currentHealth / character.maxHealth) * 100} className="h-2 bg-red-100 dark:bg-red-900/50 [&>div]:bg-red-500" aria-label={`Health ${character.currentHealth} of ${character.maxHealth}`} />
@@ -110,7 +110,7 @@ export function CharacterDisplay() {
           <TooltipProvider delayDuration={100}> <Tooltip> <TooltipTrigger className="w-full">
               <div className="flex items-center gap-2 mb-1">
                 <ShieldCheck className="w-4 h-4 text-green-600" /> {/* Changed icon */}
-                <span className="text-xs font-medium text-green-700 dark:text-green-400">Action Stamina</span>
+                <span className="text-xs font-medium text-green-700 dark:text-green-400">Action Stamina (from STR)</span>
                 <span className="ml-auto text-xs font-mono text-muted-foreground">{character.currentStamina} / {character.maxStamina}</span>
               </div>
               <Progress value={(character.currentStamina / character.maxStamina) * 100} className="h-2 bg-green-100 dark:bg-green-900/50 [&>div]:bg-green-500" aria-label={`Action Stamina ${character.currentStamina} of ${character.maxStamina}`} />
@@ -121,7 +121,7 @@ export function CharacterDisplay() {
              <TooltipProvider delayDuration={100}> <Tooltip> <TooltipTrigger className="w-full">
                 <div className="flex items-center gap-2 mb-1">
                   <Zap className="w-4 h-4 text-blue-500" />
-                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Mana</span>
+                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">Mana (from WIS)</span>
                   <span className="ml-auto text-xs font-mono text-muted-foreground">{character.currentMana} / {character.maxMana}</span>
                 </div>
                 <Progress value={(character.currentMana / character.maxMana) * 100} className="h-2 bg-blue-100 dark:bg-blue-900/50 [&>div]:bg-blue-500" aria-label={`Mana ${character.currentMana} of ${character.maxMana}`} />
