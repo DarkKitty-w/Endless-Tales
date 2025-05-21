@@ -10,7 +10,7 @@ import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
-import { BookCopy, CalendarClock, Loader2, Dices, Info, GitBranch, Hammer, Save, ShieldAlert } from "lucide-react";
+import { BookCopy, CalendarClock, Loader2, Dices, Info, GitBranch, Hammer, Save, ShieldAlert, RefreshCw } from "lucide-react"; // Added RefreshCw
 
 interface NarrationDisplayProps {
     storyLog: StoryLogEntry[];
@@ -27,6 +27,7 @@ interface NarrationDisplayProps {
     branchingChoices: NarrateAdventureOutput['branchingChoices'];
     handlePlayerAction: (action: string) => void;
     isInitialLoading: boolean; // Specifically for the first narration load
+    onRetryNarration: () => void; // New prop for retry
 }
 
 export function NarrationDisplay({
@@ -43,7 +44,8 @@ export function NarrationDisplay({
     error,
     branchingChoices,
     handlePlayerAction,
-    isInitialLoading
+    isInitialLoading,
+    onRetryNarration, // New prop
 }: NarrationDisplayProps) {
     const scrollEndRef = useRef<HTMLDivElement>(null);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
@@ -66,6 +68,7 @@ export function NarrationDisplay({
 
     const renderDynamicContent = () => {
         const busy = isLoading || isAssessingDifficulty || isRollingDice || isGeneratingSkillTree || isEnding || isSaving || isCraftingLoading;
+        const anyLoading = isInitialLoading || isLoading;
 
         if (diceResult !== null && diceType !== "None") {
             return (
@@ -85,26 +88,33 @@ export function NarrationDisplay({
             );
         }
 
-        if (busy && !isInitialLoading && !isRollingDice) {
+        if (anyLoading && !isRollingDice) { // Show loading indicator if isInitialLoading or isLoading is true
             let loadingText = "Thinking...";
             let LoadingIcon = Loader2;
             let iconAnimation = "animate-spin";
-            if (isGeneratingSkillTree) loadingText = "Generating skill tree...";
+            if (isInitialLoading && storyLog.length === 0) loadingText = "Loading your adventure's beginning...";
+            else if (isGeneratingSkillTree) loadingText = "Generating skill tree...";
             else if (isSaving) { loadingText = "Saving progress..."; LoadingIcon = Save; iconAnimation="animate-pulse"; }
             else if (isEnding) { loadingText = "Ending and summarizing..."; LoadingIcon = BookCopy; iconAnimation="animate-pulse"; }
             else if (isAssessingDifficulty) loadingText = "Assessing difficulty...";
             else if (isCraftingLoading) { loadingText = "Crafting..."; LoadingIcon = Hammer; iconAnimation="animate-spin"; }
             
             return (
-                <div className="flex items-center justify-center py-4 text-muted-foreground animate-pulse">
-                    <LoadingIcon className={`h-5 w-5 mr-2 ${iconAnimation}`} />
-                    <span>{loadingText}</span>
+                <div className="flex flex-col items-center justify-center py-4 text-muted-foreground">
+                    <div className="flex items-center animate-pulse">
+                        <LoadingIcon className={`h-5 w-5 mr-2 ${iconAnimation}`} />
+                        <span>{loadingText}</span>
+                    </div>
+                    {(isInitialLoading || isLoading) && !isAssessingDifficulty && !isSaving && !isEnding && !isGeneratingSkillTree && !isCraftingLoading && (
+                        <Button variant="outline" size="sm" onClick={onRetryNarration} className="mt-3">
+                            <RefreshCw className="mr-2 h-4 w-4" /> Retry AI
+                        </Button>
+                    )}
                 </div>
             );
         }
 
         // Always render branching choices if available, even if busy with other minor things (not initial loading)
-        // Ensure branchingChoices is an array and has items before mapping
         if (Array.isArray(branchingChoices) && branchingChoices.length > 0) {
             return (
                 <div className="py-2 mt-2 space-y-2 border-t border-dashed border-foreground/10 pt-3">
@@ -115,9 +125,9 @@ export function NarrationDisplay({
                                 key={index}
                                 variant="outline"
                                 size="sm"
-                                className="text-left justify-start h-auto py-1.5 whitespace-normal" // Ensure text wraps and height adjusts
+                                className="text-left justify-start h-auto py-1.5 whitespace-normal"
                                 onClick={() => handlePlayerAction(choice.text)}
-                                disabled={busy} // Disable if any loading state is true
+                                disabled={busy} // Disable if any other loading state is true
                             >
                                 <div className="flex flex-col items-start w-full">
                                     <span className="font-medium text-foreground">{choice.text}</span>
@@ -130,12 +140,10 @@ export function NarrationDisplay({
             );
         }
         
-        // Message if initial load finished, log still empty, and not busy with subsequent actions
         if (!isInitialLoading && !isLoading && storyLog.length === 0 && !error) {
             return <p className="py-4 text-muted-foreground italic text-center text-sm">The story awaits your first command. What will you do?</p>;
         }
-        // Message if not busy, no error, no choices, but log has entries (standard prompt for next action)
-        // This case might be less frequent now that choices are always expected
+        
         if (!busy && !error && storyLog.length > 0 && (!branchingChoices || branchingChoices.length === 0)) {
             return <p className="py-2 text-muted-foreground italic text-center text-xs">What will you do next?</p>;
         }
@@ -152,12 +160,19 @@ export function NarrationDisplay({
             </CardHeader>
             <ScrollArea ref={scrollAreaRef} className="flex-1 pb-2 scrollbar scrollbar-thumb-primary scrollbar-track-input">
                 <CardContent className="px-4 pt-4"> 
-                    {isInitialLoading && storyLog.length === 0 ? (
+                    {isInitialLoading && storyLog.length === 0 && !error ? ( // Show skeletons only if initial loading AND log is empty AND no error
                         <div className="space-y-4 py-4">
                             <div className="flex items-center justify-center py-4 text-muted-foreground">
                                 <Loader2 className="h-6 w-6 mr-2 animate-spin" />
                                 <span>Loading your adventure's beginning...</span>
                             </div>
+                             {(isInitialLoading || isLoading) && ( // Show retry button during initial loading as well
+                                <div className="text-center">
+                                    <Button variant="outline" size="sm" onClick={onRetryNarration} className="mt-2">
+                                        <RefreshCw className="mr-2 h-4 w-4" /> Retry AI
+                                    </Button>
+                                </div>
+                            )}
                             <Skeleton className="h-12 w-full" />
                             <Skeleton className="h-8 w-3/4" />
                             <Skeleton className="h-6 w-1/2" />
@@ -169,7 +184,6 @@ export function NarrationDisplay({
                                     <CalendarClock className="w-3 h-3" /> Turn {log.turnNumber || index + 1}
                                     <span className="ml-auto text-xs">({new Date(log.timestamp || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})</span>
                                 </p>
-                                 {/* Handle Narrator/Game Master specific messages differently if needed */}
                                  {log.narration.startsWith("Narrator:") || log.narration.startsWith("Game Master:") ? (
                                      <Alert variant="default" className="mt-1.5 border-orange-500/50 bg-orange-50 dark:bg-orange-900/20 text-sm">
                                          <ShieldAlert className="h-4 w-4 text-orange-600 dark:text-orange-400" />
@@ -184,7 +198,6 @@ export function NarrationDisplay({
                         ))
                     ) : null }
                     
-                    {/* Render dynamic content (choices, errors, loading messages) here */}
                     {renderDynamicContent()}
                     <div ref={scrollEndRef} className="h-1" />
                  </CardContent>
