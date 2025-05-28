@@ -25,19 +25,37 @@ export function CoopLobby() {
   const { currentPlayerUid, sessionId, isHost, players: contextPlayers } = state;
   const { toast } = useToast();
 
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // For specific actions like create/join/start
+  const [isAuthLoading, setIsAuthLoading] = useState(true); // For initial auth check
   const [sessionToJoin, setSessionToJoin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sessionData, setSessionData] = useState<FirestoreCoopSession | null>(null);
+
+  // Effect to manage the initial authentication loading state
+  useEffect(() => {
+    if (currentPlayerUid) {
+      setIsAuthLoading(false);
+    } else {
+      // Give Firebase a moment to sign in anonymously
+      const timer = setTimeout(() => {
+        if (!state.currentPlayerUid) { // Check context state again after delay
+          console.warn("CoopLobby: currentPlayerUid still null after delay. Showing auth required message.");
+        }
+        setIsAuthLoading(false);
+      }, 2000); // Wait 2 seconds for auth to settle
+      return () => clearTimeout(timer);
+    }
+  }, [currentPlayerUid, state.currentPlayerUid]);
+
 
   // Listen to session updates from Firestore
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     if (sessionId) {
-      setIsLoading(true);
+      setIsLoading(true); // Loading session data
       unsubscribe = listenToSessionUpdates(sessionId, (data) => {
         setSessionData(data);
-        setIsLoading(false);
+        setIsLoading(false); // Finished loading session data
         if (data) {
           // Sync local player list with Firestore one if different
           if (JSON.stringify(data.players.sort()) !== JSON.stringify(contextPlayers.sort())) {
@@ -137,15 +155,28 @@ export function CoopLobby() {
   };
 
   const handleBackToMenu = () => {
+    // If in a session, consider if leaving the session is needed (e.g., update Firestore)
+    // For now, just resets local state
     dispatch({ type: "RESET_GAME" });
   };
+
+  if (isAuthLoading) {
+    return (
+        <div className="flex flex-col items-center justify-center min-h-screen p-4">
+            <CardboardCard className="w-full max-w-md text-center">
+                 <CardHeader><CardTitle className="flex items-center justify-center gap-2"><Loader2 className="w-6 h-6 animate-spin"/> Connecting...</CardTitle></CardHeader>
+                 <CardContent><p className="text-muted-foreground">Initializing session services...</p></CardContent>
+            </CardboardCard>
+        </div>
+    );
+  }
 
   if (!currentPlayerUid) {
     return (
         <div className="flex flex-col items-center justify-center min-h-screen p-4">
             <CardboardCard className="w-full max-w-md text-center">
                  <CardHeader><CardTitle>Authentication Required</CardTitle></CardHeader>
-                 <CardContent><p className="text-muted-foreground">Please ensure you are signed in (e.g., via Anonymous Authentication in Firebase) to use co-op features.</p></CardContent>
+                 <CardContent><p className="text-muted-foreground">Please ensure you are signed in (e.g., via Anonymous Authentication in Firebase) to use co-op features. If this persists, check your internet connection or Firebase setup.</p></CardContent>
                  <CardFooter><Button onClick={handleBackToMenu} className="w-full">Back to Main Menu</Button></CardFooter>
             </CardboardCard>
         </div>
@@ -203,12 +234,12 @@ export function CoopLobby() {
                 </div>
               </div>
               <div>
-                <Label>Players in Lobby ({sessionData?.players?.length || 0}):</Label>
+                <Label>Players in Lobby ({sessionData?.players?.length || contextPlayers.length || 0}):</Label>
                 <ScrollArea className="h-24 mt-1 border rounded-md p-2">
-                  {sessionData?.players && sessionData.players.length > 0 ? (
-                    sessionData.players.map((uid) => (
+                  {(sessionData?.players || contextPlayers) && (sessionData?.players || contextPlayers).length > 0 ? (
+                    (sessionData?.players || contextPlayers).map((uid) => (
                       <div key={uid} className="text-sm p-1 bg-background/50 rounded mb-1">
-                        Player {uid.substring(0, 6)}... {uid === currentPlayerUid && "(You)"} {uid === sessionData.hostUid && "(Host)"}
+                        Player {uid.substring(0, 6)}... {uid === currentPlayerUid && "(You)"} {uid === (sessionData?.hostUid || (isHost ? currentPlayerUid : '')) && "(Host)"}
                       </div>
                     ))
                   ) : (
@@ -222,7 +253,7 @@ export function CoopLobby() {
                 </Button>
               )}
               {!isHost && sessionData?.status === 'lobby' && (
-                <p className="text-center text-muted-foreground italic">Waiting for the host ({sessionData?.hostUid.substring(0,6)}...) to start the game.</p>
+                <p className="text-center text-muted-foreground italic">Waiting for the host ({sessionData?.hostUid ? sessionData.hostUid.substring(0,6) + '...' : 'Host'}) to start the game.</p>
               )}
               {sessionData?.status === 'playing' && (
                  <p className="text-center text-green-600 font-semibold">Game in progress! You should be redirected shortly...</p>
