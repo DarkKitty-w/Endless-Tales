@@ -5,8 +5,8 @@ import type { Character, CharacterStats } from "@/types/character-types";
 import type { InventoryItem, ItemQuality } from "@/types/inventory-types";
 import type { AdventureSettings, DifficultyLevel, AdventureType } from "@/types/adventure-types";
 import {
-    calculateMaxHealth, // Updated
-    calculateMaxActionStamina, // Updated
+    calculateMaxHealth,
+    calculateMaxActionStamina,
     calculateMaxMana,
     calculateXpToNextLevel,
     getStarterSkillsForClass
@@ -79,6 +79,12 @@ export const initialAdventureSettings: AdventureSettings = {
 export const initialState: GameState = {
   status: "MainMenu",
   character: null,
+  // Multiplayer specific state
+  sessionId: null,
+  players: [],
+  currentPlayerUid: null,
+  isHost: false,
+
   adventureSettings: { ...initialAdventureSettings },
   currentNarration: null,
   storyLog: [],

@@ -3,13 +3,15 @@
 
 import type { ReactNode } from "react";
 import React, { createContext, useContext, useReducer, Dispatch, useEffect, useCallback } from "react";
-import type { GameState, Character, InventoryItem, StoryLogEntry, SkillTree, Skill, Reputation, NpcRelationships } from "@/types/game-types";
+import type { GameState } from "@/types/game-types";
 import type { Action } from "./game-actions";
 import { initialState } from "./game-initial-state";
 import { gameReducer } from "./game-reducer";
 import { THEMES } from "@/lib/themes";
-import { SAVED_ADVENTURES_KEY, THEME_ID_KEY, THEME_MODE_KEY, USER_API_KEY_KEY } from "@/lib/constants"; // Import USER_API_KEY_KEY
+import { SAVED_ADVENTURES_KEY, THEME_ID_KEY, THEME_MODE_KEY, USER_API_KEY_KEY } from "@/lib/constants";
 import type { SavedAdventure } from "@/types/adventure-types";
+import { auth } from '@/lib/firebase'; // Import Firebase auth
+import type { User } from 'firebase/auth'; // Import Firebase User type
 
 
 // --- Context Definition ---
@@ -84,6 +86,23 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
          if (!loadedStateApplied && state.selectedThemeId === initialState.selectedThemeId && state.isDarkMode === initialState.isDarkMode && state.userGoogleAiApiKey === initialState.userGoogleAiApiKey) {
              applyTheme(initialState.selectedThemeId, initialState.isDarkMode);
          }
+         
+         // Listen to Firebase Auth state changes
+        const unsubscribeAuth = auth.onAuthStateChanged((user: User | null) => {
+            if (user) {
+                console.log("GameProvider: Firebase Auth user signed in:", user.uid);
+                dispatch({ type: 'SET_CURRENT_PLAYER_UID', payload: user.uid });
+                // Here you might also want to check if this user is part of an active game session
+                // and potentially load that session. For now, just setting UID.
+            } else {
+                console.log("GameProvider: Firebase Auth user signed out.");
+                dispatch({ type: 'SET_CURRENT_PLAYER_UID', payload: null });
+            }
+        });
+
+        return () => {
+            unsubscribeAuth(); // Cleanup Firebase auth listener
+        };
 
     }, [applyTheme]); // Only needs applyTheme on initial mount
 
@@ -124,15 +143,21 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
          relationships: relationshipString,
          class: state.character?.class,
          stage: `${currentStageName} (${state.character?.skillTreeStage ?? 0}/4)`,
+         health: `${state.character?.currentHealth}/${state.character?.maxHealth}`, // Updated to show health
          stamina: `${state.character?.currentStamina}/${state.character?.maxStamina}`,
          mana: `${state.character?.currentMana}/${state.character?.maxMana}`,
          adventureId: state.currentAdventureId,
          settings: state.adventureSettings,
          inventory: inventoryString,
          theme: `${state.selectedThemeId} (${state.isDarkMode ? 'Dark' : 'Light'})`,
-         apiKeySet: !!state.userGoogleAiApiKey, // Log if API key is set
+         apiKeySet: !!state.userGoogleAiApiKey,
          storyLogLength: state.storyLog.length,
          isGeneratingSkillTree: state.isGeneratingSkillTree,
+         // Multiplayer log
+         sessionId: state.sessionId,
+         players: state.players,
+         currentPlayerUid: state.currentPlayerUid,
+         isHost: state.isHost,
       });
    }, [state]);
 

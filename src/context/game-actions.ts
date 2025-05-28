@@ -10,13 +10,13 @@ import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel,
 export type Action =
   | { type: "SET_GAME_STATUS"; payload: GameStatus }
   | { type: "CREATE_CHARACTER"; payload: Partial<Character> }
-  | { type: "CREATE_CHARACTER_AND_SETUP"; payload: Partial<Character> } 
+  | { type: "CREATE_CHARACTER_AND_SETUP"; payload: Partial<Character> }
   | { type: "SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY"; payload: { character: Character, adventureSettings: AdventureSettings } }
   | { type: "UPDATE_CHARACTER"; payload: Partial<Character> }
   | { type: "SET_AI_DESCRIPTION"; payload: string }
   | { type: "SET_ADVENTURE_SETTINGS"; payload: Partial<AdventureSettings> }
   | { type: "START_GAMEPLAY" }
-  | { type: "UPDATE_NARRATION"; payload: StoryLogEntry & { isCharacterDefeated?: boolean } } // Added isCharacterDefeated
+  | { type: "UPDATE_NARRATION"; payload: StoryLogEntry & { isCharacterDefeated?: boolean } }
   | { type: "GRANT_XP"; payload: number }
   | { type: "LEVEL_UP"; payload: { newLevel: number; newXpToNextLevel: number } }
   | { type: "UPDATE_REPUTATION"; payload: ReputationChange }
@@ -41,4 +41,11 @@ export type Action =
   | { type: "SET_USER_API_KEY"; payload: string | null }
   | { type: "UPDATE_CRAFTING_RESULT"; payload: { narration: string; consumedItems: string[]; craftedItem: InventoryItem | null; newGameStateString: string } }
   | { type: "SET_ADVENTURE_TYPE", payload: AdventureType }
-  | { type: "RESPAWN_CHARACTER"; payload?: { narrationMessage?: string } }; // New action for respawn
+  | { type: "RESPAWN_CHARACTER"; payload?: { narrationMessage?: string } }
+  // Multiplayer Actions
+  | { type: "SET_SESSION_ID"; payload: string | null }
+  | { type: "SET_PLAYERS"; payload: string[] } // Array of player UIDs
+  | { type: "ADD_PLAYER"; payload: string } // UID of player to add
+  | { type: "REMOVE_PLAYER"; payload: string } // UID of player to remove
+  | { type: "SET_CURRENT_PLAYER_UID"; payload: string | null }
+  | { type: "SET_IS_HOST"; payload: boolean };
