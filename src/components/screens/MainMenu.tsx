@@ -1,11 +1,11 @@
-
+// src/components/screens/MainMenu.tsx
 "use client";
 
 import React, { useState, useEffect } from 'react';
 import { useGame } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Play, Users, Settings, Sparkles, FolderClock, ChevronDown, Info } from "lucide-react";
+import { Play, Users, Settings, Sparkles, FolderClock, ChevronDown, Info, Dices, Swords } from "lucide-react"; // Added Dices, Swords
 import { SettingsPanel } from '@/components/screens/SettingsPanel';
 import {
   Sheet,
@@ -34,12 +34,8 @@ export function MainMenu() {
 
   const handleNewGameFlow = (adventureType: AdventureType) => {
     console.log(`MainMenu: Starting new game flow for type: ${adventureType}`);
-    dispatch({ type: "RESET_GAME" }); // Reset game state first
-    dispatch({ type: "SET_ADVENTURE_TYPE", payload: adventureType }); // Set the specific adventure type
-
-    // For "Immersed" and "Custom", go to AdventureSetup first.
-    // For "Randomized", user goes to CharacterCreation after AdventureSetup (or directly if no setup needed for randomized).
-    // Current logic: all types that need setup go to AdventureSetup. Randomized might have minimal setup.
+    dispatch({ type: "RESET_GAME" }); 
+    dispatch({ type: "SET_ADVENTURE_TYPE", payload: adventureType }); 
     dispatch({ type: "SET_GAME_STATUS", payload: "AdventureSetup" });
   };
 
@@ -81,10 +77,10 @@ export function MainMenu() {
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-[calc(100%-2rem)] sm:w-[364px] max-w-md">
                 <DropdownMenuItem onClick={() => handleNewGameFlow("Randomized")} className="cursor-pointer">
-                  <Play className="mr-2 h-4 w-4" /> Randomized Adventure
+                  <Dices className="mr-2 h-4 w-4" /> Randomized Adventure
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleNewGameFlow("Custom")} className="cursor-pointer">
-                  <Settings className="mr-2 h-4 w-4" /> Custom Adventure
+                  <Swords className="mr-2 h-4 w-4" /> Custom Adventure
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleNewGameFlow("Immersed")} className="cursor-pointer">
                   <Sparkles className="mr-2 h-4 w-4" /> Immersed Adventure
@@ -106,9 +102,9 @@ export function MainMenu() {
                 <Image
                     src='https://storage.ko-fi.com/cdn/kofi5.png?v=6'
                     alt='Buy Me a Coffee at ko-fi.com'
-                    width={150} // Specify a reasonable width
-                    height={36} // Specify height to maintain aspect ratio
-                    style={{border: '0px', height: '36px', width: 'auto'}} // width auto to respect aspect ratio
+                    width={150} 
+                    height={36} 
+                    style={{border: '0px', height: '36px', width: 'auto'}} 
                 />
             </a>
         </CardFooter>

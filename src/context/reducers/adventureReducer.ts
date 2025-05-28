@@ -6,7 +6,7 @@ import { initialAdventureSettings, initialState, initialCharacterState, initialI
 import { generateAdventureId, calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana } from "@/lib/gameUtils";
 import { updateGameStateString } from "@/lib/game-state-utils";
 import { SAVED_ADVENTURES_KEY } from "@/lib/constants";
-import { characterReducer } from "./characterReducer"; // Corrected import path
+import { characterReducer } from "./characterReducer";
 
 export function adventureReducer(state: GameState, action: Action): GameState {
     switch (action.type) {
@@ -20,13 +20,14 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                 return state;
             }
             if (!state.adventureSettings.adventureType) {
-                 console.error("AdventureReducer: AdventureType is null in CREATE_CHARACTER_AND_SETUP. Cannot proceed to AdventureSetup. Staying on CharacterCreation.");
-                 return { ...state, character: newCharacter, status: "CharacterCreation" }; // Stay on char creation but with the new char
+                 console.error("AdventureReducer: AdventureType is null in CREATE_CHARACTER_AND_SETUP. Cannot proceed. Staying on CharacterCreation.");
+                 return { ...state, character: newCharacter, status: "CharacterCreation" }; 
             }
             const adventureId = state.currentAdventureId || generateAdventureId();
             const turnCount = 0;
             const currentInventory = [...initialInventory];
             const initialGameState = updateGameStateString( `Starting adventure for ${newCharacter.name}...`, newCharacter, currentInventory, turnCount );
+            console.log("AdventureReducer: CREATE_CHARACTER_AND_SETUP - Transitioning to Gameplay. Adventure Type:", state.adventureSettings.adventureType);
             return {
                 ...state, character: newCharacter, status: "Gameplay", currentAdventureId: adventureId,
                 inventory: currentInventory, storyLog: [], turnCount: turnCount, currentNarration: null,
@@ -46,7 +47,6 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             const currentInventory = [...initialInventory]; 
             const initialGameState = updateGameStateString( "The adventure for " + immersedCharacter.name + " is about to begin...", immersedCharacter, currentInventory, turnCount );
 
-            // Recalculate resources based on the AI-generated character's stats
             const finalMaxHealth = calculateMaxHealth(immersedCharacter.stats);
             const finalMaxActionStamina = calculateMaxActionStamina(immersedCharacter.stats);
             const finalMaxMana = calculateMaxMana(immersedCharacter.stats, immersedCharacter.knowledge);
@@ -102,16 +102,10 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             }
             const updatedGameState = updateGameStateString(action.payload.updatedGameState, charAfterNarration, inventoryAfterNarration, newTurnCount);
             
-            // Handle character defeat from narration payload
             if (action.payload.isCharacterDefeated && charAfterNarration.currentHealth <=0) {
                 if (state.adventureSettings.permanentDeath) {
-                    // This will be further processed by END_ADVENTURE if it's called from Gameplay.tsx
-                    // For now, just log the defeat if not handled elsewhere.
                     console.log("AdventureReducer: Character defeated (Permadeath). Game will end.");
                 } else {
-                    // Non-permadeath: The actual respawn action (like restoring health)
-                    // should be dispatched by Gameplay.tsx after this narration update.
-                    // This reducer just acknowledges the state for the log.
                     console.log("AdventureReducer: Character defeated. Respawn should be triggered.");
                 }
             }
@@ -125,14 +119,13 @@ export function adventureReducer(state: GameState, action: Action): GameState {
              const respawnMessage = action.payload?.narrationMessage || "You had a narrow escape and have recovered!";
              const respawnLogEntry: StoryLogEntry = {
                  narration: respawnMessage,
-                 updatedGameState: updateGameStateString(state.currentGameStateString, state.character, state.inventory, state.turnCount), // Game state reflects restored health
+                 updatedGameState: updateGameStateString(state.currentGameStateString, state.character, state.inventory, state.turnCount), 
                  timestamp: Date.now(),
              };
             return {
                 ...state,
                 storyLog: [...state.storyLog, respawnLogEntry],
                 currentNarration: respawnLogEntry,
-                // Character health/stamina/mana are restored by characterReducer
             };
         }
 
@@ -164,7 +157,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                  finalCharacterState = state.character; 
                  finalInventoryState = state.inventory; 
                  finalTurnCount = state.turnCount + (action.payload.finalNarration ? 1: 0) ; 
-                 if (finalCharacterState) { // Ensure character exists before updating game state string
+                 if (finalCharacterState) { 
                      finalGameState = updateGameStateString(action.payload.finalNarration.updatedGameState, finalCharacterState, finalInventoryState, finalTurnCount);
                  }
              }
@@ -228,6 +221,22 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(filteredSaves));
             return { ...state, savedAdventures: filteredSaves };
          }
+        
+        // --- Multiplayer Actions ---
+        case "SET_SESSION_ID":
+            return { ...state, sessionId: action.payload };
+        case "SET_PLAYERS":
+            return { ...state, players: action.payload };
+        case "ADD_PLAYER":
+            if (state.players.includes(action.payload)) return state; // Avoid duplicates
+            return { ...state, players: [...state.players, action.payload] };
+        case "REMOVE_PLAYER":
+            return { ...state, players: state.players.filter(uid => uid !== action.payload) };
+        case "SET_CURRENT_PLAYER_UID": // Already handled in GameContext, but good for completeness
+            return { ...state, currentPlayerUid: action.payload };
+        case "SET_IS_HOST":
+            return { ...state, isHost: action.payload };
+
         default:
             return state;
     }
