@@ -1,10 +1,10 @@
+
 // src/types/game-types.ts
 
 import type { Character } from "./character-types";
 import type { InventoryItem } from "./inventory-types";
 import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel, AdventureType } from "./adventure-types";
 
-// Keep general game status type here or move to its own file if it grows
 export type GameStatus =
   | "MainMenu"
   | "CharacterCreation"
@@ -58,4 +58,4 @@ export type {
 
 export type { InventoryItem, ItemQuality } from "./inventory-types";
 
-export type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel, AdventureType } from "./adventure-types";
+export type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel, AdventureType, FirestoreCoopSession } from "./adventure-types";

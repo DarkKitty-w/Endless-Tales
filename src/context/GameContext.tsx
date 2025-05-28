@@ -1,38 +1,34 @@
+
 // src/context/GameContext.tsx
 "use client";
 
 import type { ReactNode } from "react";
 import React, { createContext, useContext, useReducer, Dispatch, useEffect, useCallback } from "react";
-import type { GameState } from "@/types/game-types";
+import type { GameState, FirestoreCoopSession } from "@/types/game-types";
 import type { Action } from "./game-actions";
 import { initialState } from "./game-initial-state";
 import { gameReducer } from "./game-reducer";
 import { THEMES } from "@/lib/themes";
 import { SAVED_ADVENTURES_KEY, THEME_ID_KEY, THEME_MODE_KEY, USER_API_KEY_KEY } from "@/lib/constants";
 import type { SavedAdventure } from "@/types/adventure-types";
-import { auth } from '@/lib/firebase'; // Import Firebase auth
-import type { User } from 'firebase/auth'; // Import Firebase User type
+import { auth } from '@/lib/firebase';
+import type { User } from 'firebase/auth';
+import { listenToSessionUpdates } from "@/services/multiplayer-service";
 
 
-// --- Context Definition ---
 const GameContext = createContext<{ state: GameState; dispatch: Dispatch<Action> } | undefined>(undefined);
 
-// --- Provider Component ---
 export const GameProvider = ({ children }: { children: ReactNode }) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
 
-   // --- Apply Theme Logic ---
    const applyTheme = useCallback((themeId: string, isDark: boolean) => {
         const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
         const colors = isDark ? theme.dark : theme.light;
         const root = document.documentElement;
-
         if (!root) return;
-
         Object.entries(colors).forEach(([property, value]) => {
             root.style.setProperty(property, value);
         });
-
         if (isDark) {
             root.classList.add('dark');
         } else {
@@ -40,13 +36,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         }
    }, []);
 
-
-    // --- Persistence Effect (Loading) ---
     useEffect(() => {
         console.log("GameProvider mounted. Attempting to load saved data.");
         let loadedStateApplied = false;
-
-        // Load Saved Adventures
         try {
             const savedData = localStorage.getItem(SAVED_ADVENTURES_KEY);
             if (savedData) {
@@ -61,61 +53,43 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
             console.error("Failed to load saved adventures:", error);
             localStorage.removeItem(SAVED_ADVENTURES_KEY);
         }
-
-         // Load Theme Settings
          const savedThemeId = localStorage.getItem(THEME_ID_KEY) || initialState.selectedThemeId;
          const savedMode = localStorage.getItem(THEME_MODE_KEY);
          const prefersDark = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
          const initialDarkMode = savedMode === 'dark' || (!savedMode && prefersDark);
-
-        // Load User API Key
         const savedUserApiKey = localStorage.getItem(USER_API_KEY_KEY);
         if (savedUserApiKey) {
             dispatch({ type: 'SET_USER_API_KEY', payload: savedUserApiKey });
             loadedStateApplied = true;
         }
-
-
          if (savedThemeId !== initialState.selectedThemeId || initialDarkMode !== initialState.isDarkMode || (savedUserApiKey && savedUserApiKey !== initialState.userGoogleAiApiKey) ) {
             if (savedThemeId !== initialState.selectedThemeId) dispatch({ type: 'SET_THEME_ID', payload: savedThemeId });
             if (initialDarkMode !== initialState.isDarkMode) dispatch({ type: 'SET_DARK_MODE', payload: initialDarkMode });
-            // API key already dispatched if found
             loadedStateApplied = true;
          }
-
          if (!loadedStateApplied && state.selectedThemeId === initialState.selectedThemeId && state.isDarkMode === initialState.isDarkMode && state.userGoogleAiApiKey === initialState.userGoogleAiApiKey) {
              applyTheme(initialState.selectedThemeId, initialState.isDarkMode);
          }
-         
-         // Listen to Firebase Auth state changes
         const unsubscribeAuth = auth.onAuthStateChanged((user: User | null) => {
             if (user) {
                 console.log("GameProvider: Firebase Auth user signed in:", user.uid);
                 dispatch({ type: 'SET_CURRENT_PLAYER_UID', payload: user.uid });
-                // Here you might also want to check if this user is part of an active game session
-                // and potentially load that session. For now, just setting UID.
             } else {
                 console.log("GameProvider: Firebase Auth user signed out.");
                 dispatch({ type: 'SET_CURRENT_PLAYER_UID', payload: null });
             }
         });
-
         return () => {
-            unsubscribeAuth(); // Cleanup Firebase auth listener
+            unsubscribeAuth();
         };
+    }, [applyTheme]);
 
-    }, [applyTheme]); // Only needs applyTheme on initial mount
-
-
-     // --- Theme Application Effect (Reacting to State Changes) ---
       useEffect(() => {
          applyTheme(state.selectedThemeId, state.isDarkMode);
-         // Save theme and mode to localStorage whenever they change in state
          localStorage.setItem(THEME_ID_KEY, state.selectedThemeId);
          localStorage.setItem(THEME_MODE_KEY, state.isDarkMode ? 'dark' : 'light');
       }, [state.selectedThemeId, state.isDarkMode, applyTheme]);
 
-      // --- API Key Persistence Effect ---
       useEffect(() => {
         if (state.userGoogleAiApiKey) {
             localStorage.setItem(USER_API_KEY_KEY, state.userGoogleAiApiKey);
@@ -124,8 +98,48 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         }
       }, [state.userGoogleAiApiKey]);
 
+    // Effect for listening to Firestore session updates
+    useEffect(() => {
+        let unsubscribeSession: (() => void) | undefined;
 
-   // Log state changes
+        if (state.sessionId && (state.status === "CoopLobby" || state.status === "CoopGameplay")) {
+            console.log(`GameContext: Listening to session updates for sessionId: ${state.sessionId}`);
+            unsubscribeSession = listenToSessionUpdates(state.sessionId, (sessionData: FirestoreCoopSession | null) => {
+                if (sessionData) {
+                    console.log("GameContext: Firestore session data received:", sessionData);
+                    // Dispatch an action to sync the relevant parts of the session data
+                    // This needs to be more granular to avoid overwriting local optimistic updates
+                    dispatch({ type: "SYNC_COOP_SESSION_STATE", payload: sessionData });
+
+                    // Example: If session status from Firestore is 'playing' and local is 'CoopLobby', transition
+                    if (sessionData.status === 'playing' && state.status === 'CoopLobby') {
+                        dispatch({
+                            type: "SET_ADVENTURE_SETTINGS",
+                            payload: {
+                                ...sessionData.adventureSettings, // Sync adventure settings
+                                adventureType: "Coop"
+                            }
+                        });
+                        dispatch({ type: "SET_GAME_STATUS", payload: "CoopGameplay" });
+                    }
+                } else {
+                    console.log("GameContext: Session data is null (deleted or error).");
+                    // Handle session deletion or error, e.g., redirect to main menu
+                    if (state.status === "CoopLobby" || state.status === "CoopGameplay") {
+                         dispatch({ type: "RESET_GAME" }); // Or a more specific "SESSION_ENDED" action
+                    }
+                }
+            });
+        }
+        return () => {
+            if (unsubscribeSession) {
+                console.log(`GameContext: Unsubscribing from session updates for sessionId: ${state.sessionId}`);
+                unsubscribeSession();
+            }
+        };
+    }, [state.sessionId, state.status, dispatch]);
+
+
    useEffect(() => {
       const currentStageName = state.character?.skillTreeStage !== undefined && state.character?.skillTree
           ? state.character.skillTree.stages[state.character.skillTreeStage]?.stageName ?? `Stage ${state.character.skillTreeStage}`
@@ -143,7 +157,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
          relationships: relationshipString,
          class: state.character?.class,
          stage: `${currentStageName} (${state.character?.skillTreeStage ?? 0}/4)`,
-         health: `${state.character?.currentHealth}/${state.character?.maxHealth}`, // Updated to show health
+         health: `${state.character?.currentHealth}/${state.character?.maxHealth}`,
          stamina: `${state.character?.currentStamina}/${state.character?.maxStamina}`,
          mana: `${state.character?.currentMana}/${state.character?.maxMana}`,
          adventureId: state.currentAdventureId,
@@ -169,7 +183,6 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
   );
 };
 
-// --- Hook ---
 export const useGame = () => {
   const context = useContext(GameContext);
   if (context === undefined) {

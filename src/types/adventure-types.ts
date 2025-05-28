@@ -1,18 +1,17 @@
 
 // src/types/adventure-types.ts
 
-import type { GameStatus } from "./game-types"; // Assuming GameStatus stays in the main types file for now
-import type { Character, Reputation, NpcRelationships, Skill, CharacterStats, ReputationChange, NpcRelationshipChange } from "./character-types";
+import type { GameStatus } from "./game-types";
+import type { Character, CharacterStats, Skill } from "./character-types";
 import type { InventoryItem } from "./inventory-types";
 
 
 /** Defines the possible difficulty levels for the game and AI assessment. */
-export type DifficultyLevel = "Trivial" | "Easy" | "Normal" | "Hard" | "Very Hard" | "Impossible" | "Nightmare"; // Added Nightmare
+export type DifficultyLevel = "Trivial" | "Easy" | "Normal" | "Hard" | "Very Hard" | "Impossible" | "Nightmare";
 
 /** Defines the possible types of adventures. */
-export type AdventureType = "Randomized" | "Custom" | "Immersed" | null;
+export type AdventureType = "Randomized" | "Custom" | "Immersed" | "Coop" | null;
 
-// Define types for the new custom adventure options
 export type GenreTheme = "High Fantasy" | "Dark Fantasy" | "Sci-Fi (Cyberpunk)" | "Sci-Fi (Space Opera)" | "Post-Apocalyptic" | "Horror" | "Mystery" | "Urban Fantasy" | "";
 export type MagicSystem = "High Magic (Common & Powerful)" | "Low Magic (Rare & Subtle)" | "Elemental Magic" | "Psionics" | "No Magic" | "";
 export type TechLevel = "Primitive" | "Medieval" | "Renaissance" | "Industrial" | "Modern" | "Futuristic" | "";
@@ -27,44 +26,40 @@ export interface AdventureSettings {
   adventureType: AdventureType;
   permanentDeath: boolean;
   difficulty: DifficultyLevel;
-  // Fields for Custom Adventure
   worldType?: string;
   mainQuestline?: string;
   genreTheme?: GenreTheme;
   magicSystem?: MagicSystem;
   techLevel?: TechLevel;
   dominantTone?: DominantTone;
-  startingSituation?: string; // Text input
+  startingSituation?: string;
   combatFrequency?: CombatFrequency;
   puzzleFrequency?: PuzzleFrequency;
   socialFocus?: SocialFocus;
-  // Fields for Immersed Adventure
   universeName?: string;
-  playerCharacterConcept?: string; // Can be an existing character name or a concept for a new one
-  characterOriginType?: 'existing' | 'original'; // New field for Immersed mode
+  playerCharacterConcept?: string;
+  characterOriginType?: 'existing' | 'original';
 }
 
 /** Represents a single entry in the adventure's story log. */
 export interface StoryLogEntry {
   narration: string;
   updatedGameState: string;
-  // Character progression updates from AI
   updatedStats?: Partial<CharacterStats>;
   updatedTraits?: string[];
   updatedKnowledge?: string[];
-  progressedToStage?: number; // Optional: AI indicates skill stage progression
-  suggestedClassChange?: string; // Optional: AI suggests a class change
+  progressedToStage?: number;
+  suggestedClassChange?: string;
   timestamp: number;
-  // Resource changes from AI
-  staminaChange?: number; // Negative for cost, positive for gain
-  manaChange?: number; // Negative for cost, positive for gain
-  gainedSkill?: Skill; // Optional: If a new skill was learned/gained
-  xpGained?: number; // Optional: XP awarded by AI for the action/event
-  reputationChange?: ReputationChange; // Optional: Reputation change awarded by AI
-  npcRelationshipChange?: NpcRelationshipChange; // Optional: NPC Relationship change awarded by AI
-  // Branching choices
+  staminaChange?: number;
+  manaChange?: number;
+  gainedSkill?: Skill;
+  xpGained?: number;
+  reputationChange?: { faction: string; change: number };
+  npcRelationshipChange?: { npcName: string; change: number };
   branchingChoices?: { text: string; consequenceHint?: string }[];
   dynamicEventTriggered?: string;
+  isCharacterDefeated?: boolean; // Added to explicitly track defeat in narration
 }
 
 /** Represents a saved adventure state. */
@@ -82,3 +77,22 @@ export interface SavedAdventure {
     turnCount?: number;
 }
 
+/** Structure for Firestore co-op session documents */
+export interface FirestoreCoopSession {
+    sessionId: string;
+    hostUid: string;
+    players: string[]; // Array of player UIDs
+    status: 'lobby' | 'playing' | 'ended';
+    createdAt: number; // Firestore timestamp or server timestamp
+    currentTurnUid?: string | null; // UID of the player whose turn it is
+    turnCount?: number;
+    adventureSettings: AdventureSettings;
+    storyLog: StoryLogEntry[];
+    currentGameStateString: string;
+    // For co-op, character and inventory might be shared or handled per player.
+    // For simplicity, we might start with a shared character or a host-controlled one.
+    sharedCharacter?: Character | null; // Or a more complex structure for multiple characters
+    sharedInventory?: InventoryItem[];
+    lastActionBy?: string; // UID of player who took the last action
+    lastActionTimestamp?: number;
+}

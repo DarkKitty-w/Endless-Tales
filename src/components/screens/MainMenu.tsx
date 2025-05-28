@@ -1,3 +1,4 @@
+
 // src/components/screens/MainMenu.tsx
 "use client";
 
@@ -5,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { useGame } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Play, Users, Settings, Sparkles, FolderClock, ChevronDown, Info, Dices, Swords } from "lucide-react"; // Added Dices, Swords
+import { Play, Users, Settings, Sparkles, FolderClock, ChevronDown, Info, Dices, Swords } from "lucide-react";
 import { SettingsPanel } from '@/components/screens/SettingsPanel';
 import {
   Sheet,
@@ -34,9 +35,13 @@ export function MainMenu() {
 
   const handleNewGameFlow = (adventureType: AdventureType) => {
     console.log(`MainMenu: Starting new game flow for type: ${adventureType}`);
-    dispatch({ type: "RESET_GAME" }); 
-    dispatch({ type: "SET_ADVENTURE_TYPE", payload: adventureType }); 
-    dispatch({ type: "SET_GAME_STATUS", payload: "AdventureSetup" });
+    dispatch({ type: "RESET_GAME" });
+    dispatch({ type: "SET_ADVENTURE_TYPE", payload: adventureType });
+    if (adventureType === "Coop") {
+        dispatch({ type: "SET_GAME_STATUS", payload: "CoopLobby" });
+    } else {
+        dispatch({ type: "SET_GAME_STATUS", payload: "AdventureSetup" });
+    }
   };
 
   const handleViewSaved = () => {
@@ -86,9 +91,9 @@ export function MainMenu() {
                   <Sparkles className="mr-2 h-4 w-4" /> Immersed Adventure
                 </DropdownMenuItem>
                  <DropdownMenuSeparator />
-                 <DropdownMenuItem disabled className="cursor-not-allowed opacity-50">
-                  <Users className="mr-2 h-4 w-4" /> Co-op Adventure (Coming Soon)
-                </DropdownMenuItem>
+                 <DropdownMenuItem onClick={() => handleNewGameFlow("Coop")} className="cursor-pointer">
+                    <Users className="mr-2 h-4 w-4" /> Co-op Adventure
+                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -102,9 +107,9 @@ export function MainMenu() {
                 <Image
                     src='https://storage.ko-fi.com/cdn/kofi5.png?v=6'
                     alt='Buy Me a Coffee at ko-fi.com'
-                    width={150} 
-                    height={36} 
-                    style={{border: '0px', height: '36px', width: 'auto'}} 
+                    width={150}
+                    height={36}
+                    style={{border: '0px', height: '36px', width: 'auto'}}
                 />
             </a>
         </CardFooter>

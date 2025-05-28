@@ -1,10 +1,11 @@
+
 // src/context/game-actions.ts
 import type { GameStatus, GameState } from "@/types/game-types";
 import type {
     Character, SkillTree, Skill, ReputationChange, NpcRelationshipChange, CharacterStats,
 } from "@/types/character-types";
 import type { InventoryItem } from "@/types/inventory-types";
-import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel, AdventureType } from "@/types/adventure-types";
+import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel, AdventureType, FirestoreCoopSession } from "@/types/adventure-types";
 
 /** Defines all possible actions that can be dispatched to the game reducer. */
 export type Action =
@@ -16,7 +17,7 @@ export type Action =
   | { type: "SET_AI_DESCRIPTION"; payload: string }
   | { type: "SET_ADVENTURE_SETTINGS"; payload: Partial<AdventureSettings> }
   | { type: "START_GAMEPLAY" }
-  | { type: "UPDATE_NARRATION"; payload: StoryLogEntry & { isCharacterDefeated?: boolean } }
+  | { type: "UPDATE_NARRATION"; payload: StoryLogEntry }
   | { type: "GRANT_XP"; payload: number }
   | { type: "LEVEL_UP"; payload: { newLevel: number; newXpToNextLevel: number } }
   | { type: "UPDATE_REPUTATION"; payload: ReputationChange }
@@ -48,4 +49,5 @@ export type Action =
   | { type: "ADD_PLAYER"; payload: string } // UID of player to add
   | { type: "REMOVE_PLAYER"; payload: string } // UID of player to remove
   | { type: "SET_CURRENT_PLAYER_UID"; payload: string | null }
-  | { type: "SET_IS_HOST"; payload: boolean };
+  | { type: "SET_IS_HOST"; payload: boolean }
+  | { type: "SYNC_COOP_SESSION_STATE"; payload: Partial<FirestoreCoopSession> }; // New action to sync with Firestore
