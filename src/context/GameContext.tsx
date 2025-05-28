@@ -13,6 +13,7 @@ import { SAVED_ADVENTURES_KEY, THEME_ID_KEY, THEME_MODE_KEY, USER_API_KEY_KEY } 
 import type { SavedAdventure } from "@/types/adventure-types";
 import { auth } from '@/lib/firebase';
 import type { User } from 'firebase/auth';
+import { signInAnonymously } from "firebase/auth"; // Import signInAnonymously
 import { listenToSessionUpdates } from "@/services/multiplayer-service";
 
 
@@ -70,19 +71,29 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
          if (!loadedStateApplied && state.selectedThemeId === initialState.selectedThemeId && state.isDarkMode === initialState.isDarkMode && state.userGoogleAiApiKey === initialState.userGoogleAiApiKey) {
              applyTheme(initialState.selectedThemeId, initialState.isDarkMode);
          }
-        const unsubscribeAuth = auth.onAuthStateChanged((user: User | null) => {
+        const unsubscribeAuth = auth.onAuthStateChanged(async (user: User | null) => { // Make async
             if (user) {
                 console.log("GameProvider: Firebase Auth user signed in:", user.uid);
                 dispatch({ type: 'SET_CURRENT_PLAYER_UID', payload: user.uid });
             } else {
-                console.log("GameProvider: Firebase Auth user signed out.");
-                dispatch({ type: 'SET_CURRENT_PLAYER_UID', payload: null });
+                console.log("GameProvider: Firebase Auth user signed out or no user. Attempting anonymous sign-in.");
+                try {
+                    const userCredential = await signInAnonymously(auth);
+                    console.log("GameProvider: Signed in anonymously:", userCredential.user.uid);
+                    // onAuthStateChanged will fire again with the new anonymous user,
+                    // so dispatching SET_CURRENT_PLAYER_UID here might be redundant
+                    // but it doesn't hurt.
+                    dispatch({ type: 'SET_CURRENT_PLAYER_UID', payload: userCredential.user.uid });
+                } catch (error) {
+                    console.error("GameProvider: Error signing in anonymously:", error);
+                    dispatch({ type: 'SET_CURRENT_PLAYER_UID', payload: null }); // Ensure UID is null on failure
+                }
             }
         });
         return () => {
             unsubscribeAuth();
         };
-    }, [applyTheme]);
+    }, [applyTheme]); // applyTheme is stable due to useCallback
 
       useEffect(() => {
          applyTheme(state.selectedThemeId, state.isDarkMode);
@@ -158,7 +169,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
          class: state.character?.class,
          stage: `${currentStageName} (${state.character?.skillTreeStage ?? 0}/4)`,
          health: `${state.character?.currentHealth}/${state.character?.maxHealth}`,
-         stamina: `${state.character?.currentStamina}/${state.character?.maxStamina}`,
+         actionStamina: `${state.character?.currentStamina}/${state.character?.maxStamina}`, // Changed from stamina to actionStamina for clarity
          mana: `${state.character?.currentMana}/${state.character?.maxMana}`,
          adventureId: state.currentAdventureId,
          settings: state.adventureSettings,
@@ -190,3 +201,6 @@ export const useGame = () => {
   }
   return context;
 };
+
+
+      
