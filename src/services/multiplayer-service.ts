@@ -1,6 +1,6 @@
 
 // src/services/multiplayer-service.ts
-"use server"; // Mark as server component if it contains server-only logic, or remove if client-side only
+// REMOVED 'use server'; directive as this file contains client-side Firebase interactions
 
 import { db, auth } from "@/lib/firebase"; // Assuming auth might be needed for UID later
 import {
@@ -160,7 +160,7 @@ export async function hostStartGame(sessionId: string, hostUid: string): Promise
     if (sessionData.status !== 'lobby') throw new Error("Game is not in lobby state.");
 
     const startGameLog: StoryLogEntry = {
-        narration: `The adventure begins! Host ${hostUid} has started the game.`,
+        narration: `The adventure begins! Host ${hostUid.substring(0,6)}... has started the game.`, // Shorten UID for log
         updatedGameState: "Game started by host.",
         timestamp: Timestamp.now().toMillis()
     };
