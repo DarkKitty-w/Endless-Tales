@@ -2,15 +2,14 @@
 import {genkit, GenerationCommonConfig} from 'genkit';
 import {googleAI, GoogleAIGenerativeAI} from '@genkit-ai/googleai';
 
+const googleAiPlugin = googleAI({
+  apiKey: process.env.GOOGLE_GENAI_API_KEY,
+});
+
 // Base configuration for Genkit
 export const ai = genkit({
   promptDir: './prompts',
-  plugins: [
-    googleAI({
-      apiKey: process.env.GOOGLE_GENAI_API_KEY,
-    }),
-  ],
-  model: 'googleai/gemini-2.0-flash',
+  plugins: [googleAiPlugin],
 });
 
 /**
@@ -27,5 +26,5 @@ export function getModel(userApiKey?: string | null): GoogleAIGenerativeAI {
         return dynamicGoogleAI.model('gemini-2.0-flash');
     }
     // Fallback to the default, globally configured model
-    return ai.model('googleai/gemini-2.0-flash');
+    return googleAiPlugin.model('gemini-2.0-flash');
 }
