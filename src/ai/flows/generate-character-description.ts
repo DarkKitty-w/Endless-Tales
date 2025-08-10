@@ -101,7 +101,8 @@ const generateCharacterDescriptionFlow = ai.defineFlow<
   async (input) => {
     console.log("Sending to generateCharacterDescriptionPrompt:", JSON.stringify(input, null, 2));
     const model = getModel(input.userApiKey);
-    const { output } = await model.generate({
+    const { output } = await ai.generate({
+        model: model,
         prompt: prompt,
         input: input,
         output: { schema: GenerateCharacterDescriptionOutputSchema }

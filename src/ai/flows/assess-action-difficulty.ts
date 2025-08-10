@@ -96,7 +96,8 @@ const assessActionDifficultyFlow = ai.defineFlow<
   async (input) => {
      console.log("Sending to assessActionDifficultyPrompt:", JSON.stringify(input, null, 2));
      const model = getModel(input.userApiKey);
-     const {output} = await model.generate({
+     const {output} = await ai.generate({
+        model: model,
         prompt: assessActionDifficultyPrompt,
         input: input,
         output: { schema: AssessActionDifficultyOutputSchema }

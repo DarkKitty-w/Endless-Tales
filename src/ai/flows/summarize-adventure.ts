@@ -1,3 +1,4 @@
+
 'use server';
 /**
  * @fileOverview Summarizes the key events, choices, and consequences of a player's adventure.
@@ -52,7 +53,8 @@ const summarizeAdventureFlow = ai.defineFlow<
   },
   async input => {
     const model = getModel(input.userApiKey);
-    const {output} = await model.generate({
+    const {output} = await ai.generate({
+        model: model,
         prompt: prompt,
         input: input,
         output: { schema: SummarizeAdventureOutputSchema }
