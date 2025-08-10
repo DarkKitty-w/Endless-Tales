@@ -1,3 +1,4 @@
+
 // src/components/screens/AdventureSetup.tsx
 "use client";
 
@@ -484,7 +485,7 @@ export function AdventureSetup() {
            <Button variant="outline" onClick={handleBack} disabled={isLoadingImmersedCharacter || isSuggestingNameLoading}> <ArrowLeft className="mr-2 h-4 w-4" /> Back to Main Menu </Button>
            <Button onClick={handleStartAdventure} disabled={isProceedDisabled} className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"> 
             {(isLoadingImmersedCharacter || isSuggestingNameLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isLoadingImmersedCharacter ? "Preparing Character..." : (isSuggestingNameLoading ? "Suggesting..." : proceedButtonText)}
+            {isLoadingImmersedCharacter ? "Preparing Character..." : (isSuggestingNameLoading ? "Suggesting..." : (state.character ? "Start Adventure" : "Proceed to Character Creation"))}
            </Button>
         </CardFooter>
       </CardboardCard>
