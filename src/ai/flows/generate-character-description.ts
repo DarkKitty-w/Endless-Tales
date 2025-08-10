@@ -101,11 +101,7 @@ const generateCharacterDescriptionFlow = ai.defineFlow<
   async (input) => {
     console.log("Sending to generateCharacterDescriptionPrompt:", JSON.stringify(input, null, 2));
     const model = getModel(input.userApiKey);
-    const { output } = await ai.generate({
-        model: model,
-        prompt: prompt,
-        input: input,
-    });
+    const { output } = await prompt(input, { model: model });
 
     if (!output || !output.detailedDescription) {
         console.error("AI description generation failed to return a valid output.", output);

@@ -122,11 +122,7 @@ const generateSkillTreeFlow = ai.defineFlow<
         console.log(`generateSkillTreeFlow: AI call attempt ${attempt} for class "${input.characterClass}"...`);
         try {
             const model = getModel(input.userApiKey);
-            const result = await ai.generate({
-                model: model,
-                prompt: generateSkillTreePrompt,
-                input: input,
-            });
+            const result = await generateSkillTreePrompt(input, { model: model });
             output = result.output;
 
             // Validate the structure of the output

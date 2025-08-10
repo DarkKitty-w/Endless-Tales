@@ -96,11 +96,7 @@ const assessActionDifficultyFlow = ai.defineFlow<
   async (input) => {
      console.log("Sending to assessActionDifficultyPrompt:", JSON.stringify(input, null, 2));
      const model = getModel(input.userApiKey);
-     const {output} = await ai.generate({
-        model: model,
-        prompt: assessActionDifficultyPrompt,
-        input: input,
-     });
+     const {output} = await assessActionDifficultyPrompt(input, { model: model });
 
      if (!output || !output.difficulty || !output.reasoning || !output.suggestedDice) {
         console.error("AI difficulty assessment output missing or invalid:", output);

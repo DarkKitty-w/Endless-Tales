@@ -53,11 +53,7 @@ const summarizeAdventureFlow = ai.defineFlow<
   },
   async input => {
     const model = getModel(input.userApiKey);
-    const {output} = await ai.generate({
-        model: model,
-        prompt: prompt,
-        input: input,
-    });
+    const {output} = await prompt(input, { model: model });
     return output!;
   }
 );
