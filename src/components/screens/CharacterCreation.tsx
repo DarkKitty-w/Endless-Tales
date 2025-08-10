@@ -409,7 +409,15 @@ export function CharacterCreation() {
             background: finalBackground, stats: { ...stats }, 
             aiGeneratedDescription: finalAiGeneratedDescription,
         };
-        dispatch({ type: "CREATE_CHARACTER_AND_SETUP", payload: characterDataToDispatch });
+
+        if (state.adventureSettings.adventureType === "Randomized") {
+            // For randomized, we now go to AdventureSetup
+            dispatch({ type: "UPDATE_CHARACTER", payload: characterDataToDispatch });
+            dispatch({ type: "SET_GAME_STATUS", payload: "AdventureSetup" });
+        } else {
+            // For Custom/Immersed-Original, this is the final step before Gameplay
+            dispatch({ type: "CREATE_CHARACTER_AND_SETUP", payload: characterDataToDispatch });
+        }
      });
    };
 
@@ -458,6 +466,10 @@ export function CharacterCreation() {
         </div>
     );
   }
+  
+  const proceedButtonText = state.adventureSettings.adventureType === "Randomized"
+      ? "Proceed to Adventure Setup"
+      : "Start Adventure";
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
@@ -587,10 +599,7 @@ export function CharacterCreation() {
                             aria-label="Save character and proceed"
                         >
                             <Save className="mr-2 h-4 w-4" />
-                            {state.adventureSettings.adventureType === "Immersed" && state.adventureSettings.characterOriginType === 'existing'
-                                ? "Start Adventure" 
-                                : "Proceed to Adventure Setup" 
-                            }
+                            {proceedButtonText}
                         </Button>
                     </div>
                 </CardFooter>

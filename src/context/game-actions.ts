@@ -50,4 +50,4 @@ export type Action =
   | { type: "REMOVE_PLAYER"; payload: string } // UID of player to remove
   | { type: "SET_CURRENT_PLAYER_UID"; payload: string | null }
   | { type: "SET_IS_HOST"; payload: boolean }
-  | { type: "SYNC_COOP_SESSION_STATE"; payload: Partial<FirestoreCoopSession> }; // New action to sync with Firestore
+  | { type: "SYNC_COOP_SESSION_STATE"; payload: Partial<FirestoreCoopSession> };
