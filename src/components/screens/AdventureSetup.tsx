@@ -309,7 +309,10 @@ export function AdventureSetup() {
           {customError && ( <Alert variant="destructive"> <AlertDescription>{customError}</AlertDescription> </Alert> )}
 
           {adventureTypeFromContext === "Randomized" && (
-             <div className="space-y-4 pt-2 text-center"> <p className="text-sm text-muted-foreground italic">A unique world, quests, and challenges will be generated based on your character.</p> </div>
+             <div className="space-y-4 pt-2 text-center">
+                 {state.character && <p className="text-sm text-foreground">Character '<span className="font-semibold">{state.character.name}</span>' is ready. Finalize your adventure settings below.</p>}
+                 {!state.character && <p className="text-sm text-muted-foreground italic">A unique world will be generated for your character.</p>}
+             </div>
           )}
 
           {adventureTypeFromContext === "Custom" && (
@@ -485,10 +488,12 @@ export function AdventureSetup() {
            <Button variant="outline" onClick={handleBack} disabled={isLoadingImmersedCharacter || isSuggestingNameLoading}> <ArrowLeft className="mr-2 h-4 w-4" /> Back to Main Menu </Button>
            <Button onClick={handleStartAdventure} disabled={isProceedDisabled} className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"> 
             {(isLoadingImmersedCharacter || isSuggestingNameLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {isLoadingImmersedCharacter ? "Preparing Character..." : (isSuggestingNameLoading ? "Suggesting..." : (state.character ? "Start Adventure" : "Proceed to Character Creation"))}
+            {isLoadingImmersedCharacter ? "Preparing Character..." : (isSuggestingNameLoading ? "Suggesting..." : (proceedButtonText))}
            </Button>
         </CardFooter>
       </CardboardCard>
     </div>
   );
 }
+
+    
