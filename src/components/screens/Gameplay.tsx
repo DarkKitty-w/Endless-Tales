@@ -1,4 +1,3 @@
-
 // src/components/screens/Gameplay.tsx
 "use client";
 
@@ -65,7 +64,7 @@ export function Gameplay() {
         character, currentNarration, currentGameStateString, storyLog,
         adventureSettings, inventory, currentAdventureId,
         isGeneratingSkillTree: contextIsGeneratingSkillTree,
-        turnCount
+        turnCount, userGoogleAiApiKey
     } = state;
 
     const [isLoading, setIsLoading] = useState(false); // For subsequent narrations
@@ -128,7 +127,7 @@ export function Gameplay() {
             const fullStory = finalLogToSummarize.map((log, index) => `[Turn ${index + 1}]\n${log.narration}`).join("\n\n---\n\n");
             if (fullStory.trim().length > 0) {
                 try {
-                    const summaryResult = await summarizeAdventure({ story: fullStory });
+                    const summaryResult = await summarizeAdventure({ story: fullStory, userApiKey: userGoogleAiApiKey });
                     summary = summaryResult.summary;
                     toast({ title: "Summary Generated", description: "View your adventure outcome." });
                 } catch (summaryError: any) {
@@ -140,7 +139,7 @@ export function Gameplay() {
         }
         dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationEntry } });
         setIsEnding(false);
-    }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, localIsGeneratingSkillTree, contextIsGeneratingSkillTree, storyLog, dispatch, toast, character, isCraftingLoading]);
+    }, [isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice, localIsGeneratingSkillTree, contextIsGeneratingSkillTree, storyLog, dispatch, toast, character, isCraftingLoading, userGoogleAiApiKey]);
 
     const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
         console.log(`Gameplay: handlePlayerAction called. Action: "${action.substring(0,50)}...", isInitialAction: ${isInitialAction}`);
@@ -167,17 +166,7 @@ export function Gameplay() {
 
         try {
             if (character.class === 'admin000') {
-                const devOutput = processDevCommand({character, playerChoice: action, gameState: currentGameStateString, adventureSettings, turnCount});
-                dispatch({ type: "UPDATE_NARRATION", payload: { narration: devOutput.narration, updatedGameState: devOutput.updatedGameState, timestamp: Date.now(), branchingChoices: devOutput.branchingChoices } });
-                if (devOutput.xpGained) dispatch({type: 'GRANT_XP', payload: devOutput.xpGained});
-                if (devOutput.progressedToStage !== undefined) dispatch({type: 'PROGRESS_SKILL_STAGE', payload: devOutput.progressedToStage});
-                if (devOutput.healthChange) dispatch({ type: 'UPDATE_CHARACTER', payload: { currentHealth: Math.max(0, Math.min(character.maxHealth, character.currentHealth + devOutput.healthChange)) } });
-                if (devOutput.staminaChange) dispatch({ type: 'UPDATE_CHARACTER', payload: { currentStamina: Math.max(0, Math.min(character.maxStamina, character.currentStamina + devOutput.staminaChange)) } });
-                if (devOutput.manaChange) dispatch({ type: 'UPDATE_CHARACTER', payload: { currentMana: Math.max(0, Math.min(character.maxMana, character.currentMana + devOutput.manaChange)) } });
-                if (devOutput.updatedTraits) dispatch({ type: 'UPDATE_CHARACTER', payload: { traits: devOutput.updatedTraits } });
-                if (devOutput.updatedKnowledge) dispatch({ type: 'UPDATE_CHARACTER', payload: { knowledge: devOutput.updatedKnowledge } });
-                if (devOutput.gainedSkill) dispatch({ type: 'UPDATE_CHARACTER', payload: { learnedSkills: [...character.learnedSkills, devOutput.gainedSkill] } });
-                setBranchingChoices(devOutput.branchingChoices || GENERIC_BRANCHING_CHOICES);
+                // Dev commands are now handled synchronously inside Gameplay.tsx to directly dispatch state changes
                 return;
             }
 
@@ -195,6 +184,7 @@ export function Gameplay() {
                     playerAction: action, characterCapabilities: capabilitiesSummary, characterClass: character.class,
                     currentSituation: currentNarration?.narration || "At the beginning of the scene.",
                     gameStateSummary: currentGameStateString, gameDifficulty: adventureSettings.difficulty, turnCount: turnCount,
+                    userApiKey: userGoogleAiApiKey,
                 };
                 const assessmentResult = await assessActionDifficulty(assessmentInput);
                 setIsAssessingDifficulty(false);
@@ -269,6 +259,7 @@ export function Gameplay() {
                 isCustomAdventure: adventureSettings.adventureType === "Custom",
                 isRandomizedAdventure: adventureSettings.adventureType === "Randomized",
                 isImmersedAdventure: adventureSettings.adventureType === "Immersed",
+                userApiKey: userGoogleAiApiKey,
             };
 
             const narrationResult = await narrateAdventure(inputForAI);
@@ -322,7 +313,7 @@ export function Gameplay() {
     }, [
         character, inventory, isLoading, isEnding, isSaving, isAssessingDifficulty, isRollingDice,
         localIsGeneratingSkillTree, contextIsGeneratingSkillTree, currentGameStateString, currentNarration, storyLog, adventureSettings, turnCount,
-        dispatch, toast, handleEndAdventure, isCraftingLoading 
+        dispatch, toast, handleEndAdventure, isCraftingLoading, userGoogleAiApiKey
     ]);
 
     const handleRetryNarration = useCallback(() => {
@@ -364,7 +355,7 @@ export function Gameplay() {
         toast({ title: "Generating Skill Tree...", description: `Crafting abilities for the ${charClass} class...`, duration: 3000 });
         
         try {
-            const skillTreeResult = await generateSkillTree({ characterClass: charClass });
+            const skillTreeResult = await generateSkillTree({ characterClass: charClass, userApiKey: userGoogleAiApiKey });
             if (skillTreeResult && skillTreeResult.stages.length === 5) { 
                 dispatch({ type: "SET_SKILL_TREE", payload: { class: charClass, skillTree: skillTreeResult } });
                 toast({ title: "Skill Tree Generated!", description: `The path of the ${charClass} is set.` });
@@ -381,7 +372,7 @@ export function Gameplay() {
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false });
             setLocalIsGeneratingSkillTree(false);
         }
-    }, [dispatch, toast, adventureSettings.adventureType, character, contextIsGeneratingSkillTree]);
+    }, [dispatch, toast, adventureSettings.adventureType, character, contextIsGeneratingSkillTree, userGoogleAiApiKey]);
 
     useEffect(() => {
         const performInitialSetup = async () => {
@@ -470,7 +461,7 @@ export function Gameplay() {
          try {
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: true });
             setLocalIsGeneratingSkillTree(true);
-             newSkillTreeResult = await generateSkillTree({ characterClass: newClass });
+             newSkillTreeResult = await generateSkillTree({ characterClass: newClass, userApiKey: userGoogleAiApiKey });
              if (newSkillTreeResult && newSkillTreeResult.stages.length === 5) { 
                  dispatch({ type: "CHANGE_CLASS_AND_RESET_SKILLS", payload: { newClass, newSkillTree: newSkillTreeResult } });
                  toast({ title: `Class Changed to ${newClass}!`, description: "Your abilities and progression have been reset." });
@@ -483,7 +474,7 @@ export function Gameplay() {
              dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false });
              setLocalIsGeneratingSkillTree(false);
          }
-     }, [character, dispatch, toast, localIsGeneratingSkillTree, adventureSettings.adventureType]);
+     }, [character, dispatch, toast, localIsGeneratingSkillTree, adventureSettings.adventureType, userGoogleAiApiKey]);
 
     const handleGoBack = useCallback(() => {
         if (isLoading || isEnding || isSaving) return;
@@ -501,21 +492,17 @@ export function Gameplay() {
         toast({ title: "Suggestion", description: `Try: "${suggestion}"`, duration: 3000 });
     }, [isLoading, isEnding, isSaving, character, toast]);
 
-    const processDevCommand = (input: {character: Character, playerChoice: string, gameState: string, adventureSettings: AdventureSettings, turnCount: number}): NarrateAdventureOutput => {
-        let devNarration = `(Developer Mode) Player chose: "${input.playerChoice}".`;
-        const command = input.playerChoice.trim().toLowerCase();
+    const processDevCommand = useCallback((action: string) => {
+        if (!character) return;
+        
+        let devNarration = `(Developer Mode) Player chose: "${action}".`;
+        const command = action.trim().toLowerCase();
         const parts = command.split(' ');
         const baseCommand = parts[0];
         const value = parts.length > 1 ? parts.slice(1).join(' ') : undefined;
-
+        
+        const updates: Partial<Character> = {};
         let xpGained: number | undefined;
-        let progressedToStage: number | undefined;
-        let healthChange: number | undefined;
-        let staminaChange: number | undefined;
-        let manaChange: number | undefined;
-        let updatedTraits: string[] | undefined;
-        let updatedKnowledge: string[] | undefined;
-        let gainedSkill: Skill | undefined;
 
         if (baseCommand === '/xp' && value) {
             const amount = parseInt(value, 10);
@@ -523,62 +510,63 @@ export function Gameplay() {
             else { devNarration += " - Invalid XP amount."; }
         } else if (baseCommand === '/stage' && value) {
             const stageNum = parseInt(value, 10);
-            if (!isNaN(stageNum) && stageNum >= 0 && stageNum <= 4) { progressedToStage = stageNum; devNarration += ` Set skill stage to ${stageNum}.`; }
+            if (!isNaN(stageNum) && stageNum >= 0 && stageNum <= 4) { updates.skillTreeStage = stageNum; devNarration += ` Set skill stage to ${stageNum}.`; }
             else { devNarration += " - Invalid stage number (0-4)."; }
-        } else if (baseCommand === '/health' && value && input.character) {
+        } else if (baseCommand === '/health' && value) {
             const amount = parseInt(value, 10);
             if (!isNaN(amount)) {
-                const newHealth = Math.max(0, Math.min(input.character.maxHealth, input.character.currentHealth + amount));
-                healthChange = newHealth - input.character.currentHealth;
-                devNarration += ` Adjusted health by ${healthChange}. New health: ${newHealth}.`;
-            } else {
-                devNarration += " - Invalid health amount.";
-            }
-        } else if (baseCommand === '/stamina' && value && input.character) {
+                const newHealth = Math.max(0, Math.min(character.maxHealth, character.currentHealth + amount));
+                updates.currentHealth = newHealth;
+                devNarration += ` Adjusted health by ${amount}. New health: ${newHealth}.`;
+            } else { devNarration += " - Invalid health amount."; }
+        } else if (baseCommand === '/stamina' && value) {
             const amount = parseInt(value, 10);
             if (!isNaN(amount)) {
-                const newStamina = Math.max(0, Math.min(input.character.maxStamina, input.character.currentStamina + amount));
-                staminaChange = newStamina - input.character.currentStamina;
-                devNarration += ` Adjusted action stamina by ${staminaChange}. New action stamina: ${newStamina}.`;
-            } else {
-                devNarration += " - Invalid action stamina amount.";
-            }
-        } else if (baseCommand === '/mana' && value && input.character) {
+                updates.currentStamina = Math.max(0, Math.min(character.maxStamina, character.currentStamina + amount));
+                devNarration += ` Adjusted action stamina by ${amount}.`;
+            } else { devNarration += " - Invalid action stamina amount."; }
+        } else if (baseCommand === '/mana' && value) {
             const amount = parseInt(value, 10);
             if (!isNaN(amount)) {
-                const newMana = Math.max(0, Math.min(input.character.maxMana, input.character.currentMana + amount));
-                manaChange = newMana - input.character.currentMana;
-                devNarration += ` Adjusted mana by ${manaChange}. New mana: ${newMana}.`;
-            } else {
-                devNarration += " - Invalid mana amount.";
-            }
-        } else if (baseCommand === '/addtrait' && value && input.character) {
-            updatedTraits = [...(input.character.traits || []), value];
+                updates.currentMana = Math.max(0, Math.min(character.maxMana, character.currentMana + amount));
+                devNarration += ` Adjusted mana by ${amount}.`;
+            } else { devNarration += " - Invalid mana amount."; }
+        } else if (baseCommand === '/addtrait' && value) {
+            updates.traits = [...character.traits, value];
             devNarration += ` Added trait: ${value}.`;
-        } else if (baseCommand === '/addknowledge' && value && input.character) {
-            updatedKnowledge = [...(input.character.knowledge || []), value];
+        } else if (baseCommand === '/addknowledge' && value) {
+            updates.knowledge = [...character.knowledge, value];
             devNarration += ` Added knowledge: ${value}.`;
-        } else if (baseCommand === '/addskill' && value && input.character) {
-            gainedSkill = { name: value, description: "Developer added skill", type: 'Learned' };
+        } else if (baseCommand === '/addskill' && value) {
+            updates.learnedSkills = [...character.learnedSkills, { name: value, description: "Developer added skill", type: 'Learned' }];
             devNarration += ` Added skill: ${value}.`;
         } else {
             devNarration += " Action processed. Dev restrictions bypassed.";
         }
 
-        return {
+        if (Object.keys(updates).length > 0) dispatch({ type: "UPDATE_CHARACTER", payload: updates });
+        if (xpGained) dispatch({ type: "GRANT_XP", payload: xpGained });
+        
+        const devLogEntry: StoryLogEntry = {
             narration: devNarration,
-            updatedGameState: `${input.gameState} (Dev Action: ${input.playerChoice}, Turn: ${input.turnCount + 1})`,
-            xpGained,
-            progressedToStage,
-            healthChange,
-            staminaChange,
-            manaChange,
-            updatedTraits,
-            updatedKnowledge,
-            gainedSkill,
+            updatedGameState: updateGameStateString(currentGameStateString, character, inventory, turnCount + 1),
+            timestamp: Date.now(),
             branchingChoices: GENERIC_BRANCHING_CHOICES
         };
-    }
+        
+        dispatch({ type: "UPDATE_NARRATION", payload: devLogEntry });
+        setBranchingChoices(GENERIC_BRANCHING_CHOICES);
+
+    }, [character, currentGameStateString, inventory, turnCount, dispatch]);
+
+    // New useEffect to handle dev commands
+    useEffect(() => {
+        if (character?.class === 'admin000' && lastPlayerAction && lastPlayerAction.startsWith('/')) {
+            processDevCommand(lastPlayerAction);
+            setLastPlayerAction(null); // Clear after processing
+        }
+    }, [lastPlayerAction, character, processDevCommand]);
+
 
     if (!character) {
         return ( <div className="flex flex-col items-center justify-center min-h-screen p-4 gap-4"> <Loader2 className="h-12 w-12 animate-spin text-primary" /> <p className="text-lg text-muted-foreground">Loading Character Data...</p> <Button onClick={() => dispatch({ type: 'RESET_GAME' })} variant="outline"> Return to Main Menu </Button> </div> );
@@ -603,7 +591,7 @@ export function Gameplay() {
                 <div className="flex-1 flex flex-col p-4 overflow-hidden">
                      <MobileSheet character={character} inventory={inventory} isGeneratingSkillTree={localIsGeneratingSkillTree || contextIsGeneratingSkillTree} turnCount={turnCount} renderReputation={renderReputation} renderNpcRelationships={renderNpcRelationships} onSettingsOpen={() => setIsDesktopSettingsOpen(true)} />
                     <NarrationDisplay storyLog={storyLog} isLoading={isLoading} isAssessingDifficulty={isAssessingDifficulty} isRollingDice={isRollingDice} isGeneratingSkillTree={localIsGeneratingSkillTree || contextIsGeneratingSkillTree} isEnding={isEnding} isSaving={isSaving} isCraftingLoading={isCraftingLoading} diceResult={diceResult} diceType={diceType} error={error} branchingChoices={branchingChoices} handlePlayerAction={handlePlayerAction} isInitialLoading={isInitialLoading} onRetryNarration={handleRetryNarration} />
-                    <ActionInput onSubmit={handlePlayerAction} onSuggest={handleSuggestAction} onCraft={() => setIsCraftingDialogOpen(true)} disabled={anyLoading} />
+                    <ActionInput onSubmit={handlePlayerAction} onSuggest={handleSuggestAction} onCraft={() => setIsCraftingDialogOpen(true)} disabled={anyLoading || character.class === 'admin000'} />
                     <GameplayActions onSave={handleSaveGame} onAbandon={handleGoBack} onEnd={() => handleEndAdventure(undefined, character.currentHealth <= 0)} onSettings={() => setIsDesktopSettingsOpen(true)} disabled={anyLoading} isMobile={isMobile} currentAdventureId={currentAdventureId} />
                     <ClassChangeDialog isOpen={!!pendingClassChange} onOpenChange={(open) => !open && setPendingClassChange(null)} character={character} pendingClassChange={pendingClassChange} onConfirm={handleConfirmClassChange} />
                     <CraftingDialog isOpen={isCraftingDialogOpen} onOpenChange={setIsCraftingDialogOpen} inventory={inventory} onCraft={handleCrafting} />

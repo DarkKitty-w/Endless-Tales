@@ -8,7 +8,7 @@
  * - GenerateSkillTreeOutput - The return type for the generateSkillTree function.
  */
 
-import {ai} from '@/ai/ai-instance';
+import {ai, getModel} from '@/ai/ai-instance';
 import {z} from 'genkit';
 import type { SkillTree, SkillTreeStage, Skill } from '@/types/game-types'; // Import types from central location
 
@@ -16,6 +16,7 @@ import type { SkillTree, SkillTreeStage, Skill } from '@/types/game-types'; // I
 // Define input schema first
 const GenerateSkillTreeInputSchema = z.object({
   characterClass: z.string().describe('The character class for which to generate the skill tree (e.g., Warrior, Mage, Rogue, Scholar).'),
+  userApiKey: z.string().optional().nullable().describe("User's optional Google AI API key."),
 });
 
 // Define the structure of a single skill
@@ -120,7 +121,12 @@ const generateSkillTreeFlow = ai.defineFlow<
         attempt++;
         console.log(`generateSkillTreeFlow: AI call attempt ${attempt} for class "${input.characterClass}"...`);
         try {
-            const result = await generateSkillTreePrompt(input);
+            const model = getModel(input.userApiKey);
+            const result = await model.generate({
+                prompt: generateSkillTreePrompt,
+                input: input,
+                output: { schema: GenerateSkillTreeOutputSchema }
+            });
             output = result.output;
 
             // Validate the structure of the output

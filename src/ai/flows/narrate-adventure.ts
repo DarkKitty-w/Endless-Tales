@@ -7,7 +7,7 @@
  * - NarrateAdventureInput - The input type for the narrateAdventure function.
  * - NarrateAdventureOutput - The return type for the narrateAdventure function.
  */
-import {ai}from '@/ai/ai-instance';
+import {ai, getModel}from '@/ai/ai-instance';
 import {z}from 'genkit';
 import type {
   CharacterStats,
@@ -93,6 +93,7 @@ const NarrateAdventureInputSchema = z.object({
   isCustomAdventure: z.boolean().optional(),
   isRandomizedAdventure: z.boolean().optional(),
   isImmersedAdventure: z.boolean().optional(),
+  userApiKey: z.string().optional().nullable().describe("User's optional Google AI API key."),
 });
 
 
@@ -113,7 +114,7 @@ const NarrateAdventureOutputSchema = z.object({
   xpGained: z.number().optional().describe("Optional: Amount of XP gained from the action/event (may be less relevant or narrative-driven for Immersed mode)."),
   reputationChange: z.object({ faction: z.string(), change: z.number() }).optional().describe("Optional: Change in reputation with a faction."),
   npcRelationshipChange: z.object({ npcName: z.string(), change: z.number() }).optional().describe("Optional: Change in relationship with an NPC."),
-  suggestedClassChange: z.string().optional().describe("Optional: Suggest a different class name **only if the AI detects the player's actions consistently align with a different class (not applicable for Immersed mode).**"),
+  suggestedClassChange: z.string().optional().describe("Optional: Suggest a different class name **only if the player's actions consistently align with a different class (not applicable for Immersed mode).**"),
   gainedSkill: SkillSchema.optional().describe("Optional: Details of a new skill **only if the character learned a new skill (narrative-driven for Immersed mode).**"),
   branchingChoices: z.array(BranchingChoiceSchema).length(4).describe("ALWAYS provide 4 significant choices presented to the player."),
   dynamicEventTriggered: z.string().optional().describe("Optional: A brief description **only if a random or time-based dynamic world event occurred.**"),
@@ -130,94 +131,18 @@ export async function narrateAdventure(
   console.log(`NarrateAdventure AI Flow: Called for Turn ${input.turnCount}, Action: "${input.playerChoice.substring(0,50)}..."`);
   if (input.character.class === 'admin000') {
     console.log("NarrateAdventure AI Flow: Developer Mode detected. Bypassing AI narration.");
-    return processDevCommand(input);
-  }
-  return narrateAdventureFlow(input);
-}
-
-// Helper function for developer commands
-function processDevCommand(input: NarrateAdventureInput): NarrateAdventureOutput {
-    let devNarration = `(Developer Mode) Player chose: "${input.playerChoice}".`;
-    const command = input.playerChoice.trim().toLowerCase();
-    const parts = command.split(' ');
-    const baseCommand = parts[0];
-    const value = parts.length > 1 ? parts.slice(1).join(' ') : undefined;
-
-    let xpGained: number | undefined;
-    let progressedToStage: number | undefined;
-    let healthChange: number | undefined;
-    let staminaChange: number | undefined;
-    let manaChange: number | undefined;
-    let updatedTraits: string[] | undefined;
-    let updatedKnowledge: string[] | undefined;
-    let gainedSkill: z.infer<typeof SkillSchema> | undefined;
-
-    if (baseCommand === '/xp' && value) {
-        const amount = parseInt(value, 10);
-        if (!isNaN(amount)) { xpGained = amount; devNarration += ` Granted ${amount} XP.`; }
-        else { devNarration += " - Invalid XP amount."; }
-    } else if (baseCommand === '/stage' && value) {
-        const stageNum = parseInt(value, 10);
-        if (!isNaN(stageNum) && stageNum >= 0 && stageNum <= 4) { progressedToStage = stageNum; devNarration += ` Set skill stage to ${stageNum}.`; }
-        else { devNarration += " - Invalid stage number (0-4)."; }
-    } else if (baseCommand === '/health' && value && input.character) {
-        const amount = parseInt(value, 10);
-        if (!isNaN(amount)) {
-            const newHealth = Math.max(0, Math.min(input.character.maxHealth, input.character.currentHealth + amount));
-            healthChange = newHealth - input.character.currentHealth;
-            devNarration += ` Adjusted health by ${healthChange}. New health: ${newHealth}.`;
-        } else {
-            devNarration += " - Invalid health amount.";
-        }
-    } else if (baseCommand === '/stamina' && value && input.character) {
-        const amount = parseInt(value, 10);
-        if (!isNaN(amount)) {
-            const newStamina = Math.max(0, Math.min(input.character.maxStamina, input.character.currentStamina + amount));
-            staminaChange = newStamina - input.character.currentStamina;
-            devNarration += ` Adjusted action stamina by ${staminaChange}. New action stamina: ${newStamina}.`;
-        } else {
-            devNarration += " - Invalid action stamina amount.";
-        }
-    } else if (baseCommand === '/mana' && value && input.character) {
-        const amount = parseInt(value, 10);
-        if (!isNaN(amount)) {
-            const newMana = Math.max(0, Math.min(input.character.maxMana, input.character.currentMana + amount));
-            manaChange = newMana - input.character.currentMana;
-            devNarration += ` Adjusted mana by ${manaChange}. New mana: ${newMana}.`;
-        } else {
-            devNarration += " - Invalid mana amount.";
-        }
-    } else if (baseCommand === '/addtrait' && value && input.character) {
-        updatedTraits = [...(input.character.traits || []), value];
-        devNarration += ` Added trait: ${value}.`;
-    } else if (baseCommand === '/addknowledge' && value && input.character) {
-        updatedKnowledge = [...(input.character.knowledge || []), value];
-        devNarration += ` Added knowledge: ${value}.`;
-    } else if (baseCommand === '/addskill' && value && input.character) {
-        gainedSkill = { name: value, description: "Developer added skill", type: 'Learned' };
-        devNarration += ` Added skill: ${value}.`;
-    } else {
-        devNarration += " Action processed. Dev restrictions bypassed.";
-    }
-
+    // This is now handled within Gameplay.tsx to avoid complex state passing
+    // For simplicity, we just return a basic response here.
     return {
-        narration: devNarration,
-        updatedGameState: `${input.gameState} (Dev Action: ${input.playerChoice}, Turn: ${input.turnCount + 1})`,
-        xpGained,
-        progressedToStage,
-        healthChange,
-        staminaChange,
-        manaChange,
-        updatedTraits,
-        updatedKnowledge,
-        gainedSkill,
-        branchingChoices: [ // Provide generic choices for dev mode
-            { text: "Continue as planned." },
-            { text: "Inspect the environment." },
-            { text: "Check character status." },
-            { text: "Do something unexpected." }
+        narration: `Developer command "${input.playerChoice}" processed.`,
+        updatedGameState: input.gameState,
+        branchingChoices: [
+            { text: "Continue as planned." }, { text: "Inspect the environment." },
+            { text: "Check character status." }, { text: "Do something unexpected." }
         ]
     };
+  }
+  return narrateAdventureFlow(input);
 }
 
 
@@ -341,7 +266,13 @@ const narrateAdventureFlow = ai.defineFlow(
     ];
 
     try {
-        const result = await narrateAdventurePrompt(promptInput);
+        const model = getModel(input.userApiKey);
+        const result = await model.generate({
+            prompt: narrateAdventurePrompt,
+            input: promptInput,
+            output: { schema: NarrateAdventureOutputSchema }
+        });
+
         output = result.output;
         console.log("narrateAdventureFlow: Received raw output from AI:", JSON.stringify(output, null, 2).substring(0, 2000) + "...");
 

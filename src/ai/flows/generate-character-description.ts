@@ -8,7 +8,7 @@
  * - GenerateCharacterDescriptionOutput - The return type for the generateCharacterDescription function.
  */
 
-import {ai} from '@/ai/ai-instance';
+import {ai, getModel} from '@/ai/ai-instance';
 import {z} from 'genkit';
 
 // --- Zod Schemas (Internal - Not Exported) ---
@@ -22,7 +22,8 @@ const GenerateCharacterDescriptionInputSchema = z.object({
     .describe("For Immersed mode, this includes the character concept, existing character name, or original character role. For other modes, it's the free-text description from the user."),
   isImmersedMode: z.boolean().optional().describe("Flag to indicate if this generation is for an Immersed adventure. Default false."),
   universeName: z.string().optional().describe("For Immersed mode: The name of the universe the character belongs to."),
-  playerCharacterConcept: z.string().optional().describe("For Immersed mode: The player's specific character concept, existing character name, or original character role within that universe. This helps the AI understand if it's an existing character or an original one.") 
+  playerCharacterConcept: z.string().optional().describe("For Immersed mode: The player's specific character concept, existing character name, or original character role within that universe. This helps the AI understand if it's an existing character or an original one."),
+  userApiKey: z.string().optional().nullable().describe("User's optional Google AI API key."),
 });
 
 const GenerateCharacterDescriptionOutputSchema = z.object({
@@ -99,7 +100,12 @@ const generateCharacterDescriptionFlow = ai.defineFlow<
   },
   async (input) => {
     console.log("Sending to generateCharacterDescriptionPrompt:", JSON.stringify(input, null, 2));
-    const { output } = await prompt(input);
+    const model = getModel(input.userApiKey);
+    const { output } = await model.generate({
+        prompt: prompt,
+        input: input,
+        output: { schema: GenerateCharacterDescriptionOutputSchema }
+    });
 
     if (!output || !output.detailedDescription) {
         console.error("AI description generation failed to return a valid output.", output);
@@ -133,4 +139,3 @@ const generateCharacterDescriptionFlow = ai.defineFlow<
     return output;
   }
 );
-

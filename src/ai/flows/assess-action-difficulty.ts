@@ -9,7 +9,7 @@
  * - DifficultyLevel - The possible difficulty levels.
  */
 
-import {ai} from '@/ai/ai-instance';
+import {ai, getModel} from '@/ai/ai-instance';
 import {z} from 'genkit';
 import type { DifficultyLevel } from '@/types/game-types'; 
 
@@ -25,6 +25,7 @@ const AssessActionDifficultyInputSchema = z.object({
     gameStateSummary: z.string().describe('Broader context including location, major quest progress, significant items, and achieved milestones.'),
     gameDifficulty: z.string().describe("The overall game difficulty setting (e.g., Easy, Normal, Hard, Nightmare). This should influence the baseline difficulty."),
     turnCount: z.number().describe("The current turn number. Higher turn counts might imply more complex situations or fatigued characters."),
+    userApiKey: z.string().optional().nullable().describe("User's optional Google AI API key."),
 });
 
 const AssessActionDifficultyOutputSchema = z.object({
@@ -94,7 +95,12 @@ const assessActionDifficultyFlow = ai.defineFlow<
   },
   async (input) => {
      console.log("Sending to assessActionDifficultyPrompt:", JSON.stringify(input, null, 2));
-     const {output} = await assessActionDifficultyPrompt(input);
+     const model = getModel(input.userApiKey);
+     const {output} = await model.generate({
+        prompt: assessActionDifficultyPrompt,
+        input: input,
+        output: { schema: AssessActionDifficultyOutputSchema }
+     });
 
      if (!output || !output.difficulty || !output.reasoning || !output.suggestedDice) {
         console.error("AI difficulty assessment output missing or invalid:", output);

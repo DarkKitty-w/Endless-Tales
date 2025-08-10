@@ -7,7 +7,7 @@
  * - SummarizeAdventureOutput - The return type for the summarizeAdventure function.
  */
 
-import {ai} from '@/ai/ai-instance';
+import {ai, getModel} from '@/ai/ai-instance';
 import {z} from 'genkit';
 
 // --- Zod Schemas (Internal - Not Exported) ---
@@ -15,6 +15,7 @@ const SummarizeAdventureInputSchema = z.object({
   story: z
     .string()
     .describe('The full text of the adventure story to summarize.'),
+  userApiKey: z.string().optional().nullable().describe("User's optional Google AI API key."),
 });
 
 const SummarizeAdventureOutputSchema = z.object({
@@ -50,7 +51,12 @@ const summarizeAdventureFlow = ai.defineFlow<
     outputSchema: SummarizeAdventureOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
+    const model = getModel(input.userApiKey);
+    const {output} = await model.generate({
+        prompt: prompt,
+        input: input,
+        output: { schema: SummarizeAdventureOutputSchema }
+    });
     return output!;
   }
 );

@@ -345,6 +345,7 @@ export function CharacterCreation() {
              isImmersedMode: currentAdvType === "Immersed",
              universeName: universeNameForAI,
              playerCharacterConcept: playerCharacterConceptForAI,
+             userApiKey: state.userGoogleAiApiKey,
         };
         const result: GenerateCharacterDescriptionOutput = await generateCharacterDescription(aiInput);
         
@@ -367,7 +368,7 @@ export function CharacterCreation() {
        setError("Failed to generate profile. The AI might be busy or encountered an error.");
        toast({ title: "AI Generation Failed", description: (err as Error).message || "Unknown error.", variant: "destructive" });
      } finally { setIsGenerating(false); }
-   }, [getValues, setValue, trigger, dispatch, toast, state.adventureSettings]);
+   }, [getValues, setValue, trigger, dispatch, toast, state.adventureSettings, state.userGoogleAiApiKey]);
 
 
   const onSubmit = (data: FormData) => {
