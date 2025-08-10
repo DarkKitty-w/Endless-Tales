@@ -1,4 +1,3 @@
-
 // src/components/screens/MainMenu.tsx
 "use client";
 
@@ -37,6 +36,7 @@ export function MainMenu() {
     console.log(`MainMenu: Starting new game flow for type: ${adventureType}`);
     dispatch({ type: "RESET_GAME" });
     dispatch({ type: "SET_ADVENTURE_TYPE", payload: adventureType });
+
     if (adventureType === "Coop") {
         dispatch({ type: "SET_GAME_STATUS", payload: "CoopLobby" });
     } else if (adventureType === "Randomized") {

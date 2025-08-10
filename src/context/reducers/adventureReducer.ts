@@ -1,4 +1,3 @@
-
 // src/context/reducers/adventureReducer.ts
 import type { GameState } from "@/types/game-types";
 import type { StoryLogEntry, SavedAdventure, FirestoreCoopSession } from "@/types/adventure-types";
@@ -13,66 +12,6 @@ export function adventureReducer(state: GameState, action: Action): GameState {
     switch (action.type) {
         case "SET_GAME_STATUS":
             return { ...state, status: action.payload };
-
-        case "CREATE_CHARACTER_AND_SETUP": {
-            if (state.adventureSettings.adventureType === "Coop") {
-                console.warn("AdventureReducer: CREATE_CHARACTER_AND_SETUP called in Coop mode. This should be handled by session logic.");
-                return state; // Character creation is different for co-op
-            }
-            const newCharacter = characterReducer(null, { type: "CREATE_CHARACTER", payload: action.payload });
-            if (!newCharacter) {
-                console.error("AdventureReducer: Failed to create character. Character object is null.");
-                return state;
-            }
-            if (!state.adventureSettings.adventureType) {
-                 console.error("AdventureReducer: AdventureType is null in CREATE_CHARACTER_AND_SETUP. Cannot proceed to AdventureSetup. Staying on CharacterCreation.");
-                 return { ...state, character: newCharacter, status: "CharacterCreation" };
-            }
-            const adventureId = state.currentAdventureId || generateAdventureId();
-            const turnCount = 0;
-            const currentInventory = [...initialInventory];
-            const initialGameState = updateGameStateString( `Starting adventure for ${newCharacter.name}...`, newCharacter, currentInventory, turnCount );
-            console.log("AdventureReducer: CREATE_CHARACTER_AND_SETUP - Transitioning to Gameplay. Adventure Type:", state.adventureSettings.adventureType);
-            return {
-                ...state, character: newCharacter, status: "Gameplay", currentAdventureId: adventureId,
-                inventory: currentInventory, storyLog: [], turnCount: turnCount, currentNarration: null,
-                adventureSummary: null, currentGameStateString: initialGameState,
-                isGeneratingSkillTree: state.adventureSettings.adventureType !== "Immersed" && !newCharacter.skillTree,
-            };
-        }
-
-        case "SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY": {
-            const { character: immersedCharacter, adventureSettings: immersedSettings } = action.payload;
-            if (!immersedCharacter || !immersedSettings || immersedSettings.adventureType !== "Immersed") {
-                console.error("AdventureReducer: Invalid payload for SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY");
-                return state;
-            }
-            const adventureId = generateAdventureId();
-            const turnCount = 0;
-            const currentInventory = [...initialInventory];
-            const initialGameState = updateGameStateString( "The adventure for " + immersedCharacter.name + " is about to begin...", immersedCharacter, currentInventory, turnCount );
-
-            const finalMaxHealth = calculateMaxHealth(immersedCharacter.stats);
-            const finalMaxActionStamina = calculateMaxActionStamina(immersedCharacter.stats);
-            const finalMaxMana = calculateMaxMana(immersedCharacter.stats, immersedCharacter.knowledge);
-
-            const characterWithRecalculatedResources = {
-                ...immersedCharacter,
-                maxHealth: finalMaxHealth,
-                currentHealth: finalMaxHealth,
-                maxStamina: finalMaxActionStamina,
-                currentStamina: finalMaxActionStamina,
-                maxMana: finalMaxMana,
-                currentMana: finalMaxMana,
-            };
-
-            return {
-                ...state, status: "Gameplay", character: characterWithRecalculatedResources, adventureSettings: immersedSettings,
-                inventory: currentInventory, storyLog: [], currentNarration: null, adventureSummary: null,
-                currentGameStateString: initialGameState, currentAdventureId: adventureId,
-                isGeneratingSkillTree: false, turnCount: turnCount,
-            };
-        }
 
         case "START_GAMEPLAY": {
             if (state.adventureSettings.adventureType !== "Coop" && !state.character) {
@@ -211,7 +150,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
           }
 
         case "LOAD_ADVENTURE": {
-            const adventureToLoad = state.savedAdventures.find(adv => adv.id === action.payload);
+            const adventureToLoad = action.payload;
             if (!adventureToLoad || adventureToLoad.adventureSettings.adventureType === "Coop") {
                 return state; // Do not load co-op games this way
             }

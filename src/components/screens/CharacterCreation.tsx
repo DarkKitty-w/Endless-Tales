@@ -1,4 +1,3 @@
-
 // src/components/screens/CharacterCreation.tsx
 "use client";
 
@@ -11,7 +10,7 @@ import { useGame } from "@/context/GameContext";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Wand2, RotateCcw, User, Save, AlertCircle, CheckCircle, LogOut, Loader2, TrendingUp } from "lucide-react";
+import { Wand2, RotateCcw, User, Save, AlertCircle, CheckCircle, LogOut, Loader2, TrendingUp, ArrowRight } from "lucide-react";
 import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -410,13 +409,12 @@ export function CharacterCreation() {
             aiGeneratedDescription: finalAiGeneratedDescription,
         };
 
+        dispatch({ type: "CREATE_CHARACTER", payload: characterDataToDispatch });
+
         if (state.adventureSettings.adventureType === "Randomized") {
-            // For randomized, we now go to AdventureSetup
-            dispatch({ type: "UPDATE_CHARACTER", payload: characterDataToDispatch });
             dispatch({ type: "SET_GAME_STATUS", payload: "AdventureSetup" });
-        } else {
-            // For Custom/Immersed-Original, this is the final step before Gameplay
-            dispatch({ type: "CREATE_CHARACTER_AND_SETUP", payload: characterDataToDispatch });
+        } else { // This handles the "Custom" flow correctly
+            dispatch({ type: "START_GAMEPLAY" });
         }
      });
    };
@@ -598,7 +596,7 @@ export function CharacterCreation() {
                             disabled={isProceedButtonDisabled}
                             aria-label="Save character and proceed"
                         >
-                            <Save className="mr-2 h-4 w-4" />
+                            {state.adventureSettings.adventureType === "Randomized" ? <ArrowRight className="mr-2 h-4 w-4"/> : <Save className="mr-2 h-4 w-4"/>}
                             {proceedButtonText}
                         </Button>
                     </div>

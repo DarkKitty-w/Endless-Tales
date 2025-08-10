@@ -1,4 +1,3 @@
-
 // src/context/game-actions.ts
 import type { GameStatus, GameState } from "@/types/game-types";
 import type {
@@ -11,8 +10,6 @@ import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel,
 export type Action =
   | { type: "SET_GAME_STATUS"; payload: GameStatus }
   | { type: "CREATE_CHARACTER"; payload: Partial<Character> }
-  | { type: "CREATE_CHARACTER_AND_SETUP"; payload: Partial<Character> }
-  | { type: "SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY"; payload: { character: Character, adventureSettings: AdventureSettings } }
   | { type: "UPDATE_CHARACTER"; payload: Partial<Character> }
   | { type: "SET_AI_DESCRIPTION"; payload: string }
   | { type: "SET_ADVENTURE_SETTINGS"; payload: Partial<AdventureSettings> }
@@ -27,7 +24,7 @@ export type Action =
   | { type: "RESET_GAME" }
   | { type: "LOAD_SAVED_ADVENTURES"; payload: SavedAdventure[] }
   | { type: "SAVE_CURRENT_ADVENTURE" }
-  | { type: "LOAD_ADVENTURE"; payload: string } // Payload is the adventure ID
+  | { type: "LOAD_ADVENTURE"; payload: SavedAdventure } // Payload is the full saved adventure object
   | { type: "DELETE_ADVENTURE"; payload: string } // Payload is the adventure ID
   | { type: "SET_SKILL_TREE_GENERATING"; payload: boolean }
   | { type: "SET_SKILL_TREE"; payload: { class: string; skillTree: SkillTree } }

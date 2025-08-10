@@ -12,8 +12,8 @@ export function characterReducer(state: Character | null, action: Action): Chara
                 ? { ...initialCharacterStats, ...action.payload.stats }
                 : { ...initialCharacterStats };
             const baseKnowledge = action.payload.knowledge ?? [];
-            const maxHealth = calculateMaxHealth(baseStats); // Updated
-            const maxActionStamina = calculateMaxActionStamina(baseStats); // Updated
+            const maxHealth = calculateMaxHealth(baseStats);
+            const maxActionStamina = calculateMaxActionStamina(baseStats);
             const maxMana = calculateMaxMana(baseStats, baseKnowledge);
             const characterClass = action.payload.class ?? initialCharacterState.class;
             const starterSkills = getStarterSkillsForClass(characterClass);

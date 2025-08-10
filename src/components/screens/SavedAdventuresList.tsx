@@ -47,8 +47,8 @@ export function SavedAdventuresList() {
   const { savedAdventures } = state;
   const { toast } = useToast();
 
-  const handleLoad = (id: string) => {
-    dispatch({ type: "LOAD_ADVENTURE", payload: id });
+  const handleLoad = (adventure: SavedAdventure) => {
+    dispatch({ type: "LOAD_ADVENTURE", payload: adventure });
     toast({ title: "Loading Adventure...", description: "Resuming your journey." });
   };
 
@@ -151,7 +151,7 @@ export function SavedAdventuresList() {
                           <Button
                             variant="default"
                             size="sm"
-                            onClick={() => handleLoad(adventure.id)}
+                            onClick={() => handleLoad(adventure)}
                             className="bg-accent hover:bg-accent/90 text-accent-foreground"
                           >
                             {adventure.statusBeforeSave === 'AdventureSummary' ? <BookOpenText className="mr-1 h-4 w-4"/> : <Play className="mr-1 h-4 w-4"/>}

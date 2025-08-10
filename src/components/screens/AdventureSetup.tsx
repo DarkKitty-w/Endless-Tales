@@ -1,4 +1,3 @@
-
 // src/components/screens/AdventureSetup.tsx
 "use client";
 
@@ -10,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings, Globe, ScrollText, ShieldAlert, Sparkles, AlertTriangle, BookOpen, Atom, Drama, Lightbulb as LightbulbIcon, Users as UsersIcon, Puzzle, Mic2, UserPlus, UserCheck, Loader2 } from "lucide-react"; // Added LightbulbIcon
+import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings, Globe, ScrollText, ShieldAlert, Sparkles, AlertTriangle, BookOpen, Atom, Drama, Puzzle, Users as UsersIcon, Mic2, UserPlus, UserCheck, Loader2, Lightbulb as LightbulbIcon } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -36,40 +35,41 @@ export function AdventureSetup() {
   
   const adventureTypeFromContext = state.adventureSettings.adventureType;
 
+  // Common settings
   const [permanentDeath, setPermanentDeath] = useState<boolean>(state.adventureSettings.permanentDeath ?? defaultInitialAdventureSettings.permanentDeath);
   const [difficulty, setDifficulty] = useState<DifficultyLevel>(state.adventureSettings.difficulty ?? defaultInitialAdventureSettings.difficulty);
   
-  const [worldType, setWorldType] = useState<string>(state.adventureSettings.worldType ?? defaultInitialAdventureSettings.worldType ?? "");
-  const [mainQuestline, setMainQuestline] = useState<string>(state.adventureSettings.mainQuestline ?? defaultInitialAdventureSettings.mainQuestline ?? "");
-  const [genreTheme, setGenreTheme] = useState<GenreTheme>(state.adventureSettings.genreTheme ?? defaultInitialAdventureSettings.genreTheme ?? "");
-  const [magicSystem, setMagicSystem] = useState<MagicSystem>(state.adventureSettings.magicSystem ?? defaultInitialAdventureSettings.magicSystem ?? "");
-  const [techLevel, setTechLevel] = useState<TechLevel>(state.adventureSettings.techLevel ?? defaultInitialAdventureSettings.techLevel ?? "");
-  const [dominantTone, setDominantTone] = useState<DominantTone>(state.adventureSettings.dominantTone ?? defaultInitialAdventureSettings.dominantTone ?? "");
-  const [startingSituation, setStartingSituation] = useState<string>(state.adventureSettings.startingSituation ?? defaultInitialAdventureSettings.startingSituation ?? "");
+  // Custom Adventure settings
+  const [worldType, setWorldType] = useState<string>(state.adventureSettings.worldType ?? "");
+  const [mainQuestline, setMainQuestline] = useState<string>(state.adventureSettings.mainQuestline ?? "");
+  const [genreTheme, setGenreTheme] = useState<GenreTheme>(state.adventureSettings.genreTheme ?? "");
+  const [magicSystem, setMagicSystem] = useState<MagicSystem>(state.adventureSettings.magicSystem ?? "");
+  const [techLevel, setTechLevel] = useState<TechLevel>(state.adventureSettings.techLevel ?? "");
+  const [dominantTone, setDominantTone] = useState<DominantTone>(state.adventureSettings.dominantTone ?? "");
+  const [startingSituation, setStartingSituation] = useState<string>(state.adventureSettings.startingSituation ?? "");
   const [combatFrequency, setCombatFrequency] = useState<CombatFrequency>(state.adventureSettings.combatFrequency ?? "Medium");
   const [puzzleFrequency, setPuzzleFrequency] = useState<PuzzleFrequency>(state.adventureSettings.puzzleFrequency ?? "Medium");
   const [socialFocus, setSocialFocus] = useState<SocialFocus>(state.adventureSettings.socialFocus ?? "Medium");
   
-  const [universeName, setUniverseName] = useState<string>(state.adventureSettings.universeName ?? defaultInitialAdventureSettings.universeName ?? "");
-  const [playerCharacterConcept, setPlayerCharacterConcept] = useState<string>(state.adventureSettings.playerCharacterConcept ?? defaultInitialAdventureSettings.playerCharacterConcept ?? "");
+  // Immersed Adventure settings
+  const [universeName, setUniverseName] = useState<string>(state.adventureSettings.universeName ?? "");
+  const [playerCharacterConcept, setPlayerCharacterConcept] = useState<string>(state.adventureSettings.playerCharacterConcept ?? "");
   const [characterOriginType, setCharacterOriginType] = useState<'existing' | 'original'>(
-    state.adventureSettings.adventureType === "Immersed" 
-      ? (state.adventureSettings.characterOriginType ?? 'original') 
-      : 'original' 
+    state.adventureSettings.characterOriginType ?? 'original' 
   );
   
+  // Component state
   const [customError, setCustomError] = useState<string | null>(null);
   const [isLoadingImmersedCharacter, setIsLoadingImmersedCharacter] = useState(false);
   const [isSuggestingNameLoading, setIsSuggestingNameLoading] = useState(false); 
 
   useEffect(() => {
-    console.log("AdventureSetup: Context adventureSettings changed or component mounted. adventureTypeFromContext:", adventureTypeFromContext);
-    console.log("AdventureSetup: state.adventureSettings from context:", JSON.stringify(state.adventureSettings));
-
+    // This effect ensures that local state for settings is in sync with game context
+    // This is useful if the user navigates away and comes back
     setPermanentDeath(state.adventureSettings.permanentDeath ?? defaultInitialAdventureSettings.permanentDeath);
     setDifficulty(state.adventureSettings.difficulty ?? defaultInitialAdventureSettings.difficulty);
 
-    if (adventureTypeFromContext === "Custom") {
+    if (state.adventureSettings.adventureType === "Custom") {
       setWorldType(state.adventureSettings.worldType ?? "");
       setMainQuestline(state.adventureSettings.mainQuestline ?? "");
       setGenreTheme(state.adventureSettings.genreTheme ?? "");
@@ -80,14 +80,13 @@ export function AdventureSetup() {
       setCombatFrequency(state.adventureSettings.combatFrequency ?? "Medium");
       setPuzzleFrequency(state.adventureSettings.puzzleFrequency ?? "Medium");
       setSocialFocus(state.adventureSettings.socialFocus ?? "Medium");
-    } else if (adventureTypeFromContext === "Immersed") {
+    } else if (state.adventureSettings.adventureType === "Immersed") {
       setUniverseName(state.adventureSettings.universeName ?? "");
       setPlayerCharacterConcept(state.adventureSettings.playerCharacterConcept ?? "");
       setCharacterOriginType(state.adventureSettings.characterOriginType ?? 'original');
     }
     setCustomError(null); 
-  }, [state.adventureSettings, adventureTypeFromContext]);
-
+  }, [state.adventureSettings]);
 
   const validateSettings = (): boolean => {
      if (adventureTypeFromContext === "Custom") {
@@ -130,7 +129,6 @@ export function AdventureSetup() {
 
       if (suggestions.length > 0) {
         let newSuggestion = suggestions[Math.floor(Math.random() * suggestions.length)];
-        // If there's more than one suggestion and the new one is the same as current, try to pick another
         if (suggestions.length > 1 && newSuggestion === playerCharacterConcept) {
           const otherSuggestions = suggestions.filter(s => s !== playerCharacterConcept);
           if (otherSuggestions.length > 0) {
@@ -151,8 +149,7 @@ export function AdventureSetup() {
     }
   };
 
-
-  const handleStartAdventure = async () => {
+  const handleProceed = async () => {
     setCustomError(null);
 
     if (!adventureTypeFromContext) {
@@ -167,86 +164,56 @@ export function AdventureSetup() {
     }
 
     const finalDifficulty = VALID_ADVENTURE_DIFFICULTY_LEVELS.includes(difficulty) ? difficulty : "Normal";
-
-    const settingsPayload: AdventureSettings = { 
-      adventureType: adventureTypeFromContext,
-      permanentDeath,
-      difficulty: finalDifficulty,
-      worldType: adventureTypeFromContext === "Custom" ? worldType : undefined,
-      mainQuestline: adventureTypeFromContext === "Custom" ? mainQuestline : undefined,
-      genreTheme: adventureTypeFromContext === "Custom" ? genreTheme : undefined,
-      magicSystem: adventureTypeFromContext === "Custom" ? magicSystem : undefined,
-      techLevel: adventureTypeFromContext === "Custom" ? techLevel : undefined,
-      dominantTone: adventureTypeFromContext === "Custom" ? dominantTone : undefined,
-      startingSituation: adventureTypeFromContext === "Custom" ? startingSituation : undefined,
-      combatFrequency: adventureTypeFromContext === "Custom" ? combatFrequency : undefined,
-      puzzleFrequency: adventureTypeFromContext === "Custom" ? puzzleFrequency : undefined,
-      socialFocus: adventureTypeFromContext === "Custom" ? socialFocus : undefined,
-      universeName: adventureTypeFromContext === "Immersed" ? universeName : undefined,
-      playerCharacterConcept: adventureTypeFromContext === "Immersed" ? playerCharacterConcept : undefined,
-      characterOriginType: adventureTypeFromContext === "Immersed" ? characterOriginType : undefined,
+    const settingsPayload: Partial<AdventureSettings> = { 
+      adventureType: adventureTypeFromContext, permanentDeath, difficulty: finalDifficulty,
+      worldType, mainQuestline, genreTheme, magicSystem, techLevel, dominantTone, startingSituation,
+      combatFrequency, puzzleFrequency, socialFocus, universeName, playerCharacterConcept, characterOriginType
     };
     
-    console.log("AdventureSetup: Dispatching SET_ADVENTURE_SETTINGS with payload:", JSON.stringify(settingsPayload));
     dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload });
-    
 
-    // This is the core logic fix for the loop issue.
-    // Check if character already exists from a previous step (like in Randomized flow).
-    if (state.character) {
-      dispatch({ type: "START_GAMEPLAY" });
-      toast({ title: "Adventure Starting!", description: "The world awaits..." });
-      return;
-    }
-
-    // Logic for Immersed (Existing) remains the same
-    if (adventureTypeFromContext === "Immersed" && characterOriginType === "existing") {
+    // --- FLOW LOGIC ---
+    if (state.character && (adventureTypeFromContext === "Randomized" || adventureTypeFromContext === "Immersed")) {
+        // Randomized or Immersed with existing character -> START GAMEPLAY
+        dispatch({ type: "START_GAMEPLAY" });
+        toast({ title: "Adventure Starting!", description: "The world awaits..." });
+    } else if (adventureTypeFromContext === "Custom") {
+        // Custom flow -> GO TO CHARACTER CREATION
+        dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
+        toast({ title: "Adventure Setup Complete!", description: "Now, create your adventurer." });
+    } else if (adventureTypeFromContext === "Immersed") {
+        // Immersed flow (original character) -> GENERATE CHARACTER THEN START
         setIsLoadingImmersedCharacter(true);
         toast({ title: "Fetching Character Lore...", description: `Preparing ${playerCharacterConcept} from ${universeName}...` });
         try {
             const aiProfile: GenerateCharacterDescriptionOutput = await generateCharacterDescription({
                  characterDescription: playerCharacterConcept, 
-                 isImmersedMode: true,
-                 universeName: universeName,
-                 playerCharacterConcept: playerCharacterConcept 
+                 isImmersedMode: true, universeName: universeName, playerCharacterConcept: playerCharacterConcept 
             });
-            
             const baseStats = { ...initialCharacterState.stats }; 
             const randomStr = Math.floor(Math.random() * 5) + 3; 
             const randomSta = Math.floor(Math.random() * 5) + 3; 
             const randomWis = 15 - randomStr - randomSta;       
-            
-            const finalStats: CharacterStats = { 
-                ...baseStats, 
-                strength: randomStr,
-                stamina: randomSta,
-                wisdom: Math.max(1, randomWis), 
-            }; 
+            const finalStats: CharacterStats = { strength: randomStr, stamina: randomSta, wisdom: Math.max(1, randomWis) }; 
 
             const newCharacter: Character = {
                 ...initialCharacterState, 
                 name: playerCharacterConcept, 
                 description: aiProfile.detailedDescription || `Playing as ${playerCharacterConcept} from the universe of ${universeName}.`,
                 class: aiProfile.inferredClass || "Immersed Protagonist", 
-                traits: aiProfile.inferredTraits || [],
-                knowledge: aiProfile.inferredKnowledge || [],
+                traits: aiProfile.inferredTraits || [], knowledge: aiProfile.inferredKnowledge || [],
                 background: aiProfile.inferredBackground || `A character from the universe of ${universeName}.`,
-                stats: finalStats,
-                aiGeneratedDescription: aiProfile.detailedDescription, 
-                maxHealth: calculateMaxHealth(finalStats),
-                currentHealth: calculateMaxHealth(finalStats),
-                maxStamina: calculateMaxActionStamina(finalStats),
-                currentStamina: calculateMaxActionStamina(finalStats),
+                stats: finalStats, aiGeneratedDescription: aiProfile.detailedDescription, 
+                maxHealth: calculateMaxHealth(finalStats), currentHealth: calculateMaxHealth(finalStats),
+                maxStamina: calculateMaxActionStamina(finalStats), currentStamina: calculateMaxActionStamina(finalStats),
                 maxMana: calculateMaxMana(finalStats, aiProfile.inferredKnowledge || []),
                 currentMana: calculateMaxMana(finalStats, aiProfile.inferredKnowledge || []),
                 learnedSkills: getStarterSkillsForClass(aiProfile.inferredClass || "Immersed Protagonist"),
-                xpToNextLevel: calculateXpToNextLevel(1),
-                skillTree: null, 
-                skillTreeStage: 0,
+                xpToNextLevel: calculateXpToNextLevel(1), skillTree: null, skillTreeStage: 0,
             };
             
-            console.log("AdventureSetup: Dispatching SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY for existing character.");
-            dispatch({ type: "SET_IMMERSED_CHARACTER_AND_START_GAMEPLAY", payload: { character: newCharacter, adventureSettings: settingsPayload } });
+            dispatch({ type: "CREATE_CHARACTER", payload: newCharacter });
+            dispatch({ type: "START_GAMEPLAY" });
             toast({ title: "Adventure Starting!", description: `Stepping into the shoes of ${playerCharacterConcept} in the universe of ${universeName}!` });
 
         } catch (err) {
@@ -255,10 +222,9 @@ export function AdventureSetup() {
         } finally {
             setIsLoadingImmersedCharacter(false);
         }
-    } else { 
-      // If no character exists yet (for Custom or Immersed-Original flow), proceed to character creation.
-      dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
-      toast({ title: "Adventure Setup Complete!", description: "Now, create your adventurer." });
+    } else {
+        console.error("AdventureSetup: Unhandled proceed logic. State:", state.status, "AdventureType:", adventureTypeFromContext, "Character exists:", !!state.character);
+        toast({ title: "Navigation Error", description: "Could not determine the next step.", variant: "destructive" });
     }
   };
 
@@ -286,10 +252,9 @@ export function AdventureSetup() {
         case "Immersed": return <Sparkles className="w-5 h-5 text-purple-500"/>;
         default: return <Settings className="w-5 h-5"/>;
     }
-  }
-
-  // Determine button text based on whether a character already exists
-  const proceedButtonText = state.character ? "Start Adventure" : "Proceed to Character Creation";
+  };
+  
+  const proceedButtonText = adventureTypeFromContext === "Custom" ? "Proceed to Character Creation" : "Start Adventure";
                             
   const isProceedDisabled = isLoadingImmersedCharacter || isSuggestingNameLoading ||
                             (adventureTypeFromContext === 'Custom' && (!worldType.trim() || !mainQuestline.trim() || !genreTheme || !magicSystem || !techLevel || !dominantTone || !startingSituation.trim() )) ||
@@ -486,7 +451,7 @@ export function AdventureSetup() {
         </CardContent>
         <CardFooter className="flex flex-col sm:flex-row justify-between gap-4 pt-6 border-t border-foreground/10">
            <Button variant="outline" onClick={handleBack} disabled={isLoadingImmersedCharacter || isSuggestingNameLoading}> <ArrowLeft className="mr-2 h-4 w-4" /> Back to Main Menu </Button>
-           <Button onClick={handleStartAdventure} disabled={isProceedDisabled} className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"> 
+           <Button onClick={handleProceed} disabled={isProceedDisabled} className="bg-accent hover:bg-accent/90 text-accent-foreground w-full sm:w-auto"> 
             {(isLoadingImmersedCharacter || isSuggestingNameLoading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {isLoadingImmersedCharacter ? "Preparing Character..." : (isSuggestingNameLoading ? "Suggesting..." : (proceedButtonText))}
            </Button>
@@ -495,5 +460,3 @@ export function AdventureSetup() {
     </div>
   );
 }
-
-    
