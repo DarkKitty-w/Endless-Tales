@@ -384,72 +384,43 @@ export function Gameplay() {
     }, [dispatch, toast, adventureSettings.adventureType, character, contextIsGeneratingSkillTree]);
 
     useEffect(() => {
-        if (!currentAdventureId || !character) {
-            console.log("Gameplay Initial Setup: Waiting for adventure ID and character...");
-            setIsInitialLoading(false); // Ensure not stuck in initial loading if prerequisites are missing
-            return;
-        }
-
         const performInitialSetup = async () => {
-            console.log(`Gameplay Initial Setup: Starting for adventure ${currentAdventureId}. isInitialLoading: ${isInitialLoading}, storyLog: ${storyLog.length}, skillTree: ${!!character.skillTree}`);
-            
-            let skillTreeIsReady = adventureSettings.adventureType === "Immersed" || (character && !!character.skillTree);
+            if (!character || !currentAdventureId || initialSetupAttemptedRef.current[currentAdventureId]) {
+                if (isInitialLoading) setIsInitialLoading(false); // Stop loading if prerequisites are missing
+                return;
+            }
+            initialSetupAttemptedRef.current[currentAdventureId] = true;
+            console.log(`Gameplay Initial Setup: Starting for adventure ${currentAdventureId}.`);
 
-            if (!skillTreeIsReady && !(localIsGeneratingSkillTree || contextIsGeneratingSkillTree)) {
+            // Step 1: Generate Skill Tree if needed
+            let skillTreeReady = adventureSettings.adventureType === "Immersed" || !!character.skillTree;
+            if (!skillTreeReady) {
                 console.log("Gameplay Initial Setup: Skill tree needed for class:", character.class);
-                const generatedSkillTree = await triggerSkillTreeGeneration(character.class);
-                skillTreeIsReady = !!generatedSkillTree || adventureSettings.adventureType === "Immersed";
-                console.log("Gameplay Initial Setup: Skill tree generation attempt finished. Ready:", skillTreeIsReady);
-            } else {
-                 console.log("Gameplay Initial Setup: Skill tree already available or generation in progress/not needed. Current skillTreeIsReady:", skillTreeIsReady);
+                await triggerSkillTreeGeneration(character.class);
+                // Re-check state after dispatch
+                const updatedCharacter = state.character;
+                skillTreeReady = adventureSettings.adventureType === "Immersed" || !!updatedCharacter?.skillTree;
+                 console.log("Gameplay Initial Setup: Skill tree generation attempt finished. Ready:", skillTreeReady);
             }
 
-            if (skillTreeIsReady && storyLog.length === 0 && !isLoading && !isInitialLoading) { 
+            // Step 2: Trigger initial narration only after skill tree is ready and if no story exists
+            if (skillTreeReady && storyLog.length === 0) {
                 console.log("Gameplay Initial Setup: Conditions met for initial narration. Calling handlePlayerAction.");
                 await handlePlayerAction(INITIAL_ACTION_STRING, true);
-            } else if (storyLog.length > 0 && isInitialLoading) {
-                console.log("Gameplay Initial Setup: Story log has entries. Forcing isInitialLoading to false.");
-                setIsInitialLoading(false);
-            } else if (!skillTreeIsReady && adventureSettings.adventureType !== "Immersed" && !localIsGeneratingSkillTree && !contextIsGeneratingSkillTree) {
-                console.warn("Gameplay Initial Setup: Skill tree still not available after attempt. Initial narration might be blocked.");
-                if (isInitialLoading) setIsInitialLoading(false);
             } else {
-                console.log("Gameplay Initial Setup: Conditions for initial narration not met or still loading states active. SkillTreeReady:", skillTreeIsReady, "LogLength:", storyLog.length, "InitialLoading:", isInitialLoading, "IsLoading:", isLoading);
-                if (isInitialLoading && !isLoading && !localIsGeneratingSkillTree && !contextIsGeneratingSkillTree && skillTreeIsReady && storyLog.length > 0) {
-                     console.log("Gameplay Initial Setup: Forcing isInitialLoading to false as setup conditions met but story already exists.");
-                     setIsInitialLoading(false);
-                 } else if (isInitialLoading && skillTreeIsReady && storyLog.length === 0 && !isLoading) {
-                    console.log("Gameplay Initial Setup: Forcing initial action because stuck on initial loading despite skill tree ready and no story.");
-                    await handlePlayerAction(INITIAL_ACTION_STRING, true);
-                 }
+                // If story log already has entries (e.g., from a loaded game), we don't need initial narration.
+                 console.log("Gameplay Initial Setup: Story log has entries or skill tree failed. Skipping initial narration.");
+                setIsInitialLoading(false);
             }
         };
 
-        if (!initialSetupAttemptedRef.current[currentAdventureId]) {
-            initialSetupAttemptedRef.current[currentAdventureId] = true; // Mark as attempted *before* async operations
-            performInitialSetup().catch(err => {
-                console.error("Gameplay: Error during performInitialSetup:", err);
-                setError("Failed to initialize the adventure. Please try again.");
-                if (isInitialLoading) setIsInitialLoading(false);
-                if (localIsGeneratingSkillTree) setLocalIsGeneratingSkillTree(false);
-                if (contextIsGeneratingSkillTree) dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false });
-            });
-        } else if (isInitialLoading && storyLog.length > 0) {
-            // If setup was marked attempted but we're still in initial loading with a story log,
-            // it means the initial narration might have completed but the flag wasn't reset.
-            console.log("Gameplay Initial Setup: Already attempted, story log exists, forcing isInitialLoading to false.");
+        performInitialSetup().catch(err => {
+            console.error("Gameplay: Fatal error during initial setup:", err);
+            setError("A critical error occurred while starting the adventure. Please try again.");
             setIsInitialLoading(false);
-        }
+        });
     
-    }, [
-        state, // Full state for reactivity
-        currentAdventureId, 
-        character, 
-        adventureSettings.adventureType, 
-        isInitialLoading, isLoading, localIsGeneratingSkillTree, contextIsGeneratingSkillTree, 
-        triggerSkillTreeGeneration, handlePlayerAction, 
-        dispatch, storyLog.length
-    ]);
+    }, [character, currentAdventureId, adventureSettings.adventureType, triggerSkillTreeGeneration, handlePlayerAction, storyLog.length, state.character, isInitialLoading]);
     
 
     const handleSaveGame = useCallback(async () => {
@@ -644,4 +615,3 @@ export function Gameplay() {
         </TooltipProvider>
     );
 }
-
