@@ -1,4 +1,3 @@
-
 // src/components/screens/AdventureSetup.tsx
 "use client";
 
@@ -191,6 +190,15 @@ export function AdventureSetup() {
     dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload });
     
 
+    // This is the core logic fix for the loop issue.
+    // Check if character already exists from a previous step (like in Randomized flow).
+    if (state.character) {
+      dispatch({ type: "START_GAMEPLAY" });
+      toast({ title: "Adventure Starting!", description: "The world awaits..." });
+      return;
+    }
+
+    // Logic for Immersed (Existing) remains the same
     if (adventureTypeFromContext === "Immersed" && characterOriginType === "existing") {
         setIsLoadingImmersedCharacter(true);
         toast({ title: "Fetching Character Lore...", description: `Preparing ${playerCharacterConcept} from ${universeName}...` });
@@ -247,14 +255,9 @@ export function AdventureSetup() {
             setIsLoadingImmersedCharacter(false);
         }
     } else { 
-        // For Randomized, Custom, or Immersed (Original Character)
-        if (state.character) { // If character already exists (Randomized flow)
-            dispatch({ type: "START_GAMEPLAY" });
-            toast({ title: "Adventure Starting!", description: "The world awaits..." });
-        } else { // For Custom and Immersed-Original flow
-             dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
-             toast({ title: "Adventure Setup Complete!", description: "Now, create your adventurer." });
-        }
+      // If no character exists yet (for Custom or Immersed-Original flow), proceed to character creation.
+      dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
+      toast({ title: "Adventure Setup Complete!", description: "Now, create your adventurer." });
     }
   };
 
@@ -284,11 +287,8 @@ export function AdventureSetup() {
     }
   }
 
-  const proceedButtonText = 
-    (adventureTypeFromContext === "Immersed" && characterOriginType === "existing") || 
-    (adventureTypeFromContext === "Randomized" && state.character)
-        ? "Start Adventure" 
-        : "Proceed to Character Creation";
+  // Determine button text based on whether a character already exists
+  const proceedButtonText = state.character ? "Start Adventure" : "Proceed to Character Creation";
                             
   const isProceedDisabled = isLoadingImmersedCharacter || isSuggestingNameLoading ||
                             (adventureTypeFromContext === 'Custom' && (!worldType.trim() || !mainQuestline.trim() || !genreTheme || !magicSystem || !techLevel || !dominantTone || !startingSituation.trim() )) ||
@@ -491,5 +491,3 @@ export function AdventureSetup() {
     </div>
   );
 }
-
-    
