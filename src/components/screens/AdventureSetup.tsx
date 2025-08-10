@@ -188,11 +188,11 @@ export function AdventureSetup() {
     };
     
     console.log("AdventureSetup: Dispatching SET_ADVENTURE_SETTINGS with payload:", JSON.stringify(settingsPayload));
+    dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload });
     
 
     if (adventureTypeFromContext === "Immersed" && characterOriginType === "existing") {
         setIsLoadingImmersedCharacter(true);
-        dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload }); // Dispatch settings first
         toast({ title: "Fetching Character Lore...", description: `Preparing ${playerCharacterConcept} from ${universeName}...` });
         try {
             const aiProfile: GenerateCharacterDescriptionOutput = await generateCharacterDescription({
@@ -248,15 +248,13 @@ export function AdventureSetup() {
         }
     } else { 
         // For Randomized, Custom, or Immersed (Original Character)
-        dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload });
-        dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" }); 
-        let descriptionToast = `Proceeding to character creation for your ${adventureTypeFromContext} adventure. Difficulty: ${finalDifficulty}.`;
-        if (adventureTypeFromContext === "Randomized") {
-            descriptionToast = `Preparing a randomized adventure at ${finalDifficulty} difficulty. Time to create your hero!`;
-        } else if (adventureTypeFromContext === "Immersed" && characterOriginType === "original") {
-            descriptionToast = `Entering the universe of ${universeName}. Let's create your original character for this ${finalDifficulty} adventure!`;
+        if (state.character) { // If character already exists (Randomized flow)
+            dispatch({ type: "START_GAMEPLAY" });
+            toast({ title: "Adventure Starting!", description: "The world awaits..." });
+        } else { // For Custom and Immersed-Original flow
+             dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
+             toast({ title: "Adventure Setup Complete!", description: "Now, create your adventurer." });
         }
-        toast({ title: "Adventure Setup Complete!", description: descriptionToast });
     }
   };
 
@@ -286,11 +284,13 @@ export function AdventureSetup() {
     }
   }
 
-  const proceedButtonText = (adventureTypeFromContext === "Immersed" && characterOriginType === "existing") 
-                            ? "Start Adventure" 
-                            : "Proceed to Character Creation";
+  const proceedButtonText = 
+    (adventureTypeFromContext === "Immersed" && characterOriginType === "existing") || 
+    (adventureTypeFromContext === "Randomized" && state.character)
+        ? "Start Adventure" 
+        : "Proceed to Character Creation";
                             
-  const isProceedDisabled = customError !== null || isLoadingImmersedCharacter || isSuggestingNameLoading ||
+  const isProceedDisabled = isLoadingImmersedCharacter || isSuggestingNameLoading ||
                             (adventureTypeFromContext === 'Custom' && (!worldType.trim() || !mainQuestline.trim() || !genreTheme || !magicSystem || !techLevel || !dominantTone || !startingSituation.trim() )) ||
                             (adventureTypeFromContext === 'Immersed' && (!universeName.trim() || !playerCharacterConcept.trim()));
 
@@ -491,3 +491,5 @@ export function AdventureSetup() {
     </div>
   );
 }
+
+    
