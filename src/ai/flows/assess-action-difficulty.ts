@@ -100,7 +100,6 @@ const assessActionDifficultyFlow = ai.defineFlow<
         model: model,
         prompt: assessActionDifficultyPrompt,
         input: input,
-        output: { schema: AssessActionDifficultyOutputSchema }
      });
 
      if (!output || !output.difficulty || !output.reasoning || !output.suggestedDice) {

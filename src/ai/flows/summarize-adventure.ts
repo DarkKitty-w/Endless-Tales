@@ -57,7 +57,6 @@ const summarizeAdventureFlow = ai.defineFlow<
         model: model,
         prompt: prompt,
         input: input,
-        output: { schema: SummarizeAdventureOutputSchema }
     });
     return output!;
   }

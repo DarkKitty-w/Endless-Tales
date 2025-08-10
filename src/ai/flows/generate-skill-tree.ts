@@ -126,7 +126,6 @@ const generateSkillTreeFlow = ai.defineFlow<
                 model: model,
                 prompt: generateSkillTreePrompt,
                 input: input,
-                output: { schema: GenerateSkillTreeOutputSchema }
             });
             output = result.output;
 

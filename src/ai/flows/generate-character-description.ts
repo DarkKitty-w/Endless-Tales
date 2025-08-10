@@ -105,7 +105,6 @@ const generateCharacterDescriptionFlow = ai.defineFlow<
         model: model,
         prompt: prompt,
         input: input,
-        output: { schema: GenerateCharacterDescriptionOutputSchema }
     });
 
     if (!output || !output.detailedDescription) {
