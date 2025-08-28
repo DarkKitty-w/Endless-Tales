@@ -89,10 +89,7 @@ Based on the provided character description:
 });
 
 
-const generateCharacterDescriptionFlow = ai.defineFlow<
-  typeof GenerateCharacterDescriptionInputSchema,
-  typeof GenerateCharacterDescriptionOutputSchema
->(
+const generateCharacterDescriptionFlow = ai.defineFlow(
   {
     name: 'generateCharacterDescriptionFlow',
     inputSchema: GenerateCharacterDescriptionInputSchema,
@@ -101,7 +98,7 @@ const generateCharacterDescriptionFlow = ai.defineFlow<
   async (input) => {
     console.log("Sending to generateCharacterDescriptionPrompt:", JSON.stringify(input, null, 2));
     const model = getModel(input.userApiKey);
-    const { output } = await prompt(input, { model: model });
+    const { output } = await prompt(input, { model });
 
     if (!output || !output.detailedDescription) {
         console.error("AI description generation failed to return a valid output.", output);

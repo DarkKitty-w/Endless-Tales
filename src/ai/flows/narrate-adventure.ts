@@ -267,12 +267,7 @@ const narrateAdventureFlow = ai.defineFlow(
 
     try {
         const model = getModel(input.userApiKey);
-        const result = await ai.generate({
-            model: model,
-            prompt: narrateAdventurePrompt,
-            input: promptInput,
-            output: { schema: NarrateAdventureOutputSchema }
-        });
+        const result = await narrateAdventurePrompt(promptInput, { model });
 
         output = result.output;
         console.log("narrateAdventureFlow: Received raw output from AI:", JSON.stringify(output, null, 2).substring(0, 2000) + "...");

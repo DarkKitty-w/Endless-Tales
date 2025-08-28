@@ -84,10 +84,7 @@ Determine the difficulty of this action using **ONLY** the following levels: Tri
 `,
 });
 
-const assessActionDifficultyFlow = ai.defineFlow<
-  typeof AssessActionDifficultyInputSchema,
-  typeof AssessActionDifficultyOutputSchema
->(
+const assessActionDifficultyFlow = ai.defineFlow(
   {
     name: 'assessActionDifficultyFlow',
     inputSchema: AssessActionDifficultyInputSchema,
@@ -96,7 +93,7 @@ const assessActionDifficultyFlow = ai.defineFlow<
   async (input) => {
      console.log("Sending to assessActionDifficultyPrompt:", JSON.stringify(input, null, 2));
      const model = getModel(input.userApiKey);
-     const {output} = await assessActionDifficultyPrompt(input, { model: model });
+     const {output} = await assessActionDifficultyPrompt(input, { model });
 
      if (!output || !output.difficulty || !output.reasoning || !output.suggestedDice) {
         console.error("AI difficulty assessment output missing or invalid:", output);

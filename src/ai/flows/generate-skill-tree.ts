@@ -101,10 +101,7 @@ const createFallbackSkillTree = (className: string): GenerateSkillTreeOutput => 
 };
 
 // Genkit Flow Definition
-const generateSkillTreeFlow = ai.defineFlow<
-  typeof GenerateSkillTreeInputSchema,
-  typeof GenerateSkillTreeOutputSchema
->(
+const generateSkillTreeFlow = ai.defineFlow(
   {
     name: 'generateSkillTreeFlow',
     inputSchema: GenerateSkillTreeInputSchema,
@@ -122,7 +119,7 @@ const generateSkillTreeFlow = ai.defineFlow<
         console.log(`generateSkillTreeFlow: AI call attempt ${attempt} for class "${input.characterClass}"...`);
         try {
             const model = getModel(input.userApiKey);
-            const result = await generateSkillTreePrompt(input, { model: model });
+            const result = await generateSkillTreePrompt(input, { model });
             output = result.output;
 
             // Validate the structure of the output

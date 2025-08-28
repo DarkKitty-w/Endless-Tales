@@ -42,10 +42,7 @@ const prompt = ai.definePrompt({
   prompt: `You are an AI assistant that summarizes adventure stories. Please provide a concise summary of the following adventure, including the key events, choices, and consequences:\n\n{{{story}}}`,
 });
 
-const summarizeAdventureFlow = ai.defineFlow<
-  typeof SummarizeAdventureInputSchema,
-  typeof SummarizeAdventureOutputSchema
->(
+const summarizeAdventureFlow = ai.defineFlow(
   {
     name: 'summarizeAdventureFlow',
     inputSchema: SummarizeAdventureInputSchema,
@@ -53,7 +50,7 @@ const summarizeAdventureFlow = ai.defineFlow<
   },
   async input => {
     const model = getModel(input.userApiKey);
-    const {output} = await prompt(input, { model: model });
+    const {output} = await prompt(input, { model });
     return output!;
   }
 );
