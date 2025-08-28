@@ -1,7 +1,7 @@
 
 // src/ai/ai-instance.ts
 import {genkit, GenerationCommonConfig} from 'genkit';
-import {googleAI, GoogleAIGenerativeAI, gemini25Pro} from '@genkit-ai/googleai';
+import {googleAI, GoogleAIGenerativeAI} from '@genkit-ai/googleai';
 
 const googleAiPlugin = googleAI({
   apiKey: process.env.GOOGLE_GENAI_API_KEY,
@@ -24,8 +24,8 @@ export function getModel(userApiKey?: string | null): GoogleAIGenerativeAI {
         // Create a temporary, per-request instance of the GoogleAI plugin with the user's key
         const dynamicGoogleAI = googleAI({ apiKey: userApiKey });
         // Return a specific model from this dynamic plugin instance
-        return dynamicGoogleAI.getModel('gemini-2.5-pro');
+        return dynamicGoogleAI.getModel('gemini-2.5-flash');
     }
-    // Fallback to the default, globally configured model by using the imported reference
-    return gemini25Pro;
+    // Fallback to the default, globally configured model
+    return googleAiPlugin.getModel('gemini-2.5-flash');
 }
