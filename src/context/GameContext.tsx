@@ -1,4 +1,3 @@
-
 // src/context/GameContext.tsx
 "use client";
 
@@ -38,8 +37,9 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
    }, []);
 
     useEffect(() => {
-        console.log("GameProvider mounted. Attempting to load saved data.");
-        let loadedStateApplied = false;
+        console.log("GameProvider initializing...");
+
+        // Load saved adventures from localStorage
         try {
             const savedData = localStorage.getItem(SAVED_ADVENTURES_KEY);
             if (savedData) {
@@ -54,24 +54,25 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
             console.error("Failed to load saved adventures:", error);
             localStorage.removeItem(SAVED_ADVENTURES_KEY);
         }
-         const savedThemeId = localStorage.getItem(THEME_ID_KEY) || initialState.selectedThemeId;
-         const savedMode = localStorage.getItem(THEME_MODE_KEY);
-         const prefersDark = typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false;
-         const initialDarkMode = savedMode === 'dark' || (!savedMode && prefersDark);
+
+        // Load theme and API key from localStorage
+        const savedThemeId = localStorage.getItem(THEME_ID_KEY) || initialState.selectedThemeId;
+        const savedMode = localStorage.getItem(THEME_MODE_KEY);
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const initialDarkMode = savedMode === 'dark' || (savedMode === null && prefersDark);
         const savedUserApiKey = localStorage.getItem(USER_API_KEY_KEY);
+        
         if (savedUserApiKey) {
             dispatch({ type: 'SET_USER_API_KEY', payload: savedUserApiKey });
-            loadedStateApplied = true;
         }
-         if (savedThemeId !== initialState.selectedThemeId || initialDarkMode !== initialState.isDarkMode || (savedUserApiKey && savedUserApiKey !== initialState.userGoogleAiApiKey) ) {
-            if (savedThemeId !== initialState.selectedThemeId) dispatch({ type: 'SET_THEME_ID', payload: savedThemeId });
-            if (initialDarkMode !== initialState.isDarkMode) dispatch({ type: 'SET_DARK_MODE', payload: initialDarkMode });
-            loadedStateApplied = true;
-         }
-         if (!loadedStateApplied && state.selectedThemeId === initialState.selectedThemeId && state.isDarkMode === initialState.isDarkMode && state.userGoogleAiApiKey === initialState.userGoogleAiApiKey) {
-             applyTheme(initialState.selectedThemeId, initialState.isDarkMode);
-         }
-        const unsubscribeAuth = auth.onAuthStateChanged(async (user: User | null) => { // Make async
+        dispatch({ type: 'SET_THEME_ID', payload: savedThemeId });
+        dispatch({ type: 'SET_DARK_MODE', payload: initialDarkMode });
+
+        // Apply the loaded theme immediately
+        applyTheme(savedThemeId, initialDarkMode);
+        
+        // Setup Firebase anonymous auth listener
+        const unsubscribeAuth = auth.onAuthStateChanged(async (user: User | null) => {
             if (user) {
                 console.log("GameProvider: Firebase Auth user signed in:", user.uid);
                 dispatch({ type: 'SET_CURRENT_PLAYER_UID', payload: user.uid });
@@ -80,34 +81,40 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
                 try {
                     const userCredential = await signInAnonymously(auth);
                     console.log("GameProvider: Signed in anonymously:", userCredential.user.uid);
-                    // onAuthStateChanged will fire again with the new anonymous user,
-                    // so dispatching SET_CURRENT_PLAYER_UID here might be redundant
-                    // but it doesn't hurt.
                     dispatch({ type: 'SET_CURRENT_PLAYER_UID', payload: userCredential.user.uid });
                 } catch (error) {
                     console.error("GameProvider: Error signing in anonymously:", error);
-                    dispatch({ type: 'SET_CURRENT_PLAYER_UID', payload: null }); // Ensure UID is null on failure
+                    dispatch({ type: 'SET_CURRENT_PLAYER_UID', payload: null });
                 }
             }
         });
+
+        // Cleanup auth listener on component unmount
         return () => {
             unsubscribeAuth();
         };
-    }, [applyTheme]); // applyTheme is stable due to useCallback
+    }, [applyTheme]); // Only run this effect once on mount
+
 
       useEffect(() => {
-         applyTheme(state.selectedThemeId, state.isDarkMode);
-         localStorage.setItem(THEME_ID_KEY, state.selectedThemeId);
-         localStorage.setItem(THEME_MODE_KEY, state.isDarkMode ? 'dark' : 'light');
-      }, [state.selectedThemeId, state.isDarkMode, applyTheme]);
+         // This effect runs whenever theme settings change in the state, to persist them
+         if(state.status !== "MainMenu" && state.status !== "CharacterCreation") { // Avoid saving during initial setup phase
+            applyTheme(state.selectedThemeId, state.isDarkMode);
+            localStorage.setItem(THEME_ID_KEY, state.selectedThemeId);
+            localStorage.setItem(THEME_MODE_KEY, state.isDarkMode ? 'dark' : 'light');
+         }
+      }, [state.selectedThemeId, state.isDarkMode, state.status, applyTheme]);
 
       useEffect(() => {
-        if (state.userGoogleAiApiKey) {
-            localStorage.setItem(USER_API_KEY_KEY, state.userGoogleAiApiKey);
-        } else {
-            localStorage.removeItem(USER_API_KEY_KEY);
+        // This effect runs whenever the API key changes in the state, to persist it
+         if(state.status !== "MainMenu" && state.status !== "CharacterCreation") {
+            if (state.userGoogleAiApiKey) {
+                localStorage.setItem(USER_API_KEY_KEY, state.userGoogleAiApiKey);
+            } else {
+                localStorage.removeItem(USER_API_KEY_KEY);
+            }
         }
-      }, [state.userGoogleAiApiKey]);
+      }, [state.userGoogleAiApiKey, state.status]);
 
     // Effect for listening to Firestore session updates
     useEffect(() => {
@@ -118,16 +125,13 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
             unsubscribeSession = listenToSessionUpdates(state.sessionId, (sessionData: FirestoreCoopSession | null) => {
                 if (sessionData) {
                     console.log("GameContext: Firestore session data received:", sessionData);
-                    // Dispatch an action to sync the relevant parts of the session data
-                    // This needs to be more granular to avoid overwriting local optimistic updates
                     dispatch({ type: "SYNC_COOP_SESSION_STATE", payload: sessionData });
 
-                    // Example: If session status from Firestore is 'playing' and local is 'CoopLobby', transition
                     if (sessionData.status === 'playing' && state.status === 'CoopLobby') {
                         dispatch({
                             type: "SET_ADVENTURE_SETTINGS",
                             payload: {
-                                ...sessionData.adventureSettings, // Sync adventure settings
+                                ...sessionData.adventureSettings,
                                 adventureType: "Coop"
                             }
                         });
@@ -135,9 +139,8 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
                     }
                 } else {
                     console.log("GameContext: Session data is null (deleted or error).");
-                    // Handle session deletion or error, e.g., redirect to main menu
                     if (state.status === "CoopLobby" || state.status === "CoopGameplay") {
-                         dispatch({ type: "RESET_GAME" }); // Or a more specific "SESSION_ENDED" action
+                         dispatch({ type: "RESET_GAME" });
                     }
                 }
             });
@@ -169,7 +172,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
          class: state.character?.class,
          stage: `${currentStageName} (${state.character?.skillTreeStage ?? 0}/4)`,
          health: `${state.character?.currentHealth}/${state.character?.maxHealth}`,
-         actionStamina: `${state.character?.currentStamina}/${state.character?.maxStamina}`, // Changed from stamina to actionStamina for clarity
+         actionStamina: `${state.character?.currentStamina}/${state.character?.maxStamina}`,
          mana: `${state.character?.currentMana}/${state.character?.maxMana}`,
          adventureId: state.currentAdventureId,
          settings: state.adventureSettings,
@@ -178,7 +181,6 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
          apiKeySet: !!state.userGoogleAiApiKey,
          storyLogLength: state.storyLog.length,
          isGeneratingSkillTree: state.isGeneratingSkillTree,
-         // Multiplayer log
          sessionId: state.sessionId,
          players: state.players,
          currentPlayerUid: state.currentPlayerUid,
@@ -201,6 +203,3 @@ export const useGame = () => {
   }
   return context;
 };
-
-
-      
