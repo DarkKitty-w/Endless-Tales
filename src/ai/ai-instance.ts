@@ -22,10 +22,10 @@ export const ai = genkit({
 export function getModel(userApiKey?: string | null): GoogleAIGenerativeAI {
     if (userApiKey) {
         // Create a temporary, per-request instance of the GoogleAI plugin with the user's key
-        const dynamicGoogleAI = googleAI({ apiKey: userApiKey });
+        const dynamicGoogleAI = new GoogleAIGenerativeAI({ apiKey: userApiKey });
         // Return a specific model from this dynamic plugin instance
-        return dynamicGoogleAI.getModel('gemini-2.5-flash');
+        return dynamicGoogleAI.getModel('gemini-2.0-flash');
     }
     // Fallback to the default, globally configured model
-    return googleAiPlugin.getModel('gemini-2.5-flash');
+    return googleAiPlugin.getModel('gemini-2.0-flash');
 }
