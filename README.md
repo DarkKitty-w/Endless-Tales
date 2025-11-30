@@ -195,19 +195,89 @@ src/
 
 ## ⚠️ 7. Bugs / Problèmes Connus
 
-* `gameState` en chaîne de caractères (fragile)
-* Pas de sauvegarde en cours 🕒
-* Dérive IA sur longues aventures 🧠
+### 🔴 Critique (Stabilité & Données)
+
+* **Parsing JSON fragile**
+
+  * L’IA renvoie souvent du JSON entouré de ```json ou du texte parasite → `JSON.parse()` crash.
+  * Conséquence : actions qui plantent + erreurs génériques.
+
+* **LocalStorage saturé (QuotaExceededError)**
+
+  * `storyLog` complet stocké dans `SAVED_ADVENTURES_KEY`.
+  * Longues aventures → dépassement des ~5MB.
+  * Conséquence : sauvegardes impossibles.
+
+* **Limite de Contexte IA**
+
+  * Historique jamais tronqué dans `narrateAdventure`.
+  * Longs scénarios → dépassement tokens, oublis, erreurs 400.
+
+* **Gestion des Clés API fragile**
+
+  * Sans clé utilisateur ou build avec API_KEY manquant → erreurs 401/403 silencieuses.
+
+---
+
+### 🟡 UX / Interface
+
+* **Scroll automatique imprécis** dans `NarrationDisplay.tsx` (setTimeout dépendant du rendu).
+* **Vie/Mana cachés sur mobile**, l'utilisateur ne voit pas immédiatement les dégâts.
+* **Input bloqué pendant l’IA**, impossible de préparer un message lors d’un long temps de réponse.
+
+---
+
+### 🔧 Logique de Jeu
+
+* **Crafting trop permissif**
+
+  * L’IA décide librement → risques d’objets absurdes si hallucination.
+* **Respawn sans pénalité**
+
+  * Retour à la vie full HP sans perte d’XP/items → mort triviale.
 
 ---
 
 ## 🚧 8. TODO / Roadmap
 
-* 🔄 Refactoriser `gameState` en JSON
-* 💾 Sauvegarde de l'aventure en cours
-* 💬 Chat multijoueur
-* 🧠 Améliorer mémoire IA
-* ⚡ Développer flux artisanat & compétences
+### 🚀 Priorité 1 : Robustesse & Correctifs
+
+* **Sanitizer JSON IA** : supprimer balises ```json + texte parasite avant `JSON.parse()`.
+* **Fenêtre glissante contexte IA** :
+
+  * Résumé d’aventure
+  * 10 derniers tours
+  * État du personnage + inventaire
+* **Validation Zod stricte** + mécanisme de "réparation" automatique.
+* **Gestion claire des erreurs API** : modale si clé invalide / quota dépassé.
+
+---
+
+### ✨ Priorité 2 : Gameplay & Fonctionnalités
+
+* **Génération d’images IA**
+
+  * Carte du monde + portrait du personnage.
+* **Système de Commerce** (achat/vente via IA).
+* **Inventaire avancé** (équipement modifiant les stats).
+* **Export/Import .json** pour contourner la limite du LocalStorage.
+
+---
+
+### 🔮 Priorité 3 : Architecture & Multijoueur
+
+* **Réactivation et sync temps réel Firebase** (Co-op).
+* **Mode Maître du Jeu Humain**.
+* **Narration vocale (TTS)**.
+* **PWA hors-ligne**.
+
+---
+
+### 🎨 Améliorations UI/UX
+
+* Effet **machine à écrire** pour la narration.
+* **Thèmes dynamiques** selon le genre de l’aventure.
+* Améliorations **accessibilité (a11y)**.
 
 ---
 
