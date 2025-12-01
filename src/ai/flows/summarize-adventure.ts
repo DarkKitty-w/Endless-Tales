@@ -1,56 +1,46 @@
-
-'use server';
 /**
- * @fileOverview Summarizes the key events, choices, and consequences of a player's adventure.
- *
- * - summarizeAdventure - A function that summarizes the adventure story.
- * - SummarizeAdventureInput - The input type for the summarizeAdventure function.
- * - SummarizeAdventureOutput - The return type for the summarizeAdventure function.
+ * @fileOverview Summarizes the adventure.
  */
 
-import {ai, getModel} from '@/ai/ai-instance';
-import {z} from 'genkit';
+import { getClient } from '../ai-instance';
+import { Type, Schema } from "@google/genai";
 
-// --- Zod Schemas (Internal - Not Exported) ---
-const SummarizeAdventureInputSchema = z.object({
-  story: z
-    .string()
-    .describe('The full text of the adventure story to summarize.'),
-  userApiKey: z.string().optional().nullable().describe("User's optional Google AI API key."),
-});
-
-const SummarizeAdventureOutputSchema = z.object({
-  summary: z
-    .string()
-    .describe('A concise summary of the adventure, including key events, choices, and consequences.'),
-});
-
-// --- Exported Types (Derived from internal schemas) ---
-export type SummarizeAdventureInput = z.infer<typeof SummarizeAdventureInputSchema>;
-export type SummarizeAdventureOutput = z.infer<typeof SummarizeAdventureOutputSchema>;
-
-// --- Exported Async Function ---
-export async function summarizeAdventure(input: SummarizeAdventureInput): Promise<SummarizeAdventureOutput> {
-  return summarizeAdventureFlow(input);
+export interface SummarizeAdventureInput {
+  story: string;
+  userApiKey?: string | null;
 }
 
-// --- Internal Prompt and Flow Definitions ---
-const prompt = ai.definePrompt({
-  name: 'summarizeAdventurePrompt',
-  input: { schema: SummarizeAdventureInputSchema },
-  output: { schema: SummarizeAdventureOutputSchema },
-  prompt: `You are an AI assistant that summarizes adventure stories. Please provide a concise summary of the following adventure, including the key events, choices, and consequences:\n\n{{{story}}}`,
-});
+export interface SummarizeAdventureOutput {
+  summary: string;
+}
 
-const summarizeAdventureFlow = ai.defineFlow(
-  {
-    name: 'summarizeAdventureFlow',
-    inputSchema: SummarizeAdventureInputSchema,
-    outputSchema: SummarizeAdventureOutputSchema,
-  },
-  async input => {
-    const model = getModel(input.userApiKey);
-    const {output} = await prompt(input, { model });
-    return output!;
+const responseSchema: Schema = {
+    type: Type.OBJECT,
+    properties: {
+        summary: { type: Type.STRING }
+    },
+    required: ["summary"]
+};
+
+export async function summarizeAdventure(input: SummarizeAdventureInput): Promise<SummarizeAdventureOutput> {
+  const prompt = `Summarize the following adventure story concisely, highlighting key events and consequences:\n\n${input.story}`;
+
+  try {
+      const client = getClient(input.userApiKey);
+      const response = await client.models.generateContent({
+          model: 'gemini-2.0-flash',
+          contents: prompt,
+          config: {
+              responseMimeType: "application/json",
+              responseSchema: responseSchema,
+          }
+      });
+
+      const text = response.text;
+      if (!text) throw new Error("No text");
+      return JSON.parse(text);
+  } catch (e) {
+      console.error("AI Summary Error:", e);
+      return { summary: "Summary generation failed." };
   }
-);
+}

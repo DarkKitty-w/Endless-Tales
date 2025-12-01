@@ -3,28 +3,27 @@
 "use client";
 
 import React from 'react';
-import type { Character, Reputation, NpcRelationships } from '@/types/game-types';
-import type { InventoryItem } from '@/types/inventory-types';
+import type { Character, Reputation, NpcRelationships } from '../../types/game-types';
+import type { InventoryItem } from '../../types/inventory-types';
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-  SheetFooter, // Ensure SheetFooter is imported if used
-} from "@/components/ui/sheet";
-import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { Progress } from '@/components/ui/progress';
-import { Label } from "@/components/ui/label";
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/components/ui/tooltip';
+} from "../../components/ui/sheet";
+import { Button } from '../../components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import { ScrollArea } from '../../components/ui/scroll-area';
+import { Separator } from '../../components/ui/separator';
+import { Progress } from '../../components/ui/progress';
+import { Label } from "../../components/ui/label";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '../../components/ui/tooltip';
 import { User, Settings, Backpack, Workflow, Award, Users, HeartPulse, CalendarClock, Milestone, Loader2 } from 'lucide-react';
-import { CharacterDisplay } from "@/components/game/CharacterDisplay";
-import { InventoryDisplay } from "@/components/game/InventoryDisplay";
-import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay";
-import { useGame } from "@/context/GameContext";
+import { CharacterDisplay } from "../../components/game/CharacterDisplay";
+import { InventoryDisplay } from "../../components/game/InventoryDisplay";
+import { SkillTreeDisplay } from "../../components/game/SkillTreeDisplay";
+import { useGame } from "../../context/GameContext";
 
 interface MobileSheetProps {
     character: Character;
@@ -123,14 +122,12 @@ export function MobileSheet({
                                      <InventoryDisplay />
                                  )}
                              </div>
-                            {/* Removed SheetFooter from here as it's not standard for bottom sheets with Tabs */}
                        </SheetContent>
                     </Sheet>
-                     <Sheet>
-                        <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon" onClick={onSettingsOpen}><Settings className="h-5 w-5" /><span className="sr-only">Settings</span></Button>
-                        </SheetTrigger>
-                    </Sheet>
+                    <Button variant="ghost" size="icon" onClick={onSettingsOpen}>
+                        <Settings className="h-5 w-5" />
+                        <span className="sr-only">Settings</span>
+                    </Button>
                  </div>
             </div>
         </TooltipProvider>

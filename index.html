@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Endless Tales</title>
+    <script>
+      // Polyfill process.env for browser compatibility
+      window.process = {
+        env: {
+          NODE_ENV: 'development',
+          API_KEY: '' 
+        }
+      };
+    </script>
+    <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.2.0",
+    "react/jsx-runtime": "https://esm.sh/react@18.2.0/jsx-runtime",
+    "react-dom/client": "https://esm.sh/react-dom@18.2.0/client",
+    "react-dom": "https://esm.sh/react-dom@18.2.0",
+    "react-is": "https://esm.sh/react-is@18.2.0?external=react",
+    "prop-types": "https://esm.sh/prop-types@15.8.1",
+    "lucide-react": "https://esm.sh/lucide-react@0.330.0?external=react,react-dom",
+    "date-fns": "https://esm.sh/date-fns@3.3.1",
+    "clsx": "https://esm.sh/clsx@2.1.0",
+    "tailwind-merge": "https://esm.sh/tailwind-merge@2.2.1",
+    "react-hook-form": "https://esm.sh/react-hook-form@7.50.1?external=react,react-dom",
+    "@hookform/resolvers/zod": "https://esm.sh/@hookform/resolvers@3.3.4/zod?external=react,react-dom,react-hook-form,zod",
+    "zod": "https://esm.sh/zod@3.22.4",
+    "lodash": "https://esm.sh/lodash@4.17.21",
+    "recharts": "https://esm.sh/recharts@2.12.0?external=react,react-dom,react-is,prop-types",
+    "@google/genai": "https://esm.run/@google/genai",
+    "@radix-ui/react-accordion": "https://esm.sh/@radix-ui/react-accordion@1.1.2?external=react,react-dom",
+    "@radix-ui/react-alert-dialog": "https://esm.sh/@radix-ui/react-alert-dialog@1.0.5?external=react,react-dom",
+    "@radix-ui/react-avatar": "https://esm.sh/@radix-ui/react-avatar@1.0.4?external=react,react-dom",
+    "@radix-ui/react-checkbox": "https://esm.sh/@radix-ui/react-checkbox@1.0.4?external=react,react-dom",
+    "@radix-ui/react-dialog": "https://esm.sh/@radix-ui/react-dialog@1.0.5?external=react,react-dom",
+    "@radix-ui/react-dropdown-menu": "https://esm.sh/@radix-ui/react-dropdown-menu@2.0.6?external=react,react-dom",
+    "@radix-ui/react-label": "https://esm.sh/@radix-ui/react-label@2.0.2?external=react,react-dom",
+    "@radix-ui/react-menubar": "https://esm.sh/@radix-ui/react-menubar@1.0.4?external=react,react-dom",
+    "@radix-ui/react-popover": "https://esm.sh/@radix-ui/react-popover@1.0.7?external=react,react-dom",
+    "@radix-ui/react-progress": "https://esm.sh/@radix-ui/react-progress@1.0.3?external=react,react-dom",
+    "@radix-ui/react-radio-group": "https://esm.sh/@radix-ui/react-radio-group@1.1.3?external=react,react-dom",
+    "@radix-ui/react-scroll-area": "https://esm.sh/@radix-ui/react-scroll-area@1.0.5?external=react,react-dom",
+    "@radix-ui/react-select": "https://esm.sh/@radix-ui/react-select@2.0.0?external=react,react-dom",
+    "@radix-ui/react-separator": "https://esm.sh/@radix-ui/react-separator@1.0.3?external=react,react-dom",
+    "@radix-ui/react-slider": "https://esm.sh/@radix-ui/react-slider@1.1.2?external=react,react-dom",
+    "@radix-ui/react-slot": "https://esm.sh/@radix-ui/react-slot@1.0.2?external=react,react-dom",
+    "@radix-ui/react-switch": "https://esm.sh/@radix-ui/react-switch@1.0.3?external=react,react-dom",
+    "@radix-ui/react-tabs": "https://esm.sh/@radix-ui/react-tabs@1.0.4?external=react,react-dom",
+    "@radix-ui/react-toast": "https://esm.sh/@radix-ui/react-toast@1.1.5?external=react,react-dom",
+    "@radix-ui/react-tooltip": "https://esm.sh/@radix-ui/react-tooltip@1.0.7?external=react,react-dom",
+    "react-day-picker": "https://esm.sh/react-day-picker@8.10.0?external=react,react-dom,date-fns",
+    "tailwindcss-animate": "https://esm.sh/tailwindcss-animate@1.0.7?external=tailwindcss",
+    "class-variance-authority": "https://esm.sh/class-variance-authority@0.7.0",
+    "tailwind-scrollbar": "https://esm.sh/tailwind-scrollbar@3.0.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "next": "https://aistudiocdn.com/next@^16.0.5",
+    "tailwindcss": "https://aistudiocdn.com/tailwindcss@^4.1.17",
+    "@hookform/resolvers/": "https://aistudiocdn.com/@hookform/resolvers@^5.2.2/"
+  }
+}
+</script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              border: "hsl(var(--border))",
+              input: "hsl(var(--input))",
+              ring: "hsl(var(--ring))",
+              background: "hsl(var(--background))",
+              foreground: "hsl(var(--foreground))",
+              primary: {
+                DEFAULT: "hsl(var(--primary))",
+                foreground: "hsl(var(--primary-foreground))",
+              },
+              secondary: {
+                DEFAULT: "hsl(var(--secondary))",
+                foreground: "hsl(var(--secondary-foreground))",
+              },
+              destructive: {
+                DEFAULT: "hsl(var(--destructive))",
+                foreground: "hsl(var(--destructive-foreground))",
+              },
+              muted: {
+                DEFAULT: "hsl(var(--muted))",
+                foreground: "hsl(var(--muted-foreground))",
+              },
+              accent: {
+                DEFAULT: "hsl(var(--accent))",
+                foreground: "hsl(var(--accent-foreground))",
+              },
+              popover: {
+                DEFAULT: "hsl(var(--popover))",
+                foreground: "hsl(var(--popover-foreground))",
+              },
+              card: {
+                DEFAULT: "hsl(var(--card))",
+                foreground: "hsl(var(--card-foreground))",
+              },
+            },
+            borderRadius: {
+              lg: "var(--radius)",
+              md: "calc(var(--radius) - 2px)",
+              sm: "calc(var(--radius) - 4px)",
+            },
+            keyframes: {
+              'accordion-down': {
+                from: { height: '0' },
+                to: { height: 'var(--radix-accordion-content-height)' }
+              },
+              'accordion-up': {
+                from: { height: 'var(--radix-accordion-content-height)' },
+                to: { height: '0' }
+              },
+              fadeInOut: {
+                 '0%, 100%': { opacity: '0' },
+                 '20%, 80%': { opacity: '1' },
+              },
+            },
+            animation: {
+              'accordion-down': 'accordion-down 0.2s ease-out',
+              'accordion-up': 'accordion-up 0.2s ease-out',
+              'fade-in-out': 'fadeInOut 1.5s ease-in-out forwards',
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+      /* Initial CSS variables to avoid FOUC before React hydration */
+      :root {
+        --background: 20 15% 95%;
+        --foreground: 20 10% 20%;
+        --card: 30 20% 92%;
+        --card-foreground: 20 10% 20%;
+        --popover: 30 20% 92%;
+        --popover-foreground: 20 10% 20%;
+        --primary: 0 0% 50%;
+        --primary-foreground: 0 0% 100%;
+        --secondary: 30 15% 80%;
+        --secondary-foreground: 20 10% 20%;
+        --muted: 30 15% 85%;
+        --muted-foreground: 0 0% 45%;
+        --accent: 20 60% 50%;
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 84.2% 60.2%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 20 10% 75%;
+        --input: 20 10% 80%;
+        --ring: 20 60% 50%;
+        --radius: 0.5rem;
+        
+        --chart-1: 12 76% 61%;
+        --chart-2: 173 58% 39%;
+        --chart-3: 197 37% 24%;
+        --chart-4: 43 74% 66%;
+        --chart-5: 27 87% 67%;
+        
+        --sidebar-background: 0 0% 98%;
+        --sidebar-foreground: 240 5.3% 26.1%;
+        --sidebar-primary: 240 5.9% 10%;
+        --sidebar-primary-foreground: 0 0% 98%;
+        --sidebar-accent: 240 4.8% 95.9%;
+        --sidebar-accent-foreground: 240 5.9% 10%;
+        --sidebar-border: 220 13% 91%;
+        --sidebar-ring: 217.2 91.2% 59.8%;
+      }
+      .dark {
+        --background: 20 10% 10%;
+        --foreground: 20 5% 95%;
+        --card: 20 10% 15%;
+        --card-foreground: 20 5% 95%;
+        --popover: 20 10% 15%;
+        --popover-foreground: 20 5% 95%;
+        --primary: 0 0% 70%;
+        --primary-foreground: 0 0% 10%;
+        --secondary: 30 10% 25%;
+        --secondary-foreground: 20 5% 95%;
+        --muted: 30 10% 20%;
+        --muted-foreground: 0 0% 63.9%;
+        --accent: 20 60% 50%;
+        --accent-foreground: 0 0% 100%;
+        --destructive: 0 62.8% 30.6%;
+        --destructive-foreground: 0 0% 98%;
+        --border: 20 10% 30%;
+        --input: 20 10% 35%;
+        --ring: 20 60% 50%;
+        
+        --chart-1: 220 70% 50%;
+        --chart-2: 160 60% 45%;
+        --chart-3: 30 80% 55%;
+        --chart-4: 280 65% 60%;
+        --chart-5: 340 75% 55%;
+        
+        --sidebar-background: 240 5.9% 10%;
+        --sidebar-foreground: 240 4.8% 95.9%;
+        --sidebar-primary: 224.3 76.3% 48%;
+        --sidebar-primary-foreground: 0 0% 100%;
+        --sidebar-accent: 240 3.7% 15.9%;
+        --sidebar-accent-foreground: 240 4.8% 95.9%;
+        --sidebar-border: 240 3.7% 15.9%;
+        --sidebar-ring: 217.2 91.2% 59.8%;
+      }
+      
+      body {
+        font-family: 'Comic Sans MS', 'Chalkboard SE', 'Marker Felt', sans-serif;
+        background-color: hsl(var(--background));
+        color: hsl(var(--foreground));
+        transition: background-color 0.3s ease, color 0.3s ease;
+      }
+    </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>

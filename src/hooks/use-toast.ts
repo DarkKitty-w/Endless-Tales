@@ -1,11 +1,11 @@
-// src/hooks/use-toast.ts
 "use client"
 
+// src/hooks/use-toast.ts
 import * as React from "react"
 import type {
   ToastActionElement,
   ToastProps,
-} from "@/components/ui/toast"
+} from "../components/ui/toast"
 
 const TOAST_LIMIT = 3 // Allow up to 3 toasts visible at once
 const TOAST_REMOVE_DELAY = 5000 // Auto-remove after 5 seconds

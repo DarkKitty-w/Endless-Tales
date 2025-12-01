@@ -1,18 +1,18 @@
 
 // src/context/game-initial-state.ts
 
-import type { GameState } from "@/types/game-types";
-import type { Character, CharacterStats } from "@/types/character-types";
-import type { InventoryItem, ItemQuality } from "@/types/inventory-types";
-import type { AdventureSettings, DifficultyLevel } from "@/types/adventure-types";
+import type { GameState } from "../types/game-types";
+import type { Character, CharacterStats } from "../types/character-types";
+import type { InventoryItem, ItemQuality } from "../types/inventory-types";
+import type { AdventureSettings, DifficultyLevel } from "../types/adventure-types";
 import {
     calculateMaxHealth,
     calculateMaxActionStamina,
     calculateMaxMana,
     calculateXpToNextLevel,
     getStarterSkillsForClass
-} from "@/lib/gameUtils";
-import { TOTAL_STAT_POINTS, MIN_STAT_VALUE } from "@/lib/constants";
+} from "../lib/gameUtils";
+import { TOTAL_STAT_POINTS } from "../lib/constants";
 
 const pointsPerStat = Math.floor(TOTAL_STAT_POINTS / 3);
 const remainderPoints = TOTAL_STAT_POINTS % 3;

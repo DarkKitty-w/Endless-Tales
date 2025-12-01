@@ -1,10 +1,10 @@
 
 // src/context/reducers/settingsReducer.ts
-import type { AdventureSettings, DifficultyLevel, AdventureType } from "@/types/adventure-types";
-import type { GameState } from "@/types/game-types";
+import type { AdventureSettings, DifficultyLevel } from "../../types/adventure-types";
+import type { GameState } from "../../types/game-types";
 import type { Action } from "../game-actions";
 import { initialAdventureSettings } from "../game-initial-state";
-import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "@/lib/constants";
+import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "../../lib/constants";
 
 // Define the part of the state this reducer handles
 type SettingsState = Pick<GameState, 'adventureSettings' | 'selectedThemeId' | 'isDarkMode' | 'userGoogleAiApiKey'>;
@@ -136,4 +136,3 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
             return state;
     }
 }
-

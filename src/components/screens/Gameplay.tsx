@@ -1,35 +1,38 @@
+
 // src/components/screens/Gameplay.tsx
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import type { GameState, Character, SkillTree, Reputation, NpcRelationships } from '@/types/game-types';
-import type { StoryLogEntry, InventoryItem, DifficultyLevel as AssessedDifficultyLevel, AdventureSettings } from '@/types/adventure-types';
-import type { Skill, CharacterStats } from '@/types/character-types';
-import { useGame } from "@/context/GameContext";
-import { useToast } from "@/hooks/use-toast";
-import { calculateXpToNextLevel, calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, getStarterSkillsForClass } from "@/lib/gameUtils";
-import { narrateAdventure, type NarrateAdventureInput, type NarrateAdventureOutput } from "@/ai/flows/narrate-adventure";
-import { summarizeAdventure } from "@/ai/flows/summarize-adventure";
-import { assessActionDifficulty, type AssessActionDifficultyInput } from "@/ai/flows/assess-action-difficulty";
-import { generateSkillTree } from "@/ai/flows/generate-skill-tree";
-import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "@/ai/flows/attempt-crafting";
-import { cn } from "@/lib/utils";
+import type { GameState, Character, SkillTree, Reputation, NpcRelationships } from '../../types/game-types';
+import type { StoryLogEntry, DifficultyLevel as AssessedDifficultyLevel, AdventureSettings } from '../../types/adventure-types';
+import type { InventoryItem } from '../../types/inventory-types';
+import type { Skill, CharacterStats } from '../../types/character-types';
+import { useGame } from "../../context/GameContext";
+import { useToast } from "../../hooks/use-toast";
+import { calculateXpToNextLevel, calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, getStarterSkillsForClass } from "../../lib/gameUtils";
+import { narrateAdventure, type NarrateAdventureInput, type NarrateAdventureOutput } from "../../ai/flows/narrate-adventure";
+import { summarizeAdventure } from "../../ai/flows/summarize-adventure";
+import { assessActionDifficulty, type AssessActionDifficultyInput } from "../../ai/flows/assess-action-difficulty";
+import { generateSkillTree } from "../../ai/flows/generate-skill-tree";
+import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "../../ai/flows/attempt-crafting";
+import { updateGameStateString } from "../../lib/game-state-utils";
+import { cn } from "../../lib/utils";
 
 import { Loader2, Settings, ArrowLeft, Skull, Save, Info, Dices, Hammer, BookCopy, CalendarClock, GitBranch, RefreshCw } from "lucide-react";
-import { SettingsPanel } from "@/components/screens/SettingsPanel";
-import { LeftPanel } from "@/components/game/LeftPanel";
-import { NarrationDisplay } from '@/components/gameplay/NarrationDisplay';
-import { ActionInput } from '@/components/gameplay/ActionInput';
-import { GameplayActions } from '@/components/gameplay/GameplayActions';
-import { CraftingDialog } from '@/components/gameplay/CraftingDialog';
-import { ClassChangeDialog } from '@/components/gameplay/ClassChangeDialog';
-import { MobileSheet } from '@/components/gameplay/MobileSheet';
-import { useIsMobile } from "@/hooks/use-mobile";
-import { Button } from '@/components/ui/button';
-import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"; // Added SheetContent, SheetHeader, SheetTitle
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Skeleton } from "@/components/ui/skeleton";
+import { SettingsPanel } from "../../components/screens/SettingsPanel";
+import { LeftPanel } from "../../components/game/LeftPanel";
+import { NarrationDisplay } from '../../components/gameplay/NarrationDisplay';
+import { ActionInput } from '../../components/gameplay/ActionInput';
+import { GameplayActions } from '../../components/gameplay/GameplayActions';
+import { CraftingDialog } from '../../components/gameplay/CraftingDialog';
+import { ClassChangeDialog } from '../../components/gameplay/ClassChangeDialog';
+import { MobileSheet } from '../../components/gameplay/MobileSheet';
+import { useIsMobile } from "../../hooks/use-mobile";
+import { Button } from '../../components/ui/button';
+import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle } from "../../components/ui/sheet";
+import { TooltipProvider } from "../../components/ui/tooltip";
+import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
+import { Skeleton } from "../../components/ui/skeleton";
 
 
 // --- Dice Roller Service (Embedded) ---
@@ -195,7 +198,7 @@ export function Gameplay() {
                 toast({ title: `Action Difficulty: ${assessedDifficulty}`, description: assessmentResult.reasoning.substring(0, 100), duration: 1500 });
                 await new Promise(resolve => setTimeout(resolve, 200));
                 
-                if (assessedDifficulty === "Impossible") {
+                if ((assessedDifficulty as string) === "Impossible") {
                     const impossibleActionLog: StoryLogEntry = {
                         narration: `Narrator: Your attempt to "${action}" is deemed impossible. ${assessmentResult.reasoning}`,
                         updatedGameState: currentGameStateString, // No state change for impossible action
@@ -225,7 +228,7 @@ export function Gameplay() {
                 setIsRollingDice(false);
                 await new Promise(resolve => setTimeout(resolve, 1400)); // Time for user to see dice result
                 setDiceResult(null); // Clear dice result
-            } else if (!isPassiveAction && assessedDifficulty !== "Impossible" && diceType !== 'None') {
+            } else if (!isPassiveAction && (assessedDifficulty as string) !== "Impossible" && diceType !== 'None') {
                 actionWithDice += ` (Difficulty: ${assessedDifficulty}, No Roll Required)`;
             }
 
@@ -256,9 +259,6 @@ export function Gameplay() {
                 playerChoice: actionWithDice, gameState: currentGameStateString,
                 previousNarration: storyLog.length > 0 ? storyLog[storyLog.length - 1].narration : undefined,
                 adventureSettings: adventureSettings, turnCount: turnCount,
-                isCustomAdventure: adventureSettings.adventureType === "Custom",
-                isRandomizedAdventure: adventureSettings.adventureType === "Randomized",
-                isImmersedAdventure: adventureSettings.adventureType === "Immersed",
                 userApiKey: userGoogleAiApiKey,
             };
 
@@ -266,7 +266,20 @@ export function Gameplay() {
 
             // Fallback handling is now mostly inside narrateAdventureFlow, but we check again
             if (narrationResult && narrationResult.narration && narrationResult.updatedGameState) {
-                dispatch({ type: "UPDATE_NARRATION", payload: { ...narrationResult, timestamp: Date.now() } });
+                const gainedSkillTyped = narrationResult.gainedSkill ? {
+                    ...narrationResult.gainedSkill,
+                    type: (narrationResult.gainedSkill.type === 'Starter' || narrationResult.gainedSkill.type === 'Learned') 
+                        ? (narrationResult.gainedSkill.type as 'Starter' | 'Learned') 
+                        : 'Learned' as const
+                } : undefined;
+
+                const logEntryPayload: StoryLogEntry = {
+                    ...narrationResult,
+                    timestamp: Date.now(),
+                    gainedSkill: gainedSkillTyped
+                };
+
+                dispatch({ type: "UPDATE_NARRATION", payload: logEntryPayload });
                 setBranchingChoices(narrationResult.branchingChoices ?? GENERIC_BRANCHING_CHOICES);
                 // Toasts for positive feedback
                 if (narrationResult.dynamicEventTriggered) toast({ title: "Dynamic Event!", description: narrationResult.dynamicEventTriggered, duration: 4000, className: "border-purple-500" });
@@ -283,7 +296,7 @@ export function Gameplay() {
                 const updatedChar = state.character; // This will be updated after dispatch
                 if (narrationResult.isCharacterDefeated && updatedChar && updatedChar.currentHealth <=0) { 
                     if (adventureSettings.permanentDeath) {
-                        await handleEndAdventure({ ...narrationResult, timestamp: Date.now() }, true);
+                        await handleEndAdventure(logEntryPayload, true);
                     } else {
                         dispatch({ type: "RESPAWN_CHARACTER", payload: { narrationMessage: `${character.name} was defeated but managed to escape death's grasp this time!` } });
                         toast({ title: "Defeated!", description: "You narrowly escaped death! Your health and resources are restored.", variant: "destructive", duration: 5000 });
@@ -574,12 +587,12 @@ export function Gameplay() {
 
      const renderReputation = useCallback((rep: Reputation | undefined) => {
         if (!rep || Object.keys(rep).length === 0) return <p className="text-xs text-muted-foreground italic">None</p>;
-        return ( <ul className="list-none pl-0"> {Object.entries(rep).map(([faction, score]) => ( <li key={faction} className="flex justify-between items-center text-xs"> <span>{faction}:</span> <span className={`font-medium ${score > 10 ? 'text-green-600' : score < -10 ? 'text-destructive' : ''}`}>{score}</span> </li> ))} </ul> );
+        return ( <ul className="list-none pl-0"> {Object.entries(rep).map(([faction, score]) => ( <li key={faction} className="flex justify-between items-center text-xs"> <span>{faction}:</span> <span className={`font-medium ${(score as number) > 10 ? 'text-green-600' : (score as number) < -10 ? 'text-destructive' : ''}`}>{score as number}</span> </li> ))} </ul> );
     }, []);
 
      const renderNpcRelationships = useCallback((rels: NpcRelationships | undefined) => {
         if (!rels || Object.keys(rels).length === 0) return <p className="text-xs text-muted-foreground italic">None</p>;
-        return ( <ul className="list-none pl-0"> {Object.entries(rels).map(([npcName, score]) => ( <li key={npcName} className="flex justify-between items-center text-xs"> <span>{npcName}:</span> <span className={`font-medium ${score > 20 ? 'text-green-600' : score < -20 ? 'text-destructive' : ''}`}>{score}</span> </li> ))} </ul> );
+        return ( <ul className="list-none pl-0"> {Object.entries(rels).map(([npcName, score]) => ( <li key={npcName} className="flex justify-between items-center text-xs"> <span>{npcName}:</span> <span className={`font-medium ${(score as number) > 20 ? 'text-green-600' : (score as number) < -20 ? 'text-destructive' : ''}`}>{score as number}</span> </li> ))} </ul> );
     }, []);
 
     const anyLoading = isLoading || isEnding || isSaving || isAssessingDifficulty || isRollingDice || localIsGeneratingSkillTree || contextIsGeneratingSkillTree || isCraftingLoading || isInitialLoading;

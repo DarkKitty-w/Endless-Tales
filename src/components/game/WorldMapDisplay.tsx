@@ -1,10 +1,10 @@
+
 // src/components/game/WorldMapDisplay.tsx
 "use client";
 
-import { useGame } from "@/context/GameContext";
-import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
-import { HandDrawnMapIcon } from "@/components/icons/HandDrawnIcons";
-import Image from "next/image"; // Import next/image
+import { useGame } from "../../context/GameContext";
+import { CardboardCard, CardContent, CardHeader, CardTitle } from "./CardboardCard";
+import { HandDrawnMapIcon } from "../icons/HandDrawnIcons";
 
 export function WorldMapDisplay() {
   const { state } = useGame();
@@ -24,12 +24,10 @@ export function WorldMapDisplay() {
       <CardContent className="pb-4 flex flex-col items-center justify-center">
         {/* Display the map image */}
         <div className="w-full aspect-[4/3] relative mb-2 rounded-sm overflow-hidden border border-foreground/10 shadow-inner">
-           <Image
+           <img
              src={mapImageUri}
              alt="Adventure Map"
-             layout="fill" // Use fill layout
-             objectFit="cover" // Cover the area
-             className="filter grayscale-[30%] sepia-[20%]" // Apply a slight old map filter
+             className="w-full h-full object-cover filter grayscale-[30%] sepia-[20%]" // Apply a slight old map filter
            />
             {/* TODO: Add player marker based on game state */}
             {/* Example placeholder marker */}

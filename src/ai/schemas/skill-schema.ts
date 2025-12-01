@@ -1,4 +1,4 @@
-import { z } from 'genkit';
+import { z } from 'zod';
 
 export const SkillSchema = z.object({
     name: z.string().describe("The name of the skill."),

@@ -1,52 +1,55 @@
-# 🎮 Endless Tales : Une Aventure Textuelle IA 🧙‍♂️
+# 🎮 Endless Tales — Aventure Textuelle IA 🧙‍♂️
 
-Bienvenue dans **Endless Tales**, un jeu d'aventure textuel nouvelle génération où vos choix façonnent une histoire unique, narrée et gérée par un **Game Master IA** 🤖. Construit avec **Genkit** et **Google Gemini**, ce projet utilise une IA pour contrôler dynamiquement l'histoire, la progression de votre personnage, vos relations et le monde qui vous entoure.
-
-Ce projet ne se contente pas d'enchaîner des prompts ; il s'agit d'un **système de jeu complet** où l'IA agit comme un maître du jeu conscient des règles, grâce à des flux de logique complexes.
-
----
-
-## 🌟 Piliers du projet
-
-### 🛠️ Personnalisation Extrême
-
-Avant de commencer, vous ne choisissez pas seulement un scénario ; vous construisez le vôtre. En mode **Custom**, vous définissez :
-
-* 🏰 Genre (Fantasy, Sci-Fi, Horreur)
-* ✨ Système de magie (Haut, Bas, Aucun)
-* ⚙️ Niveau technologique (Primitif, Futuriste)
-* 🎭 Ton dominant (Sérieux, Comique)
-* ⚔️ Fréquence des combats, énigmes et interactions sociales
-
-L'IA utilise ces paramètres comme sa "bible" pour générer l'aventure.
-
-### 🤖 IA en tant que Maître du Jeu
-
-L'IA n'est pas un simple narrateur. C'est un **MJ actif** :
-
-* 📝 Gestion de la fiche de personnage
-* 📈 Progression des compétences (`progressedToStage`)
-* 🛡️ Réputation auprès des factions
-* 💬 Relations PNJ
-* ⭐ Attribution d'XP (`xpGained`)
-* 🎲 Déclenchement d'événements dynamiques
-
-### 👥 Multijoueur Coopératif
-
-Construit sur **Firebase**, le jeu supporte des sessions multijoueur en temps réel. Les actions de chaque joueur impactent le monde partagé 🌍.
+**Endless Tales** est un jeu d’aventure textuel nouvelle génération où chaque histoire est narrée, façonnée et gérée par un **Game Master IA** 🤖.
+Basé sur le **SDK Google GenAI** et **Gemini**, ce système va bien plus loin qu’une simple suite de prompts : il s’agit d’un véritable **moteur de jeu narratif**, doté de logique interne, d’évolution de personnage, d’événements dynamiques et d’un monde réactif.
 
 ---
 
-## 🚀 2. Installation
+## 🌟 Caractéristiques principales
+
+### 🛠️ Personnalisation Totale du Monde
+
+En mode **Custom**, vous définissez entièrement votre univers :
+
+* 🏰 Genre (Fantasy, Sci-Fi, Horreur…)
+* ✨ Système de magie (Haute magie, basse magie, aucune)
+* ⚙️ Niveau technologique (Primitif → Futuriste)
+* 🎭 Ton dominant (Sérieux, Ironique, Comique)
+* ⚔️ Fréquences des combats, énigmes et interactions sociales
+
+L’IA s’en sert comme base pour générer une histoire **totalement cohérente**.
+
+---
+
+### 🤖 Un Maître du Jeu IA
+
+L’IA joue le rôle de **MJ actif**, capable de :
+
+* 📝 Gérer la fiche de personnage
+* 📈 Faire progresser vos compétences (`progressedToStage`)
+* 🛡️ Suivre la réputation auprès des factions
+* 💬 Gérer les relations avec les PNJ
+* ⭐ Attribuer l’XP (`xpGained`)
+* 🎲 Déclencher des événements dynamiques selon vos choix
+
+---
+
+### 👥 Multijoueur Coopératif *(désactivé temporairement)*
+
+Le jeu est conçu pour fonctionner avec **Firebase** pour des sessions coopératives.
+La fonctionnalité est actuellement en maintenance mais pleinement architecturée.
+
+---
+
+## 🚀 Installation
 
 ### 🛠️ Prérequis
 
-* Node.js (v18+)
+* Node.js 18+
 * npm ou yarn
-* Compte Firebase
-* Clé d'API Google AI
+* Clé API Google AI (Gemini)
 
-### 📦 Instructions
+### 📦 Étapes
 
 Clonez le dépôt :
 
@@ -63,154 +66,146 @@ npm install
 yarn install
 ```
 
-Créez un fichier `.env.local` et ajoutez vos clés :
+Créez un fichier `.env.local` (optionnel, une zone dans l’interface permet aussi l’entrée de la clé) :
 
 ```env
 GOOGLE_GENAI_API_KEY=VOTRE_CLE_API_GOOGLE_AI
-NEXT_PUBLIC_FIREBASE_API_KEY=...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-NEXT_PUBLIC_FIREBASE_APP_ID=...
 ```
 
-Lancez l'application :
-
-**Terminal 1 (Next.js) :**
+Lancez l’application :
 
 ```bash
 npm run dev
 ```
 
-Disponible sur [http://localhost:9002](http://localhost:9002) 🌐
+Application disponible sur : **[http://localhost:9002](http://localhost:9002)**
 
-**Terminal 2 (Serveur IA Genkit) :**
-
-```bash
-npm run genkit:dev
-```
-
-Démarre l'API locale pour tous les flux d'IA.
+**Note :** L'application fonctionne entièrement **côté client** : plus besoin d’un serveur Genkit séparé.
 
 ---
 
-## 🎯 3. Usage
+## 🎯 Utilisation
 
 ### 🏠 Menu Principal
 
-* 🎲 **Randomized** : aventure rapide générée aléatoirement
-* 🛠️ **Custom** : personnalisation complète
-* 📖 **Immersed** : aventure dans un univers narratif existant
-* 👥 **Co-op** : rejoindre ou héberger une session multijoueur
+* 🎲 **Randomized** : aventure entièrement aléatoire
+* 🛠️ **Custom** : paramètres d’univers personnalisés
+* 📖 **Immersed** : aventures dans des univers existants (Harry Potter, Star Wars…)
+* ⚙️ **Paramètres** : entrée de la clé API Google
 
-### ⚙️ Configuration de l'Aventure
+### ⚙️ Configuration de l’Aventure
 
-* Genre/Thème
-* Système de Magie
-* Niveau Technologique
-* Ton Dominant
-* Fréquence des combats / énigmes / interactions sociales
-* Niveau de difficulté & Permadeath ☠️
+* Genre / Thème
+* Système de magie
+* Niveau technologique
+* Ton narratif
+* Fréquences : combats / énigmes / interactions sociales
+* Difficulté & Permadeath ☠️
 
 ### 🧝‍♂️ Création de Personnage
 
-* Formulaire Simple 📝
-* Description Textuelle ✍️ (IA génère la fiche complète)
+Deux modes :
 
-### 🎮 Phase de Jeu
+* Formulaire simple
+* Description textuelle (génération IA complète)
 
-* Recevez narration & choix de l'IA
-* Sélection d'action ou action personnalisée
-* L'IA renvoie un objet JSON avec changements d'état (santé, XP, compétences, réputation)
+### 🎮 Pendant la Partie
 
-### 🏁 Fin d'Aventure
+* Narration évolutive générée par l'IA
+* Choix prédéfinis **ou actions libres**
+* Mise à jour automatique : santé, XP, compétences, réputation…
 
-* Résumé généré par l'IA
-* Journal sauvegardé dans `localStorage` 📚
+### 🏁 Fin d’Aventure
 
----
-
-## ⚔️ 4. Fonctionnalités
-
-* 🤖 IA Maître du Jeu (Genkit & Gemini)
-* 🎨 Personnalisation poussée
-* 🧙‍♂️ Génération de personnage par IA
-* 🔧 Logique de jeu pilotée par IA
-
-### 🏹 Mécaniques de JDR
-
-* STR, STA, WIS 📊
-* Lancers de dés côté serveur 🎲
-* Compétences de départ selon classe
-* Gestion d'état avec +40 actions possibles
-
-### 🖥️ Client & Multijoueur
-
-* `useReducer` modulaire
-* Multijoueur coopératif en temps réel 🌐
-* Thématisation dynamique & mode sombre 🌙
-* Persistance locale des préférences et aventures terminées
+* Résumé généré par l’IA
+* Journal sauvegardé dans le navigateur
 
 ---
 
-## 🗂️ 5. Structure des Dossiers
+## ⚔️ Fonctionnalités
+
+### 🤖 IA Maître du Jeu
+
+* Gestion narrative complète via **Gemini 2.0 Flash**
+* Cohérence dynamique du monde et des événements
+
+### 🧙‍♂️ Mécaniques JDR
+
+* **Stats :** STR, STA, WIS
+* **Lancers de dés :** d6, d10, d20 (calculés côté code)
+* **Compétences :** arbre dynamique généré par l’IA
+* **Barres :** Santé / Stamina / Mana
+
+### 🖥️ Technique
+
+* Next.js 15+ / React 18
+* State management complexe via `useReducer`
+* UI moderne : Tailwind + Shadcn + Lucide
+* Persistance via `localStorage`
+* Architecture “Client-First”
+
+---
+
+## 🗂️ Structure du Projet
 
 ```
 src/
-├── ai/                 # Cœur de l'IA (Genkit)
-│   ├── flows/          # Logique (narrate-adventure.ts, attempt-crafting.ts)
-│   ├── schemas/        # Structures Zod
-│   └── ai-instance.ts
+├── ai/                 # Logique IA (Google GenAI)
+│   ├── flows/          # Flux narratifs et systèmes
+│   ├── schemas/        # Schémas des réponses JSON
+│   └── ai-instance.ts  # Configuration du client Gemini
 ├── app/                # Pages Next.js
 ├── components/
-│   ├── screens/        # Pages complètes (MainMenu, Gameplay...)
-│   ├── game/           # UI spécifique au jeu
-│   ├── gameplay/       # Éléments interactifs
-│   └── ui/             # Composants génériques
-├── context/            # Gestion de l'état global
-│   ├── reducers/       
-│   ├── GameContext.tsx
-│   ├── game-reducer.ts
-│   ├── game-actions.ts
-│   └── game-initial-state.ts
+│   ├── screens/        # Pages complètes
+│   ├── game/           # UI du gameplay
+│   ├── gameplay/       # Actions, narration…
+│   └── ui/             # Composants génériques Shadcn
+├── context/            # State global (reducers)
 ├── lib/                # Utilitaires
-├── services/           # Logique métier
-└── types/              # Types TypeScript
+└── types/              # Typescript types
 ```
 
 ---
 
-## 🛠️ 6. Tech Stack
+## ⚠️ Bugs / Limitations
 
-* Next.js v15+ 🌐
-* TypeScript 🔒
-* Genkit + Google Gemini 2.0 Flash 🤖
-* React 18 + shadcn/ui + Tailwind CSS 🎨
-* Firebase Auth + Firestore 💾
-* React Context API + useReducer 📦
-* Zod pour validation 🔍
+### 🔴 Stabilité
 
----
+* JSON parfois mal formaté (Markdown → erreurs de parsing)
+* `localStorage` limité (5MB → aventures longues problématiques)
+* Limite de contexte IA : certains anciens détails peuvent être oubliés
 
-## ⚠️ 7. Bugs / Problèmes Connus
+### 🟡 UX
 
-* `gameState` en chaîne de caractères (fragile)
-* Pas de sauvegarde en cours 🕒
-* Dérive IA sur longues aventures 🧠
+* Scroll automatique parfois imprécis
+* Input désactivé durant la réflexion de l’IA
 
 ---
 
-## 🚧 8. TODO / Roadmap
+## 🚧 Roadmap
 
-* 🔄 Refactoriser `gameState` en JSON
-* 💾 Sauvegarde de l'aventure en cours
-* 💬 Chat multijoueur
-* 🧠 Améliorer mémoire IA
-* ⚡ Développer flux artisanat & compétences
+### 🚀 Priorité 1 — Stabilité
+
+* Nettoyage automatique du JSON IA
+* Validation Zod stricte + réparation des réponses
+* Amélioration des erreurs API (clé invalide, quota…)
+
+### ✨ Priorité 2 — Gameplay
+
+* Génération d’images (portraits, cartes)
+* Système de commerce
+* Inventaire avancé (équipement)
+* Import/Export `.json` de sauvegardes
+
+### 🔮 Priorité 3 — Architecture
+
+* Rétablissement du multijoueur Firebase
+* Mode “MJ Humain”
+* Narration vocale (TTS)
 
 ---
 
-## 📜 9. Licence
+## 📜 Licence
 
-Le projet est actuellement **privé** (`"private": true`). Pour le rendre open-source, ajouter un fichier LICENSE (ex: MIT, Apache 2.0).
+Publié sous licence **MIT**.
+

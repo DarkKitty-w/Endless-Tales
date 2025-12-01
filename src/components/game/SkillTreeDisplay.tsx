@@ -1,24 +1,25 @@
+
 // src/components/game/SkillTreeDisplay.tsx
 "use client";
 
 import React from "react";
-import type { SkillTree, Skill } from "@/types/game-types"; // Import types from central location
-import { CardboardCard, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/game/CardboardCard";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
+import type { SkillTree, Skill } from "../../types/game-types"; // Import types from central location
+import { CardboardCard, CardContent, CardHeader, CardTitle, CardDescription } from "../../components/game/CardboardCard";
+import { ScrollArea } from "../../components/ui/scroll-area";
+import { Badge } from "../../components/ui/badge";
 import { Star, Lock, Unlock, Sparkles, CheckCircle2, CircleDot, Workflow } from "lucide-react"; // Added CheckCircle2, CircleDot, Workflow
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "@/components/ui/accordion";
+} from "../../components/ui/accordion";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "../../components/ui/tooltip";
 
 interface SkillTreeDisplayProps {
   skillTree: SkillTree;

@@ -1,23 +1,13 @@
+
+import React from 'react';
 import type {Metadata} from 'next';
-import {Geist, Geist_Mono} from 'next/font/google';
-import './globals.css';
-import { GameProvider } from '@/context/GameContext'; // Import GameProvider
-import { Toaster } from "@/components/ui/toaster"; // Import Toaster
-
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
+import { GameProvider } from '../context/GameContext'; // Import GameProvider
+import { Toaster } from "../components/ui/toaster"; // Import Toaster
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: 'Endless Tales', // Updated Title
-  description: 'An AI-driven text adventure game.', // Updated Description
-  // Removed explicit icons configuration to rely on Next.js default behavior (e.g., app/icon.ico or app/favicon.ico)
+  title: 'Endless Tales', 
+  description: 'An AI-driven text adventure game.', 
 };
 
 export default function RootLayout({
@@ -26,8 +16,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans`}>
+    <html lang="en" suppressHydrationWarning>
+      {/* Remove font variables class for now */}
+      <body className={`antialiased font-sans`} suppressHydrationWarning>
         <GameProvider> {/* Wrap children with GameProvider */}
           {children}
            <Toaster /> {/* Add Toaster for notifications */}

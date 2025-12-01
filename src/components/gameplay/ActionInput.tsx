@@ -1,10 +1,11 @@
+
 // src/components/gameplay/ActionInput.tsx
 "use client";
 
 import React, { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
 import { Send, Sparkles, Hammer } from "lucide-react"; // Added Hammer
 
 interface ActionInputProps {

@@ -1,7 +1,8 @@
+
 // src/lib/game-state-utils.ts
 
-import type { Character } from "@/types/character-types";
-import type { InventoryItem } from "@/types/inventory-types";
+import type { Character } from "../types/character-types";
+import type { InventoryItem } from "../types/inventory-types";
 
 /**
  * Helper function to update the game state string with current character and inventory info.

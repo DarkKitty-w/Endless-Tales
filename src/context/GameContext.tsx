@@ -1,24 +1,26 @@
+
 // src/context/GameContext.tsx
 "use client";
 
 import type { ReactNode } from "react";
 import React, { createContext, useContext, useReducer, Dispatch, useEffect, useCallback } from "react";
-import type { GameState, FirestoreCoopSession } from "@/types/game-types";
+import type { GameState } from "../types/game-types";
 import type { Action } from "./game-actions";
 import { initialState } from "./game-initial-state";
 import { gameReducer } from "./game-reducer";
-import { THEMES } from "@/lib/themes";
-import { SAVED_ADVENTURES_KEY, THEME_ID_KEY, THEME_MODE_KEY, USER_API_KEY_KEY } from "@/lib/constants";
-import type { SavedAdventure } from "@/types/adventure-types";
-import { auth } from '@/lib/firebase';
-import type { User } from 'firebase/auth';
-import { signInAnonymously } from "firebase/auth"; // Import signInAnonymously
-import { listenToSessionUpdates } from "@/services/multiplayer-service";
+import { THEMES } from "../lib/themes";
+import { SAVED_ADVENTURES_KEY, THEME_ID_KEY, THEME_MODE_KEY, USER_API_KEY_KEY } from "../lib/constants";
+import type { SavedAdventure } from "../types/adventure-types";
+// Firebase imports disabled
+// import { auth } from '../lib/firebase';
+// import type { User } from 'firebase/auth';
+// import { signInAnonymously } from "firebase/auth";
+// import { listenToSessionUpdates } from "../services/multiplayer-service";
 
 
 const GameContext = createContext<{ state: GameState; dispatch: Dispatch<Action> } | undefined>(undefined);
 
-export const GameProvider = ({ children }: { children: ReactNode }) => {
+export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
 
    const applyTheme = useCallback((themeId: string, isDark: boolean) => {
@@ -27,7 +29,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         const root = document.documentElement;
         if (!root) return;
         Object.entries(colors).forEach(([property, value]) => {
-            root.style.setProperty(property, value);
+            root.style.setProperty(property, value as string);
         });
         if (isDark) {
             root.classList.add('dark');
@@ -71,6 +73,8 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         // Apply the loaded theme immediately
         applyTheme(savedThemeId, initialDarkMode);
         
+        // FIREBASE DISABLED
+        /*
         // Setup Firebase anonymous auth listener
         const unsubscribeAuth = auth.onAuthStateChanged(async (user: User | null) => {
             if (user) {
@@ -93,30 +97,33 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
         return () => {
             unsubscribeAuth();
         };
+        */
     }, [applyTheme]); // Only run this effect once on mount
 
 
       useEffect(() => {
-         // This effect runs whenever theme settings change in the state, to persist them
-         if(state.status !== "MainMenu" && state.status !== "CharacterCreation") { // Avoid saving during initial setup phase
-            applyTheme(state.selectedThemeId, state.isDarkMode);
-            localStorage.setItem(THEME_ID_KEY, state.selectedThemeId);
-            localStorage.setItem(THEME_MODE_KEY, state.isDarkMode ? 'dark' : 'light');
-         }
-      }, [state.selectedThemeId, state.isDarkMode, state.status, applyTheme]);
+         // Apply visual changes immediately regardless of game status
+         applyTheme(state.selectedThemeId, state.isDarkMode);
+         
+         // Persist to local storage
+         localStorage.setItem(THEME_ID_KEY, state.selectedThemeId);
+         localStorage.setItem(THEME_MODE_KEY, state.isDarkMode ? 'dark' : 'light');
+      }, [state.selectedThemeId, state.isDarkMode, applyTheme]);
 
       useEffect(() => {
-        // This effect runs whenever the API key changes in the state, to persist it
-         if(state.status !== "MainMenu" && state.status !== "CharacterCreation") {
-            if (state.userGoogleAiApiKey) {
-                localStorage.setItem(USER_API_KEY_KEY, state.userGoogleAiApiKey);
-            } else {
-                localStorage.removeItem(USER_API_KEY_KEY);
+        // Persist API key regardless of game status
+        if (state.userGoogleAiApiKey) {
+            localStorage.setItem(USER_API_KEY_KEY, state.userGoogleAiApiKey);
+        } else {
+            // Only remove if explicitly null (cleared), undefined might be initial load
+            if (state.userGoogleAiApiKey === null) {
+                 localStorage.removeItem(USER_API_KEY_KEY);
             }
         }
-      }, [state.userGoogleAiApiKey, state.status]);
+      }, [state.userGoogleAiApiKey]);
 
-    // Effect for listening to Firestore session updates
+    // FIREBASE DISABLED - Removed Session Listener
+    /*
     useEffect(() => {
         let unsubscribeSession: (() => void) | undefined;
 
@@ -152,6 +159,7 @@ export const GameProvider = ({ children }: { children: ReactNode }) => {
             }
         };
     }, [state.sessionId, state.status, dispatch]);
+    */
 
 
    useEffect(() => {

@@ -1,5 +1,7 @@
+
 // src/components/icons/HandDrawnIcons.tsx
 import React from 'react';
+import { cn } from "../../lib/utils";
 
 // Using simple paths and slight randomness/waviness for a hand-drawn feel
 // Stroke width and color can be controlled via className (e.g., using Tailwind)
@@ -113,6 +115,3 @@ export const HandDrawnMapIcon = ({ className = "w-6 h-6", ...props }) => (
     <line x1="16" y1="6" x2="16" y2="22" />
  </svg>
 );
-
-// Helper to make cn available if used directly
-import { cn } from "@/lib/utils";

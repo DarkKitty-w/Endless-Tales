@@ -1,6 +1,7 @@
+
 // src/lib/gameUtils.ts
 
-import type { CharacterStats, Skill } from "@/types/character-types";
+import type { CharacterStats, Skill } from "../types/character-types";
 
 /**
  * Calculates the maximum Health Points (HP) based on character's Stamina stat.

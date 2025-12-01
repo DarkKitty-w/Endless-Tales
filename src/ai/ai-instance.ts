@@ -1,31 +1,26 @@
-
 // src/ai/ai-instance.ts
-import {genkit, GenerationCommonConfig} from 'genkit';
-import {googleAI, GoogleAIGenerativeAI} from '@genkit-ai/googleai';
+import { GoogleGenAI } from "@google/genai";
 
-const googleAiPlugin = googleAI({
-  apiKey: process.env.GOOGLE_GENAI_API_KEY,
-});
+// Safely access process.env
+const safeProcess = typeof process !== 'undefined' ? process : { env: {} as Record<string, string | undefined> };
 
-// Base configuration for Genkit
-export const ai = genkit({
-  promptDir: './prompts',
-  plugins: [googleAiPlugin],
-});
+// Use a dummy key if not present to prevent initialization crash. 
+// Real requests will fail if a valid key isn't provided via getClient later or if this env var is invalid.
+const apiKey = safeProcess.env.API_KEY || safeProcess.env.GOOGLE_GENAI_API_KEY || 'DUMMY_KEY_FOR_INIT';
+
+// Initialize the default client
+export const aiClient = new GoogleGenAI({ apiKey });
 
 /**
- * Gets a model instance with a dynamically provided API key.
- * If no key is provided, it falls back to the default instance.
+ * Gets a GenAI client instance. 
+ * If a user API key is provided, returns a new instance using that key.
+ * Otherwise returns the default instance using the environment key.
  * @param userApiKey - The user-provided Google AI API key.
- * @returns A configured model reference.
+ * @returns A GoogleGenAI client instance.
  */
-export function getModel(userApiKey?: string | null): GoogleAIGenerativeAI {
+export function getClient(userApiKey?: string | null): GoogleGenAI {
     if (userApiKey) {
-        // Create a temporary, per-request instance of the GoogleAI plugin with the user's key
-        const dynamicGoogleAI = new GoogleAIGenerativeAI({ apiKey: userApiKey });
-        // Return a specific model from this dynamic plugin instance
-        return dynamicGoogleAI.getModel('gemini-2.0-flash');
+        return new GoogleGenAI({ apiKey: userApiKey });
     }
-    // Fallback to the default, globally configured model
-    return googleAiPlugin.getModel('gemini-2.0-flash');
+    return aiClient;
 }

@@ -1,3 +1,4 @@
+
 // src/components/gameplay/ClassChangeDialog.tsx
 "use client";
 
@@ -11,8 +12,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import type { Character } from '@/types/character-types';
+} from "../ui/alert-dialog";
+import type { Character } from '../../types/character-types';
 
 interface ClassChangeDialogProps {
     isOpen: boolean;

@@ -1,3 +1,4 @@
+
 // src/components/ui/sheet.tsx
 "use client"
 
@@ -6,7 +7,7 @@ import * as DialogPrimitive from "@radix-ui/react-dialog" // Use DialogPrimitive
 import { cva, type VariantProps } from "class-variance-authority"
 import { X } from "lucide-react"
 
-import { cn } from "@/lib/utils"
+import { cn } from "../../lib/utils"
 
 // Sheet is a Dialog
 const Sheet = DialogPrimitive.Root
@@ -54,17 +55,23 @@ const sheetVariants = cva(
 
 interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>, // Use DialogPrimitive.Content
-    VariantProps<typeof sheetVariants> {}
+    VariantProps<typeof sheetVariants> {
+        side?: VariantProps<typeof sheetVariants>['side'];
+        className?: string;
+        children?: React.ReactNode;
+        style?: React.CSSProperties; // Add style to props to support custom styles
+    }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>, // Use DialogPrimitive.Content
   SheetContentProps
->(({ side = "right", className, children, ...props }, ref) => (
+>(({ side = "right", className, children, style, ...props }, ref) => (
   <SheetPortal> {/* SheetPortal is DialogPrimitive.Portal */}
     <SheetOverlay />
     <DialogPrimitive.Content // Use DialogPrimitive.Content here
       ref={ref}
       className={cn(sheetVariants({ side }), className)}
+      style={style} // Pass style prop
       {...props}
     >
       {children}

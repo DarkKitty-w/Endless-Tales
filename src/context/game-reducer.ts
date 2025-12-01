@@ -1,6 +1,7 @@
+"use client";
 
 // src/context/game-reducer.ts
-import type { GameState } from "@/types/game-types";
+import type { GameState } from "../types/game-types";
 import type { Action } from "./game-actions";
 import { initialAdventureSettings, initialState } from "./game-initial-state";
 import { characterReducer } from "./reducers/characterReducer";
@@ -9,7 +10,7 @@ import { settingsReducer } from "./reducers/settingsReducer";
 import { adventureReducer } from "./reducers/adventureReducer"; // This will handle most game flow logic
 
 export function gameReducer(state: GameState, action: Action): GameState {
-    console.log(`GameReducer: Action received - ${action.type}`, action.payload !== undefined ? JSON.stringify(action.payload).substring(0,300) : '(no payload)');
+    console.log(`GameReducer: Action received - ${action.type}`, (action as any).payload !== undefined ? JSON.stringify((action as any).payload).substring(0,300) : '(no payload)');
 
     const updatedCharacter = characterReducer(state.character, action);
     const updatedInventory = inventoryReducer(state.inventory, action);

@@ -1,22 +1,23 @@
+
 // src/components/character/StatAllocationInput.tsx
 "use client";
 
 import * as React from "react";
-import type { LucideIcon } from "lucide-react";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
-import { MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants";
-import type { CharacterStats } from "@/types/character-types";
-import { cn } from "@/lib/utils";
+// Removed import type { LucideIcon } from "lucide-react";
+import { Label } from "../ui/label";
+import { Slider } from "../ui/slider";
+import { MIN_STAT_VALUE, MAX_STAT_VALUE } from "../../lib/constants";
+import type { CharacterStats } from "../../types/character-types";
+import { cn } from "../../lib/utils";
 // Assuming HandDrawnWisdomIcon is now imported from HandDrawnIcons
-import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnMagicIcon as HandDrawnWisdomIcon } from "@/components/icons/HandDrawnIcons";
+import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnMagicIcon as HandDrawnWisdomIcon } from "../icons/HandDrawnIcons";
 
 interface StatAllocationInputProps {
   label: string;
   statKey: keyof CharacterStats; // Will be 'strength', 'stamina', or 'wisdom'
   value: number;
   onChange: (statKey: keyof CharacterStats, value: number) => void;
-  Icon?: LucideIcon; // The specific icon for the stat will be determined internally
+  Icon?: React.ElementType; // Relaxed type to allow non-Lucide icons
   disabled?: boolean;
   remainingPoints: number;
 }

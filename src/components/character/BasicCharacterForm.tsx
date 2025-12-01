@@ -3,10 +3,10 @@
 
 import React from 'react';
 import { UseFormRegister, FieldErrors } from 'react-hook-form';
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+import { Label } from "../ui/label";
+import { Input } from "../ui/input";
 import { ShieldQuestion } from 'lucide-react'; // Example icon
-import type { AdventureType } from '@/types/adventure-types'; // Import AdventureType
+import type { AdventureType } from '../../types/adventure-types';
 
 interface BasicFormData {
   name: string;

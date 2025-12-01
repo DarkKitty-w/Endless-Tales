@@ -1,13 +1,14 @@
+
 // src/components/screens/SavedAdventuresList.tsx
 "use client";
 
 import React from "react";
-import { useGame } from "@/context/GameContext"; // Import main context hook
-import type { SavedAdventure, Character, Reputation, NpcRelationships } from "@/types/game-types"; // Import types from central location
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useGame } from "../../context/GameContext"; // Import main context hook
+import type { SavedAdventure, Character, Reputation, NpcRelationships } from "../../types/game-types"; // Import types from central location
+import { Button } from "../../components/ui/button";
+import { ScrollArea } from "../../components/ui/scroll-area";
+import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "../../components/game/CardboardCard";
+import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,10 +19,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
+} from "../../components/ui/alert-dialog";
 import { FolderClock, ArrowLeft, Trash2, Play, Info, BookOpenText, Package, ShieldQuestion, Star, HeartPulse, Zap, ThumbsUp, ThumbsDown, Award, Users } from "lucide-react"; // Added Award, Thumbs icons, Users icon
 import { formatDistanceToNow } from 'date-fns';
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "../../hooks/use-toast";
 
 // Helper to render reputation summary
 const renderReputationSummary = (reputation: Reputation | undefined): string => {

@@ -5,22 +5,22 @@
 import React from "react";
 import type {
     Character, Reputation, NpcRelationships
-} from '@/types/game-types';
-import type { InventoryItem } from '@/types/inventory-types';
-import { useGame } from "@/context/GameContext";
-import { CharacterDisplay } from "@/components/game/CharacterDisplay";
-import { InventoryDisplay } from "@/components/game/InventoryDisplay";
-import { SkillTreeDisplay } from "@/components/game/SkillTreeDisplay";
-import { CardboardCard, CardContent } from "@/components/game/CardboardCard";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Separator } from "@/components/ui/separator";
-import { Progress } from "@/components/ui/progress";
-import { Label } from "@/components/ui/label";
-import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
+} from '../../types/game-types';
+import type { InventoryItem } from '../../types/inventory-types';
+import { useGame } from "../../context/GameContext";
+import { CharacterDisplay } from "../../components/game/CharacterDisplay";
+import { InventoryDisplay } from "../../components/game/InventoryDisplay";
+import { SkillTreeDisplay } from "../../components/game/SkillTreeDisplay";
+import { CardboardCard, CardContent } from "../../components/game/CardboardCard";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import { Separator } from "../../components/ui/separator";
+import { Progress } from "../../components/ui/progress";
+import { Label } from "../../components/ui/label";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "../../components/ui/tooltip";
 import {
     Award, Users, HeartPulse, CalendarClock, Milestone, Backpack, Workflow, Loader2, User
 } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea } from "../../components/ui/scroll-area";
 
 interface LeftPanelProps {
     character: Character;
@@ -100,7 +100,7 @@ export function LeftPanel({
 
                                     <Separator />
                                     <div className="space-y-1">
-                                        <Label className="text-sm font-medium flex items-center gap-1 mb-1"><Users className="w-3.5 h-3.5"/> Reputation:</Label>
+                                        <Label className="text-sm font-medium flex items-center gap-1"><Users className="w-3.5 h-3.5"/> Reputation:</Label>
                                         {renderReputation(character.reputation)}
                                     </div>
 
@@ -147,4 +147,3 @@ export function LeftPanel({
         </div>
     );
 }
-    
