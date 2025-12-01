@@ -51,6 +51,7 @@ export interface StoryLogEntry {
   progressedToStage?: number;
   suggestedClassChange?: string;
   timestamp: number;
+  healthChange?: number; // Added healthChange
   staminaChange?: number;
   manaChange?: number;
   gainedSkill?: Skill;
@@ -60,6 +61,7 @@ export interface StoryLogEntry {
   branchingChoices?: { text: string; consequenceHint?: string }[];
   dynamicEventTriggered?: string;
   isCharacterDefeated?: boolean; // Added to explicitly track defeat in narration
+  turnNumber?: number; // Added turnNumber property
 }
 
 /** Represents a saved adventure state. */

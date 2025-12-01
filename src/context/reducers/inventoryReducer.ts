@@ -1,8 +1,8 @@
+
 // src/context/reducers/inventoryReducer.ts
-import type { InventoryItem, ItemQuality } from "@/types/inventory-types";
+import type { InventoryItem, ItemQuality } from "../../types/inventory-types";
 import type { Action } from "../game-actions";
 import { initialInventory } from "../game-initial-state";
-import { updateGameStateString } from "@/lib/game-state-utils"; // If needed for derived state
 
 export function inventoryReducer(state: InventoryItem[], action: Action): InventoryItem[] {
     switch (action.type) {

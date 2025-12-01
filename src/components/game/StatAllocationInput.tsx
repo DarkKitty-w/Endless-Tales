@@ -1,12 +1,13 @@
+
 "use client";
 
 import * as React from "react";
 import type { LucideIcon } from "lucide-react";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
-import { MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants";
-import type { CharacterStats } from "@/types/character-types";
-import { cn } from "@/lib/utils";
+import { Label } from "../ui/label";
+import { Slider } from "../ui/slider";
+import { MIN_STAT_VALUE, MAX_STAT_VALUE } from "../../lib/constants";
+import type { CharacterStats } from "../../types/character-types";
+import { cn } from "../../lib/utils";
 
 interface StatAllocationInputProps {
   label: string;
@@ -37,8 +38,7 @@ export function StatAllocationInput({
               {Icon && <Icon className={cn("w-4 h-4",
                   statKey === 'strength' ? 'text-destructive' :
                   statKey === 'stamina' ? 'text-green-600' :
-                  statKey === 'agility' ? 'text-blue-500' :
-                  'text-muted-foreground' // Default color for others
+                  'text-blue-500' // Default color for others
                )} />}
              {label}
          </Label>

@@ -1,24 +1,25 @@
+
 // src/components/screens/SettingsPanel.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useGame } from "@/context/GameContext";
+import { useGame } from "../../context/GameContext";
 import {
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetDescription,
   SheetFooter,
-} from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
+} from "../../components/ui/sheet";
+import { Button } from "../../components/ui/button";
+import { Switch } from "../../components/ui/switch";
+import { Label } from "../../components/ui/label";
+import { Input } from "../../components/ui/input";
 import { Palette, Moon, Sun, Paintbrush, KeyRound, CheckCircle, XCircle } from "lucide-react";
-import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
-import { THEMES } from "@/lib/themes";
-import { useToast } from "@/hooks/use-toast";
+import { Separator } from "../../components/ui/separator";
+import { cn } from "../../lib/utils";
+import { THEMES } from "../../lib/themes";
+import { useToast } from "../../hooks/use-toast";
 
 interface SettingsPanelProps {
     isOpen: boolean;

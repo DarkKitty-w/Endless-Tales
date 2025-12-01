@@ -6,7 +6,6 @@
  * - rollD20 - Rolls a twenty-sided die (d20).
  * - rollD100 - Rolls a hundred-sided die (d100).
  */
-'use server';
 
 /**
  * Rolls a die with the specified number of sides.

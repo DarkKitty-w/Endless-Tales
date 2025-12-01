@@ -1,18 +1,19 @@
+
 // src/components/game/InventoryDisplay.tsx
 "use client";
 
-import { useGame } from "@/context/GameContext";
-import type { ItemQuality } from "@/types/game-types"; // Import types from central location
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useGame } from "../../context/GameContext";
+import type { ItemQuality } from "../../types/game-types"; // Import types from central location
+import { ScrollArea } from "../../components/ui/scroll-area";
 import { Backpack, PackageSearch, Package, Info, Weight, Gem, Sparkles, HeartCrack, ShieldCheck } from "lucide-react"; // Added icons
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "../../components/ui/badge";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { getQualityColor } from "@/lib/utils"; // Import from utils
+} from "../../components/ui/tooltip";
+import { getQualityColor } from "../../lib/utils"; // Import from utils
 
 
 export function InventoryDisplay() {
@@ -28,7 +29,7 @@ export function InventoryDisplay() {
      if (lowerName.includes('book') || lowerName.includes('tome') || lowerName.includes('scroll')) return <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>; // Lucide Book
      if (lowerName.includes('key')) return <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></svg>; // Lucide Key
      if (lowerName.includes('clothes') || lowerName.includes('armor') || lowerName.includes('robe') || lowerName.includes('chestplate')) return <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 21c-2.4-2-2.4-6 0-8"/><path d="M10 21c2.4-2 2.4-6 0-8"/><path d="M15 3a1 1 0 0 0-1 1v4.2c0 .4 0 .9-.3 1.3l-2.9 4.1c-.1.2-.2.3-.4.4H8.7c-.2-.1-.3-.2-.4-.4L5.4 9.6c-.3-.4-.3-.9-.3-1.3V4a1 1 0 0 0-1-1"/><path d="M10 11h4"/></svg>; // Lucide Shirt
-     if (lowerName.includes('bread') || lowerName.includes('food') || lowerName.includes('apple')) return <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 13a2 2 0 0 0-2 2.83 1 1 0 0 1-.83.83 2 2 0 0 0-2.83 2 1 1 0 0 1-.83.83 2 2 0 0 0 0 2.83 1 1 0 0 1 .83.83 2 2 0 0 0 2.83 0 1 1 0 0 1 .83-.83 2 2 0 0 0 0-2.83 1 1 0 0 1-.83-.83 2 2 0 0 0-2.83-2 1 1 0 0 1-.83-.83 2 2 0 0 0-2-2.83 1 1 0 0 1-.83-.83 2 2 0 0 0-2.83 0 1 1 0 0 1-.83.83 2 2 0 0 0 0 2.83 1 1 0 0 1 .83.83 2 2 0 0 0 2 2.83 1 1 0 0 1 .83.83 2 2 0 0 0 2.83 2 1 1 0 0 1 .83.83 2 2 0 0 0 2.83 0 1 1 0 0 1 .83-.83 2 2 0 0 0 2-2.83 1 1 0 0 1 .83-.83 2 2 0 0 0 0-2.83 1 1 0 0 1-.83-.83 2 2 0 0 0-2.83-2 1 1 0 0 1-.83-.83 2 2 0 0 0-2.83 0 1 1 0 0 1-.83.83 2 2 0 0 0-2 2.83 1 1 0 0 1-.83.83 2 2 0 0 0-2.83 2 1 1 0 0 1-.83.83 2 2 0 0 0 0 2.83 1 1 0 0 1 .83.83 2 2 0 0 0 2.83 0 1 1 0 0 1 .83-.83Z"/></svg>; // Lucide Apple (placeholder for food)
+     if (lowerName.includes('bread') || lowerName.includes('food') || lowerName.includes('apple')) return <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 13a2 2 0 0 0-2 2.83 1 1 0 0 1-.83.83 2 2 0 0 0-2.83 2 1 1 0 0 1-.83.83 2 2 0 0 0 0 2.83 1 1 0 0 1 .83.83 2 2 0 0 0 2.83 0 1 1 0 0 1 .83-.83 2 2 0 0 0 0-2.83 1 1 0 0 1-.83-.83 2 2 0 0 0-2.83-2 1 1 0 0 1-.83-.83 2 2 0 0 0-2.83 0 1 1 0 0 1-.83.83 2 2 0 0 0 2 2.83 1 1 0 0 1 .83.83 2 2 0 0 0 2.83 0 1 1 0 0 1 .83-.83 2 2 0 0 0 0-2.83 1 1 0 0 1-.83-.83 2 2 0 0 0-2.83-2 1 1 0 0 1-.83.83 2 2 0 0 0-2.83 0 1 1 0 0 1 .83.83 2 2 0 0 0 2.83 0 1 1 0 0 1 .83-.83Z"/></svg>; // Lucide Apple (placeholder for food)
      // Default icon
      return <Package className="w-4 h-4" />;
   };

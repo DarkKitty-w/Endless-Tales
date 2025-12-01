@@ -1,28 +1,23 @@
-// src/components/screens/MainMenu.tsx
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { useGame } from "@/context/GameContext";
-import { Button } from "@/components/ui/button";
-import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Play, Users, Settings, Sparkles, FolderClock, ChevronDown, Info, Dices, Swords } from "lucide-react";
-import { SettingsPanel } from '@/components/screens/SettingsPanel';
+import { useGame } from "../../context/GameContext";
+import { Button } from "../../components/ui/button";
+import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "../../components/game/CardboardCard";
+import { Play, Settings, Sparkles, FolderClock, ChevronDown, Dices, Swords } from "lucide-react";
+import { SettingsPanel } from '../../components/screens/SettingsPanel';
 import {
   Sheet,
   SheetTrigger,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+} from "../../components/ui/sheet";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
-import type { AdventureType } from "@/types/adventure-types";
-import Image from 'next/image';
+} from "../../components/ui/dropdown-menu";
+import type { AdventureType } from "../../types/adventure-types";
 
 export function MainMenu() {
   const { dispatch } = useGame();
@@ -63,12 +58,8 @@ export function MainMenu() {
               <span className="sr-only">Open Settings</span>
            </Button>
         </SheetTrigger>
-        <SheetContent side="right">
-           <SheetHeader className="p-4 border-b">
-              <SheetTitle>Settings</SheetTitle>
-           </SheetHeader>
-           <SettingsPanel isOpen={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
-        </SheetContent>
+        {/* SettingsPanel contains the SheetContent, so we render it directly here */}
+        <SettingsPanel isOpen={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
        </Sheet>
 
       <CardboardCard className="w-full max-w-md text-center shadow-xl border-2 border-foreground/20">
@@ -94,10 +85,11 @@ export function MainMenu() {
                 <DropdownMenuItem onClick={() => handleNewGameFlow("Immersed")} className="cursor-pointer">
                   <Sparkles className="mr-2 h-4 w-4" /> Immersed Adventure
                 </DropdownMenuItem>
-                 <DropdownMenuSeparator />
+                 {/* Co-op Disabled Temporarily */}
+                 {/* <DropdownMenuSeparator />
                  <DropdownMenuItem onClick={() => handleNewGameFlow("Coop")} className="cursor-pointer">
                     <Users className="mr-2 h-4 w-4" /> Co-op Adventure
-                 </DropdownMenuItem>
+                 </DropdownMenuItem> */}
               </DropdownMenuContent>
             </DropdownMenu>
 
@@ -108,7 +100,7 @@ export function MainMenu() {
         <CardFooter className="pt-4 justify-center flex-col items-center">
            <p className="text-xs text-muted-foreground mb-2">v0.1.0 - Alpha</p>
             <a href='https://ko-fi.com/K3K31ELFCW' target='_blank' rel="noopener noreferrer">
-                <Image
+                <img
                     src='https://storage.ko-fi.com/cdn/kofi5.png?v=6'
                     alt='Buy Me a Coffee at ko-fi.com'
                     width={150}

@@ -1,3 +1,4 @@
+
 // src/components/gameplay/CraftingDialog.tsx
 "use client";
 
@@ -10,15 +11,15 @@ import {
     DialogTitle,
     DialogClose,
     DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+} from "../../components/ui/dialog";
+import { Button } from '../../components/ui/button';
+import { Label } from '../../components/ui/label';
+import { Input } from '../../components/ui/input';
+import { ScrollArea } from '../../components/ui/scroll-area';
+import { Alert, AlertDescription } from '../../components/ui/alert';
 import { Loader2, Hammer, CheckCircle, Square } from 'lucide-react';
-import type { InventoryItem } from '@/types/inventory-types';
-import { getQualityColor, cn } from "@/lib/utils";
+import type { InventoryItem } from '../../types/inventory-types';
+import { getQualityColor, cn } from "../../lib/utils";
 
 interface CraftingDialogProps {
     isOpen: boolean;

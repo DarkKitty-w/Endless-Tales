@@ -1,13 +1,14 @@
+
 // src/components/character/TextCharacterForm.tsx
 "use client";
 
 import React from 'react';
 import { UseFormRegister, FieldErrors } from 'react-hook-form';
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input"; // Need Input for name
-import { Textarea } from "@/components/ui/textarea";
-import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Label } from "../ui/label";
+import { Input } from "../ui/input"; // Need Input for name
+import { Textarea } from "../ui/textarea";
+import { Button } from "../ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { Wand2 } from "lucide-react";
 
 // Define a type for the form data this component handles
@@ -84,4 +85,3 @@ export function TextCharacterForm({
     </>
   );
 }
-    

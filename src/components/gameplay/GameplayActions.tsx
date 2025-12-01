@@ -1,8 +1,9 @@
+
 // src/components/gameplay/GameplayActions.tsx
 "use client";
 
 import React from "react";
-import { Button } from "@/components/ui/button";
+import { Button } from "../ui/button";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -13,8 +14,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { Sheet, SheetTrigger } from "@/components/ui/sheet";
+} from "../ui/alert-dialog";
 import { Save, ArrowLeft, Skull, Settings } from "lucide-react";
 
 interface GameplayActionsProps {
@@ -57,14 +57,9 @@ export function GameplayActions({
             </Button>
             {/* Desktop Settings Button */}
             {!isMobile && (
-                <Sheet>
-                     <SheetTrigger asChild>
-                        <Button variant="ghost" size="sm" onClick={onSettings}>
-                            <Settings className="w-4 h-4 mr-1.5" /> Settings
-                        </Button>
-                    </SheetTrigger>
-                    {/* Settings Panel content is rendered via the parent component */}
-                </Sheet>
+                <Button variant="ghost" size="sm" onClick={onSettings}>
+                    <Settings className="w-4 h-4 mr-1.5" /> Settings
+                </Button>
              )}
         </div>
     );

@@ -1,24 +1,22 @@
-
-// src/components/screens/CoopLobby.tsx
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
-import { useGame } from "@/context/GameContext";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { CardboardCard, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/game/CardboardCard";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useGame } from "../../context/GameContext";
+import { Button } from "../../components/ui/button";
+import { Input } from "../../components/ui/input";
+import { Label } from "../../components/ui/label";
+import { ScrollArea } from "../../components/ui/scroll-area";
+import { CardboardCard, CardHeader, CardTitle, CardContent, CardFooter } from "../../components/game/CardboardCard";
+import { Alert, AlertDescription } from "../../components/ui/alert";
 import { Loader2, Users, Copy, Play, ArrowLeft } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "../../hooks/use-toast";
 import {
   createCoopSession,
   joinCoopSession,
   listenToSessionUpdates,
   hostStartGame,
-} from "@/services/multiplayer-service";
-import type { FirestoreCoopSession } from "@/types/adventure-types";
+} from "../../services/multiplayer-service";
+import type { FirestoreCoopSession } from "../../types/adventure-types";
 
 export function CoopLobby() {
   const { state, dispatch } = useGame();

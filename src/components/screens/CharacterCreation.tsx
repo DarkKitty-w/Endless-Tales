@@ -6,24 +6,24 @@ import { useForm, type FieldErrors, type UseFormRegister } from "react-hook-form
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import _ from 'lodash';
-import { useGame } from "@/context/GameContext";
-import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
+import { useGame } from "../../context/GameContext";
+import { Button } from "../../components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
+import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "../../components/game/CardboardCard";
 import { Wand2, RotateCcw, User, Save, AlertCircle, CheckCircle, LogOut, Loader2, TrendingUp, ArrowRight } from "lucide-react";
-import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useToast } from "@/hooks/use-toast";
-import { Separator } from "@/components/ui/separator";
-import { StatAllocationInput } from "@/components/character/StatAllocationInput";
-import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "@/lib/constants";
-import type { CharacterStats, Character } from "@/types/character-types";
-import { initialCharacterStats as defaultInitialStats } from "@/context/game-initial-state";
-import { BasicCharacterForm } from "@/components/character/BasicCharacterForm";
-import { TextCharacterForm } from "@/components/character/TextCharacterForm";
-import type { AdventureType } from "@/types/adventure-types";
-import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnMagicIcon as HandDrawnWisdomIcon } from "@/components/icons/HandDrawnIcons"; // Corrected import path
+import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "../../ai/flows/generate-character-description";
+import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../components/ui/tooltip";
+import { useToast } from "../../hooks/use-toast";
+import { Separator } from "../../components/ui/separator";
+import { StatAllocationInput } from "../../components/character/StatAllocationInput";
+import { TOTAL_STAT_POINTS, MIN_STAT_VALUE, MAX_STAT_VALUE } from "../../lib/constants";
+import type { CharacterStats, Character } from "../../types/character-types";
+import { initialCharacterStats as defaultInitialStats } from "../../context/game-initial-state";
+import { BasicCharacterForm } from "../../components/character/BasicCharacterForm";
+import { TextCharacterForm } from "../../components/character/TextCharacterForm";
+import type { AdventureType } from "../../types/adventure-types";
+import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnMagicIcon as HandDrawnWisdomIcon } from "../../components/icons/HandDrawnIcons";
 
 // Module-level variables to hold context for Zod schema, updated by useEffect
 let currentGlobalAdventureType: AdventureType | null = null;
@@ -363,10 +363,11 @@ export function CharacterCreation() {
         dispatch({ type: "SET_AI_DESCRIPTION", payload: result.detailedDescription });
         toast({ title: "AI Profile Generated!", description: "Character details updated."});
         await trigger(); 
-     } catch (err) {
+     } catch (err: unknown) {
        console.error("CharacterCreation: AI generation failed:", err);
        setError("Failed to generate profile. The AI might be busy or encountered an error.");
-       toast({ title: "AI Generation Failed", description: (err as Error).message || "Unknown error.", variant: "destructive" });
+       const errorMessage = (err instanceof Error) ? err.message : String(err);
+       toast({ title: "AI Generation Failed", description: errorMessage, variant: "destructive" });
      } finally { setIsGenerating(false); }
    }, [getValues, setValue, trigger, dispatch, toast, state.adventureSettings, state.userGoogleAiApiKey]);
 
@@ -383,11 +384,11 @@ export function CharacterCreation() {
         if (!isFormCurrentlyValid) {
             const fieldErrorMessages = Object.entries(errors).map(([key, err]) => {
                 if (err && typeof err === 'object' && 'message' in err) {
-                    return `${key}: ${err.message}`;
+                    return `${key}: ${(err as any).message}`;
                 }
                 return null;
             }).filter(Boolean);
-            const flatErrors = Object.values(errors).map(e => e?.message).filter(Boolean).join('; ');
+            const flatErrors = Object.values(errors).map(e => (e as any)?.message).filter(Boolean).join('; ');
             toast({ title: "Validation Error", description: fieldErrorMessages.join('; ') || flatErrors || "Please correct the highlighted fields.", variant: "destructive"});
             return;
         }

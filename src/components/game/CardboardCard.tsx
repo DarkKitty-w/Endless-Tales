@@ -1,6 +1,7 @@
+
 import * as React from "react"
 
-import { cn } from "@/lib/utils"
+import { cn } from "../../lib/utils"
 import {
   Card as ShadCard,
   CardContent,
@@ -8,7 +9,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "../../components/ui/card"
 
 const CardboardCard = React.forwardRef<
   HTMLDivElement,

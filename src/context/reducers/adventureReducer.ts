@@ -1,12 +1,12 @@
+
 // src/context/reducers/adventureReducer.ts
-import type { GameState } from "@/types/game-types";
-import type { StoryLogEntry, SavedAdventure, FirestoreCoopSession } from "@/types/adventure-types";
+import type { GameState } from "../../types/game-types";
+import type { StoryLogEntry, SavedAdventure } from "../../types/adventure-types";
 import type { Action } from "../game-actions";
-import { initialAdventureSettings, initialState, initialCharacterState, initialInventory } from "../game-initial-state";
-import { generateAdventureId, calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana } from "@/lib/gameUtils";
-import { updateGameStateString } from "@/lib/game-state-utils";
-import { SAVED_ADVENTURES_KEY } from "@/lib/constants";
-import { characterReducer } from "./characterReducer";
+import { initialState, initialInventory } from "../game-initial-state";
+import { generateAdventureId, calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana } from "../../lib/gameUtils";
+import { updateGameStateString } from "../../lib/game-state-utils";
+import { SAVED_ADVENTURES_KEY } from "../../lib/constants";
 
 export function adventureReducer(state: GameState, action: Action): GameState {
     switch (action.type) {
@@ -41,15 +41,67 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             const newLogEntry: StoryLogEntry = { ...action.payload, timestamp: action.payload.timestamp || Date.now() };
             const newLog = [...state.storyLog, newLogEntry];
             const newTurnCount = state.turnCount + 1;
-            const charAfterNarration = state.character;
-            const inventoryAfterNarration = state.inventory;
+            
+            // Create a deep copy of the character to apply updates
+            let updatedCharacter = state.character ? { ...state.character } : null;
 
-            if (!charAfterNarration) {
-                 return { ...state, currentNarration: newLogEntry, storyLog: newLog, turnCount: newTurnCount };
+            if (updatedCharacter) {
+                 const { updatedStats, updatedTraits, updatedKnowledge, healthChange, staminaChange, manaChange, gainedSkill, xpGained, reputationChange, npcRelationshipChange, progressedToStage } = action.payload;
+
+                 // Update Stats and recalculate derived max values
+                 if (updatedStats) {
+                     updatedCharacter.stats = { ...updatedCharacter.stats, ...updatedStats };
+                     updatedCharacter.maxHealth = calculateMaxHealth(updatedCharacter.stats);
+                     updatedCharacter.maxStamina = calculateMaxActionStamina(updatedCharacter.stats);
+                     updatedCharacter.maxMana = calculateMaxMana(updatedCharacter.stats, updatedCharacter.knowledge);
+                 }
+
+                 // Update Lists
+                 if (updatedTraits) updatedCharacter.traits = updatedTraits;
+                 if (updatedKnowledge) updatedCharacter.knowledge = updatedKnowledge;
+
+                 // Recalculate max values if knowledge changed (affects Mana)
+                 if (updatedKnowledge) {
+                    updatedCharacter.maxMana = calculateMaxMana(updatedCharacter.stats, updatedCharacter.knowledge);
+                 }
+
+                 // Update Vitals (Current)
+                 if (healthChange) updatedCharacter.currentHealth = Math.max(0, Math.min(updatedCharacter.maxHealth, updatedCharacter.currentHealth + healthChange));
+                 if (staminaChange) updatedCharacter.currentStamina = Math.max(0, Math.min(updatedCharacter.maxStamina, updatedCharacter.currentStamina + staminaChange));
+                 if (manaChange) updatedCharacter.currentMana = Math.max(0, Math.min(updatedCharacter.maxMana, updatedCharacter.currentMana + manaChange));
+
+                 // Update Skills/XP/Rep
+                 if (gainedSkill && !updatedCharacter.learnedSkills.some(s => s.name === gainedSkill.name)) {
+                     updatedCharacter.learnedSkills = [...updatedCharacter.learnedSkills, { ...gainedSkill, type: 'Learned' }];
+                 }
+                 if (xpGained) updatedCharacter.xp += xpGained;
+
+                 if (reputationChange) {
+                     const { faction, change } = reputationChange;
+                     const currentScore = updatedCharacter.reputation[faction] ?? 0;
+                     updatedCharacter.reputation = {
+                        ...updatedCharacter.reputation,
+                        [faction]: Math.max(-100, Math.min(100, currentScore + change))
+                     };
+                 }
+
+                 if (npcRelationshipChange) {
+                     const { npcName, change } = npcRelationshipChange;
+                     const currentScore = updatedCharacter.npcRelationships[npcName] ?? 0;
+                     updatedCharacter.npcRelationships = {
+                        ...updatedCharacter.npcRelationships,
+                        [npcName]: Math.max(-100, Math.min(100, currentScore + change))
+                     };
+                 }
+
+                 if (progressedToStage !== undefined && progressedToStage > updatedCharacter.skillTreeStage) {
+                     updatedCharacter.skillTreeStage = progressedToStage;
+                 }
             }
-            const updatedGameState = updateGameStateString(action.payload.updatedGameState, charAfterNarration, inventoryAfterNarration, newTurnCount);
 
-            if (action.payload.isCharacterDefeated && charAfterNarration.currentHealth <=0) {
+            const updatedGameState = updateGameStateString(action.payload.updatedGameState, updatedCharacter, state.inventory, newTurnCount);
+
+            if (action.payload.isCharacterDefeated && updatedCharacter && updatedCharacter.currentHealth <= 0) {
                 if (state.adventureSettings.permanentDeath) {
                     console.log("AdventureReducer: Character defeated (Permadeath). Game will end.");
                 } else {
@@ -57,8 +109,12 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                 }
             }
             return {
-                ...state, currentNarration: newLogEntry, storyLog: newLog,
-                currentGameStateString: updatedGameState, turnCount: newTurnCount,
+                ...state, 
+                character: updatedCharacter,
+                currentNarration: newLogEntry, 
+                storyLog: newLog,
+                currentGameStateString: updatedGameState, 
+                turnCount: newTurnCount,
             };
         }
         case "RESPAWN_CHARACTER": {
@@ -69,8 +125,18 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                  updatedGameState: updateGameStateString(state.currentGameStateString, state.character, state.inventory, state.turnCount),
                  timestamp: Date.now(),
              };
+             
+             // Restore character vitals
+             const updatedCharacter = {
+                 ...state.character,
+                 currentHealth: state.character.maxHealth,
+                 currentStamina: state.character.maxStamina,
+                 currentMana: state.character.maxMana
+             };
+
             return {
                 ...state,
+                character: updatedCharacter,
                 storyLog: [...state.storyLog, respawnLogEntry],
                 currentNarration: respawnLogEntry,
             };

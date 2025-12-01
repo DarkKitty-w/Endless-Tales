@@ -1,41 +1,14 @@
 
 // src/lib/firebase.ts
-import { initializeApp, getApp, getApps } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+// FIREBASE DISABLED TEMPORARILY
+// This file now exports dummy objects to prevent initialization errors.
 
-// Your web app's Firebase configuration
-// IMPORTANT: These values are loaded from environment variables.
-// Ensure you have a .env.local file with these values set.
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID, // Optional
-};
-
-// Initialize Firebase
-let app;
-if (!getApps().length) {
-  if (
-    !firebaseConfig.apiKey ||
-    !firebaseConfig.authDomain ||
-    !firebaseConfig.projectId
-  ) {
-    console.warn(
-      "Firebase config is missing or incomplete. Please check your .env.local file and ensure all NEXT_PUBLIC_FIREBASE_ variables are set."
-    );
-    // You might want to throw an error here or handle it differently if Firebase is critical
-  }
-  app = initializeApp(firebaseConfig);
-} else {
-  app = getApp();
-}
-
-const db = getFirestore(app);
-const auth = getAuth(app);
+const app = {} as any;
+const db = {} as any;
+const auth = {
+    currentUser: null,
+    onAuthStateChanged: (cb: any) => { return () => {}; }, // Dummy unsubscribe
+    signOut: async () => {},
+} as any;
 
 export { app, db, auth };

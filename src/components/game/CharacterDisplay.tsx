@@ -1,20 +1,20 @@
 // src/components/game/CharacterDisplay.tsx
 "use client";
 
-import { useGame } from "@/context/GameContext";
-import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
+import { useGame } from "../../context/GameContext";
+import { CardboardCard, CardContent, CardHeader, CardTitle } from "../../components/game/CardboardCard";
 // Using HandDrawnMagicIcon for Wisdom as an example, can be changed
-import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnMagicIcon as HandDrawnWisdomIcon } from "@/components/icons/HandDrawnIcons";
+import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnMagicIcon as HandDrawnWisdomIcon } from "../../components/icons/HandDrawnIcons";
 import { User, ShieldQuestion, Star, Zap, HeartPulse, ShieldCheck, Workflow, Award, Users, Milestone } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Progress } from "@/components/ui/progress";
+import { Badge } from "../../components/ui/badge";
+import { Separator } from "../../components/ui/separator";
+import { Progress } from "../../components/ui/progress";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
+} from "../../components/ui/tooltip";
 
 export function CharacterDisplay() {
   const { state } = useGame();
@@ -60,8 +60,16 @@ export function CharacterDisplay() {
                  </Badge>
              )}
             {character.background && ( <Badge variant="secondary" className="text-xs">BG: {character.background}</Badge> )}
-            {character.traits.length > 0 && character.traits.map((trait, index) => ( <Badge key={`trait-${index}`} variant="outline" className="text-xs">{trait}</Badge> ))}
-            {character.knowledge.length > 0 && character.knowledge.map((k, index) => ( <Badge key={`knowledge-${index}`} variant="outline" className="text-xs bg-blue-100 dark:bg-blue-900/50 border-blue-300 dark:border-blue-700">{k}</Badge> ))}
+            {character.traits.length > 0 && character.traits.map((trait, index) => (
+                <span key={`trait-${index}`}>
+                    <Badge variant="outline" className="text-xs">{trait}</Badge>
+                </span>
+            ))}
+            {character.knowledge.length > 0 && character.knowledge.map((k, index) => (
+                <span key={`knowledge-${index}`}>
+                    <Badge variant="outline" className="text-xs bg-blue-100 dark:bg-blue-900/50 border-blue-300 dark:border-blue-700">{k}</Badge>
+                </span>
+            ))}
          </div>
       </CardHeader>
       <CardContent className="pt-4 pb-4">

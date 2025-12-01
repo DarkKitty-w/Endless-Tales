@@ -1,10 +1,11 @@
+
 // src/components/character/CharacterStatsAllocator.tsx
 "use client";
 
 import React from "react";
-import type { CharacterStats } from "@/types/character-types";
+import type { CharacterStats } from "../../types/character-types";
 import { StatAllocationInput } from "./StatAllocationInput";
-import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "@/components/icons/HandDrawnIcons";
+import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "../icons/HandDrawnIcons";
 import { AlertCircle } from "lucide-react";
 
 interface CharacterStatsAllocatorProps {
@@ -31,7 +32,7 @@ export function CharacterStatsAllocator({
     return (
         <div className="space-y-4">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2 gap-2">
-                <h3 className="text-xl font-semibold">Allocate Stats ({stats.strength + stats.stamina + stats.agility} / 15 Total Points)</h3>
+                <h3 className="text-xl font-semibold">Allocate Stats ({stats.strength + stats.stamina + stats.wisdom} / 15 Total Points)</h3>
                 <p className={`text-sm font-medium ${statError ? 'text-destructive' : 'text-muted-foreground'}`}>
                     {statError ? (
                         <span className="flex items-center gap-1 text-destructive">
@@ -50,6 +51,7 @@ export function CharacterStatsAllocator({
                     onChange={handleLocalStatChange}
                     Icon={HandDrawnStrengthIcon}
                     disabled={isGenerating}
+                    remainingPoints={remainingPoints}
                 />
                 <StatAllocationInput
                     label="Stamina"
@@ -58,23 +60,19 @@ export function CharacterStatsAllocator({
                     onChange={handleLocalStatChange}
                     Icon={HandDrawnStaminaIcon}
                     disabled={isGenerating}
+                    remainingPoints={remainingPoints}
                 />
                 <StatAllocationInput
-                    label="Agility"
-                    statKey="agility"
-                    value={stats.agility}
+                    label="Wisdom"
+                    statKey="wisdom"
+                    value={stats.wisdom}
                     onChange={handleLocalStatChange}
-                    Icon={HandDrawnAgilityIcon}
+                    Icon={HandDrawnAgilityIcon} // Using Agility icon as placeholder/alternative if Wisdom icon not defined here, though prompt implies Wisdom is used. Assuming HandDrawnAgilityIcon exists as per imports.
                     disabled={isGenerating}
+                    remainingPoints={remainingPoints}
                 />
             </div>
-            {/* Display non-adjustable stats */}
-            <div className="text-sm text-muted-foreground grid grid-cols-1 sm:grid-cols-3 gap-2 mt-2">
-                <span>Intellect: {stats.intellect}</span>
-                <span>Wisdom: {stats.wisdom}</span>
-                <span>Charisma: {stats.charisma}</span>
-            </div>
+            {/* Display non-adjustable stats removed as per previous logic which focused on 3 main stats */}
         </div>
     );
 }
-    

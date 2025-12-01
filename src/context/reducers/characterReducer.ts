@@ -1,9 +1,9 @@
+
 // src/context/reducers/characterReducer.ts
-import type { Character, CharacterStats, Skill, SkillTree, SkillTreeStage } from "@/types/character-types";
+import type { Character, CharacterStats, SkillTreeStage } from "../../types/character-types";
 import type { Action } from "../game-actions";
 import { initialCharacterState, initialCharacterStats } from "../game-initial-state";
-import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, calculateXpToNextLevel, getStarterSkillsForClass } from "@/lib/gameUtils";
-import { updateGameStateString } from "@/lib/game-state-utils";
+import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, calculateXpToNextLevel, getStarterSkillsForClass } from "../../lib/gameUtils";
 
 export function characterReducer(state: Character | null, action: Action): Character | null {
     switch (action.type) {
@@ -140,7 +140,7 @@ export function characterReducer(state: Character | null, action: Action): Chara
                      })),
                 };
              });
-             const validatedSkillTree: SkillTree = { className: action.payload.class, stages: validatedStages };
+             const validatedSkillTree = { className: action.payload.class, stages: validatedStages };
             return { ...state, skillTree: validatedSkillTree };
         }
          case "CHANGE_CLASS_AND_RESET_SKILLS": {
@@ -160,7 +160,7 @@ export function characterReducer(state: Character | null, action: Action): Chara
                      })),
                  };
              });
-             const newValidatedSkillTree: SkillTree = { className: action.payload.newClass, stages: validatedStages };
+             const newValidatedSkillTree = { className: action.payload.newClass, stages: validatedStages };
              const starterSkills = getStarterSkillsForClass(action.payload.newClass);
              return { ...state, class: action.payload.newClass, skillTree: newValidatedSkillTree, skillTreeStage: 0, learnedSkills: starterSkills };
          }

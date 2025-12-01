@@ -1,6 +1,7 @@
+
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
-import type { ItemQuality } from "@/types/inventory-types"; // Import ItemQuality type
+import type { ItemQuality } from "../types/inventory-types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

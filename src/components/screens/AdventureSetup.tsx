@@ -1,32 +1,33 @@
+
 // src/components/screens/AdventureSetup.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useGame } from "@/context/GameContext";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
+import { useGame } from "../../context/GameContext";
+import { Button } from "../../components/ui/button";
+import { Label } from "../../components/ui/label";
+import { Input } from "../../components/ui/input";
+import { Switch } from "../../components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "../../components/ui/radio-group";
+import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "../../components/game/CardboardCard";
 import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings, Globe, ScrollText, ShieldAlert, Sparkles, AlertTriangle, BookOpen, Atom, Drama, Puzzle, Users as UsersIcon, Mic2, UserPlus, UserCheck, Loader2, Lightbulb as LightbulbIcon } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "../../hooks/use-toast";
+import { Alert, AlertDescription } from "../../components/ui/alert";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-  } from "@/components/ui/select"
-import type { AdventureSettings, DifficultyLevel, AdventureType, GenreTheme, MagicSystem, TechLevel, DominantTone, CombatFrequency, PuzzleFrequency, SocialFocus } from "@/types/adventure-types";
-import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "@/lib/constants";
-import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "@/ai/flows/generate-character-description";
-import { suggestExistingCharacters } from "@/ai/flows/suggest-existing-characters"; 
-import { suggestOriginalCharacterConcepts } from "@/ai/flows/suggest-original-character-concepts"; 
-import type { Character, CharacterStats } from "@/types/character-types";
-import { initialCharacterState, initialAdventureSettings as defaultInitialAdventureSettings } from "@/context/game-initial-state";
-import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, getStarterSkillsForClass, calculateXpToNextLevel } from "@/lib/gameUtils";
+  } from "../../components/ui/select"
+import type { AdventureSettings, DifficultyLevel, AdventureType, GenreTheme, MagicSystem, TechLevel, DominantTone, CombatFrequency, PuzzleFrequency, SocialFocus } from "../../types/adventure-types";
+import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "../../lib/constants";
+import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "../../ai/flows/generate-character-description";
+import { suggestExistingCharacters } from "../../ai/flows/suggest-existing-characters"; 
+import { suggestOriginalCharacterConcepts } from "../../ai/flows/suggest-original-character-concepts"; 
+import type { Character, CharacterStats } from "../../types/character-types";
+import { initialCharacterState, initialAdventureSettings as defaultInitialAdventureSettings } from "../../context/game-initial-state";
+import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, getStarterSkillsForClass, calculateXpToNextLevel } from "../../lib/gameUtils";
 
 
 export function AdventureSetup() {
@@ -120,10 +121,10 @@ export function AdventureSetup() {
     try {
       let suggestions: string[] = [];
       if (characterOriginType === 'existing') {
-        const result = await suggestExistingCharacters({ universeName });
+        const result = await suggestExistingCharacters({ universeName, userApiKey: state.userGoogleAiApiKey });
         suggestions = result.suggestedNames || [];
       } else { // 'original'
-        const result = await suggestOriginalCharacterConcepts({ universeName });
+        const result = await suggestOriginalCharacterConcepts({ universeName, userApiKey: state.userGoogleAiApiKey });
         suggestions = result.suggestedConcepts || [];
       }
 
@@ -188,7 +189,10 @@ export function AdventureSetup() {
         try {
             const aiProfile: GenerateCharacterDescriptionOutput = await generateCharacterDescription({
                  characterDescription: playerCharacterConcept, 
-                 isImmersedMode: true, universeName: universeName, playerCharacterConcept: playerCharacterConcept 
+                 isImmersedMode: true, 
+                 universeName: universeName, 
+                 playerCharacterConcept: playerCharacterConcept,
+                 userApiKey: state.userGoogleAiApiKey
             });
             const baseStats = { ...initialCharacterState.stats }; 
             const randomStr = Math.floor(Math.random() * 5) + 3; 

@@ -1,13 +1,14 @@
+
 // src/components/screens/AdventureSummary.tsx
 "use client";
 
 import React from "react";
-import { useGame } from "@/context/GameContext";
-import type { StoryLogEntry } from "@/types/game-types"; // Import type
-import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/game/CardboardCard";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { useGame } from "../../context/GameContext";
+import type { StoryLogEntry } from "../../types/game-types";
+import { Button } from "../../components/ui/button";
+import { ScrollArea } from "../../components/ui/scroll-area";
+import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "../../components/game/CardboardCard";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../../components/ui/accordion";
 import { BookOpen, FileText, Home } from "lucide-react";
 
 export function AdventureSummary() {

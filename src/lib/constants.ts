@@ -1,6 +1,7 @@
+
 // src/lib/constants.ts
-import type { DifficultyLevel as AdventureDifficultyLevel } from "@/types/adventure-types"; // Import DifficultyLevel type
-import type { DifficultyLevel as AssessmentDifficultyLevel } from "@/types/game-types"; // Corrected import
+import type { DifficultyLevel as AdventureDifficultyLevel } from "../types/adventure-types"; // Import DifficultyLevel type
+import type { DifficultyLevel as AssessmentDifficultyLevel } from "../types/game-types"; // Corrected import
 
 
 /** The total number of points available for character stats. */

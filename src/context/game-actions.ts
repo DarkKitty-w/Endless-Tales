@@ -1,10 +1,11 @@
+
 // src/context/game-actions.ts
-import type { GameStatus, GameState } from "@/types/game-types";
+import type { GameStatus } from "../types/game-types";
 import type {
-    Character, SkillTree, Skill, ReputationChange, NpcRelationshipChange, CharacterStats,
-} from "@/types/character-types";
-import type { InventoryItem } from "@/types/inventory-types";
-import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel, AdventureType, FirestoreCoopSession } from "@/types/adventure-types";
+    Character, SkillTree, ReputationChange, NpcRelationshipChange
+} from "../types/character-types";
+import type { InventoryItem } from "../types/inventory-types";
+import type { AdventureSettings, StoryLogEntry, SavedAdventure, AdventureType, FirestoreCoopSession } from "../types/adventure-types";
 
 /** Defines all possible actions that can be dispatched to the game reducer. */
 export type Action =

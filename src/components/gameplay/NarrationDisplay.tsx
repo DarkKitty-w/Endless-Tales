@@ -3,13 +3,13 @@
 "use client";
 
 import React, { useRef, useEffect, useCallback } from "react";
-import type { StoryLogEntry } from "@/types/adventure-types";
-import type { NarrateAdventureOutput } from "@/ai/flows/narrate-adventure";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { CardboardCard, CardContent, CardHeader, CardTitle } from "@/components/game/CardboardCard";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Button } from "@/components/ui/button";
+import type { StoryLogEntry } from "../../types/adventure-types";
+import type { NarrateAdventureOutput } from "../../ai/flows/narrate-adventure";
+import { ScrollArea } from "../../components/ui/scroll-area";
+import { CardboardCard, CardContent, CardHeader, CardTitle } from "../../components/game/CardboardCard";
+import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
+import { Skeleton } from "../../components/ui/skeleton";
+import { Button } from "../../components/ui/button";
 import { BookCopy, CalendarClock, Loader2, Dices, Info, GitBranch, Hammer, Save, ShieldAlert, RefreshCw } from "lucide-react"; // Added RefreshCw
 
 interface NarrationDisplayProps {
