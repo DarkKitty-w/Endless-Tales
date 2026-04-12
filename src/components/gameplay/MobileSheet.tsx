@@ -1,9 +1,8 @@
-
 // src/components/gameplay/MobileSheet.tsx
 "use client";
 
 import React from 'react';
-import type { Character, Reputation, NpcRelationships } from '../../types/game-types';
+import type { Character } from '../../types/game-types';
 import type { InventoryItem } from '../../types/inventory-types';
 import {
   Sheet,
@@ -23,6 +22,8 @@ import { User, Settings, Backpack, Workflow, Award, Users, HeartPulse, CalendarC
 import { CharacterDisplay } from "../../components/game/CharacterDisplay";
 import { InventoryDisplay } from "../../components/game/InventoryDisplay";
 import { SkillTreeDisplay } from "../../components/game/SkillTreeDisplay";
+import { ReputationDisplay } from "../../components/game/ReputationDisplay";
+import { NpcRelationshipsDisplay } from "../../components/game/NpcRelationshipsDisplay";
 import { useGame } from "../../context/GameContext";
 
 interface MobileSheetProps {
@@ -30,9 +31,8 @@ interface MobileSheetProps {
     inventory: InventoryItem[];
     isGeneratingSkillTree: boolean;
     turnCount: number;
-    renderReputation: (rep: Reputation | undefined) => React.ReactNode;
-    renderNpcRelationships: (rels: NpcRelationships | undefined) => React.ReactNode;
     onSettingsOpen: () => void;
+    onUseSkill?: (skillName: string) => void;
 }
 
 export function MobileSheet({
@@ -40,9 +40,8 @@ export function MobileSheet({
     inventory,
     isGeneratingSkillTree,
     turnCount,
-    renderReputation,
-    renderNpcRelationships,
-    onSettingsOpen
+    onSettingsOpen,
+    onUseSkill,
 }: MobileSheetProps) {
     const { state } = useGame();
     const showSkillsTab = state.adventureSettings.adventureType !== "Immersed";
@@ -62,7 +61,7 @@ export function MobileSheet({
                             <CharacterDisplay />
                             <Separator className="my-4" />
                             <h3 className="text-lg font-semibold mb-2 flex items-center gap-2"><Milestone className="w-4 h-4" /> Progression</h3>
-                            <div className="space-y-3 text-sm">
+                            <div className="space-y-4 text-sm">
                                 <Tooltip>
                                     <TooltipTrigger className="w-full cursor-help text-left">
                                         <div className="flex items-center justify-between mb-1">
@@ -76,29 +75,38 @@ export function MobileSheet({
                                     <TooltipContent><p>Experience Points</p><p className="text-xs text-muted-foreground">({character.xpToNextLevel - character.xp} needed)</p></TooltipContent>
                                 </Tooltip>
                                 <Separator />
-                                <div className="space-y-1"><Label className="text-sm font-medium flex items-center gap-1 mb-1"><Users className="w-3.5 h-3.5" /> Reputation:</Label>{renderReputation(character.reputation)}</div>
+                                <div>
+                                    <Label className="text-sm font-medium flex items-center gap-1 mb-2"><Users className="w-3.5 h-3.5" /> Reputation:</Label>
+                                    <ReputationDisplay reputation={character.reputation} />
+                                </div>
                                 <Separator />
-                                <div className="space-y-1"><Label className="text-sm font-medium flex items-center gap-1 mb-1"><HeartPulse className="w-3.5 h-3.5" /> Relationships:</Label>{renderNpcRelationships(character.npcRelationships)}</div>
+                                <div>
+                                    <Label className="text-sm font-medium flex items-center gap-1 mb-2"><HeartPulse className="w-3.5 h-3.5" /> Relationships:</Label>
+                                    <NpcRelationshipsDisplay relationships={character.npcRelationships} />
+                                </div>
                                 <Separator />
-                                <div className="flex justify-between items-center"><Label className="text-sm font-medium flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" /> Turn:</Label><span className="font-bold text-base">{turnCount}</span></div>
+                                <div className="flex justify-between items-center">
+                                    <Label className="text-sm font-medium flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" /> Turn:</Label>
+                                    <span className="font-bold text-base">{turnCount}</span>
+                                </div>
                             </div>
-                         </ScrollArea>
-                     </SheetContent>
-                 </Sheet>
-                 <div className="flex gap-1">
-                     <Sheet>
+                        </ScrollArea>
+                    </SheetContent>
+                </Sheet>
+                <div className="flex gap-1">
+                    <Sheet>
                         <SheetTrigger asChild>
-                             <Button variant="ghost" size="sm">
+                            <Button variant="ghost" size="sm">
                                 <Backpack className="w-4 h-4 mr-1.5"/>{showSkillsTab ? "Inv. & Skills" : "Inventory"}
-                             </Button>
+                            </Button>
                         </SheetTrigger>
-                         <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
-                             <SheetHeader className="p-4 border-b">
-                                 <SheetTitle>{showSkillsTab ? "Inventory & Skills" : "Inventory"}</SheetTitle>
-                             </SheetHeader>
-                             <div className="flex-grow overflow-hidden">
-                                 {showSkillsTab ? (
-                                     <Tabs defaultValue="inventory" className="flex-grow flex flex-col h-full">
+                        <SheetContent side="bottom" className="h-[70vh] p-0 flex flex-col">
+                            <SheetHeader className="p-4 border-b">
+                                <SheetTitle>{showSkillsTab ? "Inventory & Skills" : "Inventory"}</SheetTitle>
+                            </SheetHeader>
+                            <div className="flex-grow overflow-hidden">
+                                {showSkillsTab ? (
+                                    <Tabs defaultValue="inventory" className="flex-grow flex flex-col h-full">
                                         <TabsList className="grid w-full grid-cols-2 h-12 flex-none">
                                             <TabsTrigger value="inventory" className="text-xs sm:text-sm"><Backpack className="w-4 h-4 mr-1"/>Inventory</TabsTrigger>
                                             <TabsTrigger value="skills" className="text-xs sm:text-sm"><Workflow className="w-4 h-4 mr-1"/>Skills</TabsTrigger>
@@ -108,27 +116,32 @@ export function MobileSheet({
                                                 <InventoryDisplay />
                                             </TabsContent>
                                             <TabsContent value="skills" className="h-full m-0">
-                                            {character.skillTree && !isGeneratingSkillTree ? (
-                                                 <SkillTreeDisplay skillTree={character.skillTree} learnedSkills={character.learnedSkills} currentStage={character.skillTreeStage}/>
-                                             ) : (
-                                                 <div className="flex items-center justify-center h-full text-muted-foreground italic p-4">
-                                                     {isGeneratingSkillTree ? <><Loader2 className="h-4 w-4 animate-spin mr-2"/>Generating skill tree...</> : "No skill tree available."}
-                                                 </div>
-                                             )}
+                                                {character.skillTree && !isGeneratingSkillTree ? (
+                                                    <SkillTreeDisplay
+                                                        skillTree={character.skillTree}
+                                                        learnedSkills={character.learnedSkills}
+                                                        currentStage={character.skillTreeStage}
+                                                        onUseSkill={onUseSkill}
+                                                    />
+                                                ) : (
+                                                    <div className="flex items-center justify-center h-full text-muted-foreground italic p-4">
+                                                        {isGeneratingSkillTree ? <><Loader2 className="h-4 w-4 animate-spin mr-2"/>Generating skill tree...</> : "No skill tree available."}
+                                                    </div>
+                                                )}
                                             </TabsContent>
                                         </div>
-                                     </Tabs>
-                                 ) : (
-                                     <InventoryDisplay />
-                                 )}
-                             </div>
-                       </SheetContent>
+                                    </Tabs>
+                                ) : (
+                                    <InventoryDisplay />
+                                )}
+                            </div>
+                        </SheetContent>
                     </Sheet>
                     <Button variant="ghost" size="icon" onClick={onSettingsOpen}>
                         <Settings className="h-5 w-5" />
                         <span className="sr-only">Settings</span>
                     </Button>
-                 </div>
+                </div>
             </div>
         </TooltipProvider>
     );

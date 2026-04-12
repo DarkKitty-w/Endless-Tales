@@ -1,14 +1,10 @@
-
-import type {NextConfig} from 'next';
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  // Remove the deprecated eslint option
   images: {
     remotePatterns: [
       {
@@ -25,6 +21,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Allow dev origins for Turbopack HMR
+  allowedDevOrigins: ['127.0.0.1', 'localhost'],
 };
 
 export default nextConfig;

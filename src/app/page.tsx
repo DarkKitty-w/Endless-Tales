@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect } from 'react';
@@ -11,39 +10,48 @@ import { AdventureSummary } from "../components/screens/AdventureSummary";
 import { SavedAdventuresList } from "../components/screens/SavedAdventuresList";
 // import { CoopLobby } from "../components/screens/CoopLobby"; // Disabled
 import { Loader2 } from "lucide-react";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 
 export default function Home() {
   const { state } = useGame();
 
   useEffect(() => {
-    console.log("Current Game Status in page.tsx:", state.status);
+    if (process.env.NODE_ENV === 'development') {
+      console.log("Current Game Status in page.tsx:", state.status);
+    }
   }, [state.status]);
 
-
   const renderScreen = () => {
-    console.log("Rendering screen for status:", state.status);
     switch (state.status) {
       case "MainMenu":
-        return <MainMenu />;
+        return <ErrorBoundary><MainMenu /></ErrorBoundary>;
       case "CharacterCreation":
-        return <CharacterCreation />;
+        return <ErrorBoundary><CharacterCreation /></ErrorBoundary>;
       case "AdventureSetup":
-        return <AdventureSetup />;
+        return <ErrorBoundary><AdventureSetup /></ErrorBoundary>;
       case "Gameplay":
-        return state.character ? <Gameplay /> : <div className="flex items-center justify-center min-h-screen"><Loader2 className="h-8 w-8 animate-spin mr-2"/> Loading Character...</div>;
-      
+        return (
+          <ErrorBoundary>
+            {state.character ? (
+              <Gameplay />
+            ) : (
+              <div className="flex items-center justify-center min-h-screen">
+                <Loader2 className="h-8 w-8 animate-spin mr-2" /> Loading Character...
+              </div>
+            )}
+          </ErrorBoundary>
+        );
       // Co-op modes temporarily disabled
       case "CoopGameplay":
       case "CoopLobby":
-         return <MainMenu />;
-
+        return <ErrorBoundary><MainMenu /></ErrorBoundary>;
       case "AdventureSummary":
-        return <AdventureSummary />;
+        return <ErrorBoundary><AdventureSummary /></ErrorBoundary>;
       case "ViewSavedAdventures":
-        return <SavedAdventuresList />;
+        return <ErrorBoundary><SavedAdventuresList /></ErrorBoundary>;
       default:
         console.warn("Unknown game status in page.tsx:", state.status, "Defaulting to MainMenu.");
-        return <MainMenu />;
+        return <ErrorBoundary><MainMenu /></ErrorBoundary>;
     }
   };
 

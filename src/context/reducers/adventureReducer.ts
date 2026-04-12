@@ -1,12 +1,10 @@
-
 // src/context/reducers/adventureReducer.ts
 import type { GameState } from "../../types/game-types";
 import type { StoryLogEntry, SavedAdventure } from "../../types/adventure-types";
 import type { Action } from "../game-actions";
-import { initialState, initialInventory } from "../game-initial-state";
-import { generateAdventureId, calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana } from "../../lib/gameUtils";
-import { updateGameStateString } from "../../lib/game-state-utils";
-import { SAVED_ADVENTURES_KEY } from "../../lib/constants";
+import { initialState, initialInventory, initialWorldMap } from "../game-initial-state";
+import { generateAdventureId } from "../../lib/gameUtils";
+import { updateGameStateString } from "../game-state-utils";
 
 export function adventureReducer(state: GameState, action: Action): GameState {
     switch (action.type) {
@@ -14,25 +12,26 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             return { ...state, status: action.payload };
 
         case "START_GAMEPLAY": {
-            if (state.adventureSettings.adventureType !== "Coop" && !state.character) {
-                console.error("AdventureReducer: Cannot start single-player gameplay: Character is null. Resetting to Main Menu.");
+            if (!state.character) {
+                console.error("AdventureReducer: Cannot start gameplay: Character is null. Resetting to Main Menu.");
                 return { ...initialState, savedAdventures: state.savedAdventures, selectedThemeId: state.selectedThemeId, isDarkMode: state.isDarkMode, userGoogleAiApiKey: state.userGoogleAiApiKey };
             }
-            if (!state.adventureSettings.adventureType && state.adventureSettings.adventureType !== "Coop") { // Allow Coop to start without adventureType pre-set if session handles it
+            if (!state.adventureSettings.adventureType) {
                 console.error("AdventureReducer: Cannot start gameplay: Adventure type is not set. Resetting to Main Menu.");
-                 return { ...initialState, savedAdventures: state.savedAdventures, selectedThemeId: state.selectedThemeId, isDarkMode: state.isDarkMode, userGoogleAiApiKey: state.userGoogleAiApiKey };
+                return { ...initialState, savedAdventures: state.savedAdventures, selectedThemeId: state.selectedThemeId, isDarkMode: state.isDarkMode, userGoogleAiApiKey: state.userGoogleAiApiKey };
             }
-            const adventureId = state.currentAdventureId || (state.adventureSettings.adventureType === "Coop" ? state.sessionId : generateAdventureId());
+            const adventureId = state.currentAdventureId || generateAdventureId();
             const turnCount = state.turnCount > 0 ? state.turnCount : 0;
             const currentInventory = state.inventory.length > 0 ? state.inventory : [...initialInventory];
             const initialGameState = updateGameStateString( state.storyLog.length > 0 ? state.currentGameStateString : "The adventure is about to begin...", state.character, currentInventory, turnCount );
             
-            const newStatus = state.adventureSettings.adventureType === "Coop" ? "CoopGameplay" : "Gameplay";
-
             return {
-                ...state, status: newStatus, inventory: currentInventory, currentGameStateString: initialGameState,
+                ...state,
+                status: "Gameplay",
+                inventory: currentInventory,
+                currentGameStateString: initialGameState,
                 currentAdventureId: adventureId,
-                isGeneratingSkillTree: state.character ? (state.adventureSettings.adventureType !== "Immersed" && !state.character.skillTree && !state.isGeneratingSkillTree) : false,
+                isGeneratingSkillTree: state.adventureSettings.adventureType !== "Immersed" && !state.character.skillTree && !state.isGeneratingSkillTree,
                 turnCount: turnCount,
             };
         }
@@ -42,101 +41,33 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             const newLog = [...state.storyLog, newLogEntry];
             const newTurnCount = state.turnCount + 1;
             
-            // Create a deep copy of the character to apply updates
-            let updatedCharacter = state.character ? { ...state.character } : null;
-
-            if (updatedCharacter) {
-                 const { updatedStats, updatedTraits, updatedKnowledge, healthChange, staminaChange, manaChange, gainedSkill, xpGained, reputationChange, npcRelationshipChange, progressedToStage } = action.payload;
-
-                 // Update Stats and recalculate derived max values
-                 if (updatedStats) {
-                     updatedCharacter.stats = { ...updatedCharacter.stats, ...updatedStats };
-                     updatedCharacter.maxHealth = calculateMaxHealth(updatedCharacter.stats);
-                     updatedCharacter.maxStamina = calculateMaxActionStamina(updatedCharacter.stats);
-                     updatedCharacter.maxMana = calculateMaxMana(updatedCharacter.stats, updatedCharacter.knowledge);
-                 }
-
-                 // Update Lists
-                 if (updatedTraits) updatedCharacter.traits = updatedTraits;
-                 if (updatedKnowledge) updatedCharacter.knowledge = updatedKnowledge;
-
-                 // Recalculate max values if knowledge changed (affects Mana)
-                 if (updatedKnowledge) {
-                    updatedCharacter.maxMana = calculateMaxMana(updatedCharacter.stats, updatedCharacter.knowledge);
-                 }
-
-                 // Update Vitals (Current)
-                 if (healthChange) updatedCharacter.currentHealth = Math.max(0, Math.min(updatedCharacter.maxHealth, updatedCharacter.currentHealth + healthChange));
-                 if (staminaChange) updatedCharacter.currentStamina = Math.max(0, Math.min(updatedCharacter.maxStamina, updatedCharacter.currentStamina + staminaChange));
-                 if (manaChange) updatedCharacter.currentMana = Math.max(0, Math.min(updatedCharacter.maxMana, updatedCharacter.currentMana + manaChange));
-
-                 // Update Skills/XP/Rep
-                 if (gainedSkill && !updatedCharacter.learnedSkills.some(s => s.name === gainedSkill.name)) {
-                     updatedCharacter.learnedSkills = [...updatedCharacter.learnedSkills, { ...gainedSkill, type: 'Learned' }];
-                 }
-                 if (xpGained) updatedCharacter.xp += xpGained;
-
-                 if (reputationChange) {
-                     const { faction, change } = reputationChange;
-                     const currentScore = updatedCharacter.reputation[faction] ?? 0;
-                     updatedCharacter.reputation = {
-                        ...updatedCharacter.reputation,
-                        [faction]: Math.max(-100, Math.min(100, currentScore + change))
-                     };
-                 }
-
-                 if (npcRelationshipChange) {
-                     const { npcName, change } = npcRelationshipChange;
-                     const currentScore = updatedCharacter.npcRelationships[npcName] ?? 0;
-                     updatedCharacter.npcRelationships = {
-                        ...updatedCharacter.npcRelationships,
-                        [npcName]: Math.max(-100, Math.min(100, currentScore + change))
-                     };
-                 }
-
-                 if (progressedToStage !== undefined && progressedToStage > updatedCharacter.skillTreeStage) {
-                     updatedCharacter.skillTreeStage = progressedToStage;
-                 }
-            }
-
-            const updatedGameState = updateGameStateString(action.payload.updatedGameState, updatedCharacter, state.inventory, newTurnCount);
-
-            if (action.payload.isCharacterDefeated && updatedCharacter && updatedCharacter.currentHealth <= 0) {
-                if (state.adventureSettings.permanentDeath) {
-                    console.log("AdventureReducer: Character defeated (Permadeath). Game will end.");
-                } else {
-                    console.log("AdventureReducer: Character defeated. Respawn should be triggered.");
-                }
-            }
-            return {
-                ...state, 
-                character: updatedCharacter,
-                currentNarration: newLogEntry, 
-                storyLog: newLog,
-                currentGameStateString: updatedGameState, 
-                turnCount: newTurnCount,
-            };
-        }
-        case "RESPAWN_CHARACTER": {
-            if (!state.character) return state;
-             const respawnMessage = action.payload?.narrationMessage || "You had a narrow escape and have recovered!";
-             const respawnLogEntry: StoryLogEntry = {
-                 narration: respawnMessage,
-                 updatedGameState: updateGameStateString(state.currentGameStateString, state.character, state.inventory, state.turnCount),
-                 timestamp: Date.now(),
-             };
-             
-             // Restore character vitals
-             const updatedCharacter = {
-                 ...state.character,
-                 currentHealth: state.character.maxHealth,
-                 currentStamina: state.character.maxStamina,
-                 currentMana: state.character.maxMana
-             };
+            const updatedGameState = updateGameStateString(
+                action.payload.updatedGameState,
+                state.character,
+                state.inventory,
+                newTurnCount
+            );
 
             return {
                 ...state,
-                character: updatedCharacter,
+                currentNarration: newLogEntry,
+                storyLog: newLog,
+                currentGameStateString: updatedGameState,
+                turnCount: newTurnCount,
+            };
+        }
+
+        case "RESPAWN_CHARACTER": {
+            if (!state.character) return state;
+            const respawnMessage = action.payload?.narrationMessage || "You had a narrow escape and have recovered!";
+            const respawnLogEntry: StoryLogEntry = {
+                narration: respawnMessage,
+                updatedGameState: updateGameStateString(state.currentGameStateString, state.character, state.inventory, state.turnCount),
+                timestamp: Date.now(),
+            };
+            
+            return {
+                ...state,
                 storyLog: [...state.storyLog, respawnLogEntry],
                 currentNarration: respawnLogEntry,
             };
@@ -146,135 +77,181 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             const { narration, newGameStateString: providedGameState } = action.payload;
             const newTurnCount = state.turnCount + 1;
             if (!state.character) return { ...state, turnCount: newTurnCount };
-             const finalGameStateString = updateGameStateString(providedGameState || state.currentGameStateString, state.character, state.inventory, newTurnCount);
-             const craftingLogEntry: StoryLogEntry = { narration: narration, updatedGameState: finalGameStateString, timestamp: Date.now() };
-             return {
-                 ...state, storyLog: [...state.storyLog, craftingLogEntry], currentNarration: craftingLogEntry,
-                 currentGameStateString: finalGameStateString, turnCount: newTurnCount,
-             };
+            const finalGameStateString = updateGameStateString(providedGameState || state.currentGameStateString, state.character, state.inventory, newTurnCount);
+            const craftingLogEntry: StoryLogEntry = { narration: narration, updatedGameState: finalGameStateString, timestamp: Date.now() };
+            return {
+                ...state,
+                storyLog: [...state.storyLog, craftingLogEntry],
+                currentNarration: craftingLogEntry,
+                currentGameStateString: finalGameStateString,
+                turnCount: newTurnCount,
+            };
         }
 
         case "INCREMENT_TURN": return { ...state, turnCount: state.turnCount + 1 };
         case "SET_SKILL_TREE_GENERATING": return { ...state, isGeneratingSkillTree: action.payload };
 
         case "END_ADVENTURE": {
-             let finalLog = [...state.storyLog];
-             let finalGameState = state.currentGameStateString;
-             let finalCharacterState = state.character;
-             let finalInventoryState = state.inventory;
-             let finalTurnCount = state.turnCount;
+            let finalLog = [...state.storyLog];
+            let finalGameState = state.currentGameStateString;
+            let finalCharacterState = state.character;
+            let finalInventoryState = state.inventory;
+            let finalTurnCount = state.turnCount;
 
-             if (action.payload.finalNarration && (!state.currentNarration || action.payload.finalNarration.narration !== state.currentNarration.narration)) {
-                 const finalEntry: StoryLogEntry = { ...action.payload.finalNarration, timestamp: action.payload.finalNarration.timestamp || Date.now() };
-                 finalLog.push(finalEntry);
-                 finalCharacterState = state.character;
-                 finalInventoryState = state.inventory;
-                 finalTurnCount = state.turnCount + (action.payload.finalNarration ? 1: 0) ;
-                 if (finalCharacterState) {
-                     finalGameState = updateGameStateString(action.payload.finalNarration.updatedGameState, finalCharacterState, finalInventoryState, finalTurnCount);
-                 }
-             }
+            if (action.payload.finalNarration && (!state.currentNarration || action.payload.finalNarration.narration !== state.currentNarration.narration)) {
+                const finalEntry: StoryLogEntry = { ...action.payload.finalNarration, timestamp: action.payload.finalNarration.timestamp || Date.now() };
+                finalLog.push(finalEntry);
+                finalCharacterState = state.character;
+                finalInventoryState = state.inventory;
+                finalTurnCount = state.turnCount + 1;
+                if (finalCharacterState) {
+                    finalGameState = updateGameStateString(action.payload.finalNarration.updatedGameState, finalCharacterState, finalInventoryState, finalTurnCount);
+                }
+            }
 
-             let updatedSavedAdventures = state.savedAdventures;
-             if (finalCharacterState && state.currentAdventureId && state.adventureSettings.adventureType !== "Coop") { // Only save non-Coop games locally this way
-                 const endedAdventure: SavedAdventure = {
-                     id: state.currentAdventureId, saveTimestamp: Date.now(), characterName: finalCharacterState.name,
-                     character: finalCharacterState, adventureSettings: state.adventureSettings, storyLog: finalLog,
-                     currentGameStateString: finalGameState, inventory: finalInventoryState, statusBeforeSave: "AdventureSummary",
-                     adventureSummary: action.payload.summary, turnCount: finalTurnCount,
-                 };
-                 updatedSavedAdventures = state.savedAdventures.filter(adv => adv.id !== endedAdventure.id);
-                 updatedSavedAdventures.push(endedAdventure);
-                 localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(updatedSavedAdventures));
-             }
-             return {
-                 ...state, status: "AdventureSummary", character: finalCharacterState, adventureSummary: action.payload.summary,
-                 storyLog: finalLog, inventory: finalInventoryState, turnCount: finalTurnCount, currentNarration: null,
-                 savedAdventures: updatedSavedAdventures, isGeneratingSkillTree: false,
-                 sessionId: state.adventureSettings.adventureType === "Coop" ? null : state.sessionId, // Clear session ID if it was a co-op game ending
-                 isHost: state.adventureSettings.adventureType === "Coop" ? false : state.isHost,
-             };
+            let updatedSavedAdventures = state.savedAdventures;
+            if (finalCharacterState && state.currentAdventureId) {
+                const cappedStoryLog = finalLog.slice(-50);
+                const endedAdventure: SavedAdventure = {
+                    id: state.currentAdventureId,
+                    saveTimestamp: Date.now(),
+                    characterName: finalCharacterState.name,
+                    character: finalCharacterState,
+                    adventureSettings: state.adventureSettings,
+                    storyLog: cappedStoryLog,
+                    currentGameStateString: finalGameState,
+                    inventory: finalInventoryState,
+                    statusBeforeSave: "AdventureSummary",
+                    adventureSummary: action.payload.summary,
+                    turnCount: finalTurnCount,
+                };
+                updatedSavedAdventures = state.savedAdventures.filter(adv => adv.id !== endedAdventure.id);
+                updatedSavedAdventures.push(endedAdventure);
+            }
+            return {
+                ...state,
+                status: "AdventureSummary",
+                character: finalCharacterState,
+                adventureSummary: action.payload.summary,
+                storyLog: finalLog,
+                inventory: finalInventoryState,
+                turnCount: finalTurnCount,
+                currentNarration: null,
+                savedAdventures: updatedSavedAdventures,
+                isGeneratingSkillTree: false,
+            };
         }
 
         case "LOAD_SAVED_ADVENTURES": return { ...state, savedAdventures: action.payload };
 
         case "SAVE_CURRENT_ADVENTURE": {
-            if (!state.character || !state.currentAdventureId || state.status !== "Gameplay" || state.adventureSettings.adventureType === "Coop") {
-                return state; // Do not save co-op games this way
+            if (!state.character || !state.currentAdventureId || state.status !== "Gameplay") {
+                return state;
             }
+            const cappedStoryLog = state.storyLog.slice(-50);
             const currentSave: SavedAdventure = {
-              id: state.currentAdventureId, saveTimestamp: Date.now(), characterName: state.character.name,
-              character: state.character, adventureSettings: state.adventureSettings, storyLog: state.storyLog,
-              currentGameStateString: updateGameStateString(state.currentGameStateString, state.character, state.inventory, state.turnCount),
-              inventory: state.inventory, statusBeforeSave: state.status, adventureSummary: state.adventureSummary,
-              turnCount: state.turnCount,
+                id: state.currentAdventureId,
+                saveTimestamp: Date.now(),
+                characterName: state.character.name,
+                character: state.character,
+                adventureSettings: state.adventureSettings,
+                storyLog: cappedStoryLog,
+                currentGameStateString: updateGameStateString(state.currentGameStateString, state.character, state.inventory, state.turnCount),
+                inventory: state.inventory,
+                statusBeforeSave: state.status,
+                adventureSummary: state.adventureSummary,
+                turnCount: state.turnCount,
             };
             const savesWithoutCurrent = state.savedAdventures.filter(adv => adv.id !== currentSave.id);
             const newSaves = [...savesWithoutCurrent, currentSave];
-            localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(newSaves));
             return { ...state, savedAdventures: newSaves };
-          }
+        }
 
         case "LOAD_ADVENTURE": {
             const adventureToLoad = action.payload;
-            if (!adventureToLoad || adventureToLoad.adventureSettings.adventureType === "Coop") {
-                return state; // Do not load co-op games this way
-            }
+            if (!adventureToLoad) return state;
             const statusToLoad = adventureToLoad.statusBeforeSave || (adventureToLoad.adventureSummary ? "AdventureSummary" : "Gameplay");
-             return {
-                 ...initialState,
-                 savedAdventures: state.savedAdventures, selectedThemeId: state.selectedThemeId,
-                 isDarkMode: state.isDarkMode, userGoogleAiApiKey: state.userGoogleAiApiKey,
-                 status: statusToLoad, character: adventureToLoad.character,
-                 adventureSettings: adventureToLoad.adventureSettings, storyLog: adventureToLoad.storyLog,
-                 inventory: adventureToLoad.inventory, turnCount: adventureToLoad.turnCount || 0,
-                 currentGameStateString: adventureToLoad.currentGameStateString,
-                 currentNarration: adventureToLoad.storyLog.length > 0 ? adventureToLoad.storyLog[adventureToLoad.storyLog.length - 1] : null,
-                 adventureSummary: adventureToLoad.adventureSummary, currentAdventureId: adventureToLoad.id,
-                 isGeneratingSkillTree: false,
-             };
-         }
+            return {
+                ...initialState,
+                savedAdventures: state.savedAdventures,
+                selectedThemeId: state.selectedThemeId,
+                isDarkMode: state.isDarkMode,
+                userGoogleAiApiKey: state.userGoogleAiApiKey,
+                status: statusToLoad,
+                character: adventureToLoad.character,
+                adventureSettings: adventureToLoad.adventureSettings,
+                storyLog: adventureToLoad.storyLog,
+                inventory: adventureToLoad.inventory,
+                turnCount: adventureToLoad.turnCount || 0,
+                currentGameStateString: adventureToLoad.currentGameStateString,
+                currentNarration: adventureToLoad.storyLog.length > 0 ? adventureToLoad.storyLog[adventureToLoad.storyLog.length - 1] : null,
+                adventureSummary: adventureToLoad.adventureSummary,
+                currentAdventureId: adventureToLoad.id,
+                isGeneratingSkillTree: false,
+                worldMap: adventureToLoad.worldMap || initialWorldMap, // Load map if saved
+            };
+        }
 
         case "DELETE_ADVENTURE": {
             const filteredSaves = state.savedAdventures.filter(adv => adv.id !== action.payload);
-            localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(filteredSaves));
             return { ...state, savedAdventures: filteredSaves };
-         }
+        }
 
-        // --- Multiplayer Actions ---
-        case "SET_SESSION_ID":
-            return { ...state, sessionId: action.payload, currentAdventureId: action.payload }; // For co-op, sessionID is the adventureID
-        case "SET_PLAYERS":
-            return { ...state, players: action.payload };
-        case "ADD_PLAYER":
-            if (state.players.includes(action.payload)) return state;
-            return { ...state, players: [...state.players, action.payload] };
-        case "REMOVE_PLAYER":
-            return { ...state, players: state.players.filter(uid => uid !== action.payload) };
-        case "SET_CURRENT_PLAYER_UID":
-            return { ...state, currentPlayerUid: action.payload };
-        case "SET_IS_HOST":
-            return { ...state, isHost: action.payload };
-        case "SYNC_COOP_SESSION_STATE": {
-            const sessionData = action.payload;
-            let updatedState = { ...state };
-            if (sessionData.players) updatedState.players = sessionData.players;
-            if (sessionData.turnCount !== undefined) updatedState.turnCount = sessionData.turnCount;
-            if (sessionData.storyLog) updatedState.storyLog = sessionData.storyLog;
-            if (sessionData.currentGameStateString) updatedState.currentGameStateString = sessionData.currentGameStateString;
-            if (sessionData.sharedCharacter) updatedState.character = sessionData.sharedCharacter; // Simple sync for now
-            if (sessionData.sharedInventory) updatedState.inventory = sessionData.sharedInventory;
-            if (sessionData.adventureSettings) {
-                updatedState.adventureSettings = {
-                    ...state.adventureSettings, // Keep local settings like difficulty if not in session
-                    ...sessionData.adventureSettings,
-                    adventureType: "Coop", // Ensure type is Coop
-                };
-            }
-            if (sessionData.storyLog && sessionData.storyLog.length > 0) {
-                updatedState.currentNarration = sessionData.storyLog[sessionData.storyLog.length - 1];
-            }
-            return updatedState;
+        // World map actions
+        case "SET_WORLD_MAP":
+            return { ...state, worldMap: action.payload };
+
+        case "ADD_LOCATION": {
+            const newLocation = action.payload;
+            return {
+                ...state,
+                worldMap: {
+                    ...state.worldMap,
+                    locations: [...state.worldMap.locations, newLocation],
+                },
+            };
+        }
+
+        case "UPDATE_LOCATION": {
+            const { id, updates } = action.payload;
+            return {
+                ...state,
+                worldMap: {
+                    ...state.worldMap,
+                    locations: state.worldMap.locations.map(loc =>
+                        loc.id === id ? { ...loc, ...updates } : loc
+                    ),
+                },
+            };
+        }
+
+        case "DISCOVER_LOCATION": {
+            return {
+                ...state,
+                worldMap: {
+                    ...state.worldMap,
+                    locations: state.worldMap.locations.map(loc =>
+                        loc.id === action.payload ? { ...loc, discovered: true } : loc
+                    ),
+                },
+            };
+        }
+
+        case "SET_CURRENT_LOCATION": {
+            const newLocationId = action.payload;
+            const locationExists = state.worldMap.locations.some(loc => loc.id === newLocationId);
+            if (!locationExists) return state;
+            // Also discover the location when moving there
+            return {
+                ...state,
+                worldMap: {
+                    ...state.worldMap,
+                    currentLocationId: newLocationId,
+                    locations: state.worldMap.locations.map(loc =>
+                        loc.id === newLocationId ? { ...loc, discovered: true } : loc
+                    ),
+                },
+            };
         }
 
         default:

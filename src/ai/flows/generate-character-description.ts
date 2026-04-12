@@ -2,6 +2,7 @@
  * @fileOverview An AI agent that generates a detailed character description.
  */
 
+import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import { Type, Schema } from "@google/genai";
 
@@ -10,6 +11,7 @@ export interface GenerateCharacterDescriptionInput {
   isImmersedMode?: boolean;
   universeName?: string;
   playerCharacterConcept?: string;
+  characterOriginType?: 'original' | 'existing'; // new field
   userApiKey?: string | null;
 }
 
@@ -20,6 +22,14 @@ export interface GenerateCharacterDescriptionOutput {
   inferredKnowledge: string[];
   inferredBackground: string;
 }
+
+const GenerateCharacterDescriptionOutputSchema = z.object({
+  detailedDescription: z.string(),
+  inferredClass: z.string(),
+  inferredTraits: z.array(z.string()),
+  inferredKnowledge: z.array(z.string()),
+  inferredBackground: z.string(),
+});
 
 const responseSchema: Schema = {
     type: Type.OBJECT,
@@ -39,8 +49,21 @@ export async function generateCharacterDescription(
   
   let promptContext = "";
   if (input.isImmersedMode) {
-      promptContext = `
-**Context: IMMERSED ADVENTURE MODE**
+      if (input.characterOriginType === 'existing') {
+          promptContext = `
+**Context: IMMERSED ADVENTURE MODE - EXISTING CHARACTER**
+* Universe: ${input.universeName}
+* Character Name: ${input.playerCharacterConcept}
+* User Provided Brief: ${input.characterDescription}
+
+Task:
+1. Provide a detailed description of the well-known character "${input.playerCharacterConcept}" from the ${input.universeName} universe, staying true to established lore.
+2. Infer their role/archetype (inferredClass) appropriate to that universe.
+3. Infer traits, knowledge/skills, and background based on canon.
+`;
+      } else {
+          promptContext = `
+**Context: IMMERSED ADVENTURE MODE - ORIGINAL CHARACTER**
 * Universe: ${input.universeName}
 * Character Concept: ${input.playerCharacterConcept}
 * User Description: ${input.characterDescription}
@@ -50,6 +73,7 @@ Task:
 2. Infer role/archetype (inferredClass).
 3. Infer traits, knowledge/skills, and background fitting the lore.
 `;
+      }
   } else {
       promptContext = `
 **Context: STANDARD ADVENTURE MODE**
@@ -71,7 +95,7 @@ Output JSON matching the schema.
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           contents: prompt,
           config: {
               responseMimeType: "application/json",
@@ -81,13 +105,16 @@ Output JSON matching the schema.
 
       const text = response.text;
       if (!text) throw new Error("No text returned from AI");
-      const output = JSON.parse(text) as GenerateCharacterDescriptionOutput;
       
-      // Sanitization
-      output.inferredTraits = Array.isArray(output.inferredTraits) ? output.inferredTraits : [];
-      output.inferredKnowledge = Array.isArray(output.inferredKnowledge) ? output.inferredKnowledge : [];
+      const parsed = JSON.parse(text);
+      const validation = GenerateCharacterDescriptionOutputSchema.safeParse(parsed);
       
-      return output;
+      if (validation.success) {
+          return validation.data;
+      } else {
+          console.warn("Zod validation failed for generateCharacterDescription, using fallback.", validation.error);
+          throw new Error("Invalid response structure");
+      }
 
   } catch (error) {
       console.error("AI Character Generation Error:", error);

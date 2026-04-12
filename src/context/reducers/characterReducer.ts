@@ -1,9 +1,12 @@
-
 // src/context/reducers/characterReducer.ts
-import type { Character, CharacterStats, SkillTreeStage } from "../../types/character-types";
+import type { Character, CharacterStats, SkillTreeStage, StatusEffect } from "../../types/character-types";
 import type { Action } from "../game-actions";
 import { initialCharacterState, initialCharacterStats } from "../game-initial-state";
 import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, calculateXpToNextLevel, getStarterSkillsForClass } from "../../lib/gameUtils";
+import { RESPAWN_XP_LOSS_PERCENT, RESPAWN_DEBUFF_DURATION, MAX_SKILL_TREE_STAGES } from "../../lib/constants";
+
+// Helper to create a unique ID for status effects
+const generateStatusEffectId = () => `se_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
 export function characterReducer(state: Character | null, action: Action): Character | null {
     switch (action.type) {
@@ -44,6 +47,7 @@ export function characterReducer(state: Character | null, action: Action): Chara
                 skillTree: null,
                 skillTreeStage: 0,
                 learnedSkills: starterSkills,
+                statusEffects: [],
             };
             return newCharacter;
         }
@@ -77,11 +81,12 @@ export function characterReducer(state: Character | null, action: Action): Chara
                 xpToNextLevel: action.payload.xpToNextLevel ?? state.xpToNextLevel,
                 reputation: action.payload.reputation ?? state.reputation,
                 npcRelationships: action.payload.npcRelationships ?? state.npcRelationships,
+                statusEffects: action.payload.statusEffects ?? state.statusEffects,
             };
         }
-         case "SET_AI_DESCRIPTION":
-             if (!state) return null;
-             return { ...state, aiGeneratedDescription: action.payload };
+        case "SET_AI_DESCRIPTION":
+            if (!state) return null;
+            return { ...state, aiGeneratedDescription: action.payload };
         case "GRANT_XP": {
             if (!state) return null;
             const newXp = state.xp + action.payload;
@@ -91,7 +96,6 @@ export function characterReducer(state: Character | null, action: Action): Chara
             if (!state) return null;
             if (action.payload.newLevel <= state.level) return state;
             const remainingXp = Math.max(0, state.xp - state.xpToNextLevel);
-            // Full heal on level up
             const newMaxHealth = calculateMaxHealth(state.stats);
             const newMaxActionStamina = calculateMaxActionStamina(state.stats);
             const newMaxMana = calculateMaxMana(state.stats, state.knowledge);
@@ -126,139 +130,191 @@ export function characterReducer(state: Character | null, action: Action): Chara
         case "SET_SKILL_TREE": {
             if (!state || state.class !== action.payload.class) return state;
             const stages = action.payload.skillTree.stages || [];
-             if (stages.length !== 5) {
-                 console.error(`Reducer: Received skill tree with ${stages.length} stages, expected 5. Discarding.`);
-                 return state;
-             }
-             const validatedStages: SkillTreeStage[] = Array.from({ length: 5 }, (_, i) => {
+            if (stages.length !== MAX_SKILL_TREE_STAGES) {
+                console.error(`Reducer: Received skill tree with ${stages.length} stages, expected ${MAX_SKILL_TREE_STAGES}. Discarding.`);
+                return state;
+            }
+            const validatedStages: SkillTreeStage[] = Array.from({ length: MAX_SKILL_TREE_STAGES }, (_, i) => {
                 const foundStage = stages.find(s => s.stage === i);
-                return { stage: i, stageName: foundStage?.stageName || (i === 0 ? "Potential" : `Stage ${i}`),
-                     skills: (Array.isArray(foundStage?.skills) ? foundStage.skills : []).map(skill => ({
-                         name: skill.name || "Unnamed Skill", description: skill.description || "No description.", type: skill.type || 'Learned',
-                         manaCost: typeof skill.manaCost === 'number' ? skill.manaCost : undefined,
-                         staminaCost: typeof skill.staminaCost === 'number' ? skill.staminaCost : undefined,
-                     })),
+                return {
+                    stage: i,
+                    stageName: foundStage?.stageName || (i === 0 ? "Potential" : `Stage ${i}`),
+                    skills: (Array.isArray(foundStage?.skills) ? foundStage.skills : []).map(skill => ({
+                        name: skill.name || "Unnamed Skill",
+                        description: skill.description || "No description.",
+                        type: skill.type || 'Learned',
+                        manaCost: typeof skill.manaCost === 'number' ? skill.manaCost : undefined,
+                        staminaCost: typeof skill.staminaCost === 'number' ? skill.staminaCost : undefined,
+                    })),
                 };
-             });
-             const validatedSkillTree = { className: action.payload.class, stages: validatedStages };
+            });
+            const validatedSkillTree = { className: action.payload.class, stages: validatedStages };
             return { ...state, skillTree: validatedSkillTree };
         }
-         case "CHANGE_CLASS_AND_RESET_SKILLS": {
-             if (!state) return null;
-             const stages = action.payload.newSkillTree.stages || [];
-              if (stages.length !== 5) {
-                 console.error(`Reducer: Received new skill tree with ${stages.length} stages, expected 5. Aborting class change.`);
-                 return state;
-             }
-             const validatedStages: SkillTreeStage[] = Array.from({ length: 5 }, (_, i) => {
-                 const foundStage = stages.find(s => s.stage === i);
-                 return { stage: i, stageName: foundStage?.stageName || (i === 0 ? "Potential" : `Stage ${i}`),
-                     skills: (Array.isArray(foundStage?.skills) ? foundStage.skills : []).map(skill => ({
-                         name: skill.name || "Unnamed Skill", description: skill.description || "No description.", type: skill.type || 'Learned',
-                         manaCost: typeof skill.manaCost === 'number' ? skill.manaCost : undefined,
-                         staminaCost: typeof skill.staminaCost === 'number' ? skill.staminaCost : undefined,
-                     })),
-                 };
-             });
-             const newValidatedSkillTree = { className: action.payload.newClass, stages: validatedStages };
-             const starterSkills = getStarterSkillsForClass(action.payload.newClass);
-             return { ...state, class: action.payload.newClass, skillTree: newValidatedSkillTree, skillTreeStage: 0, learnedSkills: starterSkills };
-         }
+        case "CHANGE_CLASS_AND_RESET_SKILLS": {
+            if (!state) return null;
+            const stages = action.payload.newSkillTree.stages || [];
+            if (stages.length !== MAX_SKILL_TREE_STAGES) {
+                console.error(`Reducer: Received new skill tree with ${stages.length} stages, expected ${MAX_SKILL_TREE_STAGES}. Aborting class change.`);
+                return state;
+            }
+            const validatedStages: SkillTreeStage[] = Array.from({ length: MAX_SKILL_TREE_STAGES }, (_, i) => {
+                const foundStage = stages.find(s => s.stage === i);
+                return {
+                    stage: i,
+                    stageName: foundStage?.stageName || (i === 0 ? "Potential" : `Stage ${i}`),
+                    skills: (Array.isArray(foundStage?.skills) ? foundStage.skills : []).map(skill => ({
+                        name: skill.name || "Unnamed Skill",
+                        description: skill.description || "No description.",
+                        type: skill.type || 'Learned',
+                        manaCost: typeof skill.manaCost === 'number' ? skill.manaCost : undefined,
+                        staminaCost: typeof skill.staminaCost === 'number' ? skill.staminaCost : undefined,
+                    })),
+                };
+            });
+            const newValidatedSkillTree = { className: action.payload.newClass, stages: validatedStages };
+            const starterSkills = getStarterSkillsForClass(action.payload.newClass);
+            return { ...state, class: action.payload.newClass, skillTree: newValidatedSkillTree, skillTreeStage: 0, learnedSkills: starterSkills };
+        }
         case "PROGRESS_SKILL_STAGE": {
-             if (!state || !state.skillTree) return state;
-             const newStage = Math.max(0, Math.min(4, action.payload));
-             if (newStage > state.skillTreeStage) return { ...state, skillTreeStage: newStage };
-             return state;
-         }
-         case "UPDATE_NARRATION": {
-             if (!state) return null;
-             const { updatedStats, updatedTraits, updatedKnowledge, healthChange, staminaChange, manaChange, gainedSkill, xpGained, reputationChange, npcRelationshipChange, progressedToStage } = action.payload;
-             let newState = { ...state };
-             if (updatedStats) newState.stats = { ...newState.stats, ...updatedStats };
-             if (updatedTraits) newState.traits = updatedTraits;
-             if (updatedKnowledge) newState.knowledge = updatedKnowledge;
+            if (!state || !state.skillTree) return state;
+            const maxStage = MAX_SKILL_TREE_STAGES - 1;
+            const newStage = Math.max(0, Math.min(maxStage, action.payload));
+            if (newStage > state.skillTreeStage) return { ...state, skillTreeStage: newStage };
+            return state;
+        }
+        case "UPDATE_NARRATION": {
+            if (!state) return null;
+            const { updatedStats, updatedTraits, updatedKnowledge, healthChange, staminaChange, manaChange, gainedSkill, xpGained, reputationChange, npcRelationshipChange, progressedToStage } = action.payload;
+            let newState = { ...state };
+            if (updatedStats) newState.stats = { ...newState.stats, ...updatedStats };
+            if (updatedTraits) newState.traits = updatedTraits;
+            if (updatedKnowledge) newState.knowledge = updatedKnowledge;
 
-             // Recalculate max values if stats or knowledge changed
-             if (updatedStats || updatedKnowledge) {
+            if (updatedStats || updatedKnowledge) {
                 newState.maxHealth = calculateMaxHealth(newState.stats);
                 newState.maxStamina = calculateMaxActionStamina(newState.stats);
                 newState.maxMana = calculateMaxMana(newState.stats, newState.knowledge);
-             }
-             
-             if (healthChange) newState.currentHealth = Math.max(0, Math.min(newState.maxHealth, newState.currentHealth + healthChange));
-             if (staminaChange) newState.currentStamina = Math.max(0, Math.min(newState.maxStamina, newState.currentStamina + staminaChange));
-             if (manaChange) newState.currentMana = Math.max(0, Math.min(newState.maxMana, newState.currentMana + manaChange));
+            }
+            
+            if (healthChange) newState.currentHealth = Math.max(0, Math.min(newState.maxHealth, newState.currentHealth + healthChange));
+            if (staminaChange) newState.currentStamina = Math.max(0, Math.min(newState.maxStamina, newState.currentStamina + staminaChange));
+            if (manaChange) newState.currentMana = Math.max(0, Math.min(newState.maxMana, newState.currentMana + manaChange));
 
-             if (gainedSkill && !newState.learnedSkills.some(s => s.name === gainedSkill.name)) {
-                 newState.learnedSkills = [...newState.learnedSkills, { ...gainedSkill, type: 'Learned' }];
-             }
-             if (xpGained) newState.xp += xpGained;
-             if (reputationChange) {
-                 const { faction, change } = reputationChange;
-                 const currentScore = newState.reputation[faction] ?? 0;
-                 newState.reputation[faction] = Math.max(-100, Math.min(100, currentScore + change));
-             }
-             if (npcRelationshipChange) {
-                 const { npcName, change } = npcRelationshipChange;
-                 const currentScore = newState.npcRelationships[npcName] ?? 0;
-                 newState.npcRelationships[npcName] = Math.max(-100, Math.min(100, currentScore + change));
-             }
-             if (progressedToStage !== undefined && progressedToStage > newState.skillTreeStage) {
-                 newState.skillTreeStage = progressedToStage;
-             }
-             return newState;
-         }
+            if (gainedSkill && !newState.learnedSkills.some(s => s.name === gainedSkill.name)) {
+                newState.learnedSkills = [...newState.learnedSkills, { ...gainedSkill, type: 'Learned' }];
+            }
+            if (xpGained) newState.xp += xpGained;
+            if (reputationChange) {
+                const { faction, change } = reputationChange;
+                const currentScore = newState.reputation[faction] ?? 0;
+                newState.reputation[faction] = Math.max(-100, Math.min(100, currentScore + change));
+            }
+            if (npcRelationshipChange) {
+                const { npcName, change } = npcRelationshipChange;
+                const currentScore = newState.npcRelationships[npcName] ?? 0;
+                newState.npcRelationships[npcName] = Math.max(-100, Math.min(100, currentScore + change));
+            }
+            if (progressedToStage !== undefined && progressedToStage > newState.skillTreeStage) {
+                newState.skillTreeStage = progressedToStage;
+            }
+            return newState;
+        }
         case "RESPAWN_CHARACTER": {
             if (!state) return null;
-            // TODO: Implement more nuanced respawn penalties (e.g., XP loss) if desired.
+
+            const xpLoss = Math.floor(state.xp * RESPAWN_XP_LOSS_PERCENT);
+            const newXp = Math.max(0, state.xp - xpLoss);
+
+            const weakenedDebuff: StatusEffect = {
+                id: generateStatusEffectId(),
+                name: "Weakened",
+                description: "You feel drained after narrowly escaping death. All stats reduced by 2.",
+                remainingTurns: RESPAWN_DEBUFF_DURATION,
+                statModifiers: {
+                    strength: -2,
+                    stamina: -2,
+                    wisdom: -2,
+                },
+            };
+
+            const updatedStatusEffects = [...state.statusEffects, weakenedDebuff];
+
+            const baseStats = { ...state.stats };
+            let modifiedStats = { ...baseStats };
+            for (const effect of updatedStatusEffects) {
+                if (effect.statModifiers) {
+                    modifiedStats.strength = Math.max(1, modifiedStats.strength + (effect.statModifiers.strength ?? 0));
+                    modifiedStats.stamina = Math.max(1, modifiedStats.stamina + (effect.statModifiers.stamina ?? 0));
+                    modifiedStats.wisdom = Math.max(1, modifiedStats.wisdom + (effect.statModifiers.wisdom ?? 0));
+                }
+            }
+
+            const newMaxHealth = calculateMaxHealth(modifiedStats);
+            const newMaxStamina = calculateMaxActionStamina(modifiedStats);
+            const newMaxMana = calculateMaxMana(modifiedStats, state.knowledge);
+
             return {
                 ...state,
-                currentHealth: state.maxHealth, // Restore health
-                currentStamina: state.maxStamina, // Restore action stamina
-                currentMana: state.maxMana, // Restore mana
+                xp: newXp,
+                stats: modifiedStats,
+                maxHealth: newMaxHealth,
+                currentHealth: newMaxHealth,
+                maxStamina: newMaxStamina,
+                currentStamina: newMaxStamina,
+                maxMana: newMaxMana,
+                currentMana: newMaxMana,
+                statusEffects: updatedStatusEffects,
             };
         }
-         case "RESET_GAME": return null;
-         case "LOAD_ADVENTURE":
-             const savedChar = action.payload.character;
-             const validatedStats = savedChar?.stats ? { ...initialCharacterStats, ...savedChar.stats } : { ...initialCharacterStats };
-             const validatedKnowledge = Array.isArray(savedChar?.knowledge) ? savedChar.knowledge : [];
-             const loadedCharClass = savedChar?.class || "Adventurer";
-             return {
-                 ...initialCharacterState, 
-                 ...(savedChar || {}), 
-                 name: savedChar?.name || "Recovered Adventurer",
-                 class: loadedCharClass,
-                 knowledge: validatedKnowledge,
-                 stats: validatedStats,
-                 maxHealth: typeof savedChar?.maxHealth === 'number' ? savedChar.maxHealth : calculateMaxHealth(validatedStats),
-                 currentHealth: typeof savedChar?.currentHealth === 'number' ? savedChar.currentHealth : (savedChar?.maxHealth ?? calculateMaxHealth(validatedStats)),
-                 maxStamina: typeof savedChar?.maxStamina === 'number' ? savedChar.maxStamina : calculateMaxActionStamina(validatedStats),
-                 currentStamina: typeof savedChar?.currentStamina === 'number' ? savedChar.currentStamina : (savedChar?.maxStamina ?? calculateMaxActionStamina(validatedStats)),
-                 maxMana: typeof savedChar?.maxMana === 'number' ? savedChar.maxMana : calculateMaxMana(validatedStats, validatedKnowledge),
-                 currentMana: typeof savedChar?.currentMana === 'number' ? savedChar.currentMana : (savedChar?.maxMana ?? calculateMaxMana(validatedStats, validatedKnowledge)),
-                 level: typeof savedChar?.level === 'number' ? savedChar.level : 1,
-                 xpToNextLevel: typeof savedChar?.xpToNextLevel === 'number' ? savedChar.xpToNextLevel : calculateXpToNextLevel(savedChar?.level ?? 1),
-                 skillTree: savedChar?.skillTree ? { 
-                     className: savedChar.skillTree.className || loadedCharClass,
-                     stages: (Array.isArray(savedChar.skillTree.stages) ? savedChar.skillTree.stages : []).map((stage, index) => ({
-                          stage: typeof stage.stage === 'number' ? stage.stage : index,
-                          stageName: stage.stageName || (index === 0 ? "Potential" : `Stage ${stage.stage ?? index}`), 
-                          skills: (Array.isArray(stage.skills) ? stage.skills : []).map(skill => ({
-                             name: skill.name || "Unknown Skill", description: skill.description || "", type: skill.type || 'Learned',
-                             manaCost: typeof skill.manaCost === 'number' ? skill.manaCost : undefined,
-                             staminaCost: typeof skill.staminaCost === 'number' ? skill.staminaCost : undefined,
-                         })),
-                    })).slice(0, 5) 
-                 } : null,
-                 learnedSkills: (Array.isArray(savedChar?.learnedSkills) && savedChar.learnedSkills.length > 0) 
-                      ? savedChar.learnedSkills.map(skill => ({
-                          name: skill.name || "Unknown Skill", description: skill.description || "", type: skill.type || 'Learned',
-                          manaCost: typeof skill.manaCost === 'number' ? skill.manaCost : undefined,
-                          staminaCost: typeof skill.staminaCost === 'number' ? skill.staminaCost : undefined,
-                       }))
-                     : getStarterSkillsForClass(loadedCharClass), 
-             };
+        case "RESET_GAME": return null;
+        case "LOAD_ADVENTURE": {
+            const savedChar = action.payload.character;
+            const validatedStats = savedChar?.stats ? { ...initialCharacterStats, ...savedChar.stats } : { ...initialCharacterStats };
+            const validatedKnowledge = Array.isArray(savedChar?.knowledge) ? savedChar.knowledge : [];
+            const loadedCharClass = savedChar?.class || "Adventurer";
+            return {
+                ...initialCharacterState,
+                ...(savedChar || {}),
+                name: savedChar?.name || "Recovered Adventurer",
+                class: loadedCharClass,
+                knowledge: validatedKnowledge,
+                stats: validatedStats,
+                maxHealth: typeof savedChar?.maxHealth === 'number' ? savedChar.maxHealth : calculateMaxHealth(validatedStats),
+                currentHealth: typeof savedChar?.currentHealth === 'number' ? savedChar.currentHealth : (savedChar?.maxHealth ?? calculateMaxHealth(validatedStats)),
+                maxStamina: typeof savedChar?.maxStamina === 'number' ? savedChar.maxStamina : calculateMaxActionStamina(validatedStats),
+                currentStamina: typeof savedChar?.currentStamina === 'number' ? savedChar.currentStamina : (savedChar?.maxStamina ?? calculateMaxActionStamina(validatedStats)),
+                maxMana: typeof savedChar?.maxMana === 'number' ? savedChar.maxMana : calculateMaxMana(validatedStats, validatedKnowledge),
+                currentMana: typeof savedChar?.currentMana === 'number' ? savedChar.currentMana : (savedChar?.maxMana ?? calculateMaxMana(validatedStats, validatedKnowledge)),
+                level: typeof savedChar?.level === 'number' ? savedChar.level : 1,
+                xp: typeof savedChar?.xp === 'number' ? savedChar.xp : 0,
+                xpToNextLevel: typeof savedChar?.xpToNextLevel === 'number' ? savedChar.xpToNextLevel : calculateXpToNextLevel(savedChar?.level ?? 1),
+                skillTree: savedChar?.skillTree ? {
+                    className: savedChar.skillTree.className || loadedCharClass,
+                    stages: (Array.isArray(savedChar.skillTree.stages) ? savedChar.skillTree.stages : []).map((stage, index) => ({
+                        stage: typeof stage.stage === 'number' ? stage.stage : index,
+                        stageName: stage.stageName || (index === 0 ? "Potential" : `Stage ${stage.stage ?? index}`),
+                        skills: (Array.isArray(stage.skills) ? stage.skills : []).map(skill => ({
+                            name: skill.name || "Unknown Skill",
+                            description: skill.description || "",
+                            type: skill.type || 'Learned',
+                            manaCost: typeof skill.manaCost === 'number' ? skill.manaCost : undefined,
+                            staminaCost: typeof skill.staminaCost === 'number' ? skill.staminaCost : undefined,
+                        })),
+                    })).slice(0, MAX_SKILL_TREE_STAGES)
+                } : null,
+                learnedSkills: (Array.isArray(savedChar?.learnedSkills) && savedChar.learnedSkills.length > 0)
+                    ? savedChar.learnedSkills.map(skill => ({
+                        name: skill.name || "Unknown Skill",
+                        description: skill.description || "",
+                        type: skill.type || 'Learned',
+                        manaCost: typeof skill.manaCost === 'number' ? skill.manaCost : undefined,
+                        staminaCost: typeof skill.staminaCost === 'number' ? skill.staminaCost : undefined,
+                    }))
+                    : getStarterSkillsForClass(loadedCharClass),
+                statusEffects: Array.isArray(savedChar?.statusEffects) ? savedChar.statusEffects : [],
+            };
+        }
         default:
             return state;
     }

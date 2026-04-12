@@ -2,6 +2,7 @@
  * @fileOverview An AI agent that suggests existing character names.
  */
 
+import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import { Type, Schema } from "@google/genai";
 
@@ -13,6 +14,10 @@ export interface SuggestExistingCharactersInput {
 export interface SuggestExistingCharactersOutput {
   suggestedNames: string[];
 }
+
+const SuggestExistingCharactersOutputSchema = z.object({
+  suggestedNames: z.array(z.string()),
+});
 
 const responseSchema: Schema = {
     type: Type.OBJECT,
@@ -28,7 +33,7 @@ export async function suggestExistingCharacters(input: SuggestExistingCharacters
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           contents: prompt,
           config: {
               responseMimeType: "application/json",
@@ -38,7 +43,16 @@ export async function suggestExistingCharacters(input: SuggestExistingCharacters
 
       const text = response.text;
       if (!text) throw new Error("No text");
-      return JSON.parse(text);
+      
+      const parsed = JSON.parse(text);
+      const validation = SuggestExistingCharactersOutputSchema.safeParse(parsed);
+      
+      if (validation.success) {
+          return validation.data;
+      } else {
+          console.warn("Zod validation failed for suggestExistingCharacters, using fallback.", validation.error);
+          throw new Error("Invalid response structure");
+      }
   } catch (e) {
       console.error("AI Suggestion Error:", e);
       return { suggestedNames: ["Hero", "Villain", "Sidekick"] };

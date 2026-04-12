@@ -216,7 +216,7 @@ function useToast() {
         listeners.splice(index, 1)
       }
     }
-  }, [state]) // Re-run effect if state identity changes (shouldn't normally happen)
+  }, []) // ✅ Fixed: empty dependency array ensures effect runs only once
 
   // Return the current state and the toast/dismiss functions
   return {

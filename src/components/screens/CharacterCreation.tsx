@@ -25,11 +25,7 @@ import { TextCharacterForm } from "../../components/character/TextCharacterForm"
 import type { AdventureType } from "../../types/adventure-types";
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnMagicIcon as HandDrawnWisdomIcon } from "../../components/icons/HandDrawnIcons";
 
-// Module-level variables to hold context for Zod schema, updated by useEffect
-let currentGlobalAdventureType: AdventureType | null = null;
-let currentGlobalCharacterOriginType: 'existing' | 'original' | undefined = undefined;
-
-// --- Zod Schema for Validation ---
+// --- Zod Schema for Validation (basic field validation only) ---
 const baseCharacterSchema = z.object({
   name: z.string().min(1, "Character name is required.").max(50, "Name too long (max 50)."),
 });
@@ -38,9 +34,9 @@ const commaSeparatedMaxItems = (max: number, message: string) =>
   z.string()
    .transform(val => val === undefined || val === "" ? [] : val.split(',').map(s => s.trim()).filter(Boolean))
    .refine(arr => arr.length <= max, { message })
-   .transform(arr => arr.join(', ')) // Convert back to string for form state
+   .transform(arr => arr.join(', '))
    .optional()
-   .transform(val => val || ""); // Ensure it's an empty string if undefined
+   .transform(val => val || "");
 
 const basicCreationSchemaFields = {
   creationType: z.literal("basic"),
@@ -48,14 +44,13 @@ const basicCreationSchemaFields = {
   traits: commaSeparatedMaxItems(5, "Max 5 traits allowed (comma-separated)."),
   knowledge: commaSeparatedMaxItems(5, "Max 5 knowledge areas allowed (comma-separated)."),
   background: z.string().max(100, "Background too long (max 100).").optional().transform(val => val || ""),
-  description: z.string().optional().transform(val => val || ""), // Description is optional in basic mode initially
+  description: z.string().optional().transform(val => val || ""),
 };
 const basicCreationSchema = baseCharacterSchema.extend(basicCreationSchemaFields);
 
 const textCreationSchemaFields = {
   creationType: z.literal("text"),
-  description: z.string().optional(), // Description is central here, min length validated in superRefine
-  // The following are for AI to potentially fill, so initially optional from user's perspective
+  description: z.string().optional(),
   class: z.string().max(30, "Class name too long (max 30).").optional().transform(val => val || ""),
   traits: commaSeparatedMaxItems(5, "Max 5 traits allowed (comma-separated)."),
   knowledge: commaSeparatedMaxItems(5, "Max 5 knowledge areas allowed (comma-separated)."),
@@ -66,34 +61,13 @@ const textCreationSchema = baseCharacterSchema.extend(textCreationSchemaFields);
 const combinedSchema = z.discriminatedUnion("creationType", [
   basicCreationSchema,
   textCreationSchema,
-]).superRefine((data, ctx) => {
-  const advType = currentGlobalAdventureType;
-  const originType = currentGlobalCharacterOriginType;
-
-  if (data.creationType === "basic") {
-    if (advType !== "Immersed" && (!data.class || data.class.trim() === "")) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "Class is required for Randomized/Custom adventures.", path: ["class"] });
-    }
-  } else if (data.creationType === "text") {
-    const descLength = data.description?.trim().length ?? 0;
-    const minDescLength = (advType === "Immersed" && originType === "original") ? 10 : 10;
-    if (descLength < minDescLength) {
-      let msg = `Description (min ${minDescLength} chars) is required for AI profile generation.`;
-      if (advType === "Immersed" && originType === "original") {
-        msg = `Original Character Concept (min ${minDescLength} chars in description box) is required.`;
-      } else if (advType !== "Immersed") {
-        // Only require if text tab is active and it's not an existing immersed character
-         msg = `Description (min ${minDescLength} chars) is required for AI profile generation in Randomized/Custom modes when using text-based creation.`;
-      }
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: msg, path: ["description"] });
-    }
-  }
-});
+]);
+// Note: Conditional validation (class required, description min length) moved to onSubmit.
 
 type FormData = z.infer<typeof combinedSchema>;
 
 const staticDefaultValues: FormData = {
-    creationType: "basic", // Default tab
+    creationType: "basic",
     name: "",
     class: "",
     traits: "",
@@ -139,26 +113,15 @@ export function CharacterCreation() {
    });
    const { errors, isValid: formIsValid, isDirty, dirtyFields } = formState;
 
-
+  // --- FIX XC11: Show toast when statError changes (stale closure fix) ---
   useEffect(() => {
-    const newAdvType = state.adventureSettings.adventureType;
-    const newOriginType = state.adventureSettings.characterOriginType;
-    let needsValidationTrigger = false;
-
-    if (currentGlobalAdventureType !== newAdvType) {
-      currentGlobalAdventureType = newAdvType;
-      needsValidationTrigger = true;
+    if (statError) {
+      toast({ title: "Stat Allocation Incomplete", description: statError, variant: "destructive" });
     }
-    if (currentGlobalCharacterOriginType !== newOriginType) {
-      currentGlobalCharacterOriginType = newOriginType;
-      needsValidationTrigger = true;
-    }
+  }, [statError, toast]);
+  // -----------------------------------------------------------------
 
-    if (needsValidationTrigger && formRef.current) { 
-      trigger();
-    }
-  }, [state.adventureSettings.adventureType, state.adventureSettings.characterOriginType, trigger]);
-
+  // No more global variable updates; validation now uses state directly in onSubmit.
 
   useEffect(() => {
     if (isRandomizing || isGenerating) return;
@@ -181,7 +144,7 @@ export function CharacterCreation() {
     }
     
     if (isImmersedMode) {
-        newFormValues.class = ""; // Class is not user-defined for Immersed
+        newFormValues.class = "";
     } else if (!dirtyFields.class && !newFormValues.class) {
         newFormValues.class = "Adventurer";
     }
@@ -374,12 +337,43 @@ export function CharacterCreation() {
 
   const onSubmit = (data: FormData) => {
      setError(null);
+     
+     // Stat point validation
      if (remainingPoints !== 0) {
-         setStatError(`Please allocate all ${TOTAL_STAT_POINTS} stat points. ${remainingPoints > 0 ? `${remainingPoints} point(s) remaining.` : `${Math.abs(remainingPoints)} point(s) over limit.`}`);
-         toast({ title: "Stat Allocation Incomplete", description: statError || "Stat allocation issue.", variant: "destructive"}); return;
+         const errorMsg = `Please allocate all ${TOTAL_STAT_POINTS} stat points. ${remainingPoints > 0 ? `${remainingPoints} point(s) remaining.` : `${Math.abs(remainingPoints)} point(s) over limit.`}`;
+         setStatError(errorMsg);
+         // Toast is now triggered by the useEffect watching statError
+         return;
      }
-     setStatError(null); 
+     setStatError(null);
 
+    // Additional conditional validation based on adventure type
+    const advType = state.adventureSettings.adventureType;
+    const originType = state.adventureSettings.characterOriginType;
+
+    // Class required for Randomized/Custom adventures when using basic creation
+    if (data.creationType === "basic" && advType !== "Immersed" && (!data.class || data.class.trim() === "")) {
+        toast({ title: "Validation Error", description: "Class is required for Randomized/Custom adventures.", variant: "destructive" });
+        return;
+    }
+
+    // Description minimum length for text creation
+    if (data.creationType === "text") {
+        const descLength = data.description?.trim().length ?? 0;
+        const minDescLength = (advType === "Immersed" && originType === "original") ? 10 : 10;
+        if (descLength < minDescLength) {
+            let msg = `Description (min ${minDescLength} chars) is required for AI profile generation.`;
+            if (advType === "Immersed" && originType === "original") {
+                msg = `Original Character Concept (min ${minDescLength} chars in description box) is required.`;
+            } else if (advType !== "Immersed") {
+                msg = `Description (min ${minDescLength} chars) is required for AI profile generation in Randomized/Custom modes when using text-based creation.`;
+            }
+            toast({ title: "Validation Error", description: msg, variant: "destructive" });
+            return;
+        }
+    }
+
+    // Zod validation (basic fields)
     trigger().then(isFormCurrentlyValid => {
         if (!isFormCurrentlyValid) {
             const fieldErrorMessages = Object.entries(errors).map(([key, err]) => {
@@ -395,7 +389,7 @@ export function CharacterCreation() {
 
         const finalName = data.name;
         let finalClass = data.class || "Adventurer";
-        if (state.adventureSettings.adventureType === "Immersed") {
+        if (advType === "Immersed") {
             finalClass = data.class || state.character?.class || state.adventureSettings.playerCharacterConcept || "Immersed Protagonist";
         }
 
@@ -413,9 +407,9 @@ export function CharacterCreation() {
 
         dispatch({ type: "CREATE_CHARACTER", payload: characterDataToDispatch });
 
-        if (state.adventureSettings.adventureType === "Randomized") {
+        if (advType === "Randomized") {
             dispatch({ type: "SET_GAME_STATUS", payload: "AdventureSetup" });
-        } else { // This handles the "Custom" flow correctly
+        } else {
             dispatch({ type: "START_GAMEPLAY" });
         }
      });
@@ -443,12 +437,7 @@ export function CharacterCreation() {
   }, [isGenerating, isRandomizing, remainingPoints, statError, formIsValid, errors, watch, showCharacterDefinitionForms]);
 
 
-  useEffect(() => {
-    currentGlobalAdventureType = state.adventureSettings.adventureType;
-    currentGlobalCharacterOriginType = state.adventureSettings.characterOriginType;
-    trigger(); 
-  }, [state.adventureSettings.adventureType, state.adventureSettings.characterOriginType, trigger]);
-
+  // No more global variable updates useEffect
 
   if (state.adventureSettings.adventureType === "Immersed" && state.adventureSettings.characterOriginType === "existing" && !showCharacterDefinitionForms) {
     return (

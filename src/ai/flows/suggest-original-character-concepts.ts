@@ -2,6 +2,7 @@
  * @fileOverview An AI agent that suggests original character concepts.
  */
 
+import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import { Type, Schema } from "@google/genai";
 
@@ -13,6 +14,10 @@ export interface SuggestOriginalCharacterConceptsInput {
 export interface SuggestOriginalCharacterConceptsOutput {
   suggestedConcepts: string[];
 }
+
+const SuggestOriginalCharacterConceptsOutputSchema = z.object({
+  suggestedConcepts: z.array(z.string()),
+});
 
 const responseSchema: Schema = {
     type: Type.OBJECT,
@@ -28,7 +33,7 @@ export async function suggestOriginalCharacterConcepts(input: SuggestOriginalCha
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           contents: prompt,
           config: {
               responseMimeType: "application/json",
@@ -38,7 +43,16 @@ export async function suggestOriginalCharacterConcepts(input: SuggestOriginalCha
 
       const text = response.text;
       if (!text) throw new Error("No text");
-      return JSON.parse(text);
+      
+      const parsed = JSON.parse(text);
+      const validation = SuggestOriginalCharacterConceptsOutputSchema.safeParse(parsed);
+      
+      if (validation.success) {
+          return validation.data;
+      } else {
+          console.warn("Zod validation failed for suggestOriginalCharacterConcepts, using fallback.", validation.error);
+          throw new Error("Invalid response structure");
+      }
   } catch (e) {
       console.error("AI Suggestion Error:", e);
       return { suggestedConcepts: ["A wanderer", "A local merchant", "A lost soldier"] };

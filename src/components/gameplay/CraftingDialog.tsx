@@ -1,4 +1,3 @@
-
 // src/components/gameplay/CraftingDialog.tsx
 "use client";
 
@@ -17,7 +16,7 @@ import { Label } from '../../components/ui/label';
 import { Input } from '../../components/ui/input';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { Alert, AlertDescription } from '../../components/ui/alert';
-import { Loader2, Hammer, CheckCircle, Square } from 'lucide-react';
+import { Loader2, Hammer, CheckCircle } from 'lucide-react';
 import type { InventoryItem } from '../../types/inventory-types';
 import { getQualityColor, cn } from "../../lib/utils";
 
@@ -25,7 +24,7 @@ interface CraftingDialogProps {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;
     inventory: InventoryItem[];
-    onCraft: (goal: string, ingredients: string[]) => Promise<void>; // Make async
+    onCraft: (goal: string, ingredients: string[]) => Promise<void>;
 }
 
 export function CraftingDialog({ isOpen, onOpenChange, inventory, onCraft }: CraftingDialogProps) {
@@ -51,14 +50,11 @@ export function CraftingDialog({ isOpen, onOpenChange, inventory, onCraft }: Cra
         setCraftingError(null);
         try {
             await onCraft(craftingGoal, selectedIngredients);
-            // Success/Error toasts and state resets are handled in the parent component's onCraft callback
         } catch (error) {
-            // Error handling/toast is likely done in parent, but can add fallback here
             console.error("CraftingDialog: Error during craft attempt", error);
             setCraftingError("An unexpected error occurred during crafting.");
         } finally {
             setIsCraftingLoading(false);
-            // Don't reset state here, parent might need it for toast/log
         }
     };
 
@@ -105,32 +101,35 @@ export function CraftingDialog({ isOpen, onOpenChange, inventory, onCraft }: Cra
                             <ScrollArea className="h-40 border rounded-md p-2 bg-muted/30">
                                 {inventory.length > 0 ? (
                                     <div className="space-y-1">
-                                        {inventory.map((item) => (
-                                            <div key={item.name} className="flex items-center gap-2">
-                                                <button
-                                                     type="button"
-                                                     role="checkbox"
-                                                     aria-checked={selectedIngredients.includes(item.name)}
-                                                     data-state={selectedIngredients.includes(item.name) ? 'checked' : 'unchecked'}
-                                                     onClick={() => !isCraftingLoading && handleIngredientToggle(item.name)}
-                                                     className={cn(
-                                                         "flex items-center justify-center w-4 h-4 rounded-sm border border-primary text-primary ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
-                                                         isCraftingLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
-                                                     )}
-                                                     disabled={isCraftingLoading}
-                                                     aria-label={`Select ${item.name}`}
-                                                >
-                                                      {selectedIngredients.includes(item.name) && <CheckCircle className="w-3 h-3"/>}
-                                                 </button>
-                                                <Label
-                                                    htmlFor={`ingredient-${item.name}-${Math.random()}`} // Ensure unique ID
-                                                    className={`text-sm flex-1 cursor-pointer ${getQualityColor(item.quality)}`}
-                                                    onClick={() => !isCraftingLoading && handleIngredientToggle(item.name)}
-                                                >
-                                                    {item.name} {item.quality && item.quality !== "Common" ? `(${item.quality})` : ''}
-                                                </Label>
-                                            </div>
-                                        ))}
+                                        {inventory.map((item, index) => {
+                                            const ingredientId = `ingredient-${index}-${item.name.replace(/\s+/g, '-')}`;
+                                            return (
+                                                <div key={ingredientId} className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        role="checkbox"
+                                                        aria-checked={selectedIngredients.includes(item.name)}
+                                                        data-state={selectedIngredients.includes(item.name) ? 'checked' : 'unchecked'}
+                                                        onClick={() => !isCraftingLoading && handleIngredientToggle(item.name)}
+                                                        className={cn(
+                                                            "flex items-center justify-center w-4 h-4 rounded-sm border border-primary text-primary ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
+                                                            isCraftingLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
+                                                        )}
+                                                        disabled={isCraftingLoading}
+                                                        aria-label={`Select ${item.name}`}
+                                                    >
+                                                        {selectedIngredients.includes(item.name) && <CheckCircle className="w-3 h-3" />}
+                                                    </button>
+                                                    <Label
+                                                        htmlFor={ingredientId}
+                                                        className={`text-sm flex-1 cursor-pointer ${getQualityColor(item.quality)}`}
+                                                        onClick={() => !isCraftingLoading && handleIngredientToggle(item.name)}
+                                                    >
+                                                        {item.name} {item.quality && item.quality !== "Common" ? `(${item.quality})` : ''}
+                                                    </Label>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 ) : (
                                     <p className="text-sm text-muted-foreground italic text-center py-4">Inventory is empty.</p>

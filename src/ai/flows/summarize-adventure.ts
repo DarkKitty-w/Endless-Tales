@@ -2,6 +2,7 @@
  * @fileOverview Summarizes the adventure.
  */
 
+import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import { Type, Schema } from "@google/genai";
 
@@ -13,6 +14,10 @@ export interface SummarizeAdventureInput {
 export interface SummarizeAdventureOutput {
   summary: string;
 }
+
+const SummarizeAdventureOutputSchema = z.object({
+  summary: z.string(),
+});
 
 const responseSchema: Schema = {
     type: Type.OBJECT,
@@ -28,7 +33,7 @@ export async function summarizeAdventure(input: SummarizeAdventureInput): Promis
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           contents: prompt,
           config: {
               responseMimeType: "application/json",
@@ -38,7 +43,16 @@ export async function summarizeAdventure(input: SummarizeAdventureInput): Promis
 
       const text = response.text;
       if (!text) throw new Error("No text");
-      return JSON.parse(text);
+      
+      const parsed = JSON.parse(text);
+      const validation = SummarizeAdventureOutputSchema.safeParse(parsed);
+      
+      if (validation.success) {
+          return validation.data;
+      } else {
+          console.warn("Zod validation failed for summarizeAdventure, using fallback.", validation.error);
+          throw new Error("Invalid response structure");
+      }
   } catch (e) {
       console.error("AI Summary Error:", e);
       return { summary: "Summary generation failed." };

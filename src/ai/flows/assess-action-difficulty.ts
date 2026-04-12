@@ -1,10 +1,12 @@
 /**
- * @fileOverview An AI agent that assesses the difficulty of a player action in a text adventure game.
+ * @fileOverview An AI agent that assesses the difficulty of a player action.
  */
 
+import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import { Type, Schema } from "@google/genai";
-import type { DifficultyLevel } from '../../types/game-types'; 
+import type { DifficultyLevel, GameStateContext } from '../../types/game-types';
+import { formatGameStateContextForPrompt } from '../../context/game-state-utils';
 
 export type { DifficultyLevel };
 
@@ -14,7 +16,8 @@ export interface AssessActionDifficultyInput {
     characterClass?: string;
     currentSituation: string;
     gameStateSummary: string;
-    gameDifficulty: string;
+    gameStateContext?: GameStateContext;
+    gameDifficulty: string; // e.g., "Easy", "Normal", "Hard", "Nightmare"
     turnCount: number;
     userApiKey?: string | null;
 }
@@ -24,6 +27,13 @@ export interface AssessActionDifficultyOutput {
     reasoning: string;
     suggestedDice: "d6" | "d10" | "d20" | "d100" | "None";
 }
+
+// Zod schema for validation
+const AssessActionDifficultyOutputSchema = z.object({
+    difficulty: z.enum(["Trivial", "Easy", "Normal", "Hard", "Very Hard", "Impossible"]),
+    reasoning: z.string(),
+    suggestedDice: z.enum(["d6", "d10", "d20", "d100", "None"]),
+});
 
 const responseSchema: Schema = {
     type: Type.OBJECT,
@@ -46,14 +56,26 @@ const responseSchema: Schema = {
     required: ["difficulty", "reasoning", "suggestedDice"]
 };
 
+// Lookup table for fallback values when AI assessment fails
+const FALLBACK_DIFFICULTY_MAP: Record<string, { difficulty: DifficultyLevel; dice: "d6" | "d10" | "d20" | "d100" | "None" }> = {
+    easy: { difficulty: "Easy", dice: "d6" },
+    normal: { difficulty: "Normal", dice: "d10" },
+    hard: { difficulty: "Hard", dice: "d20" },
+    nightmare: { difficulty: "Very Hard", dice: "d20" },
+};
+
 export async function assessActionDifficulty(input: AssessActionDifficultyInput): Promise<AssessActionDifficultyOutput> {
-  if (input.characterClass === 'admin000') {
+  if (process.env.NODE_ENV === 'development' && input.characterClass === 'admin000') {
     return {
       difficulty: "Trivial",
       reasoning: "Developer Mode active. Action automatically succeeds.",
       suggestedDice: "None",
     };
   }
+
+  const stateSummary = input.gameStateContext
+      ? formatGameStateContextForPrompt(input.gameStateContext)
+      : input.gameStateSummary;
 
   const prompt = `
 You are an expert Game Master AI for the text adventure "Endless Tales". Your task is to assess the difficulty of a player's intended action.
@@ -65,7 +87,8 @@ You are an expert Game Master AI for the text adventure "Endless Tales". Your ta
 1. **Player Action:** ${input.playerAction}
 2. **Character Capabilities:** ${input.characterCapabilities}
 3. **Current Situation:** ${input.currentSituation}
-4. **Game State Summary:** ${input.gameStateSummary}
+4. **Game State Summary:** 
+${stateSummary}
 5. **Plausibility:** Is the action physically possible? "Fly to the moon" or "become king instantly" are Impossible without specific justification.
 
 **Assessment Task:**
@@ -78,7 +101,7 @@ Output JSON only.
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           contents: prompt,
           config: {
               responseMimeType: "application/json",
@@ -88,22 +111,28 @@ Output JSON only.
 
       const text = response.text;
       if (!text) throw new Error("No text returned from AI");
-      return JSON.parse(text) as AssessActionDifficultyOutput;
+      
+      const parsed = JSON.parse(text);
+      const validation = AssessActionDifficultyOutputSchema.safeParse(parsed);
+      
+      if (validation.success) {
+          return validation.data;
+      } else {
+          console.warn("Zod validation failed for assessActionDifficulty, using fallback.", validation.error);
+          throw new Error("Invalid response structure");
+      }
 
   } catch (error) {
       console.error("AI Error in assessActionDifficulty:", error);
-      // Fallback
-      let fallbackDifficulty: DifficultyLevel = "Normal";
-      let fallbackDice: "d6" | "d10" | "d20" | "d100" | "None" = "d10";
-      switch(input.gameDifficulty?.toLowerCase()) {
-          case 'easy': fallbackDifficulty = "Easy"; fallbackDice = "d6"; break;
-          case 'hard': case 'nightmare': fallbackDifficulty = "Hard"; fallbackDice = "d20"; break;
-          default: fallbackDifficulty = "Normal"; fallbackDice = "d10";
-      }
+      
+      // Use lookup table for fallback based on game difficulty setting
+      const gameDiffKey = input.gameDifficulty?.toLowerCase() ?? 'normal';
+      const fallback = FALLBACK_DIFFICULTY_MAP[gameDiffKey] ?? FALLBACK_DIFFICULTY_MAP['normal'];
+      
       return {
-          difficulty: fallbackDifficulty,
-          reasoning: "AI assessment failed, assuming difficulty based on game settings.",
-          suggestedDice: fallbackDice,
+          difficulty: fallback.difficulty,
+          reasoning: "AI assessment failed; using a default assumption based on game settings.",
+          suggestedDice: fallback.dice,
       };
   }
 }

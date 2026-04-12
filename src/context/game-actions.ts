@@ -1,11 +1,11 @@
-
 // src/context/game-actions.ts
 import type { GameStatus } from "../types/game-types";
 import type {
     Character, SkillTree, ReputationChange, NpcRelationshipChange
 } from "../types/character-types";
 import type { InventoryItem } from "../types/inventory-types";
-import type { AdventureSettings, StoryLogEntry, SavedAdventure, AdventureType, FirestoreCoopSession } from "../types/adventure-types";
+import type { ProviderType } from "../ai/ai-router";
+import type { AdventureSettings, StoryLogEntry, SavedAdventure, AdventureType } from "../types/adventure-types";
 
 /** Defines all possible actions that can be dispatched to the game reducer. */
 export type Action =
@@ -25,8 +25,8 @@ export type Action =
   | { type: "RESET_GAME" }
   | { type: "LOAD_SAVED_ADVENTURES"; payload: SavedAdventure[] }
   | { type: "SAVE_CURRENT_ADVENTURE" }
-  | { type: "LOAD_ADVENTURE"; payload: SavedAdventure } // Payload is the full saved adventure object
-  | { type: "DELETE_ADVENTURE"; payload: string } // Payload is the adventure ID
+  | { type: "LOAD_ADVENTURE"; payload: SavedAdventure }
+  | { type: "DELETE_ADVENTURE"; payload: string }
   | { type: "SET_SKILL_TREE_GENERATING"; payload: boolean }
   | { type: "SET_SKILL_TREE"; payload: { class: string; skillTree: SkillTree } }
   | { type: "CHANGE_CLASS_AND_RESET_SKILLS"; payload: { newClass: string; newSkillTree: SkillTree } }
@@ -41,11 +41,6 @@ export type Action =
   | { type: "UPDATE_CRAFTING_RESULT"; payload: { narration: string; consumedItems: string[]; craftedItem: InventoryItem | null; newGameStateString: string } }
   | { type: "SET_ADVENTURE_TYPE", payload: AdventureType }
   | { type: "RESPAWN_CHARACTER"; payload?: { narrationMessage?: string } }
-  // Multiplayer Actions
-  | { type: "SET_SESSION_ID"; payload: string | null }
-  | { type: "SET_PLAYERS"; payload: string[] } // Array of player UIDs
-  | { type: "ADD_PLAYER"; payload: string } // UID of player to add
-  | { type: "REMOVE_PLAYER"; payload: string } // UID of player to remove
-  | { type: "SET_CURRENT_PLAYER_UID"; payload: string | null }
-  | { type: "SET_IS_HOST"; payload: boolean }
-  | { type: "SYNC_COOP_SESSION_STATE"; payload: Partial<FirestoreCoopSession> };
+  | { type: "SET_AI_PROVIDER"; payload: ProviderType }
+  | { type: "SET_PROVIDER_API_KEY"; payload: { provider: ProviderType; apiKey: string | null } };
+  // Multiplayer actions removed – see multiplayer-stub.ts

@@ -2,6 +2,7 @@
  * @fileOverview An AI agent that determines the outcome of a crafting attempt.
  */
 
+import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import { Type, Schema } from "@google/genai";
 import type { InventoryItem, ItemQuality } from '../../types/game-types';
@@ -28,6 +29,21 @@ export interface AttemptCraftingOutput {
   } | null;
   consumedItems: string[];
 }
+
+// Zod schema for validation
+const AttemptCraftingOutputSchema = z.object({
+    success: z.boolean(),
+    message: z.string(),
+    craftedItem: z.object({
+        name: z.string(),
+        description: z.string(),
+        quality: z.enum(["Poor", "Common", "Uncommon", "Rare", "Epic", "Legendary"]).optional(),
+        weight: z.number().optional(),
+        durability: z.number().optional(),
+        magicalEffect: z.string().optional(),
+    }).nullable(),
+    consumedItems: z.array(z.string()),
+});
 
 const responseSchema: Schema = {
     type: Type.OBJECT,
@@ -84,7 +100,7 @@ Output JSON.
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: 'gemini-2.0-flash',
+          model: 'gemini-2.5-flash',
           contents: prompt,
           config: {
               responseMimeType: "application/json",
@@ -94,7 +110,16 @@ Output JSON.
 
       const text = response.text;
       if (!text) throw new Error("No text returned from AI");
-      return JSON.parse(text) as AttemptCraftingOutput;
+      
+      const parsed = JSON.parse(text);
+      const validation = AttemptCraftingOutputSchema.safeParse(parsed);
+      
+      if (validation.success) {
+          return validation.data;
+      } else {
+          console.warn("Zod validation failed for attemptCrafting, using fallback.", validation.error);
+          throw new Error("Invalid response structure");
+      }
 
   } catch (error: any) {
       console.error("AI Crafting Error:", error);
