@@ -44,6 +44,8 @@ const SETTINGS_ACTIONS = new Set<Action['type']>([
     "SET_THEME_ID",
     "SET_DARK_MODE",
     "SET_USER_API_KEY",
+    "SET_AI_PROVIDER",
+    "SET_PROVIDER_API_KEY",
     "LOAD_ADVENTURE",
     "RESET_GAME",
 ]);
@@ -85,6 +87,8 @@ export function gameReducer(state: GameState, action: Action): GameState {
                 selectedThemeId: state.selectedThemeId,
                 isDarkMode: state.isDarkMode,
                 userGoogleAiApiKey: state.userGoogleAiApiKey,
+                aiProvider: state.aiProvider,
+                providerApiKeys: state.providerApiKeys,
             },
             action
         )
@@ -93,6 +97,8 @@ export function gameReducer(state: GameState, action: Action): GameState {
             selectedThemeId: state.selectedThemeId,
             isDarkMode: state.isDarkMode,
             userGoogleAiApiKey: state.userGoogleAiApiKey,
+            aiProvider: state.aiProvider,
+            providerApiKeys: state.providerApiKeys,
         };
 
     let nextState: GameState = {
@@ -103,6 +109,8 @@ export function gameReducer(state: GameState, action: Action): GameState {
         selectedThemeId: settingsRelatedState.selectedThemeId,
         isDarkMode: settingsRelatedState.isDarkMode,
         userGoogleAiApiKey: settingsRelatedState.userGoogleAiApiKey,
+        aiProvider: settingsRelatedState.aiProvider ?? state.aiProvider,
+        providerApiKeys: settingsRelatedState.providerApiKeys ?? state.providerApiKeys,
     };
 
     if (ADVENTURE_ACTIONS.has(action.type)) {
@@ -111,7 +119,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
 
     switch (action.type) {
         case "RESET_GAME": {
-            const { savedAdventures, selectedThemeId, isDarkMode, userGoogleAiApiKey } = state;
+            const { savedAdventures, selectedThemeId, isDarkMode, userGoogleAiApiKey, aiProvider, providerApiKeys } = state;
             console.log("GameReducer: Resetting game to initial state, preserving session settings.");
             return {
                 ...initialState,
@@ -119,6 +127,8 @@ export function gameReducer(state: GameState, action: Action): GameState {
                 selectedThemeId,
                 isDarkMode,
                 userGoogleAiApiKey,
+                aiProvider,                // ← ADDED
+                providerApiKeys,            // ← ADDED
                 status: "MainMenu",
             };
         }

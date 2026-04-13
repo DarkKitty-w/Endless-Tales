@@ -1,7 +1,7 @@
 // src/components/gameplay/ActionInput.tsx
 "use client";
 
-import React, { useState, forwardRef, useImperativeHandle } from "react";
+import React, { useState, forwardRef, useImperativeHandle, useRef } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
@@ -22,6 +22,8 @@ interface ActionInputProps {
 export const ActionInput = forwardRef<ActionInputRef, ActionInputProps>(
   ({ onSubmit, onSuggest, onCraft, disabled }, ref) => {
     const [playerInput, setPlayerInput] = useState("");
+    const submittingRef = useRef(false);
+    const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useImperativeHandle(ref, () => ({
       setValue: (value: string) => {
@@ -32,14 +34,40 @@ export const ActionInput = forwardRef<ActionInputRef, ActionInputProps>(
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       const trimmedInput = playerInput.trim();
-      if (trimmedInput && !disabled) {
+      
+      if (trimmedInput && !disabled && !submittingRef.current) {
         const sanitized = sanitizePlayerAction(trimmedInput);
         if (sanitized) {
+          // Set submission lock
+          submittingRef.current = true;
+          
+          // Clear any existing timeout
+          if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+          }
+          
+          // Release lock after 500ms
+          timeoutRef.current = setTimeout(() => {
+            submittingRef.current = false;
+            timeoutRef.current = null;
+          }, 500);
+          
           onSubmit(sanitized);
         }
         setPlayerInput("");
       }
     };
+
+    // Cleanup timeout on unmount
+    React.useEffect(() => {
+      return () => {
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+        }
+      };
+    }, []);
+
+    const isSubmitDisabled = disabled || !playerInput.trim() || submittingRef.current;
 
     return (
       <div className="flex-none">
@@ -60,7 +88,7 @@ export const ActionInput = forwardRef<ActionInputRef, ActionInputProps>(
                 type="submit"
                 className="bg-accent hover:bg-accent/90 text-accent-foreground h-10 px-4"
                 aria-label="Send action to narrator"
-                disabled={disabled || !playerInput.trim()}
+                disabled={isSubmitDisabled}
               >
                 <Send className="w-4 h-4" />
               </Button>

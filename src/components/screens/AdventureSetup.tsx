@@ -174,8 +174,8 @@ export function AdventureSetup() {
     dispatch({ type: "SET_ADVENTURE_SETTINGS", payload: settingsPayload });
 
     // --- FLOW LOGIC ---
-    if (state.character && (adventureTypeFromContext === "Randomized" || adventureTypeFromContext === "Immersed")) {
-        // Randomized or Immersed with existing character -> START GAMEPLAY
+    if (state.character && adventureTypeFromContext === "Randomized") {
+        // Randomized with existing character -> START GAMEPLAY
         dispatch({ type: "START_GAMEPLAY" });
         toast({ title: "Adventure Starting!", description: "The world awaits..." });
     } else if (adventureTypeFromContext === "Custom") {
@@ -183,18 +183,23 @@ export function AdventureSetup() {
         dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
         toast({ title: "Adventure Setup Complete!", description: "Now, create your adventurer." });
     } else if (adventureTypeFromContext === "Immersed") {
-        // Immersed flow (original character) -> GENERATE CHARACTER THEN START
+        // Immersed flow (both original and existing) -> GENERATE CHARACTER THEN START
         setIsLoadingImmersedCharacter(true);
-        toast({ title: "Fetching Character Lore...", description: `Preparing ${playerCharacterConcept} from ${universeName}...` });
+        toast({ 
+            title: characterOriginType === 'existing' ? "Fetching Character Lore..." : "Creating Character...", 
+            description: `Preparing ${playerCharacterConcept} from ${universeName}...` 
+        });
         try {
             const aiProfile: GenerateCharacterDescriptionOutput = await generateCharacterDescription({
                  characterDescription: playerCharacterConcept, 
                  isImmersedMode: true, 
                  universeName: universeName, 
                  playerCharacterConcept: playerCharacterConcept,
+                 characterOriginType: characterOriginType, // Pass the origin type
                  userApiKey: state.userGoogleAiApiKey
             });
-            const baseStats = { ...initialCharacterState.stats }; 
+
+            // Random stats within reasonable range (or could be AI-determined later)
             const randomStr = Math.floor(Math.random() * 5) + 3; 
             const randomSta = Math.floor(Math.random() * 5) + 3; 
             const randomWis = 15 - randomStr - randomSta;       
@@ -205,15 +210,21 @@ export function AdventureSetup() {
                 name: playerCharacterConcept, 
                 description: aiProfile.detailedDescription || `Playing as ${playerCharacterConcept} from the universe of ${universeName}.`,
                 class: aiProfile.inferredClass || "Immersed Protagonist", 
-                traits: aiProfile.inferredTraits || [], knowledge: aiProfile.inferredKnowledge || [],
+                traits: aiProfile.inferredTraits || [], 
+                knowledge: aiProfile.inferredKnowledge || [],
                 background: aiProfile.inferredBackground || `A character from the universe of ${universeName}.`,
-                stats: finalStats, aiGeneratedDescription: aiProfile.detailedDescription, 
-                maxHealth: calculateMaxHealth(finalStats), currentHealth: calculateMaxHealth(finalStats),
-                maxStamina: calculateMaxActionStamina(finalStats), currentStamina: calculateMaxActionStamina(finalStats),
+                stats: finalStats, 
+                aiGeneratedDescription: aiProfile.detailedDescription, 
+                maxHealth: calculateMaxHealth(finalStats), 
+                currentHealth: calculateMaxHealth(finalStats),
+                maxStamina: calculateMaxActionStamina(finalStats), 
+                currentStamina: calculateMaxActionStamina(finalStats),
                 maxMana: calculateMaxMana(finalStats, aiProfile.inferredKnowledge || []),
                 currentMana: calculateMaxMana(finalStats, aiProfile.inferredKnowledge || []),
                 learnedSkills: getStarterSkillsForClass(aiProfile.inferredClass || "Immersed Protagonist"),
-                xpToNextLevel: calculateXpToNextLevel(1), skillTree: null, skillTreeStage: 0,
+                xpToNextLevel: calculateXpToNextLevel(1), 
+                skillTree: null, 
+                skillTreeStage: 0,
             };
             
             dispatch({ type: "CREATE_CHARACTER", payload: newCharacter });
@@ -222,12 +233,16 @@ export function AdventureSetup() {
 
         } catch (err) {
             console.error("AdventureSetup: Failed to generate immersed character profile:", err);
-            toast({ title: "Character Profile Error", description: "Could not retrieve character details. Please try again or define an original character.", variant: "destructive" });
+            toast({ title: "Character Profile Error", description: "Could not retrieve character details. Please try again.", variant: "destructive" });
         } finally {
             setIsLoadingImmersedCharacter(false);
         }
+    } else if (adventureTypeFromContext === "Randomized") {
+        // Randomized without existing character -> GO TO CHARACTER CREATION
+        dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
+        toast({ title: "Adventure Setup Complete!", description: "Now, create your adventurer." });
     } else {
-        console.error("AdventureSetup: Unhandled proceed logic. State:", state.status, "AdventureType:", adventureTypeFromContext, "Character exists:", !!state.character);
+        console.error("AdventureSetup: Unhandled proceed logic.");
         toast({ title: "Navigation Error", description: "Could not determine the next step.", variant: "destructive" });
     }
   };

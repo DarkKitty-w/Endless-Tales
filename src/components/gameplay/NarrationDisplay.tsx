@@ -29,7 +29,7 @@ interface NarrationDisplayProps {
     diceType: string;
     error: string | null;
     branchingChoices: NarrateAdventureOutput['branchingChoices'];
-    handlePlayerAction: (action: string) => void;
+    onChoiceClick: (action: string) => void; // renamed from handlePlayerAction
     isInitialLoading: boolean;
     onRetryNarration: () => void;
     isStreaming?: boolean;
@@ -43,7 +43,7 @@ export function NarrationDisplay({
     diceType,
     error,
     branchingChoices,
-    handlePlayerAction,
+    onChoiceClick,
     isInitialLoading,
     onRetryNarration,
     isStreaming = false,
@@ -53,14 +53,15 @@ export function NarrationDisplay({
     const scrollAreaRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = useCallback(() => {
-        setTimeout(() => {
+        // Use requestAnimationFrame to ensure DOM has been painted
+        requestAnimationFrame(() => {
             const scrollAreaElement = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
             if (scrollAreaElement) {
                 scrollAreaElement.scrollTo({ top: scrollAreaElement.scrollHeight, behavior: 'smooth' });
             } else if (scrollEndRef.current) {
                 scrollEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
             }
-        }, 150);
+        });
     }, []);
 
     useEffect(() => {
@@ -167,7 +168,7 @@ export function NarrationDisplay({
                                 variant="outline"
                                 size="sm"
                                 className="text-left justify-start h-auto py-1.5 whitespace-normal"
-                                onClick={() => handlePlayerAction(choice.text)}
+                                onClick={() => onChoiceClick(choice.text)}
                                 disabled={busy}
                             >
                                 <div className="flex flex-col items-start w-full">

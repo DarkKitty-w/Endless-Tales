@@ -218,6 +218,12 @@ export function characterReducer(state: Character | null, action: Action): Chara
             if (progressedToStage !== undefined && progressedToStage > newState.skillTreeStage) {
                 newState.skillTreeStage = progressedToStage;
             }
+
+            // Tick status effects: decrement remaining turns and remove expired ones
+            newState.statusEffects = newState.statusEffects
+                .map(e => ({ ...e, remainingTurns: e.remainingTurns - 1 }))
+                .filter(e => e.remainingTurns > 0);
+
             return newState;
         }
         case "RESPAWN_CHARACTER": {
@@ -240,24 +246,27 @@ export function characterReducer(state: Character | null, action: Action): Chara
 
             const updatedStatusEffects = [...state.statusEffects, weakenedDebuff];
 
+            // Compute effective stats with all active modifiers (including the new debuff)
             const baseStats = { ...state.stats };
-            let modifiedStats = { ...baseStats };
+            let effectiveStats = { ...baseStats };
             for (const effect of updatedStatusEffects) {
                 if (effect.statModifiers) {
-                    modifiedStats.strength = Math.max(1, modifiedStats.strength + (effect.statModifiers.strength ?? 0));
-                    modifiedStats.stamina = Math.max(1, modifiedStats.stamina + (effect.statModifiers.stamina ?? 0));
-                    modifiedStats.wisdom = Math.max(1, modifiedStats.wisdom + (effect.statModifiers.wisdom ?? 0));
+                    effectiveStats.strength = Math.max(1, effectiveStats.strength + (effect.statModifiers.strength ?? 0));
+                    effectiveStats.stamina = Math.max(1, effectiveStats.stamina + (effect.statModifiers.stamina ?? 0));
+                    effectiveStats.wisdom = Math.max(1, effectiveStats.wisdom + (effect.statModifiers.wisdom ?? 0));
                 }
             }
 
-            const newMaxHealth = calculateMaxHealth(modifiedStats);
-            const newMaxStamina = calculateMaxActionStamina(modifiedStats);
-            const newMaxMana = calculateMaxMana(modifiedStats, state.knowledge);
+            const newMaxHealth = calculateMaxHealth(effectiveStats);
+            const newMaxStamina = calculateMaxActionStamina(effectiveStats);
+            const newMaxMana = calculateMaxMana(effectiveStats, state.knowledge);
 
             return {
                 ...state,
                 xp: newXp,
-                stats: modifiedStats,
+                // IMPORTANT: Do NOT overwrite state.stats with effectiveStats.
+                // Base stats remain unchanged; debuff is tracked via statusEffects.
+                stats: state.stats,
                 maxHealth: newMaxHealth,
                 currentHealth: newMaxHealth,
                 maxStamina: newMaxStamina,

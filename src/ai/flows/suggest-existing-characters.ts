@@ -4,11 +4,11 @@
 
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
-import { Type, Schema } from "@google/genai";
 
 export interface SuggestExistingCharactersInput {
   universeName: string;
   userApiKey?: string | null;
+  signal?: AbortSignal;
 }
 
 export interface SuggestExistingCharactersOutput {
@@ -19,12 +19,11 @@ const SuggestExistingCharactersOutputSchema = z.object({
   suggestedNames: z.array(z.string()),
 });
 
-const responseSchema: Schema = {
-    type: Type.OBJECT,
-    properties: {
-        suggestedNames: { type: Type.ARRAY, items: { type: Type.STRING } }
-    },
-    required: ["suggestedNames"]
+const PROVIDER_MODEL_MAP: Record<string, string> = {
+  gemini: 'gemini-2.5-flash',
+  openai: 'gpt-4o',
+  claude: 'claude-3-5-sonnet-20241022',
+  deepseek: 'deepseek-chat',
 };
 
 export async function suggestExistingCharacters(input: SuggestExistingCharactersInput): Promise<SuggestExistingCharactersOutput> {
@@ -33,12 +32,12 @@ export async function suggestExistingCharacters(input: SuggestExistingCharacters
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: PROVIDER_MODEL_MAP.gemini,
           contents: prompt,
           config: {
               responseMimeType: "application/json",
-              responseSchema: responseSchema,
-          }
+          },
+          signal: input.signal,
       });
 
       const text = response.text;
@@ -53,8 +52,11 @@ export async function suggestExistingCharacters(input: SuggestExistingCharacters
           console.warn("Zod validation failed for suggestExistingCharacters, using fallback.", validation.error);
           throw new Error("Invalid response structure");
       }
-  } catch (e) {
-      console.error("AI Suggestion Error:", e);
+  } catch (error: any) {
+      if (error.name === 'AbortError') {
+          throw error;
+      }
+      console.error("AI Suggestion Error:", error);
       return { suggestedNames: ["Hero", "Villain", "Sidekick"] };
   }
 }

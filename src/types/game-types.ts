@@ -1,7 +1,7 @@
 // src/types/game-types.ts
 
 import type { Character } from "./character-types";
-import type { InventoryItem } from "./inventory-types";
+import type { InventoryItem, ItemQuality } from "./inventory-types";
 import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel, AdventureType } from "./adventure-types";
 import type { ProviderType } from "../ai/ai-router";
 
@@ -22,9 +22,9 @@ export interface Location {
   description: string;
   type: 'town' | 'dungeon' | 'wilderness' | 'landmark' | 'unknown';
   discovered: boolean;
-  x: number; // relative position for rendering (0-100)
+  x: number;
   y: number;
-  connectedLocationIds: string[]; // IDs of reachable locations
+  connectedLocationIds: string[];
 }
 
 /** The world map graph. */
@@ -35,6 +35,7 @@ export interface WorldMap {
 
 /** Represents the overall state of the game application. */
 export interface GameState {
+  version: number; // <-- ADDED for schema migration
   status: GameStatus;
   character: Character | null;
   sessionId: string | null;
@@ -55,22 +56,79 @@ export interface GameState {
   selectedThemeId: string;
   isDarkMode: boolean;
   userGoogleAiApiKey: string | null;
-  worldMap: WorldMap; // new field
+  worldMap: WorldMap;
 
   // AI Provider settings
   aiProvider: ProviderType;
   providerApiKeys: Partial<Record<ProviderType, string>>;
 }
 
+
+// ----- Context types for AI prompts -----
+
+export interface GameStateCharacterContext {
+  name: string;
+  class: string;
+  level: number;
+  xp: number;
+  xpToNextLevel: number;
+  stats: {
+    strength: number;
+    stamina: number;
+    wisdom: number;
+  };
+  health: { current: number; max: number };
+  stamina: { current: number; max: number };
+  mana: { current: number; max: number };
+  traits: string[];
+  knowledge: string[];
+  background: string;
+  description: string;
+  aiGeneratedDescription?: string;
+  reputation: Record<string, number>;
+  npcRelationships: Record<string, number>;
+  skillTreeStage: number;
+  skillTreeStageName: string;
+  learnedSkills: string[];
+}
+
+export interface GameStateInventoryItemContext {
+  name: string;
+  description: string;
+  quality?: ItemQuality;
+  weight?: number;
+  durability?: number;
+  magicalEffect?: string;
+}
+
+export interface GameStateAdventureSettingsContext {
+  type: AdventureType;
+  difficulty: DifficultyLevel;
+  permanentDeath: boolean;
+  worldType?: string;
+  mainQuestline?: string;
+  genreTheme?: string;
+  magicSystem?: string;
+  techLevel?: string;
+  dominantTone?: string;
+  startingSituation?: string;
+  combatFrequency?: string;
+  puzzleFrequency?: string;
+  socialFocus?: string;
+  universeName?: string;
+  playerCharacterConcept?: string;
+  characterOriginType?: 'existing' | 'original';
+}
+
 /** Structured context for AI prompts, replacing regex-based string parsing. */
 export interface GameStateContext {
   turn: number;
-  character: { /* ... unchanged ... */ } | null;
-  inventory: Array<{ /* ... unchanged ... */ }>;
-  adventureSettings: { /* ... unchanged ... */ };
+  character: GameStateCharacterContext | null;
+  inventory: GameStateInventoryItemContext[];
+  adventureSettings: GameStateAdventureSettingsContext;
   previousNarration?: string;
   storyLogLength: number;
-  worldMap?: WorldMap; // include in AI context
+  worldMap?: WorldMap;
 }
 
 // Re-export frequently used sub-types

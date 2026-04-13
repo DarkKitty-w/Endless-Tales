@@ -1,4 +1,3 @@
-
 // src/context/reducers/inventoryReducer.ts
 import type { InventoryItem, ItemQuality } from "../../types/inventory-types";
 import type { Action } from "../game-actions";
@@ -15,12 +14,16 @@ export function inventoryReducer(state: InventoryItem[], action: Action): Invent
                 durability: typeof action.payload.durability === 'number' ? action.payload.durability : undefined,
                 magicalEffect: action.payload.magicalEffect || undefined,
             };
-            console.log("Adding validated item:", newItem.name);
+            if (process.env.NODE_ENV === 'development') {
+                console.log("Adding validated item:", newItem.name);
+            }
             return [...state, newItem];
         }
         case "REMOVE_ITEM": {
             const { itemName, quantity = 1 } = action.payload;
-            console.log(`Attempting to remove ${quantity} of item:`, itemName);
+            if (process.env.NODE_ENV === 'development') {
+                console.log(`Attempting to remove ${quantity} of item:`, itemName);
+            }
             const updatedInventory = [...state];
             let removedCount = 0;
             for (let i = updatedInventory.length - 1; i >= 0 && removedCount < quantity; i--) {
@@ -36,7 +39,9 @@ export function inventoryReducer(state: InventoryItem[], action: Action): Invent
         }
         case "UPDATE_ITEM": {
             const { itemName, updates } = action.payload;
-            console.log("Updating item:", itemName, "with", updates);
+            if (process.env.NODE_ENV === 'development') {
+                console.log("Updating item:", itemName, "with", updates);
+            }
             return state.map(item =>
                 item.name === itemName ? { ...item, ...updates } : item
             );
@@ -50,7 +55,9 @@ export function inventoryReducer(state: InventoryItem[], action: Action): Invent
                 durability: typeof item.durability === 'number' ? item.durability : undefined,
                 magicalEffect: item.magicalEffect || undefined,
             }));
-            console.log("Replacing inventory with new list:", validatedNewInventory.map(i => i.name));
+            if (process.env.NODE_ENV === 'development') {
+                console.log("Replacing inventory with new list:", validatedNewInventory.map(i => i.name));
+            }
             return validatedNewInventory;
         }
         case "UPDATE_CRAFTING_RESULT": {
@@ -73,15 +80,10 @@ export function inventoryReducer(state: InventoryItem[], action: Action): Invent
             }
             return updatedInventory;
         }
-         case "START_GAMEPLAY": // Initialize inventory on new game start
-            // Only initialize if not loading a save (reducer handles loading separately)
-             // Check if currentAdventureId exists in the *previous* state or passed somehow
-             // If not resuming, return initialInventory
-             // This logic might need adjustment depending on how START_GAMEPLAY interacts with LOAD_ADVENTURE
-             // For now, assume START_GAMEPLAY implies a new game unless LOAD_ADVENTURE happened before.
-            // A better approach might be to handle inventory init within the CREATE_CHARACTER or LOAD_ADVENTURE reducers.
-            // Let's return initialInventory for now, LOAD_ADVENTURE will overwrite it if needed.
-            return [...initialInventory]; // Return a copy
+        case "START_GAMEPLAY":
+            // Only initialise if inventory is empty (new game).
+            // If already populated (e.g., from LOAD_ADVENTURE), keep it.
+            return state.length === 0 ? [...initialInventory] : state;
         case "RESET_GAME":
             return []; // Clear inventory on reset
         case "LOAD_ADVENTURE":

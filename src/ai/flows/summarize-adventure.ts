@@ -4,11 +4,11 @@
 
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
-import { Type, Schema } from "@google/genai";
 
 export interface SummarizeAdventureInput {
   story: string;
   userApiKey?: string | null;
+  signal?: AbortSignal;
 }
 
 export interface SummarizeAdventureOutput {
@@ -19,12 +19,11 @@ const SummarizeAdventureOutputSchema = z.object({
   summary: z.string(),
 });
 
-const responseSchema: Schema = {
-    type: Type.OBJECT,
-    properties: {
-        summary: { type: Type.STRING }
-    },
-    required: ["summary"]
+const PROVIDER_MODEL_MAP: Record<string, string> = {
+  gemini: 'gemini-2.5-flash',
+  openai: 'gpt-4o',
+  claude: 'claude-3-5-sonnet-20241022',
+  deepseek: 'deepseek-chat',
 };
 
 export async function summarizeAdventure(input: SummarizeAdventureInput): Promise<SummarizeAdventureOutput> {
@@ -33,12 +32,12 @@ export async function summarizeAdventure(input: SummarizeAdventureInput): Promis
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: PROVIDER_MODEL_MAP.gemini,
           contents: prompt,
           config: {
               responseMimeType: "application/json",
-              responseSchema: responseSchema,
-          }
+          },
+          signal: input.signal,
       });
 
       const text = response.text;
@@ -53,8 +52,11 @@ export async function summarizeAdventure(input: SummarizeAdventureInput): Promis
           console.warn("Zod validation failed for summarizeAdventure, using fallback.", validation.error);
           throw new Error("Invalid response structure");
       }
-  } catch (e) {
-      console.error("AI Summary Error:", e);
+  } catch (error: any) {
+      if (error.name === 'AbortError') {
+          throw error;
+      }
+      console.error("AI Summary Error:", error);
       return { summary: "Summary generation failed." };
   }
 }

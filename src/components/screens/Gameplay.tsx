@@ -2,12 +2,12 @@
 "use client";
 
 import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import type { GameState, Character, SkillTree, Reputation, NpcRelationships } from '../../types/game-types';
 import type { StoryLogEntry, DifficultyLevel as AssessedDifficultyLevel, AdventureSettings } from '../../types/adventure-types';
 import type { InventoryItem } from '../../types/inventory-types';
 import type { Skill, CharacterStats } from '../../types/character-types';
 import { useGame } from "../../context/GameContext";
 import { useToast } from "../../hooks/use-toast";
+import type { GameState, Character, SkillTree, Reputation, NpcRelationships, Location } from '../../types/game-types';
 import { updateGameStateString, buildGameStateContext } from "../../context/game-state-utils";
 import type { GameStateContext } from "../../types/game-types";
 import { calculateXpToNextLevel, calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, getStarterSkillsForClass } from "../../lib/gameUtils";
@@ -106,6 +106,41 @@ export function Gameplay() {
     const initialSetupAttemptedRef = useRef<Record<string, boolean>>({});
     const actionInputRef = useRef<ActionInputRef>(null);
     const isMobile = useIsMobile();
+    
+    // --- AbortController for AI requests ---
+    const abortControllerRef = useRef<AbortController | null>(null);
+
+    const createAbortSignal = useCallback(() => {
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        abortControllerRef.current = new AbortController();
+        return abortControllerRef.current.signal;
+    }, []);
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => {
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+            }
+        };
+    }, []);
+    // --- End AbortController ---
+
+    // --- Undo grace period for branching choices ---
+    const pendingActionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const [pendingBranchingAction, setPendingBranchingAction] = useState<{ action: string; isInitial: boolean } | null>(null);
+
+    // Cleanup timeout on unmount
+    useEffect(() => {
+        return () => {
+            if (pendingActionTimeoutRef.current) {
+                clearTimeout(pendingActionTimeoutRef.current);
+            }
+        };
+    }, []);
+    // --- End Undo grace period ---
 
     useEffect(() => {
         if (contextIsGeneratingSkillTree !== localIsGeneratingSkillTree) {
@@ -163,10 +198,15 @@ export function Gameplay() {
             const fullStory = finalLogToSummarize.map((log, index) => `[Turn ${index + 1}]\n${log.narration}`).join("\n\n---\n\n");
             if (fullStory.trim().length > 0) {
                 try {
-                    const summaryResult = await summarizeAdventure({ story: fullStory, userApiKey: userGoogleAiApiKey });
+                    const signal = createAbortSignal();
+                    const summaryResult = await summarizeAdventure({ story: fullStory, userApiKey: userGoogleAiApiKey, signal });
                     summary = summaryResult.summary;
                     toast({ title: "Summary Generated", description: "View your adventure outcome." });
                 } catch (summaryError: any) {
+                    if (summaryError.name === 'AbortError') {
+                        console.log("Summarize adventure aborted");
+                        return;
+                    }
                     console.error("Gameplay: Summarize adventure error:", summaryError);
                     summary = `Could not generate a summary due to an error: ${summaryError.message || 'Unknown error'}. ${summary}`;
                     toast({ title: "Summary Error", description: "Failed to generate summary.", variant: "destructive" });
@@ -175,7 +215,7 @@ export function Gameplay() {
         }
         dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationEntry } });
         setIsEnding(false);
-    }, [loadingPhase, storyLog, character, userGoogleAiApiKey, dispatch, toast]);
+    }, [loadingPhase, storyLog, character, userGoogleAiApiKey, dispatch, toast, createAbortSignal]);
 
     const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
         console.log(`Gameplay: handlePlayerAction called. Action: "${action.substring(0,50)}...", isInitialAction: ${isInitialAction}`);
@@ -195,6 +235,9 @@ export function Gameplay() {
         setError(null); setDiceResult(null); setDiceType("None"); 
         setIsStreaming(false);
         setStreamingText('');
+
+        // Create new AbortSignal (cancels previous in-flight request)
+        const signal = createAbortSignal();
 
         let actionWithDice = action;
         let assessedDifficulty: AssessedDifficultyLevel = "Normal";
@@ -255,23 +298,13 @@ export function Gameplay() {
                     userApiKey: userGoogleAiApiKey,
                     assessDifficulty: needsAssessment,
                     capabilitiesSummary: needsAssessment ? capabilitiesSummary : undefined,
+                    signal, // <-- Pass AbortSignal
                 };
 
                 let narrationResult: NarrateAdventureOutput;
                 
                 if (!needsAssessment) {
-                    // Use streaming for pure narration (no assessment)
                     setIsStreaming(true);
-                    const client = (await import('../../ai/ai-instance')).getClient(userGoogleAiApiKey);
-                    const chunks: string[] = [];
-                    const stream = client.models.generateContentStream({
-                        model: 'gemini-2.5-flash',
-                        contents: '', // will be built inside narrateAdventure
-                        config: { responseMimeType: "application/json" },
-                    });
-                    // Since narrateAdventure handles the prompt, we need to call it differently.
-                    // For simplicity, we'll just call narrateAdventure normally; streaming is internal.
-                    // We'll keep the existing call.
                     narrationResult = await narrateAdventure(inputForAI);
                     setIsStreaming(false);
                     setStreamingText('');
@@ -317,6 +350,64 @@ export function Gameplay() {
                             : 'Learned' as const
                     } : undefined;
 
+                    // Process world map changes from AI
+                    if (narrationResult.worldMapChanges) {
+                        const { newLocations, discoveredLocationIds, updatedLocations } = narrationResult.worldMapChanges;
+                        
+                        if (newLocations) {
+                            for (const loc of newLocations) {
+                                const x = Math.min(100, Math.max(0, loc.x));
+                                const y = Math.min(100, Math.max(0, loc.y));
+                                const connectedIds = loc.connectedTo && loc.connectedTo.length > 0
+                                    ? loc.connectedTo
+                                    : (state.worldMap.currentLocationId ? [state.worldMap.currentLocationId] : []);
+                                dispatch({
+                                    type: "ADD_LOCATION",
+                                    payload: {
+                                        id: loc.id,
+                                        name: loc.name,
+                                        description: loc.description,
+                                        type: loc.type,
+                                        discovered: true,
+                                        x,
+                                        y,
+                                        connectedLocationIds: connectedIds,
+                                    }
+                                });
+                            }
+                        }
+                        
+                        if (discoveredLocationIds) {
+                            for (const id of discoveredLocationIds) {
+                                dispatch({ type: "DISCOVER_LOCATION", payload: id });
+                            }
+                        }
+                        
+                        if (updatedLocations) {
+                            for (const { id, updates } of updatedLocations) {
+                                const validUpdates: Partial<Location> = {};
+                                
+                                if (typeof updates.name === 'string') validUpdates.name = updates.name;
+                                if (typeof updates.description === 'string') validUpdates.description = updates.description;
+                                if (typeof updates.x === 'number') validUpdates.x = updates.x;
+                                if (typeof updates.y === 'number') validUpdates.y = updates.y;
+                                if (updates.discovered === true || updates.discovered === false) validUpdates.discovered = updates.discovered;
+                                if (Array.isArray(updates.connectedLocationIds)) validUpdates.connectedLocationIds = updates.connectedLocationIds;
+                                
+                                if (typeof updates.type === 'string') {
+                                    const typeStr = updates.type;
+                                    if (typeStr === 'town' || typeStr === 'dungeon' || typeStr === 'wilderness' || typeStr === 'landmark' || typeStr === 'unknown') {
+                                        validUpdates.type = typeStr;
+                                    } else {
+                                        validUpdates.type = 'unknown';
+                                    }
+                                }
+                                
+                                dispatch({ type: "UPDATE_LOCATION", payload: { id, updates: validUpdates } });
+                            }
+                        }
+                    }
+
                     const logEntryPayload: StoryLogEntry = {
                         ...narrationResult,
                         timestamp: Date.now(),
@@ -355,10 +446,15 @@ export function Gameplay() {
                 // Original separate calls path omitted for brevity
             }
         } catch (err: any) {
-            console.error("Gameplay: Error in handlePlayerAction:", err);
-            setError(`An unexpected error occurred while processing your action: ${err.message}`);
-            setBranchingChoices(GENERIC_BRANCHING_CHOICES);
-            toast({title: "Unexpected Error", description: "Something went wrong processing your action.", variant: "destructive"});
+            if (err.name === 'AbortError') {
+                console.log("Player action aborted, newer request superseded it.");
+                // Don't show error toast for expected cancellations
+            } else {
+                console.error("Gameplay: Error in handlePlayerAction:", err);
+                setError(`An unexpected error occurred while processing your action: ${err.message}`);
+                setBranchingChoices(GENERIC_BRANCHING_CHOICES);
+                toast({title: "Unexpected Error", description: "Something went wrong processing your action.", variant: "destructive"});
+            }
         } finally {
             if (isInitialAction) {
                 setIsInitialLoading(false);
@@ -369,7 +465,47 @@ export function Gameplay() {
             if (isAssessingDifficulty) setIsAssessingDifficulty(false);
             if (isRollingDice) setIsRollingDice(false);
         }
-    }, [character, inventory, loadingPhase, currentGameStateString, currentNarration, storyLog, adventureSettings, turnCount, dispatch, toast, handleEndAdventure, isCraftingLoading, userGoogleAiApiKey, state.character, gameStateContext]);
+    }, [character, inventory, currentGameStateString, storyLog, adventureSettings, turnCount, dispatch, toast, handleEndAdventure, userGoogleAiApiKey, state.character, gameStateContext, state.worldMap.currentLocationId, createAbortSignal]);
+
+    // Handler for branching choices with undo grace period
+    const handleBranchingChoiceClick = useCallback((action: string, isInitialAction = false) => {
+        // Clear any existing pending action
+        if (pendingActionTimeoutRef.current) {
+            clearTimeout(pendingActionTimeoutRef.current);
+        }
+
+        // Show toast with undo button
+        toast({
+            title: `You chose: "${action}"`,
+            description: "Undo within 3 seconds if this was a misclick.",
+            duration: 3000,
+            action: (
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                        if (pendingActionTimeoutRef.current) {
+                            clearTimeout(pendingActionTimeoutRef.current);
+                            pendingActionTimeoutRef.current = null;
+                        }
+                        setPendingBranchingAction(null);
+                        toast({ title: "Action undone", description: "You can choose a different path." });
+                    }}
+                >
+                    Undo
+                </Button>
+            ),
+        });
+
+        // Set timeout to execute the action after 3 seconds
+        pendingActionTimeoutRef.current = setTimeout(() => {
+            setPendingBranchingAction(null);
+            pendingActionTimeoutRef.current = null;
+            handlePlayerAction(action, isInitialAction);
+        }, 3000);
+
+        setPendingBranchingAction({ action, isInitial: isInitialAction });
+    }, [toast, handlePlayerAction]);
 
     const handleRetryNarration = useCallback(() => {
         let actionToRetry = lastPlayerAction;
@@ -409,7 +545,8 @@ export function Gameplay() {
         toast({ title: "Generating Skill Tree...", description: `Crafting abilities for the ${charClass} class...`, duration: 3000 });
         
         try {
-            const skillTreeResult = await generateSkillTree({ characterClass: charClass, userApiKey: userGoogleAiApiKey });
+            const signal = createAbortSignal();
+            const skillTreeResult = await generateSkillTree({ characterClass: charClass, userApiKey: userGoogleAiApiKey, signal });
             if (skillTreeResult && skillTreeResult.stages.length === 5) { 
                 dispatch({ type: "SET_SKILL_TREE", payload: { class: charClass, skillTree: skillTreeResult } });
                 toast({ title: "Skill Tree Generated!", description: `The path of the ${charClass} is set.` });
@@ -419,6 +556,10 @@ export function Gameplay() {
                 return skillTreeResult;
             }
         } catch (err: any) {
+            if (err.name === 'AbortError') {
+                console.log("Skill tree generation aborted");
+                return null;
+            }
             setError(`Skill Tree Error: ${err.message}. Using default progression.`);
             toast({ title: "Skill Tree Error", description: "Could not generate skill tree. Default progression used.", variant: "destructive" });
             return null; 
@@ -426,7 +567,7 @@ export function Gameplay() {
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false });
             setLocalIsGeneratingSkillTree(false);
         }
-    }, [dispatch, toast, adventureSettings.adventureType, character, contextIsGeneratingSkillTree, userGoogleAiApiKey]);
+    }, [dispatch, toast, adventureSettings.adventureType, character, contextIsGeneratingSkillTree, userGoogleAiApiKey, createAbortSignal]);
 
     useEffect(() => {
         const performInitialSetup = async () => {
@@ -488,7 +629,8 @@ export function Gameplay() {
             desiredItem: goal, usedIngredients: ingredients,
         };
         try {
-            const result: AttemptCraftingOutput = await attemptCrafting(craftingInput);
+            const signal = createAbortSignal();
+            const result: AttemptCraftingOutput = await attemptCrafting({ ...craftingInput, signal });
             toast({ title: result.success ? "Crafting Successful!" : "Crafting Failed!", description: result.message, variant: result.success ? "default" : "destructive", duration: 5000 });
             let narrationText = `You attempted to craft ${goal} using ${ingredients.join(', ')}. ${result.message}`;
             if (result.success && result.craftedItem) {
@@ -497,6 +639,10 @@ export function Gameplay() {
             dispatch({ type: 'UPDATE_CRAFTING_RESULT', payload: { narration: narrationText, consumedItems: result.consumedItems, craftedItem: result.success ? result.craftedItem : null, newGameStateString: currentGameStateString }});
             setIsCraftingDialogOpen(false);
         } catch (err: any) {
+            if (err.name === 'AbortError') {
+                console.log("Crafting aborted");
+                return;
+            }
             let userFriendlyError = `Crafting attempt failed. Please try again later.`;
             if (err.message?.includes('400 Bad Request') || err.message?.includes('invalid argument')) userFriendlyError = "Crafting failed: Invalid materials or combination? The AI was unable to process the request.";
             else if (err.message) userFriendlyError = `Crafting Error: ${err.message.substring(0, 100)}`;
@@ -505,7 +651,7 @@ export function Gameplay() {
         } finally {
             setIsCraftingLoading(false);
         }
-    }, [character, inventory, dispatch, toast, currentGameStateString, isCraftingLoading]);
+    }, [character, inventory, dispatch, toast, currentGameStateString, isCraftingLoading, createAbortSignal]);
 
     const handleConfirmClassChange = useCallback(async (newClass: string) => {
         if (!character || !newClass || isGeneratingSkillTree || adventureSettings.adventureType === "Immersed") return;
@@ -516,7 +662,8 @@ export function Gameplay() {
         try {
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: true });
             setLocalIsGeneratingSkillTree(true);
-            newSkillTreeResult = await generateSkillTree({ characterClass: newClass, userApiKey: userGoogleAiApiKey });
+            const signal = createAbortSignal();
+            newSkillTreeResult = await generateSkillTree({ characterClass: newClass, userApiKey: userGoogleAiApiKey, signal });
             if (newSkillTreeResult && newSkillTreeResult.stages.length === 5) { 
                 dispatch({ type: "CHANGE_CLASS_AND_RESET_SKILLS", payload: { newClass, newSkillTree: newSkillTreeResult } });
                 toast({ title: `Class Changed to ${newClass}!`, description: "Your abilities and progression have been reset." });
@@ -524,12 +671,16 @@ export function Gameplay() {
                 toast({ title: "Class Change Failed", description: `Could not generate skill tree for ${newClass}. Class change aborted.`, variant: "destructive" });
             }
         } catch (err: any) {
+            if (err.name === 'AbortError') {
+                console.log("Class change aborted");
+                return;
+            }
             toast({ title: "Class Change Error", description: `Could not generate skill tree for ${newClass}. Class change aborted.`, variant: "destructive" });
         } finally {
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false });
             setLocalIsGeneratingSkillTree(false);
         }
-    }, [character, dispatch, toast, isGeneratingSkillTree, adventureSettings.adventureType, userGoogleAiApiKey]);
+    }, [character, dispatch, toast, isGeneratingSkillTree, adventureSettings.adventureType, userGoogleAiApiKey, createAbortSignal]);
 
     const handleGoBack = useCallback(() => {
         if (loadingPhase.type !== 'idle') return;
@@ -668,7 +819,7 @@ export function Gameplay() {
                         diceType={diceType}
                         error={error}
                         branchingChoices={branchingChoices}
-                        handlePlayerAction={handlePlayerAction}
+                        onChoiceClick={handleBranchingChoiceClick}
                         isInitialLoading={isInitialLoading}
                         onRetryNarration={handleRetryNarration}
                         isStreaming={isStreaming}
@@ -690,6 +841,7 @@ export function Gameplay() {
                         disabled={anyLoading}
                         isMobile={isMobile}
                         currentAdventureId={currentAdventureId}
+                        aiProvider={state.aiProvider}
                     />
                     <ClassChangeDialog
                         isOpen={!!pendingClassChange}

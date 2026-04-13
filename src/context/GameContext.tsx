@@ -2,10 +2,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import React, { createContext, useContext, useReducer, Dispatch, useEffect, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useReducer, Dispatch, useEffect, useCallback, useMemo, useRef } from "react";
 import type { GameState } from "../types/game-types";
 import type { Action } from "./game-actions";
-import { initialState } from "./game-initial-state";
+import { initialState, CURRENT_STATE_VERSION } from "./game-initial-state";
 import { gameReducer } from "./game-reducer";
 import { THEMES } from "../lib/themes";
 import {
@@ -17,14 +17,37 @@ import {
 import type { SavedAdventure } from "../types/adventure-types";
 import { configureAIRouter, type ProviderType } from "../ai/ai-router";
 
-// New localStorage keys
+// Storage keys
 const AI_PROVIDER_KEY = "endlessTales_aiProvider";
 const PROVIDER_API_KEYS_KEY = "endlessTales_providerApiKeys";
 
 const GameContext = createContext<{ state: GameState; dispatch: Dispatch<Action> } | undefined>(undefined);
 
+/**
+ * Migrate a saved adventure to the current schema version.
+ */
+function migrateSavedAdventure(adventure: any): SavedAdventure {
+  // If no version, treat as version 0 (pre-versioning)
+  const version = adventure.version ?? 0;
+
+  // Clone to avoid mutating original
+  const migrated = { ...adventure };
+
+  // Version 0 -> 1: ensure worldMap exists
+  if (version < 1) {
+    if (!migrated.worldMap) {
+      migrated.worldMap = initialState.worldMap;
+    }
+    // Other future migrations can be added here
+  }
+
+  migrated.version = CURRENT_STATE_VERSION;
+  return migrated as SavedAdventure;
+}
+
 export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const applyTheme = useCallback((themeId: string, isDark: boolean) => {
     const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
@@ -48,9 +71,11 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     try {
       const savedData = localStorage.getItem(SAVED_ADVENTURES_KEY);
       if (savedData) {
-        const loadedAdventures: SavedAdventure[] = JSON.parse(savedData);
+        const loadedAdventures: any[] = JSON.parse(savedData);
         if (Array.isArray(loadedAdventures)) {
-          dispatch({ type: "LOAD_SAVED_ADVENTURES", payload: loadedAdventures });
+          // Migrate each adventure to current schema version
+          const migratedAdventures = loadedAdventures.map(migrateSavedAdventure);
+          dispatch({ type: "LOAD_SAVED_ADVENTURES", payload: migratedAdventures });
         } else {
           localStorage.removeItem(SAVED_ADVENTURES_KEY);
         }
@@ -78,9 +103,9 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
       dispatch({ type: 'SET_AI_PROVIDER', payload: savedProvider });
     }
 
-    // Load provider API keys
+    // Load provider API keys from sessionStorage (moved from localStorage for security)
     try {
-      const savedKeys = localStorage.getItem(PROVIDER_API_KEYS_KEY);
+      const savedKeys = sessionStorage.getItem(PROVIDER_API_KEYS_KEY);
       if (savedKeys) {
         const keys = JSON.parse(savedKeys);
         Object.entries(keys).forEach(([provider, key]) => {
@@ -89,6 +114,10 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
           }
         });
       }
+      // Clean up any old keys from localStorage (migration)
+      if (localStorage.getItem(PROVIDER_API_KEYS_KEY)) {
+        localStorage.removeItem(PROVIDER_API_KEYS_KEY);
+      }
     } catch (e) {
       console.error("Failed to load provider API keys:", e);
     }
@@ -96,47 +125,68 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     dispatch({ type: 'SET_THEME_ID', payload: savedThemeId });
     dispatch({ type: 'SET_DARK_MODE', payload: initialDarkMode });
 
-    applyTheme(savedThemeId, initialDarkMode);
-  }, [applyTheme]);
+    // Theme will be applied by the persistence effect after state update
+  }, []); // Empty deps – runs once
 
-  // Persist theme changes to localStorage
+  // Consolidated persistence hook with debouncing
   useEffect(() => {
-    applyTheme(state.selectedThemeId, state.isDarkMode);
-    localStorage.setItem(THEME_ID_KEY, state.selectedThemeId);
-    localStorage.setItem(THEME_MODE_KEY, state.isDarkMode ? 'dark' : 'light');
-  }, [state.selectedThemeId, state.isDarkMode, applyTheme]);
-
-  // Persist API key to sessionStorage
-  useEffect(() => {
-    if (state.userGoogleAiApiKey) {
-      sessionStorage.setItem(USER_API_KEY_KEY, state.userGoogleAiApiKey);
-    } else if (state.userGoogleAiApiKey === null) {
-      sessionStorage.removeItem(USER_API_KEY_KEY);
+    // Clear any pending debounce
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
     }
-  }, [state.userGoogleAiApiKey]);
 
-  // Persist savedAdventures to localStorage
-  useEffect(() => {
-    localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(state.savedAdventures));
-  }, [state.savedAdventures]);
+    // Debounce writes to avoid excessive I/O
+    debounceTimeoutRef.current = setTimeout(() => {
+      // Theme
+      applyTheme(state.selectedThemeId, state.isDarkMode);
+      localStorage.setItem(THEME_ID_KEY, state.selectedThemeId);
+      localStorage.setItem(THEME_MODE_KEY, state.isDarkMode ? 'dark' : 'light');
 
-  // Persist AI provider preference
-  useEffect(() => {
-    localStorage.setItem(AI_PROVIDER_KEY, state.aiProvider);
-  }, [state.aiProvider]);
+      // Google AI key (sessionStorage)
+      if (state.userGoogleAiApiKey) {
+        sessionStorage.setItem(USER_API_KEY_KEY, state.userGoogleAiApiKey);
+      } else if (state.userGoogleAiApiKey === null) {
+        sessionStorage.removeItem(USER_API_KEY_KEY);
+      }
 
-  // Persist provider API keys
-  useEffect(() => {
-    localStorage.setItem(PROVIDER_API_KEYS_KEY, JSON.stringify(state.providerApiKeys));
-  }, [state.providerApiKeys]);
+      // Saved adventures (localStorage)
+      localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(state.savedAdventures));
 
-  // Synchronize AI router configuration with current state
-  useEffect(() => {
-    configureAIRouter({
-      defaultProvider: state.aiProvider,
-      apiKeys: state.providerApiKeys,
-    });
-  }, [state.aiProvider, state.providerApiKeys]);
+      // AI provider preference (localStorage)
+      localStorage.setItem(AI_PROVIDER_KEY, state.aiProvider);
+
+      // Provider API keys (sessionStorage)
+      if (Object.keys(state.providerApiKeys).length > 0) {
+        sessionStorage.setItem(PROVIDER_API_KEYS_KEY, JSON.stringify(state.providerApiKeys));
+      } else {
+        sessionStorage.removeItem(PROVIDER_API_KEYS_KEY);
+      }
+
+      // Configure AI router
+      configureAIRouter({
+        defaultProvider: state.aiProvider,
+        apiKeys: state.providerApiKeys,
+      });
+
+      debounceTimeoutRef.current = null;
+    }, 300);
+
+    // Cleanup timeout on unmount or before next effect run
+    return () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+        debounceTimeoutRef.current = null;
+      }
+    };
+  }, [
+    state.selectedThemeId,
+    state.isDarkMode,
+    state.userGoogleAiApiKey,
+    state.savedAdventures,
+    state.aiProvider,
+    state.providerApiKeys,
+    applyTheme,
+  ]);
 
   // Debug log (development only)
   if (process.env.NODE_ENV === 'development') {
@@ -147,6 +197,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const relationshipString = state.character ? Object.entries(state.character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'None' : 'N/A';
     const inventoryString = state.inventory.map(i => `${i.name}${i.quality ? ` (${i.quality})` : ''}`).join(', ') || 'Empty';
     console.log("Game State Updated:", {
+      version: state.version,
       status: state.status,
       turn: state.turnCount,
       character: state.character?.name,

@@ -17,12 +17,14 @@ export interface AIProvider {
     model: string;
     contents: string;
     config?: GenerateContentConfig;
+    signal?: AbortSignal;
   }): Promise<GenerateContentResponse>;
 
   generateContentStream(params: {
     model: string;
     contents: string;
     config?: GenerateContentConfig;
+    signal?: AbortSignal;
   }): AsyncIterable<string>;
 }
 
@@ -58,10 +60,12 @@ class GeminiProvider implements AIProvider {
     model,
     contents,
     config,
+    signal,
   }: {
     model: string;
     contents: string;
     config?: GenerateContentConfig;
+    signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -72,6 +76,7 @@ class GeminiProvider implements AIProvider {
         config,
         userApiKey: this.getApiKey(),
       }),
+      signal,
     });
 
     if (!response.ok) {
@@ -89,10 +94,12 @@ class GeminiProvider implements AIProvider {
     model,
     contents,
     config,
+    signal,
   }: {
     model: string;
     contents: string;
     config?: GenerateContentConfig;
+    signal?: AbortSignal;
   }): AsyncIterable<string> {
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -104,6 +111,7 @@ class GeminiProvider implements AIProvider {
         userApiKey: this.getApiKey(),
         stream: true,
       }),
+      signal,
     });
 
     if (!response.ok) {
@@ -154,10 +162,12 @@ class OpenAIProvider implements AIProvider {
     model,
     contents,
     config,
+    signal,
   }: {
     model: string;
     contents: string;
     config?: GenerateContentConfig;
+    signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
     const apiKey = this.getApiKey();
     if (!apiKey) throw new Error('OpenAI API key not configured');
@@ -177,6 +187,7 @@ class OpenAIProvider implements AIProvider {
         top_p: config?.topP,
         response_format: config?.responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
       }),
+      signal,
     });
 
     if (!response.ok) {
@@ -194,10 +205,12 @@ class OpenAIProvider implements AIProvider {
     model,
     contents,
     config,
+    signal,
   }: {
     model: string;
     contents: string;
     config?: GenerateContentConfig;
+    signal?: AbortSignal;
   }): AsyncIterable<string> {
     const apiKey = this.getApiKey();
     if (!apiKey) throw new Error('OpenAI API key not configured');
@@ -216,6 +229,7 @@ class OpenAIProvider implements AIProvider {
         stream: true,
         response_format: config?.responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
       }),
+      signal,
     });
 
     if (!response.ok) {
@@ -264,10 +278,12 @@ class ClaudeProvider implements AIProvider {
     model,
     contents,
     config,
+    signal,
   }: {
     model: string;
     contents: string;
     config?: GenerateContentConfig;
+    signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
     const apiKey = this.getApiKey();
     if (!apiKey) throw new Error('Claude API key not configured');
@@ -286,6 +302,7 @@ class ClaudeProvider implements AIProvider {
         temperature: config?.temperature,
         top_p: config?.topP,
       }),
+      signal,
     });
 
     if (!response.ok) {
@@ -303,10 +320,12 @@ class ClaudeProvider implements AIProvider {
     model,
     contents,
     config,
+    signal,
   }: {
     model: string;
     contents: string;
     config?: GenerateContentConfig;
+    signal?: AbortSignal;
   }): AsyncIterable<string> {
     const apiKey = this.getApiKey();
     if (!apiKey) throw new Error('Claude API key not configured');
@@ -326,6 +345,7 @@ class ClaudeProvider implements AIProvider {
         top_p: config?.topP,
         stream: true,
       }),
+      signal,
     });
 
     if (!response.ok) {
@@ -375,10 +395,12 @@ class DeepSeekProvider implements AIProvider {
     model,
     contents,
     config,
+    signal,
   }: {
     model: string;
     contents: string;
     config?: GenerateContentConfig;
+    signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
     const apiKey = this.getApiKey();
     if (!apiKey) throw new Error('DeepSeek API key not configured');
@@ -396,6 +418,7 @@ class DeepSeekProvider implements AIProvider {
         top_p: config?.topP,
         response_format: config?.responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
       }),
+      signal,
     });
 
     if (!response.ok) {
@@ -413,10 +436,12 @@ class DeepSeekProvider implements AIProvider {
     model,
     contents,
     config,
+    signal,
   }: {
     model: string;
     contents: string;
     config?: GenerateContentConfig;
+    signal?: AbortSignal;
   }): AsyncIterable<string> {
     const apiKey = this.getApiKey();
     if (!apiKey) throw new Error('DeepSeek API key not configured');
@@ -435,6 +460,7 @@ class DeepSeekProvider implements AIProvider {
         stream: true,
         response_format: config?.responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
       }),
+      signal,
     });
 
     if (!response.ok) {
@@ -495,8 +521,6 @@ export class GenAIClient {
   private provider: AIProvider;
 
   constructor(userApiKey?: string | null) {
-    // If an explicit user API key is passed, use it with the default provider.
-    // Otherwise, use the configured provider with its own stored key.
     if (userApiKey) {
       this.provider = getAIProvider(routerConfig.defaultProvider, userApiKey);
     } else {
@@ -509,6 +533,7 @@ export class GenAIClient {
       model: string;
       contents: string;
       config?: GenerateContentConfig;
+      signal?: AbortSignal;
     }): Promise<GenerateContentResponse> => {
       return this.provider.generateContent(params);
     },
@@ -516,6 +541,7 @@ export class GenAIClient {
       model: string;
       contents: string;
       config?: GenerateContentConfig;
+      signal?: AbortSignal;
     }): AsyncIterable<string> => {
       return this.provider.generateContentStream(params);
     },

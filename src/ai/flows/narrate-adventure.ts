@@ -3,7 +3,6 @@
  */
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
-import { Type, Schema } from "@google/genai";
 import type { CharacterStats } from '../../types/character-types';
 import type { AdventureSettings } from '../../types/adventure-types';
 import type { DifficultyLevel, GameStateContext } from '../../types/game-types';
@@ -21,6 +20,7 @@ export interface NarrateAdventureInput {
   userApiKey?: string | null;
   assessDifficulty?: boolean;
   capabilitiesSummary?: string;
+  signal?: AbortSignal;
 }
 
 export interface NarrateAdventureOutput {
@@ -44,6 +44,19 @@ export interface NarrateAdventureOutput {
   assessedDifficulty?: DifficultyLevel;
   diceRoll?: number;
   diceType?: "d6" | "d10" | "d20" | "d100" | "None";
+  worldMapChanges?: {
+    newLocations?: {
+      id: string;
+      name: string;
+      description: string;
+      type: 'town' | 'dungeon' | 'wilderness' | 'landmark' | 'unknown';
+      x: number;
+      y: number;
+      connectedTo?: string[];
+    }[];
+    discoveredLocationIds?: string[];
+    updatedLocations?: { id: string; updates: Partial<{ name: string; description: string; type: string; discovered: boolean; x: number; y: number; connectedLocationIds: string[] }> }[];
+  };
 }
 
 const NarrateAdventureOutputSchema = z.object({
@@ -86,81 +99,45 @@ const NarrateAdventureOutputSchema = z.object({
   assessedDifficulty: z.enum(["Trivial", "Easy", "Normal", "Hard", "Very Hard", "Impossible"]).optional().nullable(),
   diceRoll: z.number().optional().nullable(),
   diceType: z.enum(["d6", "d10", "d20", "d100", "None"]).optional().nullable(),
+  worldMapChanges: z.object({
+    newLocations: z.array(z.object({
+      id: z.string(),
+      name: z.string(),
+      description: z.string(),
+      type: z.enum(['town', 'dungeon', 'wilderness', 'landmark', 'unknown']),
+      x: z.number(),
+      y: z.number(),
+      connectedTo: z.array(z.string()).optional(),
+    })).optional(),
+    discoveredLocationIds: z.array(z.string()).optional(),
+    updatedLocations: z.array(z.object({
+      id: z.string(),
+      updates: z.object({
+        name: z.string().optional(),
+        description: z.string().optional(),
+        type: z.string().optional(),
+        discovered: z.boolean().optional(),
+        x: z.number().optional(),
+        y: z.number().optional(),
+        connectedLocationIds: z.array(z.string()).optional(),
+      }),
+    })).optional(),
+  }).optional().nullable(),
 });
-
-const responseSchema: Schema = {
-    type: Type.OBJECT,
-    properties: {
-        narration: { type: Type.STRING },
-        updatedGameState: { type: Type.STRING },
-        updatedStats: { 
-            type: Type.OBJECT,
-            properties: {
-                strength: { type: Type.NUMBER },
-                stamina: { type: Type.NUMBER },
-                wisdom: { type: Type.NUMBER },
-            },
-            nullable: true
-        },
-        updatedTraits: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
-        updatedKnowledge: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
-        progressedToStage: { type: Type.NUMBER, nullable: true },
-        healthChange: { type: Type.NUMBER, nullable: true },
-        staminaChange: { type: Type.NUMBER, nullable: true },
-        manaChange: { type: Type.NUMBER, nullable: true },
-        xpGained: { type: Type.NUMBER, nullable: true },
-        reputationChange: {
-            type: Type.OBJECT,
-            properties: { faction: { type: Type.STRING }, change: { type: Type.NUMBER } },
-            nullable: true
-        },
-        npcRelationshipChange: {
-            type: Type.OBJECT,
-            properties: { npcName: { type: Type.STRING }, change: { type: Type.NUMBER } },
-            nullable: true
-        },
-        suggestedClassChange: { type: Type.STRING, nullable: true },
-        gainedSkill: {
-            type: Type.OBJECT,
-            properties: {
-                name: { type: Type.STRING },
-                description: { type: Type.STRING },
-                type: { type: Type.STRING },
-                manaCost: { type: Type.NUMBER },
-                staminaCost: { type: Type.NUMBER }
-            },
-            nullable: true
-        },
-        branchingChoices: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: { text: { type: Type.STRING }, consequenceHint: { type: Type.STRING } },
-                required: ["text"]
-            }
-        },
-        dynamicEventTriggered: { type: Type.STRING, nullable: true },
-        isCharacterDefeated: { type: Type.BOOLEAN, nullable: true },
-        assessedDifficulty: {
-            type: Type.STRING,
-            enum: ["Trivial", "Easy", "Normal", "Hard", "Very Hard", "Impossible"],
-            nullable: true
-        },
-        diceRoll: { type: Type.NUMBER, nullable: true },
-        diceType: {
-            type: Type.STRING,
-            enum: ["d6", "d10", "d20", "d100", "None"],
-            nullable: true
-        }
-    },
-    required: ["narration", "updatedGameState", "branchingChoices"]
-};
 
 const FALLBACK_DIFFICULTY_MAP: Record<string, { difficulty: DifficultyLevel; dice: "d6" | "d10" | "d20" | "d100" | "None" }> = {
     easy: { difficulty: "Easy", dice: "d6" },
     normal: { difficulty: "Normal", dice: "d10" },
     hard: { difficulty: "Hard", dice: "d20" },
     nightmare: { difficulty: "Very Hard", dice: "d20" },
+};
+
+// Model mapping per provider – used by the client internally but we pass a default here.
+const PROVIDER_MODEL_MAP: Record<string, string> = {
+  gemini: 'gemini-2.5-flash',
+  openai: 'gpt-4o',
+  claude: 'claude-3-5-sonnet-20241022',
+  deepseek: 'deepseek-chat',
 };
 
 export async function narrateAdventure(input: NarrateAdventureInput): Promise<NarrateAdventureOutput> {
@@ -250,24 +227,28 @@ ${assessmentPromptSection}
 4. Provide exactly 4 branching choices.
 5. Calculate resource changes (health, stamina, mana) if applicable.
 6. If character HP <= 0, set isCharacterDefeated: true.
+7. **World Map Updates:** If the narration involves traveling to a new area, discovering a location, or learning about a place, include worldMapChanges. Provide new locations with unique IDs, descriptive names, coordinates (x,y between 0-100), and connections to existing discovered locations. For already known locations that are revealed, use discoveredLocationIds. To modify existing ones, use updatedLocations.
 
-Output JSON.
+**IMPORTANT:** Respond ONLY with a valid JSON object. Do not include any explanatory text outside the JSON.
 `;
 
   try {
       const client = getClient(input.userApiKey);
       let text: string;
 
+      // Determine model based on configured provider (client handles provider selection internally)
+      const model = 'gemini-2.5-flash'; // This is a fallback; the client will use the appropriate model for the provider.
+      // Note: The GenAIClient uses the provider-specific model internally, so we can pass a generic model name.
+      // We'll use the mapped model for clarity; the client will override if needed.
+
       if (!assessDifficulty) {
-          // Use streaming for pure narration (no assessment)
           const chunks: string[] = [];
           const stream = client.models.generateContentStream({
-              model: 'gemini-1.5-flash-8b',
+              model: PROVIDER_MODEL_MAP.gemini, // The client will map this to the actual provider's model
               contents: prompt,
               config: {
                   responseMimeType: "application/json",
-                  responseSchema: responseSchema,
-              }
+              },
           });
           for await (const chunk of stream) {
               chunks.push(chunk);
@@ -275,12 +256,11 @@ Output JSON.
           text = chunks.join('');
       } else {
           const response = await client.models.generateContent({
-              model: 'gemini-1.5-flash-8b',
+              model: PROVIDER_MODEL_MAP.gemini,
               contents: prompt,
               config: {
                   responseMimeType: "application/json",
-                  responseSchema: responseSchema,
-              }
+              },
           });
           text = response.text;
       }
@@ -308,6 +288,9 @@ Output JSON.
       return output;
 
   } catch (error: any) {
+      if (error.name === 'AbortError') {
+          throw error;
+      }
       console.error("AI Narration Error:", error);
       
       const gameDiffKey = adventureSettings.difficulty?.toLowerCase() ?? 'normal';

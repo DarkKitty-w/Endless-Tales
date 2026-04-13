@@ -4,13 +4,13 @@
 
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
-import { Type, Schema } from "@google/genai";
 import type { SkillTree } from '../../types/game-types';
 import { MAX_SKILL_TREE_STAGES } from '../../lib/constants';
 
 export interface GenerateSkillTreeInput {
   characterClass: string;
   userApiKey?: string | null;
+  signal?: AbortSignal;
 }
 
 export type GenerateSkillTreeOutput = SkillTree;
@@ -33,36 +33,11 @@ const GenerateSkillTreeOutputSchema = z.object({
     stages: z.array(SkillTreeStageSchema).length(MAX_SKILL_TREE_STAGES),
 });
 
-const responseSchema: Schema = {
-    type: Type.OBJECT,
-    properties: {
-        className: { type: Type.STRING },
-        stages: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    stage: { type: Type.NUMBER },
-                    stageName: { type: Type.STRING },
-                    skills: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                name: { type: Type.STRING },
-                                description: { type: Type.STRING },
-                                manaCost: { type: Type.NUMBER, nullable: true },
-                                staminaCost: { type: Type.NUMBER, nullable: true }
-                            },
-                            required: ["name", "description"]
-                        }
-                    }
-                },
-                required: ["stage", "stageName", "skills"]
-            }
-        }
-    },
-    required: ["className", "stages"]
+const PROVIDER_MODEL_MAP: Record<string, string> = {
+  gemini: 'gemini-2.5-flash',
+  openai: 'gpt-4o',
+  claude: 'claude-3-5-sonnet-20241022',
+  deepseek: 'deepseek-chat',
 };
 
 const createFallbackSkillTree = (className: string): SkillTree => ({
@@ -92,12 +67,12 @@ Output JSON.
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: PROVIDER_MODEL_MAP.gemini,
           contents: prompt,
           config: {
               responseMimeType: "application/json",
-              responseSchema: responseSchema,
-          }
+          },
+          signal: input.signal,
       });
 
       const text = response.text;
@@ -113,7 +88,10 @@ Output JSON.
           throw new Error("Invalid response structure");
       }
 
-  } catch (error) {
+  } catch (error: any) {
+      if (error.name === 'AbortError') {
+          throw error;
+      }
       console.error("AI Skill Tree Error:", error);
       return createFallbackSkillTree(input.characterClass);
   }

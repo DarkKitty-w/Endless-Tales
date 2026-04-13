@@ -1,4 +1,3 @@
-
 // src/context/reducers/settingsReducer.ts
 import type { AdventureSettings, DifficultyLevel } from "../../types/adventure-types";
 import type { GameState } from "../../types/game-types";
@@ -54,11 +53,15 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
                 universeName: finalAdventureType === 'Immersed' ? (incomingPayload.universeName ?? state.adventureSettings.universeName ?? "") : "",
                 playerCharacterConcept: finalAdventureType === 'Immersed' ? (incomingPayload.playerCharacterConcept ?? state.adventureSettings.playerCharacterConcept ?? "") : "",
             };
-            console.log("SettingsReducer: SET_ADVENTURE_SETTINGS. Final settings being applied:", JSON.stringify(newSettings));
+            if (process.env.NODE_ENV === 'development') {
+                console.log("SettingsReducer: SET_ADVENTURE_SETTINGS. Final settings being applied:", JSON.stringify(newSettings));
+            }
             return { ...state, adventureSettings: newSettings };
         }
         case "SET_ADVENTURE_TYPE": {
-            console.log("SettingsReducer: Setting adventure type to", action.payload, ". Resetting specific fields.");
+            if (process.env.NODE_ENV === 'development') {
+                console.log("SettingsReducer: Setting adventure type to", action.payload, ". Resetting specific fields.");
+            }
             const preservedDifficulty = state.adventureSettings.difficulty || initialAdventureSettings.difficulty;
             const preservedPermadeath = state.adventureSettings.permanentDeath !== undefined
                 ? state.adventureSettings.permanentDeath
@@ -125,7 +128,9 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
                 universeName: loadedAdventureType === 'Immersed' ? (settingsToLoad?.universeName ?? "") : "",
                 playerCharacterConcept: loadedAdventureType === 'Immersed' ? (settingsToLoad?.playerCharacterConcept ?? "") : "",
              };
-             console.log("SettingsReducer: Loaded adventure settings:", JSON.stringify(validatedSettings));
+             if (process.env.NODE_ENV === 'development') {
+                 console.log("SettingsReducer: Loaded adventure settings:", JSON.stringify(validatedSettings));
+             }
              return {
                 ...state,
                  adventureSettings: validatedSettings

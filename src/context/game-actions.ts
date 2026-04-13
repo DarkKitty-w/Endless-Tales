@@ -1,5 +1,5 @@
 // src/context/game-actions.ts
-import type { GameStatus } from "../types/game-types";
+import type { GameStatus, WorldMap, Location } from "../types/game-types";
 import type {
     Character, SkillTree, ReputationChange, NpcRelationshipChange
 } from "../types/character-types";
@@ -39,8 +39,17 @@ export type Action =
   | { type: "SET_DARK_MODE"; payload: boolean }
   | { type: "SET_USER_API_KEY"; payload: string | null }
   | { type: "UPDATE_CRAFTING_RESULT"; payload: { narration: string; consumedItems: string[]; craftedItem: InventoryItem | null; newGameStateString: string } }
-  | { type: "SET_ADVENTURE_TYPE", payload: AdventureType }
+  | { type: "SET_ADVENTURE_TYPE"; payload: AdventureType }
   | { type: "RESPAWN_CHARACTER"; payload?: { narrationMessage?: string } }
   | { type: "SET_AI_PROVIDER"; payload: ProviderType }
-  | { type: "SET_PROVIDER_API_KEY"; payload: { provider: ProviderType; apiKey: string | null } };
-  // Multiplayer actions removed – see multiplayer-stub.ts
+  | { type: "SET_PROVIDER_API_KEY"; payload: { provider: ProviderType; apiKey: string | null } }
+  // World map actions
+  | { type: "SET_WORLD_MAP"; payload: WorldMap }
+  | { type: "ADD_LOCATION"; payload: Location }
+  | { type: "UPDATE_LOCATION"; payload: { id: string; updates: Partial<Location> } }
+  | { type: "DISCOVER_LOCATION"; payload: string }
+  | { type: "SET_CURRENT_LOCATION"; payload: string }
+  // Multiplayer actions (stubbed for now)
+  | { type: "SET_SESSION_ID"; payload: string | null }
+  | { type: "SET_IS_HOST"; payload: boolean }
+  | { type: "SET_PLAYERS"; payload: string[] };

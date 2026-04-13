@@ -4,11 +4,11 @@
 
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
-import { Type, Schema } from "@google/genai";
 
 export interface SuggestOriginalCharacterConceptsInput {
   universeName: string;
   userApiKey?: string | null;
+  signal?: AbortSignal;
 }
 
 export interface SuggestOriginalCharacterConceptsOutput {
@@ -19,12 +19,11 @@ const SuggestOriginalCharacterConceptsOutputSchema = z.object({
   suggestedConcepts: z.array(z.string()),
 });
 
-const responseSchema: Schema = {
-    type: Type.OBJECT,
-    properties: {
-        suggestedConcepts: { type: Type.ARRAY, items: { type: Type.STRING } }
-    },
-    required: ["suggestedConcepts"]
+const PROVIDER_MODEL_MAP: Record<string, string> = {
+  gemini: 'gemini-2.5-flash',
+  openai: 'gpt-4o',
+  claude: 'claude-3-5-sonnet-20241022',
+  deepseek: 'deepseek-chat',
 };
 
 export async function suggestOriginalCharacterConcepts(input: SuggestOriginalCharacterConceptsInput): Promise<SuggestOriginalCharacterConceptsOutput> {
@@ -33,12 +32,12 @@ export async function suggestOriginalCharacterConcepts(input: SuggestOriginalCha
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: PROVIDER_MODEL_MAP.gemini,
           contents: prompt,
           config: {
               responseMimeType: "application/json",
-              responseSchema: responseSchema,
-          }
+          },
+          signal: input.signal,
       });
 
       const text = response.text;
@@ -53,8 +52,11 @@ export async function suggestOriginalCharacterConcepts(input: SuggestOriginalCha
           console.warn("Zod validation failed for suggestOriginalCharacterConcepts, using fallback.", validation.error);
           throw new Error("Invalid response structure");
       }
-  } catch (e) {
-      console.error("AI Suggestion Error:", e);
+  } catch (error: any) {
+      if (error.name === 'AbortError') {
+          throw error;
+      }
+      console.error("AI Suggestion Error:", error);
       return { suggestedConcepts: ["A wanderer", "A local merchant", "A lost soldier"] };
   }
 }

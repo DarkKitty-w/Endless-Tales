@@ -13,6 +13,8 @@ import {
 } from "../lib/gameUtils";
 import { TOTAL_STAT_POINTS } from "../lib/constants";
 
+export const CURRENT_STATE_VERSION = 1;
+
 const pointsPerStat = Math.floor(TOTAL_STAT_POINTS / 3);
 const remainderPoints = TOTAL_STAT_POINTS % 3;
 
@@ -132,9 +134,13 @@ export const initialWorldMap: WorldMap = {
 };
 
 export const initialState: GameState = {
+  version: CURRENT_STATE_VERSION,
   status: "MainMenu",
   character: null,
-  // Multiplayer state removed – see multiplayer-stub.ts for future reference
+  sessionId: null,
+  players: [],
+  currentPlayerUid: null,
+  isHost: false,
 
   adventureSettings: { ...initialAdventureSettings },
   currentNarration: null,
@@ -150,6 +156,6 @@ export const initialState: GameState = {
   isDarkMode: false,
   userGoogleAiApiKey: null,
   worldMap: initialWorldMap,
-  aiProvider: 'gemini',                     // <-- Add this
+  aiProvider: 'gemini',
   providerApiKeys: {},
 };

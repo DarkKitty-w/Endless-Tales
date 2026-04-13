@@ -3,6 +3,7 @@
 
 import React from "react";
 import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,18 +15,27 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../ui/alert-dialog";
-import { Save, ArrowLeft, Skull, Settings, RefreshCw } from "lucide-react";
+import { Save, ArrowLeft, Skull, Settings, RefreshCw, Sparkles } from "lucide-react";
+import type { ProviderType } from "../../ai/ai-router";
 
 interface GameplayActionsProps {
     onSave: () => void;
     onAbandon: () => void;
     onEnd: () => void;
     onSettings: () => void;
-    onChangeClass: () => void; // new prop
+    onChangeClass: () => void;
     disabled: boolean;
     isMobile: boolean;
     currentAdventureId: string | null;
+    aiProvider: ProviderType;
 }
+
+const PROVIDER_LABELS: Record<ProviderType, string> = {
+    gemini: "Gemini",
+    openai: "OpenAI",
+    claude: "Claude",
+    deepseek: "DeepSeek",
+};
 
 export function GameplayActions({
     onSave,
@@ -35,10 +45,11 @@ export function GameplayActions({
     onChangeClass,
     disabled,
     isMobile,
-    currentAdventureId
+    currentAdventureId,
+    aiProvider,
 }: GameplayActionsProps) {
     return (
-        <div className={`flex-none flex flex-wrap gap-2 mt-4 ${isMobile ? 'justify-center' : 'md:justify-start'}`}>
+        <div className={`flex-none flex flex-wrap gap-2 mt-4 items-center ${isMobile ? 'justify-center' : 'md:justify-start'}`}>
             <Button variant="secondary" size="sm" onClick={onSave} disabled={disabled || !currentAdventureId}>
                 <Save className="mr-1 h-4 w-4" /> Save Game
             </Button>
@@ -69,6 +80,13 @@ export function GameplayActions({
             <Button variant="outline" size="sm" onClick={onChangeClass} disabled={disabled}>
                 <RefreshCw className="mr-1 h-4 w-4" /> Change Class
             </Button>
+            
+            {/* AI Provider Indicator */}
+            <Badge variant="outline" className="ml-0 sm:ml-2 gap-1 text-xs font-normal border-primary/30 bg-primary/5">
+                <Sparkles className="h-3 w-3 text-primary" />
+                <span className="capitalize">{PROVIDER_LABELS[aiProvider]}</span>
+            </Badge>
+
             {!isMobile && (
                 <Button variant="ghost" size="sm" onClick={onSettings}>
                     <Settings className="w-4 h-4 mr-1.5" /> Settings

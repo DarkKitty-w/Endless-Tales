@@ -1,7 +1,6 @@
-
 // src/types/adventure-types.ts
 
-import type { GameStatus } from "./game-types";
+import type { GameStatus, WorldMap } from "./game-types";
 import type { Character, CharacterStats, Skill } from "./character-types";
 import type { InventoryItem } from "./inventory-types";
 
@@ -77,6 +76,7 @@ export interface SavedAdventure {
     statusBeforeSave?: GameStatus;
     adventureSummary?: string | null;
     turnCount?: number;
+    worldMap?: WorldMap; // ← ADDED
 }
 
 /** Structure for Firestore co-op session documents */

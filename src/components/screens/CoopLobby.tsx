@@ -18,17 +18,50 @@ import {
 } from "../../services/multiplayer-service";
 import type { FirestoreCoopSession } from "../../types/adventure-types";
 
+// Feature flag – set to true when Firebase is fully integrated
+const FIREBASE_ENABLED = false;
+
 export function CoopLobby() {
   const { state, dispatch } = useGame();
   const { currentPlayerUid, sessionId, isHost, players: contextPlayers } = state;
   const { toast } = useToast();
 
-  const [isLoading, setIsLoading] = useState(false); // For specific actions like create/join/start
-  const [isAuthLoading, setIsAuthLoading] = useState(true); // For initial auth check
+  const [isLoading, setIsLoading] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [sessionToJoin, setSessionToJoin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sessionData, setSessionData] = useState<FirestoreCoopSession | null>(null);
 
+  // If Firebase is disabled, show a coming soon placeholder.
+  // This prevents any calls to the stubbed Firebase service.
+  if (!FIREBASE_ENABLED) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
+        <CardboardCard className="w-full max-w-md text-center">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-center gap-2">
+              <Users className="w-7 h-7" /> Co‑op Multiplayer
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              Co‑op multiplayer is temporarily disabled while we re‑architect the feature.
+              <br />
+              <br />
+              Stay tuned – it will return in a future update!
+            </p>
+          </CardContent>
+          <CardFooter>
+            <Button onClick={() => dispatch({ type: "RESET_GAME" })} className="w-full">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Main Menu
+            </Button>
+          </CardFooter>
+        </CardboardCard>
+      </div>
+    );
+  }
+
+  // ---------- Original Firebase‑enabled logic below ----------
   // Effect to manage the initial authentication loading state
   useEffect(() => {
     if (currentPlayerUid) {

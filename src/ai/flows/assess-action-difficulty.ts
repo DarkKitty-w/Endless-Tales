@@ -4,7 +4,6 @@
 
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
-import { Type, Schema } from "@google/genai";
 import type { DifficultyLevel, GameStateContext } from '../../types/game-types';
 import { formatGameStateContextForPrompt } from '../../context/game-state-utils';
 
@@ -20,6 +19,7 @@ export interface AssessActionDifficultyInput {
     gameDifficulty: string; // e.g., "Easy", "Normal", "Hard", "Nightmare"
     turnCount: number;
     userApiKey?: string | null;
+    signal?: AbortSignal;
 }
 
 export interface AssessActionDifficultyOutput {
@@ -35,33 +35,20 @@ const AssessActionDifficultyOutputSchema = z.object({
     suggestedDice: z.enum(["d6", "d10", "d20", "d100", "None"]),
 });
 
-const responseSchema: Schema = {
-    type: Type.OBJECT,
-    properties: {
-        difficulty: {
-            type: Type.STRING,
-            enum: ["Trivial", "Easy", "Normal", "Hard", "Very Hard", "Impossible"],
-            description: "The assessed difficulty level."
-        },
-        reasoning: {
-            type: Type.STRING,
-            description: "Explanation for the difficulty."
-        },
-        suggestedDice: {
-            type: Type.STRING,
-            enum: ["d6", "d10", "d20", "d100", "None"],
-            description: "Suggested dice to roll."
-        }
-    },
-    required: ["difficulty", "reasoning", "suggestedDice"]
-};
-
 // Lookup table for fallback values when AI assessment fails
 const FALLBACK_DIFFICULTY_MAP: Record<string, { difficulty: DifficultyLevel; dice: "d6" | "d10" | "d20" | "d100" | "None" }> = {
     easy: { difficulty: "Easy", dice: "d6" },
     normal: { difficulty: "Normal", dice: "d10" },
     hard: { difficulty: "Hard", dice: "d20" },
     nightmare: { difficulty: "Very Hard", dice: "d20" },
+};
+
+// Model mapping per provider
+const PROVIDER_MODEL_MAP: Record<string, string> = {
+  gemini: 'gemini-2.5-flash',
+  openai: 'gpt-4o',
+  claude: 'claude-3-5-sonnet-20241022',
+  deepseek: 'deepseek-chat',
 };
 
 export async function assessActionDifficulty(input: AssessActionDifficultyInput): Promise<AssessActionDifficultyOutput> {
@@ -101,12 +88,12 @@ Output JSON only.
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: PROVIDER_MODEL_MAP.gemini, // client will map to actual provider model
           contents: prompt,
           config: {
               responseMimeType: "application/json",
-              responseSchema: responseSchema,
-          }
+          },
+          signal: input.signal,
       });
 
       const text = response.text;
@@ -122,7 +109,10 @@ Output JSON only.
           throw new Error("Invalid response structure");
       }
 
-  } catch (error) {
+  } catch (error: any) {
+      if (error.name === 'AbortError') {
+          throw error;
+      }
       console.error("AI Error in assessActionDifficulty:", error);
       
       // Use lookup table for fallback based on game difficulty setting

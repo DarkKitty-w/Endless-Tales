@@ -4,15 +4,15 @@
 
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
-import { Type, Schema } from "@google/genai";
 
 export interface GenerateCharacterDescriptionInput {
   characterDescription: string;
   isImmersedMode?: boolean;
   universeName?: string;
   playerCharacterConcept?: string;
-  characterOriginType?: 'original' | 'existing'; // new field
+  characterOriginType?: 'original' | 'existing';
   userApiKey?: string | null;
+  signal?: AbortSignal;
 }
 
 export interface GenerateCharacterDescriptionOutput {
@@ -31,16 +31,11 @@ const GenerateCharacterDescriptionOutputSchema = z.object({
   inferredBackground: z.string(),
 });
 
-const responseSchema: Schema = {
-    type: Type.OBJECT,
-    properties: {
-        detailedDescription: { type: Type.STRING },
-        inferredClass: { type: Type.STRING },
-        inferredTraits: { type: Type.ARRAY, items: { type: Type.STRING } },
-        inferredKnowledge: { type: Type.ARRAY, items: { type: Type.STRING } },
-        inferredBackground: { type: Type.STRING }
-    },
-    required: ["detailedDescription", "inferredClass", "inferredTraits", "inferredKnowledge", "inferredBackground"]
+const PROVIDER_MODEL_MAP: Record<string, string> = {
+  gemini: 'gemini-2.5-flash',
+  openai: 'gpt-4o',
+  claude: 'claude-3-5-sonnet-20241022',
+  deepseek: 'deepseek-chat',
 };
 
 export async function generateCharacterDescription(
@@ -95,12 +90,12 @@ Output JSON matching the schema.
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: PROVIDER_MODEL_MAP.gemini,
           contents: prompt,
           config: {
               responseMimeType: "application/json",
-              responseSchema: responseSchema,
-          }
+          },
+          signal: input.signal,
       });
 
       const text = response.text;
@@ -116,7 +111,10 @@ Output JSON matching the schema.
           throw new Error("Invalid response structure");
       }
 
-  } catch (error) {
+  } catch (error: any) {
+      if (error.name === 'AbortError') {
+          throw error;
+      }
       console.error("AI Character Generation Error:", error);
       return {
           detailedDescription: `AI generation failed for: "${input.characterDescription}".`,

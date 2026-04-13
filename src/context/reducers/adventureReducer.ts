@@ -4,7 +4,9 @@ import type { StoryLogEntry, SavedAdventure } from "../../types/adventure-types"
 import type { Action } from "../game-actions";
 import { initialState, initialInventory, initialWorldMap } from "../game-initial-state";
 import { generateAdventureId } from "../../lib/gameUtils";
-import { updateGameStateString } from "../game-state-utils";
+import { buildGameStateContext, formatGameStateContextForPrompt } from "../game-state-utils";
+
+const MAX_LOG_SIZE = 200; // Prevent unbounded memory growth
 
 export function adventureReducer(state: GameState, action: Action): GameState {
     switch (action.type) {
@@ -14,16 +16,38 @@ export function adventureReducer(state: GameState, action: Action): GameState {
         case "START_GAMEPLAY": {
             if (!state.character) {
                 console.error("AdventureReducer: Cannot start gameplay: Character is null. Resetting to Main Menu.");
-                return { ...initialState, savedAdventures: state.savedAdventures, selectedThemeId: state.selectedThemeId, isDarkMode: state.isDarkMode, userGoogleAiApiKey: state.userGoogleAiApiKey };
+                return {
+                    ...initialState,
+                    savedAdventures: state.savedAdventures,
+                    selectedThemeId: state.selectedThemeId,
+                    isDarkMode: state.isDarkMode,
+                    userGoogleAiApiKey: state.userGoogleAiApiKey,
+                    aiProvider: state.aiProvider,
+                    providerApiKeys: state.providerApiKeys,
+                };
             }
             if (!state.adventureSettings.adventureType) {
                 console.error("AdventureReducer: Cannot start gameplay: Adventure type is not set. Resetting to Main Menu.");
-                return { ...initialState, savedAdventures: state.savedAdventures, selectedThemeId: state.selectedThemeId, isDarkMode: state.isDarkMode, userGoogleAiApiKey: state.userGoogleAiApiKey };
+                return {
+                    ...initialState,
+                    savedAdventures: state.savedAdventures,
+                    selectedThemeId: state.selectedThemeId,
+                    isDarkMode: state.isDarkMode,
+                    userGoogleAiApiKey: state.userGoogleAiApiKey,
+                    aiProvider: state.aiProvider,
+                    providerApiKeys: state.providerApiKeys,
+                };
             }
             const adventureId = state.currentAdventureId || generateAdventureId();
             const turnCount = state.turnCount > 0 ? state.turnCount : 0;
             const currentInventory = state.inventory.length > 0 ? state.inventory : [...initialInventory];
-            const initialGameState = updateGameStateString( state.storyLog.length > 0 ? state.currentGameStateString : "The adventure is about to begin...", state.character, currentInventory, turnCount );
+            const initialGameState = state.storyLog.length > 0
+                ? state.currentGameStateString
+                : formatGameStateContextForPrompt(buildGameStateContext({
+                    ...state,
+                    inventory: currentInventory,
+                    turnCount,
+                }));
             
             return {
                 ...state,
@@ -38,15 +62,14 @@ export function adventureReducer(state: GameState, action: Action): GameState {
 
         case "UPDATE_NARRATION": {
             const newLogEntry: StoryLogEntry = { ...action.payload, timestamp: action.payload.timestamp || Date.now() };
-            const newLog = [...state.storyLog, newLogEntry];
+            const newLog = [...state.storyLog, newLogEntry].slice(-MAX_LOG_SIZE);
             const newTurnCount = state.turnCount + 1;
             
-            const updatedGameState = updateGameStateString(
-                action.payload.updatedGameState,
-                state.character,
-                state.inventory,
-                newTurnCount
-            );
+            const updatedGameState = formatGameStateContextForPrompt(buildGameStateContext({
+                ...state,
+                storyLog: newLog,
+                turnCount: newTurnCount,
+            }));
 
             return {
                 ...state,
@@ -60,15 +83,16 @@ export function adventureReducer(state: GameState, action: Action): GameState {
         case "RESPAWN_CHARACTER": {
             if (!state.character) return state;
             const respawnMessage = action.payload?.narrationMessage || "You had a narrow escape and have recovered!";
+            const updatedGameState = formatGameStateContextForPrompt(buildGameStateContext(state));
             const respawnLogEntry: StoryLogEntry = {
                 narration: respawnMessage,
-                updatedGameState: updateGameStateString(state.currentGameStateString, state.character, state.inventory, state.turnCount),
+                updatedGameState,
                 timestamp: Date.now(),
             };
             
             return {
                 ...state,
-                storyLog: [...state.storyLog, respawnLogEntry],
+                storyLog: [...state.storyLog, respawnLogEntry].slice(-MAX_LOG_SIZE),
                 currentNarration: respawnLogEntry,
             };
         }
@@ -77,11 +101,14 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             const { narration, newGameStateString: providedGameState } = action.payload;
             const newTurnCount = state.turnCount + 1;
             if (!state.character) return { ...state, turnCount: newTurnCount };
-            const finalGameStateString = updateGameStateString(providedGameState || state.currentGameStateString, state.character, state.inventory, newTurnCount);
+            const finalGameStateString = providedGameState || formatGameStateContextForPrompt(buildGameStateContext({
+                ...state,
+                turnCount: newTurnCount,
+            }));
             const craftingLogEntry: StoryLogEntry = { narration: narration, updatedGameState: finalGameStateString, timestamp: Date.now() };
             return {
                 ...state,
-                storyLog: [...state.storyLog, craftingLogEntry],
+                storyLog: [...state.storyLog, craftingLogEntry].slice(-MAX_LOG_SIZE),
                 currentNarration: craftingLogEntry,
                 currentGameStateString: finalGameStateString,
                 turnCount: newTurnCount,
@@ -105,7 +132,13 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                 finalInventoryState = state.inventory;
                 finalTurnCount = state.turnCount + 1;
                 if (finalCharacterState) {
-                    finalGameState = updateGameStateString(action.payload.finalNarration.updatedGameState, finalCharacterState, finalInventoryState, finalTurnCount);
+                    finalGameState = formatGameStateContextForPrompt(buildGameStateContext({
+                        ...state,
+                        storyLog: finalLog,
+                        turnCount: finalTurnCount,
+                        inventory: finalInventoryState,
+                        character: finalCharacterState,
+                    }));
                 }
             }
 
@@ -122,7 +155,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                     currentGameStateString: finalGameState,
                     inventory: finalInventoryState,
                     statusBeforeSave: "AdventureSummary",
-                    adventureSummary: action.payload.summary,
+                    adventureSummary: action.payload.summary ?? null,
                     turnCount: finalTurnCount,
                 };
                 updatedSavedAdventures = state.savedAdventures.filter(adv => adv.id !== endedAdventure.id);
@@ -132,7 +165,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                 ...state,
                 status: "AdventureSummary",
                 character: finalCharacterState,
-                adventureSummary: action.payload.summary,
+                adventureSummary: action.payload.summary ?? null,
                 storyLog: finalLog,
                 inventory: finalInventoryState,
                 turnCount: finalTurnCount,
@@ -156,7 +189,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                 character: state.character,
                 adventureSettings: state.adventureSettings,
                 storyLog: cappedStoryLog,
-                currentGameStateString: updateGameStateString(state.currentGameStateString, state.character, state.inventory, state.turnCount),
+                currentGameStateString: formatGameStateContextForPrompt(buildGameStateContext(state)),
                 inventory: state.inventory,
                 statusBeforeSave: state.status,
                 adventureSummary: state.adventureSummary,
@@ -177,6 +210,8 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                 selectedThemeId: state.selectedThemeId,
                 isDarkMode: state.isDarkMode,
                 userGoogleAiApiKey: state.userGoogleAiApiKey,
+                aiProvider: state.aiProvider,
+                providerApiKeys: state.providerApiKeys,
                 status: statusToLoad,
                 character: adventureToLoad.character,
                 adventureSettings: adventureToLoad.adventureSettings,
@@ -185,10 +220,10 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                 turnCount: adventureToLoad.turnCount || 0,
                 currentGameStateString: adventureToLoad.currentGameStateString,
                 currentNarration: adventureToLoad.storyLog.length > 0 ? adventureToLoad.storyLog[adventureToLoad.storyLog.length - 1] : null,
-                adventureSummary: adventureToLoad.adventureSummary,
+                adventureSummary: adventureToLoad.adventureSummary ?? null,
                 currentAdventureId: adventureToLoad.id,
                 isGeneratingSkillTree: false,
-                worldMap: adventureToLoad.worldMap || initialWorldMap, // Load map if saved
+                worldMap: adventureToLoad.worldMap || initialWorldMap,
             };
         }
 
