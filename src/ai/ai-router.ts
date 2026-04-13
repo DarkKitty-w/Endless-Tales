@@ -28,7 +28,7 @@ export interface AIProvider {
   }): AsyncIterable<string>;
 }
 
-export type ProviderType = 'gemini' | 'openai' | 'claude' | 'deepseek';
+export type ProviderType = 'gemini' | 'openai' | 'claude' | 'deepseek' | 'webllm';
 
 export interface AIRouterConfig {
   defaultProvider: ProviderType;
@@ -497,6 +497,243 @@ class DeepSeekProvider implements AIProvider {
   }
 }
 
+// --- WebLLM Provider (Local AI) - Optional, lazy-loaded ---
+
+let webllmEngineCreator: any = null;
+let webllmLoadAttempted = false;
+let webllmAvailable = false;
+let webllmLoadPromise: Promise<any> | null = null;
+
+async function loadWebLLM(): Promise<any> {
+  if (webllmEngineCreator) return webllmEngineCreator;
+  if (webllmLoadPromise) return webllmLoadPromise;
+
+  webllmLoadAttempted = true;
+  console.log('[WebLLM] Attempting to load @mlc-ai/web-llm...');
+
+  webllmLoadPromise = (async () => {
+    try {
+      const module = await import('@mlc-ai/web-llm');
+      webllmEngineCreator = module.CreateWebWorkerMLCEngine;
+      webllmAvailable = true;
+      console.log('[WebLLM] Package loaded successfully');
+      return webllmEngineCreator;
+    } catch (e) {
+      console.warn('[WebLLM] Package not available:', e);
+      webllmAvailable = false;
+      throw e;
+    } finally {
+      webllmLoadPromise = null;
+    }
+  })();
+
+  return webllmLoadPromise;
+}
+
+export function isWebLLMAvailable(): boolean {
+  if (!webllmLoadAttempted) {
+    loadWebLLM().catch(() => {});
+  }
+  return webllmAvailable;
+}
+
+interface WebLLMEngine {
+  reload: (modelId: string, config?: any) => Promise<void>;
+  chat: {
+    completions: {
+      create: (params: any) => Promise<any>;
+      createStream: (params: any) => AsyncIterable<any>;
+    };
+  };
+}
+
+class WebLLMProvider implements AIProvider {
+  private static engine: WebLLMEngine | null = null;
+  private static currentModel: string = '';
+  private static loadingPromise: Promise<WebLLMEngine> | null = null;
+  private static persistence: 'temporary' | 'persistent' = 'temporary';
+  private static progressCallback: ((progress: number, text: string) => void) | null = null;
+
+  constructor(private options?: { model?: string; persistence?: 'temporary' | 'persistent'; onProgress?: (progress: number, text: string) => void }) {
+    if (options?.persistence) {
+      WebLLMProvider.persistence = options.persistence;
+    }
+    if (options?.onProgress) {
+      WebLLMProvider.progressCallback = options.onProgress;
+    }
+  }
+
+  private async getEngine(modelId: string): Promise<WebLLMEngine> {
+    const CreateWebWorkerMLCEngine = await loadWebLLM();
+    if (!CreateWebWorkerMLCEngine) {
+      throw new Error('WebLLM engine not available');
+    }
+
+    const effectiveModel = modelId || 'Llama-3.2-3B-Instruct-q4f16_1-MLC';
+    
+    if (WebLLMProvider.engine && WebLLMProvider.currentModel === effectiveModel) {
+      return WebLLMProvider.engine;
+    }
+
+    if (WebLLMProvider.loadingPromise) {
+      return WebLLMProvider.loadingPromise;
+    }
+
+    WebLLMProvider.loadingPromise = (async () => {
+      try {
+        const engineConfig: any = {
+          initProgressCallback: (report: { progress: number; text: string }) => {
+            if (WebLLMProvider.progressCallback) {
+              WebLLMProvider.progressCallback(report.progress, report.text);
+            }
+          },
+        };
+
+        if (WebLLMProvider.persistence === 'persistent') {
+          engineConfig.appConfig = {
+            useIndexedDBCache: true,
+          };
+        } else {
+          engineConfig.appConfig = {
+            useIndexedDBCache: false,
+          };
+        }
+
+        const engine = await CreateWebWorkerMLCEngine(
+          new Worker(new URL('@mlc-ai/web-llm/lib/worker.js', import.meta.url), { type: 'module' }),
+          effectiveModel,
+          engineConfig
+        );
+
+        WebLLMProvider.engine = engine as unknown as WebLLMEngine;
+        WebLLMProvider.currentModel = effectiveModel;
+        return WebLLMProvider.engine;
+      } catch (error) {
+        WebLLMProvider.loadingPromise = null;
+        throw error;
+      } finally {
+        WebLLMProvider.loadingPromise = null;
+      }
+    })();
+
+    return WebLLMProvider.loadingPromise;
+  }
+
+  async generateContent({
+    model,
+    contents,
+    config,
+    signal,
+  }: {
+    model: string;
+    contents: string;
+    config?: GenerateContentConfig;
+    signal?: AbortSignal;
+  }): Promise<GenerateContentResponse> {
+    const engine = await this.getEngine(model);
+    
+    const messages = [{ role: 'user', content: contents }];
+    
+    const response = await engine.chat.completions.create({
+      messages,
+      temperature: config?.temperature,
+      top_p: config?.topP,
+      stream: false,
+    });
+
+    const text = response.choices?.[0]?.message?.content;
+    if (!text) throw new Error('No text returned from WebLLM');
+    return { text };
+  }
+
+  async *generateContentStream({
+    model,
+    contents,
+    config,
+    signal,
+  }: {
+    model: string;
+    contents: string;
+    config?: GenerateContentConfig;
+    signal?: AbortSignal;
+  }): AsyncIterable<string> {
+    const engine = await this.getEngine(model);
+    
+    const messages = [{ role: 'user', content: contents }];
+    
+    const stream = await engine.chat.completions.createStream({
+      messages,
+      temperature: config?.temperature,
+      top_p: config?.topP,
+    });
+
+    for await (const chunk of stream) {
+      if (signal?.aborted) break;
+      const content = chunk.choices?.[0]?.delta?.content;
+      if (content) yield content;
+    }
+  }
+
+  static async getAvailableModels(): Promise<{ id: string; name: string; size: string }[]> {
+    return [
+      { id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC', name: 'Llama 3.2 3B', size: '~2 GB' },
+      { id: 'Phi-3-mini-4k-instruct-q4f16_1-MLC', name: 'Phi-3 Mini', size: '~2.5 GB' },
+      { id: 'Mistral-7B-Instruct-v0.3-q4f16_1-MLC', name: 'Mistral 7B', size: '~4 GB' },
+      { id: 'Gemma-2B-it-q4f16_1-MLC', name: 'Gemma 2B', size: '~1.5 GB' },
+    ];
+  }
+
+  static async checkHardware(): Promise<{ webgpu: boolean; memory: number }> {
+    const webgpu = 'gpu' in navigator;
+    const memory = (navigator as any).deviceMemory || 4;
+    return { webgpu, memory };
+  }
+
+  static async clearCache(): Promise<void> {
+    if (!webllmAvailable) {
+      throw new Error('WebLLM not available');
+    }
+    try {
+      // Delete IndexedDB databases used by WebLLM
+      const dbs = await indexedDB.databases();
+      for (const db of dbs) {
+        if (db.name?.includes('webllm') || db.name?.includes('mlc')) {
+          indexedDB.deleteDatabase(db.name!);
+        }
+      }
+      // Also clear Cache Storage if used
+      if ('caches' in window) {
+        const cacheNames = await caches.keys();
+        for (const name of cacheNames) {
+          if (name.includes('webllm') || name.includes('mlc')) {
+            await caches.delete(name);
+          }
+        }
+      }
+      WebLLMProvider.engine = null;
+      WebLLMProvider.currentModel = '';
+      console.log('[WebLLM] Cache cleared');
+    } catch (e) {
+      console.error('[WebLLM] Failed to clear cache:', e);
+      throw e;
+    }
+  }
+}
+
+export async function clearWebLLMCache(): Promise<void> {
+  await WebLLMProvider.clearCache();
+}
+
+// Stub provider for when WebLLM is not available
+class WebLLMStubProvider implements AIProvider {
+  async generateContent(): Promise<GenerateContentResponse> {
+    throw new Error('WebLLM is not installed. Please install @mlc-ai/web-llm to use local AI.');
+  }
+  async *generateContentStream(): AsyncIterable<string> {
+    throw new Error('WebLLM is not installed. Please install @mlc-ai/web-llm to use local AI.');
+  }
+}
+
 export function getAIProvider(
   providerType: ProviderType = routerConfig.defaultProvider,
   apiKey?: string | null
@@ -512,6 +749,12 @@ export function getAIProvider(
       return new ClaudeProvider(effectiveApiKey);
     case 'deepseek':
       return new DeepSeekProvider(effectiveApiKey);
+    case 'webllm':
+      if (webllmAvailable) {
+        return new WebLLMProvider();
+      } else {
+        return new WebLLMStubProvider();
+      }
     default:
       throw new Error(`Unsupported AI provider: ${providerType}`);
   }
@@ -520,11 +763,19 @@ export function getAIProvider(
 export class GenAIClient {
   private provider: AIProvider;
 
-  constructor(userApiKey?: string | null) {
+  constructor(userApiKey?: string | null, options?: any) {
     if (userApiKey) {
       this.provider = getAIProvider(routerConfig.defaultProvider, userApiKey);
     } else {
-      this.provider = getAIProvider(routerConfig.defaultProvider);
+      if (routerConfig.defaultProvider === 'webllm' && options) {
+        if (webllmAvailable) {
+          this.provider = new WebLLMProvider(options);
+        } else {
+          this.provider = new WebLLMStubProvider();
+        }
+      } else {
+        this.provider = getAIProvider(routerConfig.defaultProvider);
+      }
     }
   }
 
@@ -548,6 +799,8 @@ export class GenAIClient {
   };
 }
 
-export function getClient(userApiKey?: string | null): GenAIClient {
-  return new GenAIClient(userApiKey);
+export function getClient(userApiKey?: string | null, options?: any): GenAIClient {
+  return new GenAIClient(userApiKey, options);
 }
+
+export { WebLLMProvider };

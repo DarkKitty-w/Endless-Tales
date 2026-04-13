@@ -6,6 +6,7 @@ import type { StoryLogEntry, DifficultyLevel as AssessedDifficultyLevel, Adventu
 import type { InventoryItem } from '../../types/inventory-types';
 import type { Skill, CharacterStats } from '../../types/character-types';
 import { useGame } from "../../context/GameContext";
+import { AIStatusPanel } from '../../components/gameplay/AIStatusPanel';
 import { useToast } from "../../hooks/use-toast";
 import type { GameState, Character, SkillTree, Reputation, NpcRelationships, Location } from '../../types/game-types';
 import { updateGameStateString, buildGameStateContext } from "../../context/game-state-utils";
@@ -832,6 +833,7 @@ export function Gameplay() {
                         onCraft={() => setIsCraftingDialogOpen(true)}
                         disabled={anyLoading || character.class === 'admin000'}
                     />
+                    <AIStatusPanel />
                     <GameplayActions
                         onSave={handleSaveGame}
                         onAbandon={handleGoBack}
