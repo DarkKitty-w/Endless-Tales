@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import type { DifficultyLevel, GameStateContext } from '../../types/game-types';
 import { formatGameStateContextForPrompt } from '../../context/game-state-utils';
+import { processAiResponse } from '../../lib/utils';
 
 export type { DifficultyLevel };
 
@@ -43,14 +44,6 @@ const FALLBACK_DIFFICULTY_MAP: Record<string, { difficulty: DifficultyLevel; dic
     nightmare: { difficulty: "Very Hard", dice: "d20" },
 };
 
-// Model mapping per provider
-const PROVIDER_MODEL_MAP: Record<string, string> = {
-  gemini: 'gemini-2.5-flash',
-  openai: 'gpt-4o',
-  claude: 'claude-3-5-sonnet-20241022',
-  deepseek: 'deepseek-chat',
-};
-
 export async function assessActionDifficulty(input: AssessActionDifficultyInput): Promise<AssessActionDifficultyOutput> {
   if (process.env.NODE_ENV === 'development' && input.characterClass === 'admin000') {
     return {
@@ -82,47 +75,53 @@ ${stateSummary}
 Determine the difficulty: Trivial, Easy, Normal, Hard, Very Hard, Impossible.
 Suggest a dice type: d6, d10, d20, d100, None.
 
-Output JSON only.
+Return ONLY a valid JSON object. No explanations, no markdown formatting.
 `;
 
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: PROVIDER_MODEL_MAP.gemini, // client will map to actual provider model
           contents: prompt,
-          config: {
-              responseMimeType: "application/json",
-          },
+          config: { responseMimeType: "application/json" },
           signal: input.signal,
       });
 
       const text = response.text;
       if (!text) throw new Error("No text returned from AI");
-      
-      const parsed = JSON.parse(text);
-      const validation = AssessActionDifficultyOutputSchema.safeParse(parsed);
-      
-      if (validation.success) {
-          return validation.data;
-      } else {
-          console.warn("Zod validation failed for assessActionDifficulty, using fallback.", validation.error);
-          throw new Error("Invalid response structure");
-      }
+
+      // Build fallback based on game difficulty
+      const gameDiffKey = input.gameDifficulty?.toLowerCase() ?? 'normal';
+      const fallbackMapping = FALLBACK_DIFFICULTY_MAP[gameDiffKey] ?? FALLBACK_DIFFICULTY_MAP['normal'];
+      const fallback: AssessActionDifficultyOutput = {
+          difficulty: fallbackMapping.difficulty,
+          reasoning: "AI assessment failed; using a default assumption based on game settings.",
+          suggestedDice: fallbackMapping.dice,
+      };
+
+      const normalizer = (data: any): AssessActionDifficultyOutput => ({
+          difficulty: data.difficulty ?? fallback.difficulty,
+          reasoning: data.reasoning ?? fallback.reasoning,
+          suggestedDice: data.suggestedDice ?? fallback.suggestedDice,
+      });
+
+      const result = await processAiResponse(
+          text,
+          AssessActionDifficultyOutputSchema,
+          fallback,
+          normalizer
+      );
+      return result;
 
   } catch (error: any) {
-      if (error.name === 'AbortError') {
-          throw error;
-      }
+      if (error.name === 'AbortError') throw error;
       console.error("AI Error in assessActionDifficulty:", error);
       
-      // Use lookup table for fallback based on game difficulty setting
       const gameDiffKey = input.gameDifficulty?.toLowerCase() ?? 'normal';
-      const fallback = FALLBACK_DIFFICULTY_MAP[gameDiffKey] ?? FALLBACK_DIFFICULTY_MAP['normal'];
-      
+      const fallbackMapping = FALLBACK_DIFFICULTY_MAP[gameDiffKey] ?? FALLBACK_DIFFICULTY_MAP['normal'];
       return {
-          difficulty: fallback.difficulty,
+          difficulty: fallbackMapping.difficulty,
           reasoning: "AI assessment failed; using a default assumption based on game settings.",
-          suggestedDice: fallback.dice,
+          suggestedDice: fallbackMapping.dice,
       };
   }
 }

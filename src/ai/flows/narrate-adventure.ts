@@ -7,6 +7,7 @@ import type { CharacterStats } from '../../types/character-types';
 import type { AdventureSettings } from '../../types/adventure-types';
 import type { DifficultyLevel, GameStateContext } from '../../types/game-types';
 import { formatGameStateContextForPrompt } from '../../context/game-state-utils';
+import { processAiResponse } from '../../lib/utils';
 import { sanitizePlayerAction } from '../../lib/utils';
 
 export interface NarrateAdventureInput {
@@ -132,14 +133,6 @@ const FALLBACK_DIFFICULTY_MAP: Record<string, { difficulty: DifficultyLevel; dic
     nightmare: { difficulty: "Very Hard", dice: "d20" },
 };
 
-// Model mapping per provider – used by the client internally but we pass a default here.
-const PROVIDER_MODEL_MAP: Record<string, string> = {
-  gemini: 'gemini-2.5-flash',
-  openai: 'gpt-4o',
-  claude: 'claude-3-5-sonnet-20241022',
-  deepseek: 'deepseek-chat',
-};
-
 export async function narrateAdventure(input: NarrateAdventureInput): Promise<NarrateAdventureOutput> {
   if (process.env.NODE_ENV === 'development' && input.character.class === 'admin000') {
     return {
@@ -229,26 +222,19 @@ ${assessmentPromptSection}
 6. If character HP <= 0, set isCharacterDefeated: true.
 7. **World Map Updates:** If the narration involves traveling to a new area, discovering a location, or learning about a place, include worldMapChanges. Provide new locations with unique IDs, descriptive names, coordinates (x,y between 0-100), and connections to existing discovered locations. For already known locations that are revealed, use discoveredLocationIds. To modify existing ones, use updatedLocations.
 
-**IMPORTANT:** Respond ONLY with a valid JSON object. Do not include any explanatory text outside the JSON.
+Return ONLY a valid JSON object. No explanations, no markdown formatting.
 `;
 
   try {
       const client = getClient(input.userApiKey);
       let text: string;
 
-      // Determine model based on configured provider (client handles provider selection internally)
-      const model = 'gemini-2.5-flash'; // This is a fallback; the client will use the appropriate model for the provider.
-      // Note: The GenAIClient uses the provider-specific model internally, so we can pass a generic model name.
-      // We'll use the mapped model for clarity; the client will override if needed.
-
       if (!assessDifficulty) {
           const chunks: string[] = [];
           const stream = client.models.generateContentStream({
-              model: PROVIDER_MODEL_MAP.gemini, // The client will map this to the actual provider's model
               contents: prompt,
-              config: {
-                  responseMimeType: "application/json",
-              },
+              config: { responseMimeType: "application/json" },
+              signal: input.signal,
           });
           for await (const chunk of stream) {
               chunks.push(chunk);
@@ -256,41 +242,122 @@ ${assessmentPromptSection}
           text = chunks.join('');
       } else {
           const response = await client.models.generateContent({
-              model: PROVIDER_MODEL_MAP.gemini,
               contents: prompt,
-              config: {
-                  responseMimeType: "application/json",
-              },
+              config: { responseMimeType: "application/json" },
+              signal: input.signal,
           });
           text = response.text;
       }
 
       if (!text) throw new Error("No text returned from AI");
+
+      const gameDiffKey = adventureSettings.difficulty?.toLowerCase() ?? 'normal';
+      const fallbackAssess = FALLBACK_DIFFICULTY_MAP[gameDiffKey] ?? FALLBACK_DIFFICULTY_MAP['normal'];
       
-      const parsed = JSON.parse(text);
-      const validation = NarrateAdventureOutputSchema.safeParse(parsed);
-      
-      let output: NarrateAdventureOutput;
-      if (validation.success) {
-          output = validation.data as NarrateAdventureOutput;
-      } else {
-          console.warn("Zod validation failed for narrateAdventure, using fallback.", validation.error);
-          throw new Error("Invalid response structure");
+      let fallbackDiceRoll: number | undefined = undefined;
+      let fallbackDiceType: "d6" | "d10" | "d20" | "d100" | "None" = "None";
+      if (assessDifficulty) {
+          switch (fallbackAssess.dice) {
+              case 'd6': fallbackDiceRoll = Math.floor(Math.random() * 6) + 1; break;
+              case 'd10': fallbackDiceRoll = Math.floor(Math.random() * 10) + 1; break;
+              case 'd20': fallbackDiceRoll = Math.floor(Math.random() * 20) + 1; break;
+              case 'd100': fallbackDiceRoll = Math.floor(Math.random() * 100) + 1; break;
+              default: fallbackDiceRoll = undefined;
+          }
+          fallbackDiceType = fallbackAssess.dice;
       }
-      
-      if (!output.branchingChoices || output.branchingChoices.length !== 4) {
-          output.branchingChoices = [
+
+      const fallback: NarrateAdventureOutput = {
+          narration: `The Narrator stumbled. (AI Error). Please retry.`,
+          updatedGameState: input.gameState,
+          branchingChoices: [
             { text: "Look around." }, { text: "Think carefully." },
             { text: "Check inventory." }, { text: "Wait." }
-          ];
+          ],
+          assessedDifficulty: assessDifficulty ? fallbackAssess.difficulty : undefined,
+          diceRoll: fallbackDiceRoll,
+          diceType: assessDifficulty ? fallbackDiceType : undefined,
+      };
+
+      const normalizer = (data: any): NarrateAdventureOutput => {
+          // Handle case where jsonrepair produced an array
+          if (Array.isArray(data)) data = data[0] || {};
+
+          // Extract narration from various possible fields
+          const narrationText = data.narration 
+              ?? data.outcome?.description 
+              ?? data.description 
+              ?? data.action?.outcome 
+              ?? fallback.narration;
+
+          // Build updatedGameState string
+          const updatedGameState = data.updatedGameState 
+              ?? (data.update_game_state ? JSON.stringify(data.update_game_state) : null)
+              ?? input.gameState;
+
+          // Build branching choices
+          let branchingChoices = data.branchingChoices;
+          if (!branchingChoices && Array.isArray(data.choices)) {
+              branchingChoices = data.choices.slice(0, 4).map((c: any) => ({
+                  text: c.name || c.text || c.prompt || 'Continue',
+                  consequenceHint: c.description || c.consequenceHint,
+              }));
+          }
+          if (!Array.isArray(branchingChoices) || branchingChoices.length === 0) {
+              branchingChoices = fallback.branchingChoices;
+          }
+
+          // Map difficulty
+          const assessedDifficulty = data.assessedDifficulty ?? data.difficulty ?? fallback.assessedDifficulty;
+          const diceType = data.diceType ?? data.suggestedDice ?? fallback.diceType;
+          const diceRoll = data.diceRoll ?? fallback.diceRoll;
+
+          // Extract resource changes
+          const healthChange = data.healthChange ?? data.outcome?.health_change ?? data.action?.health_change;
+          const staminaChange = data.staminaChange ?? data.outcome?.stamina_change ?? data.action?.stamina_change;
+          const manaChange = data.manaChange ?? data.outcome?.mana_change ?? data.action?.mana_change;
+
+          return {
+              narration: narrationText,
+              updatedGameState,
+              updatedStats: data.updatedStats,
+              updatedTraits: data.updatedTraits,
+              updatedKnowledge: data.updatedKnowledge,
+              progressedToStage: data.progressedToStage,
+              healthChange,
+              staminaChange,
+              manaChange,
+              xpGained: data.xpGained,
+              reputationChange: data.reputationChange,
+              npcRelationshipChange: data.npcRelationshipChange,
+              suggestedClassChange: data.suggestedClassChange,
+              gainedSkill: data.gainedSkill,
+              branchingChoices,
+              dynamicEventTriggered: data.dynamicEventTriggered,
+              isCharacterDefeated: data.isCharacterDefeated ?? data.character_defeated ?? false,
+              assessedDifficulty,
+              diceRoll,
+              diceType,
+              worldMapChanges: data.worldMapChanges,
+          };
+      };
+
+      const result = await processAiResponse(
+          text,
+          NarrateAdventureOutputSchema,
+          fallback,
+          normalizer
+      );
+
+      // Ensure branching choices are exactly 4
+      if (!result.branchingChoices || result.branchingChoices.length !== 4) {
+          result.branchingChoices = fallback.branchingChoices;
       }
-      
-      return output;
+
+      return result;
 
   } catch (error: any) {
-      if (error.name === 'AbortError') {
-          throw error;
-      }
+      if (error.name === 'AbortError') throw error;
       console.error("AI Narration Error:", error);
       
       const gameDiffKey = adventureSettings.difficulty?.toLowerCase() ?? 'normal';
@@ -298,7 +365,6 @@ ${assessmentPromptSection}
       
       let fallbackDiceRoll: number | undefined = undefined;
       let fallbackDiceType: "d6" | "d10" | "d20" | "d100" | "None" = "None";
-      
       if (assessDifficulty) {
           switch (fallbackAssess.dice) {
               case 'd6': fallbackDiceRoll = Math.floor(Math.random() * 6) + 1; break;

@@ -185,7 +185,7 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
   const handleDownloadModel = useCallback(async () => {
     setWebllmLoading(true);
     setWebllmProgress({ progress: 0, text: 'Starting download...' });
-    
+
     try {
       const provider = new WebLLMProvider({
         model: webllmModel,
@@ -194,16 +194,30 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
           setWebllmProgress({ progress: progress * 100, text });
         },
       });
-      
+
+      // Trigger model load with a simple test prompt
       await provider.generateContent({
         model: webllmModel,
-        contents: 'test',
+        contents: 'Hello',
       });
-      
+
       toast({ title: "Model Ready", description: `${webllmModel} loaded successfully.` });
       setWebllmProgress(null);
     } catch (error: any) {
-      toast({ title: "Download Failed", description: error.message, variant: "destructive" });
+      console.error('[WebLLM] Download error:', error);
+
+      // Provide a helpful error message
+      let errorMessage = error.message || 'Unknown error';
+      if (errorMessage.includes("reading 'find'") || errorMessage.includes('undefined')) {
+        errorMessage = `Model "${webllmModel}" not found in WebLLM registry. Try a different model.`;
+      }
+
+      toast({
+        title: "Download Failed",
+        description: errorMessage,
+        variant: "destructive",
+        duration: 8000,
+      });
       setWebllmProgress(null);
     } finally {
       setWebllmLoading(false);

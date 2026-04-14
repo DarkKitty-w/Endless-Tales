@@ -4,6 +4,7 @@
 
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
+import { extractJsonFromResponse } from '../../lib/utils';
 
 export interface GenerateCharacterDescriptionInput {
   characterDescription: string;
@@ -30,13 +31,6 @@ const GenerateCharacterDescriptionOutputSchema = z.object({
   inferredKnowledge: z.array(z.string()),
   inferredBackground: z.string(),
 });
-
-const PROVIDER_MODEL_MAP: Record<string, string> = {
-  gemini: 'gemini-2.5-flash',
-  openai: 'gpt-4o',
-  claude: 'claude-3-5-sonnet-20241022',
-  deepseek: 'deepseek-chat',
-};
 
 export async function generateCharacterDescription(
   input: GenerateCharacterDescriptionInput
@@ -90,7 +84,7 @@ Output JSON matching the schema.
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: PROVIDER_MODEL_MAP.gemini,
+          // ✅ model removed – provider uses its default
           contents: prompt,
           config: {
               responseMimeType: "application/json",
@@ -101,7 +95,8 @@ Output JSON matching the schema.
       const text = response.text;
       if (!text) throw new Error("No text returned from AI");
       
-      const parsed = JSON.parse(text);
+      const cleanedText = extractJsonFromResponse(text);
+      const parsed = JSON.parse(cleanedText);
       const validation = GenerateCharacterDescriptionOutputSchema.safeParse(parsed);
       
       if (validation.success) {

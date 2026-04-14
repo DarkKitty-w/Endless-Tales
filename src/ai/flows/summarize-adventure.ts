@@ -4,6 +4,7 @@
 
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
+import { extractJsonFromResponse } from '../../lib/utils';
 
 export interface SummarizeAdventureInput {
   story: string;
@@ -19,20 +20,13 @@ const SummarizeAdventureOutputSchema = z.object({
   summary: z.string(),
 });
 
-const PROVIDER_MODEL_MAP: Record<string, string> = {
-  gemini: 'gemini-2.5-flash',
-  openai: 'gpt-4o',
-  claude: 'claude-3-5-sonnet-20241022',
-  deepseek: 'deepseek-chat',
-};
-
 export async function summarizeAdventure(input: SummarizeAdventureInput): Promise<SummarizeAdventureOutput> {
   const prompt = `Summarize the following adventure story concisely, highlighting key events and consequences:\n\n${input.story}`;
 
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: PROVIDER_MODEL_MAP.gemini,
+          // ✅ model removed – provider uses its default
           contents: prompt,
           config: {
               responseMimeType: "application/json",
@@ -43,7 +37,8 @@ export async function summarizeAdventure(input: SummarizeAdventureInput): Promis
       const text = response.text;
       if (!text) throw new Error("No text");
       
-      const parsed = JSON.parse(text);
+      const cleanedText = extractJsonFromResponse(text);
+      const parsed = JSON.parse(cleanedText);
       const validation = SummarizeAdventureOutputSchema.safeParse(parsed);
       
       if (validation.success) {

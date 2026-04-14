@@ -4,8 +4,8 @@
 
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
-import { Type, Schema } from "@google/genai";
 import type { InventoryItem, ItemQuality } from '../../types/game-types';
+import { processAiResponse } from '../../lib/utils';
 
 export interface AttemptCraftingInput {
   characterKnowledge: string[];
@@ -14,6 +14,7 @@ export interface AttemptCraftingInput {
   desiredItem: string;
   usedIngredients: string[];
   userApiKey?: string | null;
+  signal?: AbortSignal;
 }
 
 export interface AttemptCraftingOutput {
@@ -45,31 +46,6 @@ const AttemptCraftingOutputSchema = z.object({
     consumedItems: z.array(z.string()),
 });
 
-const responseSchema: Schema = {
-    type: Type.OBJECT,
-    properties: {
-        success: { type: Type.BOOLEAN },
-        message: { type: Type.STRING },
-        craftedItem: {
-            type: Type.OBJECT,
-            properties: {
-                name: { type: Type.STRING },
-                description: { type: Type.STRING },
-                quality: { type: Type.STRING, enum: ["Poor", "Common", "Uncommon", "Rare", "Epic", "Legendary"] },
-                weight: { type: Type.NUMBER },
-                durability: { type: Type.NUMBER },
-                magicalEffect: { type: Type.STRING }
-            },
-            nullable: true
-        },
-        consumedItems: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
-        }
-    },
-    required: ["success", "message", "consumedItems"]
-};
-
 export async function attemptCrafting(input: AttemptCraftingInput): Promise<AttemptCraftingOutput> {
   const prompt = `
 You are a Master Crafter AI for the text adventure "Endless Tales". Evaluate a player's crafting attempt.
@@ -94,34 +70,44 @@ ${input.inventoryItems.length ? input.inventoryItems.join(', ') : 'Empty'}
 * **Success:** Set success=true. Generate item details. List used ingredients in consumedItems.
 * **Failure/Impossible:** Set success=false. Provide message. List ingredients consumed (if failed attempt wasted them).
 
-Output JSON.
+Return ONLY a valid JSON object. No explanations, no markdown formatting.
 `;
 
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: 'gemini-2.5-flash',
           contents: prompt,
-          config: {
-              responseMimeType: "application/json",
-              responseSchema: responseSchema,
-          }
+          config: { responseMimeType: "application/json" },
+          signal: input.signal,
       });
 
       const text = response.text;
       if (!text) throw new Error("No text returned from AI");
-      
-      const parsed = JSON.parse(text);
-      const validation = AttemptCraftingOutputSchema.safeParse(parsed);
-      
-      if (validation.success) {
-          return validation.data;
-      } else {
-          console.warn("Zod validation failed for attemptCrafting, using fallback.", validation.error);
-          throw new Error("Invalid response structure");
-      }
+
+      const fallback: AttemptCraftingOutput = {
+          success: false,
+          message: "The crafting attempt failed due to an external force (AI Error).",
+          craftedItem: null,
+          consumedItems: [],
+      };
+
+      const normalizer = (data: any): AttemptCraftingOutput => ({
+          success: data.success ?? fallback.success,
+          message: data.message ?? fallback.message,
+          craftedItem: data.craftedItem ?? fallback.craftedItem,
+          consumedItems: Array.isArray(data.consumedItems) ? data.consumedItems : fallback.consumedItems,
+      });
+
+      const result = await processAiResponse(
+          text,
+          AttemptCraftingOutputSchema,
+          fallback,
+          normalizer
+      );
+      return result;
 
   } catch (error: any) {
+      if (error.name === 'AbortError') throw error;
       console.error("AI Crafting Error:", error);
       return {
           success: false,

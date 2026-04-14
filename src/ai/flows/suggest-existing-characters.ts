@@ -4,6 +4,7 @@
 
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
+import { extractJsonFromResponse } from '../../lib/utils';
 
 export interface SuggestExistingCharactersInput {
   universeName: string;
@@ -19,20 +20,13 @@ const SuggestExistingCharactersOutputSchema = z.object({
   suggestedNames: z.array(z.string()),
 });
 
-const PROVIDER_MODEL_MAP: Record<string, string> = {
-  gemini: 'gemini-2.5-flash',
-  openai: 'gpt-4o',
-  claude: 'claude-3-5-sonnet-20241022',
-  deepseek: 'deepseek-chat',
-};
-
 export async function suggestExistingCharacters(input: SuggestExistingCharactersInput): Promise<SuggestExistingCharactersOutput> {
   const prompt = `Suggest 3 to 5 well-known existing characters from the universe "${input.universeName}" suitable for a player character. Return only a JSON object with 'suggestedNames' array.`;
 
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
-          model: PROVIDER_MODEL_MAP.gemini,
+          // ✅ model removed – provider uses its default
           contents: prompt,
           config: {
               responseMimeType: "application/json",
@@ -43,7 +37,8 @@ export async function suggestExistingCharacters(input: SuggestExistingCharacters
       const text = response.text;
       if (!text) throw new Error("No text");
       
-      const parsed = JSON.parse(text);
+      const cleanedText = extractJsonFromResponse(text);
+      const parsed = JSON.parse(cleanedText);
       const validation = SuggestExistingCharactersOutputSchema.safeParse(parsed);
       
       if (validation.success) {
