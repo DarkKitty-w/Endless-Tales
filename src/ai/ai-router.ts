@@ -72,10 +72,11 @@ class GeminiProvider implements AIProvider {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        provider: 'gemini',
         model: effectiveModel,
         contents,
         config,
-        userApiKey: this.getApiKey(),
+        // API key is handled server-side only
       }),
       signal,
     });
@@ -107,11 +108,12 @@ class GeminiProvider implements AIProvider {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        provider: 'gemini',
         model: effectiveModel,
         contents,
         config,
-        userApiKey: this.getApiKey(),
         stream: true,
+        // API key is handled server-side only
       }),
       signal,
     });
@@ -172,7 +174,6 @@ class OpenAIProvider implements AIProvider {
     signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'gpt-4o';
-    const apiKey = this.getApiKey();
 
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -182,7 +183,7 @@ class OpenAIProvider implements AIProvider {
         model: effectiveModel,
         contents,
         config,
-        userApiKey: apiKey || undefined,
+        // API key is handled server-side only
       }),
       signal,
     });
@@ -210,7 +211,6 @@ class OpenAIProvider implements AIProvider {
     signal?: AbortSignal;
   }): AsyncIterable<string> {
     const effectiveModel = model || 'gpt-4o';
-    const apiKey = this.getApiKey();
 
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -220,8 +220,8 @@ class OpenAIProvider implements AIProvider {
         model: effectiveModel,
         contents,
         config,
-        userApiKey: apiKey || undefined,
         stream: true,
+        // API key is handled server-side only
       }),
       signal,
     });
@@ -280,7 +280,6 @@ class ClaudeProvider implements AIProvider {
     signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'claude-3-5-sonnet-20241022';
-    const apiKey = this.getApiKey();
 
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -290,7 +289,7 @@ class ClaudeProvider implements AIProvider {
         model: effectiveModel,
         contents,
         config,
-        userApiKey: apiKey || undefined,
+        // API key is handled server-side only
       }),
       signal,
     });
@@ -318,7 +317,6 @@ class ClaudeProvider implements AIProvider {
     signal?: AbortSignal;
   }): AsyncIterable<string> {
     const effectiveModel = model || 'claude-3-5-sonnet-20241022';
-    const apiKey = this.getApiKey();
 
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -328,8 +326,8 @@ class ClaudeProvider implements AIProvider {
         model: effectiveModel,
         contents,
         config,
-        userApiKey: apiKey || undefined,
         stream: true,
+        // API key is handled server-side only
       }),
       signal,
     });
@@ -389,7 +387,6 @@ class DeepSeekProvider implements AIProvider {
     signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'deepseek-chat';
-    const apiKey = this.getApiKey();
 
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -399,7 +396,7 @@ class DeepSeekProvider implements AIProvider {
         model: effectiveModel,
         contents,
         config,
-        userApiKey: apiKey || undefined,
+        // API key is handled server-side only
       }),
       signal,
     });
@@ -427,7 +424,6 @@ class DeepSeekProvider implements AIProvider {
     signal?: AbortSignal;
   }): AsyncIterable<string> {
     const effectiveModel = model || 'deepseek-chat';
-    const apiKey = this.getApiKey();
 
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -437,8 +433,8 @@ class DeepSeekProvider implements AIProvider {
         model: effectiveModel,
         contents,
         config,
-        userApiKey: apiKey || undefined,
         stream: true,
+        // API key is handled server-side only
       }),
       signal,
     });

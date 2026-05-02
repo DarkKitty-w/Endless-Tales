@@ -29,33 +29,40 @@ const PROVIDER_CONFIGS = {
   },
 };
 
-export async function POST(request: NextRequest) {
+function getEnvVarName(provider) {
+  const envVarMap = {
+    gemini: 'GEMINI_API_KEY',
+    openai: 'OPENAI_API_KEY',
+    claude: 'CLAUDE_API_KEY',
+    deepseek: 'DEEPSEEK_API_KEY',
+    openrouter: 'OPENROUTER_API_KEY',
+  };
+  return envVarMap[provider] || 'API_KEY';
+}
+
+export async function POST(request) {
   try {
     const body = await request.json();
-    const { provider = 'gemini', model, contents, config, userApiKey, stream } = body;
+    const { provider = 'gemini', model, contents, config, stream } = body;
 
-    // Validate provider
     if (!PROVIDER_CONFIGS[provider]) {
       return NextResponse.json(
-        { error: `Unsupported provider: ${provider}` },
+        { error: 'Unsupported provider: ' + provider },
         { status: 400 }
       );
     }
 
-    // Get API key: user-provided key takes precedence, then server-side key
-    const serverApiKey = API_KEYS[provider];
-    const apiKey = userApiKey || serverApiKey;
-
+    const apiKey = API_KEYS[provider];
+    
     if (!apiKey) {
       return NextResponse.json(
-        { error: `API key not configured for provider: ${provider}. Please set the environment variable or provide a user API key.` },
-        { status: 401 }
+        { error: 'API key not configured for provider: ' + provider + '. Please set the ' + getEnvVarName(provider) + ' environment variable.' },
+        { status: 500 }
       );
     }
 
     const providerConfig = PROVIDER_CONFIGS[provider];
 
-    // Route to appropriate provider handler
     switch (provider) {
       case 'gemini':
         return handleGeminiRequest({ model, contents, config, apiKey, stream });
@@ -67,7 +74,7 @@ export async function POST(request: NextRequest) {
         return handleClaudeRequest({ model, contents, config, apiKey, stream });
       default:
         return NextResponse.json(
-          { error: `Unsupported provider: ${provider}` },
+          { error: 'Unsupported provider: ' + provider },
           { status: 400 }
         );
     }
@@ -80,7 +87,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// --- Gemini Handler ---
 async function handleGeminiRequest({ model, contents, config, apiKey, stream }) {
   const endpoint = stream ? 'streamGenerateContent' : 'generateContent';
   const url = `${PROVIDER_CONFIGS.gemini.baseUrl}/models/${model}:${endpoint}?key=${apiKey}`;
@@ -98,7 +104,7 @@ async function handleGeminiRequest({ model, contents, config, apiKey, stream }) 
     const errorText = await response.text();
     console.error('Gemini API error:', response.status, errorText);
     return NextResponse.json(
-      { error: `Gemini API error: ${response.status}` },
+      { error: 'Gemini API error: ' + response.status },
       { status: response.status }
     );
   }
@@ -107,8 +113,10 @@ async function handleGeminiRequest({ model, contents, config, apiKey, stream }) 
     return createGeminiStreamResponse(response);
   } else {
     const data = await response.json();
+    return NextResponse.json(data);
+  }
+}
 
-// --- OpenAI-Compatible Handler (OpenAI, DeepSeek, OpenRouter) ---
 async function handleOpenAICompatibleRequest({ provider, model, contents, config, apiKey, stream, baseUrl }) {
   const messages = typeof contents === 'string' 
     ? [{ role: 'user', content: contents }]
@@ -120,7 +128,6 @@ async function handleOpenAICompatibleRequest({ provider, model, contents, config
     stream: !!stream,
   };
 
-  // Add optional parameters
   if (config?.temperature !== undefined) body.temperature = config.temperature;
   if (config?.topP !== undefined) body.top_p = config.topP;
   if (config?.responseMimeType === 'application/json') {
@@ -129,10 +136,9 @@ async function handleOpenAICompatibleRequest({ provider, model, contents, config
 
   const headers = {
     'Content-Type': 'application/json',
-    Authorization: `Bearer ${apiKey}`,
+    'Authorization': `Bearer ${apiKey}`,
   };
 
-  // OpenRouter-specific headers
   if (provider === 'openrouter') {
     headers['HTTP-Referer'] = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
     headers['X-Title'] = 'Endless Tales';
@@ -147,8 +153,20 @@ async function handleOpenAICompatibleRequest({ provider, model, contents, config
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
     console.error(`${provider} API error:`, response.status, error);
+    return NextResponse.json(
+      { error: `${provider} API error: ${error.error?.message || response.status}` },
+      { status: response.status }
+    );
+  }
 
-// --- Claude Handler ---
+  if (stream) {
+    return createOpenAIStreamResponse(response);
+  } else {
+    const data = await response.json();
+    return NextResponse.json(data);
+  }
+}
+
 async function handleClaudeRequest({ model, contents, config, apiKey, stream }) {
   const messages = typeof contents === 'string'
     ? [{ role: 'user', content: contents }]
@@ -190,10 +208,6 @@ async function handleClaudeRequest({ model, contents, config, apiKey, stream }) 
     return NextResponse.json(data);
   }
 }
-    return NextResponse.json(
-      { error: `${provider} API error: ${error.error?.message || response.status}` },
-
-// --- Stream Response Helpers ---
 
 function createGeminiStreamResponse(response) {
   const encoder = new TextEncoder();
@@ -227,6 +241,16 @@ function createGeminiStreamResponse(response) {
       }
     },
   });
+
+  return new Response(readable, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
+}
+
 function createOpenAIStreamResponse(response) {
   const encoder = new TextEncoder();
   const readable = new ReadableStream({
@@ -262,6 +286,14 @@ function createOpenAIStreamResponse(response) {
   });
 
   return new Response(readable, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    },
+  });
+}
+
 function createClaudeStreamResponse(response) {
   const encoder = new TextEncoder();
   const readable = new ReadableStream({
@@ -303,34 +335,4 @@ function createClaudeStreamResponse(response) {
       'Connection': 'keep-alive',
     },
   });
-}
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
-  });
-}
-
-  return new Response(readable, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
-  });
-}
-      { status: response.status }
-    );
-  }
-
-  if (stream) {
-    return createOpenAIStreamResponse(response);
-  } else {
-    const data = await response.json();
-    return NextResponse.json(data);
-  }
-}
-    return NextResponse.json(data);
-  }
 }
