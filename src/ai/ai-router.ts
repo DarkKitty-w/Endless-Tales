@@ -173,29 +173,23 @@ class OpenAIProvider implements AIProvider {
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'gpt-4o';
     const apiKey = this.getApiKey();
-    if (!apiKey) throw new Error('OpenAI API key not configured');
 
-    const messages = [{ role: 'user', content: contents }];
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('/api/ai-proxy', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        provider: 'openai',
         model: effectiveModel,
-        messages,
-        temperature: config?.temperature,
-        top_p: config?.topP,
-        response_format: config?.responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
+        contents,
+        config,
+        userApiKey: apiKey || undefined,
       }),
       signal,
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error?.message || 'OpenAI request failed');
+      throw new Error(error.error || 'OpenAI request failed');
     }
 
     const data = await response.json();
@@ -217,28 +211,24 @@ class OpenAIProvider implements AIProvider {
   }): AsyncIterable<string> {
     const effectiveModel = model || 'gpt-4o';
     const apiKey = this.getApiKey();
-    if (!apiKey) throw new Error('OpenAI API key not configured');
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('/api/ai-proxy', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        provider: 'openai',
         model: effectiveModel,
-        messages: [{ role: 'user', content: contents }],
-        temperature: config?.temperature,
-        top_p: config?.topP,
+        contents,
+        config,
+        userApiKey: apiKey || undefined,
         stream: true,
-        response_format: config?.responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
       }),
       signal,
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error?.message || 'OpenAI streaming request failed');
+      throw new Error(error.error || 'OpenAI streaming request failed');
     }
 
     const reader = response.body?.getReader();
@@ -291,28 +281,23 @@ class ClaudeProvider implements AIProvider {
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'claude-3-5-sonnet-20241022';
     const apiKey = this.getApiKey();
-    if (!apiKey) throw new Error('Claude API key not configured');
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('/api/ai-proxy', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        provider: 'claude',
         model: effectiveModel,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: contents }],
-        temperature: config?.temperature,
-        top_p: config?.topP,
+        contents,
+        config,
+        userApiKey: apiKey || undefined,
       }),
       signal,
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error?.message || 'Claude request failed');
+      throw new Error(error.error || 'Claude request failed');
     }
 
     const data = await response.json();
@@ -334,21 +319,16 @@ class ClaudeProvider implements AIProvider {
   }): AsyncIterable<string> {
     const effectiveModel = model || 'claude-3-5-sonnet-20241022';
     const apiKey = this.getApiKey();
-    if (!apiKey) throw new Error('Claude API key not configured');
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
+    const response = await fetch('/api/ai-proxy', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        provider: 'claude',
         model: effectiveModel,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: contents }],
-        temperature: config?.temperature,
-        top_p: config?.topP,
+        contents,
+        config,
+        userApiKey: apiKey || undefined,
         stream: true,
       }),
       signal,
@@ -356,7 +336,7 @@ class ClaudeProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error?.message || 'Claude streaming request failed');
+      throw new Error(error.error || 'Claude streaming request failed');
     }
 
     const reader = response.body?.getReader();
@@ -410,27 +390,23 @@ class DeepSeekProvider implements AIProvider {
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'deepseek-chat';
     const apiKey = this.getApiKey();
-    if (!apiKey) throw new Error('DeepSeek API key not configured');
 
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    const response = await fetch('/api/ai-proxy', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        provider: 'deepseek',
         model: effectiveModel,
-        messages: [{ role: 'user', content: contents }],
-        temperature: config?.temperature,
-        top_p: config?.topP,
-        response_format: config?.responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
+        contents,
+        config,
+        userApiKey: apiKey || undefined,
       }),
       signal,
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error?.message || 'DeepSeek request failed');
+      throw new Error(error.error || 'DeepSeek request failed');
     }
 
     const data = await response.json();
@@ -452,28 +428,24 @@ class DeepSeekProvider implements AIProvider {
   }): AsyncIterable<string> {
     const effectiveModel = model || 'deepseek-chat';
     const apiKey = this.getApiKey();
-    if (!apiKey) throw new Error('DeepSeek API key not configured');
 
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    const response = await fetch('/api/ai-proxy', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        provider: 'deepseek',
         model: effectiveModel,
-        messages: [{ role: 'user', content: contents }],
-        temperature: config?.temperature,
-        top_p: config?.topP,
+        contents,
+        config,
+        userApiKey: apiKey || undefined,
         stream: true,
-        response_format: config?.responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
       }),
       signal,
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error?.message || 'DeepSeek streaming request failed');
+      throw new Error(error.error || 'DeepSeek streaming request failed');
     }
 
     const reader = response.body?.getReader();
