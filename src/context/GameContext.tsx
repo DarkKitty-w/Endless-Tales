@@ -191,39 +191,41 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     applyTheme,
   ]);
 
-  // Debug log (development only)
-  if (process.env.NODE_ENV === 'development') {
-    const currentStageName = state.character?.skillTreeStage !== undefined && state.character?.skillTree
-      ? state.character.skillTree.stages[state.character.skillTreeStage]?.stageName ?? `Stage ${state.character.skillTreeStage}`
-      : "Potential";
-    const reputationString = state.character ? Object.entries(state.character.reputation).map(([f, s]) => `${f}: ${s}`).join(', ') || 'None' : 'N/A';
-    const relationshipString = state.character ? Object.entries(state.character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'None' : 'N/A';
-    const inventoryString = state.inventory.map(i => `${i.name}${i.quality ? ` (${i.quality})` : ''}`).join(', ') || 'Empty';
-    console.log("Game State Updated:", {
-      version: state.version,
-      status: state.status,
-      turn: state.turnCount,
-      character: state.character?.name,
-      level: state.character?.level,
-      xp: `${state.character?.xp}/${state.character?.xpToNextLevel}`,
-      reputation: reputationString,
-      relationships: relationshipString,
-      class: state.character?.class,
-      stage: `${currentStageName} (${state.character?.skillTreeStage ?? 0}/4)`,
-      health: `${state.character?.currentHealth}/${state.character?.maxHealth}`,
-      actionStamina: `${state.character?.currentStamina}/${state.character?.maxStamina}`,
-      mana: `${state.character?.currentMana}/${state.character?.maxMana}`,
-      adventureId: state.currentAdventureId,
-      settings: state.adventureSettings,
-      inventory: inventoryString,
-      theme: `${state.selectedThemeId} (${state.isDarkMode ? 'Dark' : 'Light'})`,
-      apiKeySet: !!state.userGoogleAiApiKey,
-      storyLogLength: state.storyLog.length,
-      isGeneratingSkillTree: state.isGeneratingSkillTree,
-      aiProvider: state.aiProvider,
-      providerKeysCount: Object.keys(state.providerApiKeys).length,
-    });
-  }
+  // Debug log (development only) - moved to useEffect to avoid running on every render
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      const currentStageName = state.character?.skillTreeStage !== undefined && state.character?.skillTree
+        ? state.character.skillTree.stages[state.character.skillTreeStage]?.stageName ?? `Stage ${state.character.skillTreeStage}`
+        : "Potential";
+      const reputationString = state.character ? Object.entries(state.character.reputation).map(([f, s]) => `${f}: ${s}`).join(', ') || 'None' : 'N/A';
+      const relationshipString = state.character ? Object.entries(state.character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'None' : 'N/A';
+      const inventoryString = state.inventory.map(i => `${i.name}${i.quality ? ` (${i.quality})` : ''}`).join(', ') || 'Empty';
+      console.log("Game State Updated:", {
+        version: state.version,
+        status: state.status,
+        turn: state.turnCount,
+        character: state.character?.name,
+        level: state.character?.level,
+        xp: `${state.character?.xp}/${state.character?.xpToNextLevel}`,
+        reputation: reputationString,
+        relationships: relationshipString,
+        class: state.character?.class,
+        stage: `${currentStageName} (${state.character?.skillTreeStage ?? 0}/4)`,
+        health: `${state.character?.currentHealth}/${state.character?.maxHealth}`,
+        actionStamina: `${state.character?.currentStamina}/${state.character?.maxStamina}`,
+        mana: `${state.character?.currentMana}/${state.character?.maxMana}`,
+        adventureId: state.currentAdventureId,
+        settings: state.adventureSettings,
+        inventory: inventoryString,
+        theme: `${state.selectedThemeId} (${state.isDarkMode ? 'Dark' : 'Light'})`,
+        apiKeySet: !!state.userGoogleAiApiKey,
+        storyLogLength: state.storyLog.length,
+        isGeneratingSkillTree: state.isGeneratingSkillTree,
+        aiProvider: state.aiProvider,
+        providerKeysCount: Object.keys(state.providerApiKeys).length,
+      });
+    }
+  }, [state.version, state.status, state.turnCount, state.character, state.inventory, state.selectedThemeId, state.isDarkMode, state.userGoogleAiApiKey, state.storyLog.length, state.isGeneratingSkillTree, state.aiProvider, state.providerApiKeys]);
 
   const contextValue = useMemo(() => ({ state, dispatch }), [state, dispatch]);
 

@@ -365,7 +365,7 @@ The `dispatch` function must be wrapped so that when playing as a guest, local a
 - [ ] **Scope AbortSignal in `triggerSkillTreeGeneration`** — use a dedicated ref
 
 ### 🟢 Polish / UX
-- [ ] **Move dev logging to `useEffect`** — avoid side effects during render
+- [x] **Move dev logging to `useEffect`** — avoid side effects during render ✅ VERIFIED FIXED
 - [x] **Implement real streaming or remove `isStreaming`** — wire up `generateContentStream` or drop the flag ✅ VERIFIED FIXED
 - [ ] **Show provider‑specific error messages** — indicate which provider’s key is missing/invalid
 - [ ] **WebLLM loading indicator** — show download progress in the UI
@@ -423,9 +423,14 @@ The `dispatch` function must be wrapped so that when playing as a guest, local a
    - Evidence: `adventureReducer.ts` lines 198, 228; `adventure-types.ts` line 79
 
 ### ❌ Claims Verified as STILL BROKEN (Checklist boxes remain unchecked):
-1. **Move dev logging to `useEffect`** - NOT FIXED
-   - `console.log("Game State Updated:", {...})` runs inside component body
-   - Evidence: `GameContext.tsx` lines 202-226
+(No items remaining - all critical and important fixes have been verified)
+
+### ✅ Additional Claims Now VERIFIED FIXED:
+1. **Move dev logging to `useEffect`** - VERIFIED FIXED
+   - Debug logging moved from component body to useEffect with specific dependencies
+   - Now only runs when state values change, not on every render
+   - Only runs in development mode (`process.env.NODE_ENV === 'development'`)
+   - Evidence: `GameContext.tsx` lines 194-228
 
 ### 🔶 Claims Partially Verified:
 1. **Security grade improved to C-** - NOW TRUE (all providers use server-side proxy)
