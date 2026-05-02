@@ -157,6 +157,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                     statusBeforeSave: "AdventureSummary",
                     adventureSummary: action.payload.summary ?? null,
                     turnCount: finalTurnCount,
+                    worldMap: state.worldMap,
                 };
                 updatedSavedAdventures = state.savedAdventures.filter(adv => adv.id !== endedAdventure.id);
                 updatedSavedAdventures.push(endedAdventure);
@@ -194,6 +195,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                 statusBeforeSave: state.status,
                 adventureSummary: state.adventureSummary,
                 turnCount: state.turnCount,
+                worldMap: state.worldMap,
             };
             const savesWithoutCurrent = state.savedAdventures.filter(adv => adv.id !== currentSave.id);
             const newSaves = [...savesWithoutCurrent, currentSave];
