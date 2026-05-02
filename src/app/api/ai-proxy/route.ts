@@ -1,8 +1,8 @@
 // src/app/api/ai-proxy/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-// Server-side API keys (never exposed to client)
-const API_KEYS = {
+// Server-side API keys (fallback if user doesn't provide their own)
+const SERVER_API_KEYS = {
   gemini: process.env.GEMINI_API_KEY,
   openai: process.env.OPENAI_API_KEY,
   claude: process.env.CLAUDE_API_KEY,
@@ -43,7 +43,7 @@ function getEnvVarName(provider) {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { provider = 'gemini', model, contents, config, stream } = body;
+    const { provider = 'gemini', model, contents, config, stream, apiKey: clientApiKey } = body;
 
     if (!PROVIDER_CONFIGS[provider]) {
       return NextResponse.json(
@@ -52,11 +52,12 @@ export async function POST(request) {
       );
     }
 
-    const apiKey = API_KEYS[provider];
+    // Hybrid approach: Use client-provided key if available, otherwise fall back to server key
+    const apiKey = clientApiKey || SERVER_API_KEYS[provider];
     
     if (!apiKey) {
       return NextResponse.json(
-        { error: 'API key not configured for provider: ' + provider + '. Please set the ' + getEnvVarName(provider) + ' environment variable.' },
+        { error: 'No API key available for provider: ' + provider + '. Please either provide your own key in Settings or set the ' + getEnvVarName(provider) + ' environment variable on the server.' },
         { status: 500 }
       );
     }

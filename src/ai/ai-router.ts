@@ -76,7 +76,8 @@ class GeminiProvider implements AIProvider {
         model: effectiveModel,
         contents,
         config,
-        // API key is handled server-side only
+        // Send user's API key if available (hybrid approach)
+        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal,
     });
@@ -113,7 +114,8 @@ class GeminiProvider implements AIProvider {
         contents,
         config,
         stream: true,
-        // API key is handled server-side only
+        // Send user's API key if available (hybrid approach)
+        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal,
     });
@@ -183,7 +185,8 @@ class OpenAIProvider implements AIProvider {
         model: effectiveModel,
         contents,
         config,
-        // API key is handled server-side only
+        // Send user's API key if available (hybrid approach)
+        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal,
     });
@@ -221,7 +224,8 @@ class OpenAIProvider implements AIProvider {
         contents,
         config,
         stream: true,
-        // API key is handled server-side only
+        // Send user's API key if available (hybrid approach)
+        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal,
     });
@@ -289,7 +293,8 @@ class ClaudeProvider implements AIProvider {
         model: effectiveModel,
         contents,
         config,
-        // API key is handled server-side only
+        // Send user's API key if available (hybrid approach)
+        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal,
     });
@@ -327,7 +332,8 @@ class ClaudeProvider implements AIProvider {
         contents,
         config,
         stream: true,
-        // API key is handled server-side only
+        // Send user's API key if available (hybrid approach)
+        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal,
     });
@@ -396,7 +402,8 @@ class DeepSeekProvider implements AIProvider {
         model: effectiveModel,
         contents,
         config,
-        // API key is handled server-side only
+        // Send user's API key if available (hybrid approach)
+        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal,
     });
@@ -434,7 +441,8 @@ class DeepSeekProvider implements AIProvider {
         contents,
         config,
         stream: true,
-        // API key is handled server-side only
+        // Send user's API key if available (hybrid approach)
+        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal,
     });

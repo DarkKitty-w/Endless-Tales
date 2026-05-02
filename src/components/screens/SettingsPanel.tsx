@@ -443,7 +443,7 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
               <div className="space-y-4">
                 <h4 className="text-sm font-medium">API Keys</h4>
                 <p className="text-xs text-muted-foreground">
-                  Enter your own API keys. They are stored locally in your browser.
+                  Enter your API key to use your own quota. If not provided, the server's key will be used as fallback.
                 </p>
 
                 {/* Gemini */}

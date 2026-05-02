@@ -75,7 +75,9 @@ export function AIStatusPanel() {
   };
 
   const hasApiKey = aiProvider !== 'webllm' && !!providerApiKeys[aiProvider];
-  const isOnline = aiProvider === 'webllm' ? webllmAvailable : hasApiKey;
+  // With hybrid approach, cloud providers always show as "online" (server has fallback key)
+  // The tooltip will show whether user's key is being used or server fallback
+  const isOnline = aiProvider === 'webllm' ? webllmAvailable : true;
 
   return (
     <TooltipProvider>
