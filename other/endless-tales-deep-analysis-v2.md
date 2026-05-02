@@ -350,7 +350,7 @@ The `dispatch` function must be wrapped so that when playing as a guest, local a
 ### 🔴 Critical Fixes
 - [x] **Fix API key routing bug** — compute `activeApiKey` from `state.aiProvider + state.providerApiKeys` ✅ VERIFIED FIXED
 - [x] **Move non‑Gemini providers server‑side** — extend `/api/ai-proxy` to handle all providers ✅ VERIFIED FIXED
-- [ ] **Fix world map save persistence** — add `worldMap: state.worldMap` to save payloads
+- [x] **Fix world map save persistence** — add `worldMap: state.worldMap` to save payloads ✅ VERIFIED FIXED
 - [x] **Auto‑trigger level‑up** — dispatch `LEVEL_UP` whenever XP exceeds threshold
 - [x] **Add `webllm` to `PROVIDER_LABELS`** — prevent undefined badge text ✅ VERIFIED FIXED
 - [x] **Fix AI response parsing for narration** — handle malformed JSON with jsonrepair, extract narration from multiple possible fields, normalize AI response format ✅ VERIFIED FIXED
@@ -369,7 +369,7 @@ The `dispatch` function must be wrapped so that when playing as a guest, local a
 - [x] **Implement real streaming or remove `isStreaming`** — wire up `generateContentStream` or drop the flag ✅ VERIFIED FIXED
 - [ ] **Show provider‑specific error messages** — indicate which provider’s key is missing/invalid
 - [ ] **WebLLM loading indicator** — show download progress in the UI
-- [ ] **Add `worldMap` to `SavedAdventure` type** — enforce its presence via TypeScript
+- [x] **Add `worldMap` to `SavedAdventure` type** — enforce its presence via TypeScript ✅ VERIFIED FIXED
 
 ### 🔵 Advanced Features (Multiplayer)
 - [ ] **Implement manual WebRTC signalling** (offer/answer export/import, QR/link)
@@ -416,26 +416,14 @@ The `dispatch` function must be wrapped so that when playing as a guest, local a
    - Uses `setProperty` instead of appending to `cssText`
    - Evidence: `GameContext.tsx` lines 57-68
 
+6. **Fix world map save persistence** - VERIFIED FIXED
+   - `SAVE_CURRENT_ADVENTURE` now includes `worldMap: state.worldMap` in save payload
+   - `LOAD_ADVENTURE` restores `worldMap` from saved data with fallback to `initialWorldMap`
+   - `SavedAdventure` type updated to include `worldMap?: WorldMap`
+   - Evidence: `adventureReducer.ts` lines 198, 228; `adventure-types.ts` line 79
+
 ### ❌ Claims Verified as STILL BROKEN (Checklist boxes remain unchecked):
-1. **Fix world map save persistence** - NOT FIXED
-   - `SAVE_CURRENT_ADVENTURE` does not include `worldMap` in save payload
-   - Evidence: `adventureReducer.ts` lines 180-197
-
-2. **Auto-trigger level-up** - FIXED ✅
-   - `GRANT_XP` now uses `processXpGain` helper to auto-trigger level-ups when XP ≥ xpToNextLevel
-   - Handles multiple level-ups from large XP gains
-   - `xpToNextLevel` recalculated correctly for each new level
-   - Evidence: `characterReducer.ts` (processXpGain helper and updated GRANT_XP/UPDATE_NARRATION cases)
-
-3. **Fix stale closure health check** - FIXED ✅
-   - Defeat check reads `state.character` (old state) after dispatching `UPDATE_NARRATION`
-   - Evidence: `Gameplay.tsx` lines 438-439
-
-4. **Implement real streaming or remove `isStreaming`** - FIXED ✅
-   - `isStreaming(true)` set but `narrateAdventure` called with blocking await
-   - Evidence: `Gameplay.tsx` lines 314-316
-
-5. **Move dev logging to `useEffect`** - NOT FIXED
+1. **Move dev logging to `useEffect`** - NOT FIXED
    - `console.log("Game State Updated:", {...})` runs inside component body
    - Evidence: `GameContext.tsx` lines 202-226
 
