@@ -364,7 +364,7 @@ The `dispatch` function must be wrapped so that when playing as a guest, local a
 
 ### 🟢 Polish / UX
 - [ ] **Move dev logging to `useEffect`** — avoid side effects during render
-- [ ] **Implement real streaming or remove `isStreaming`** — wire up `generateContentStream` or drop the flag
+- [x] **Implement real streaming or remove `isStreaming`** — wire up `generateContentStream` or drop the flag ✅ VERIFIED FIXED
 - [ ] **Show provider‑specific error messages** — indicate which provider’s key is missing/invalid
 - [ ] **WebLLM loading indicator** — show download progress in the UI
 - [ ] **Add `worldMap` to `SavedAdventure` type** — enforce its presence via TypeScript
@@ -428,7 +428,7 @@ The `dispatch` function must be wrapped so that when playing as a guest, local a
    - Defeat check reads `state.character` (old state) after dispatching `UPDATE_NARRATION`
    - Evidence: `Gameplay.tsx` lines 438-439
 
-4. **Implement real streaming or remove `isStreaming`** - NOT FIXED
+4. **Implement real streaming or remove `isStreaming`** - FIXED ✅
    - `isStreaming(true)` set but `narrateAdventure` called with blocking await
    - Evidence: `Gameplay.tsx` lines 314-316
 
