@@ -351,7 +351,7 @@ The `dispatch` function must be wrapped so that when playing as a guest, local a
 - [x] **Fix API key routing bug** — compute `activeApiKey` from `state.aiProvider + state.providerApiKeys` ✅ VERIFIED FIXED
 - [x] **Move non‑Gemini providers server‑side** — extend `/api/ai-proxy` to handle all providers ✅ VERIFIED FIXED
 - [ ] **Fix world map save persistence** — add `worldMap: state.worldMap` to save payloads
-- [ ] **Auto‑trigger level‑up** — dispatch `LEVEL_UP` whenever XP exceeds threshold
+- [x] **Auto‑trigger level‑up** — dispatch `LEVEL_UP` whenever XP exceeds threshold
 - [x] **Add `webllm` to `PROVIDER_LABELS`** — prevent undefined badge text ✅ VERIFIED FIXED
 - [x] **Fix AI response parsing for narration** — handle malformed JSON with jsonrepair, extract narration from multiple possible fields, normalize AI response format ✅ VERIFIED FIXED
 
@@ -421,10 +421,11 @@ The `dispatch` function must be wrapped so that when playing as a guest, local a
    - `SAVE_CURRENT_ADVENTURE` does not include `worldMap` in save payload
    - Evidence: `adventureReducer.ts` lines 180-197
 
-2. **Auto-trigger level-up** - NOT FIXED
-   - `LEVEL_UP` action exists but is never dispatched
-   - `GRANT_XP` adds XP but doesn't check for level-up threshold
-   - Evidence: `characterReducer.ts` lines 90-114
+2. **Auto-trigger level-up** - FIXED ✅
+   - `GRANT_XP` now uses `processXpGain` helper to auto-trigger level-ups when XP ≥ xpToNextLevel
+   - Handles multiple level-ups from large XP gains
+   - `xpToNextLevel` recalculated correctly for each new level
+   - Evidence: `characterReducer.ts` (processXpGain helper and updated GRANT_XP/UPDATE_NARRATION cases)
 
 3. **Fix stale closure health check** - FIXED ✅
    - Defeat check reads `state.character` (old state) after dispatching `UPDATE_NARRATION`

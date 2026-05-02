@@ -8,6 +8,45 @@ import { RESPAWN_XP_LOSS_PERCENT, RESPAWN_DEBUFF_DURATION, MAX_SKILL_TREE_STAGES
 // Helper to create a unique ID for status effects
 const generateStatusEffectId = () => `se_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
+// Helper to process XP gain and handle automatic level-ups (including multiple level-ups)
+const processXpGain = (state: Character, xpGained: number): Character => {
+    let newXp = state.xp + xpGained;
+    let currentLevel = state.level;
+    let currentXpToNext = state.xpToNextLevel;
+    let leveledUp = false;
+
+    // Handle multiple level-ups if XP exceeds threshold multiple times
+    while (newXp >= currentXpToNext) {
+        newXp -= currentXpToNext;
+        currentLevel += 1;
+        currentXpToNext = calculateXpToNextLevel(currentLevel);
+        leveledUp = true;
+    }
+
+    // If no level-up occurred, just update XP
+    if (!leveledUp) {
+        return { ...state, xp: newXp };
+    }
+
+    // Recalculate max stats and restore resources on level-up
+    const newMaxHealth = calculateMaxHealth(state.stats);
+    const newMaxStamina = calculateMaxActionStamina(state.stats);
+    const newMaxMana = calculateMaxMana(state.stats, state.knowledge);
+
+    return {
+        ...state,
+        level: currentLevel,
+        xp: newXp,
+        xpToNextLevel: currentXpToNext,
+        maxHealth: newMaxHealth,
+        currentHealth: newMaxHealth, // Full heal on level-up
+        maxStamina: newMaxStamina,
+        currentStamina: newMaxStamina, // Full stamina on level-up
+        maxMana: newMaxMana,
+        currentMana: newMaxMana, // Full mana on level-up
+    };
+};
+
 export function characterReducer(state: Character | null, action: Action): Character | null {
     switch (action.type) {
         case "CREATE_CHARACTER": {
@@ -89,8 +128,7 @@ export function characterReducer(state: Character | null, action: Action): Chara
             return { ...state, aiGeneratedDescription: action.payload };
         case "GRANT_XP": {
             if (!state) return null;
-            const newXp = state.xp + action.payload;
-            return { ...state, xp: newXp };
+            return processXpGain(state, action.payload);
         }
         case "LEVEL_UP": {
             if (!state) return null;
@@ -204,7 +242,10 @@ export function characterReducer(state: Character | null, action: Action): Chara
             if (gainedSkill && !newState.learnedSkills.some(s => s.name === gainedSkill.name)) {
                 newState.learnedSkills = [...newState.learnedSkills, { ...gainedSkill, type: 'Learned' }];
             }
-            if (xpGained) newState.xp += xpGained;
+            // Fix: Use processXpGain to handle level-ups from narration XP
+            if (xpGained) {
+                newState = processXpGain(newState, xpGained);
+            }
             if (reputationChange) {
                 const { faction, change } = reputationChange;
                 const currentScore = newState.reputation[faction] ?? 0;
