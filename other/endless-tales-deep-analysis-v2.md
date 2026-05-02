@@ -353,10 +353,12 @@ The `dispatch` function must be wrapped so that when playing as a guest, local a
 - [ ] **Fix world map save persistence** — add `worldMap: state.worldMap` to save payloads
 - [ ] **Auto‑trigger level‑up** — dispatch `LEVEL_UP` whenever XP exceeds threshold
 - [x] **Add `webllm` to `PROVIDER_LABELS`** — prevent undefined badge text ✅ VERIFIED FIXED
+- [x] **Fix AI response parsing for narration** — handle malformed JSON with jsonrepair, extract narration from multiple possible fields, normalize AI response format ✅ VERIFIED FIXED
+
 
 ### 🟠 Important Improvements
 - [x] **Fix theme CSS accumulation** — use `setProperty` instead of `cssText +=` ✅ VERIFIED FIXED
-- [ ] **Fix stale closure health check** — compute new health locally from `healthChange`
+- [x] **Fix stale closure health check** — compute new health locally from `healthChange` ✅ VERIFIED FIXED
 - [x] **Remove debounce from `configureAIRouter`** — or call synchronously on key change ✅ VERIFIED FIXED
 - [ ] **Separate system/user prompts** — for OpenAI/Claude/DeepSeek, pass system message separately
 - [ ] **Remove dead retry loop** — attempts 2 and 3 in `processAiResponse` are no‑ops
@@ -424,7 +426,7 @@ The `dispatch` function must be wrapped so that when playing as a guest, local a
    - `GRANT_XP` adds XP but doesn't check for level-up threshold
    - Evidence: `characterReducer.ts` lines 90-114
 
-3. **Fix stale closure health check** - NOT FIXED
+3. **Fix stale closure health check** - FIXED ✅
    - Defeat check reads `state.character` (old state) after dispatching `UPDATE_NARRATION`
    - Evidence: `Gameplay.tsx` lines 438-439
 
