@@ -128,7 +128,15 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     // Theme will be applied by the persistence effect after state update
   }, []); // Empty deps – runs once
 
-  // Consolidated persistence hook with debouncing
+  // NEW: Immediate AI router configuration (no debounce)
+  useEffect(() => {
+    configureAIRouter({
+      defaultProvider: state.aiProvider,
+      apiKeys: state.providerApiKeys,
+    });
+  }, [state.aiProvider, state.providerApiKeys]);
+
+  // Consolidated persistence hook with debouncing (storage writes only)
   useEffect(() => {
     // Clear any pending debounce
     if (debounceTimeoutRef.current) {
@@ -162,11 +170,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
         sessionStorage.removeItem(PROVIDER_API_KEYS_KEY);
       }
 
-      // Configure AI router
-      configureAIRouter({
-        defaultProvider: state.aiProvider,
-        apiKeys: state.providerApiKeys,
-      });
+      // REMOVED: configureAIRouter call – now handled by immediate effect above
 
       debounceTimeoutRef.current = null;
     }, 300);
@@ -183,8 +187,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     state.isDarkMode,
     state.userGoogleAiApiKey,
     state.savedAdventures,
-    state.aiProvider,
-    state.providerApiKeys,
+    // state.aiProvider and state.providerApiKeys are no longer in this dependency array
     applyTheme,
   ]);
 
