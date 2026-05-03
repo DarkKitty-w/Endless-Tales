@@ -115,12 +115,16 @@ export function Gameplay() {
     const [isDesktopSettingsOpen, setIsDesktopSettingsOpen] = useState(false);
     const [isPartySidebarOpen, setIsPartySidebarOpen] = useState(true);
     const [isChatPanelOpen, setIsChatPanelOpen] = useState(false);
-    const [isInteractionDialogOpen, setIsInteractionDialogOpen] = useState(false);
-    const [currentInteraction, setCurrentInteraction] = useState<InteractionRequest | null>(null);
-    const [isInteractionTarget, setIsInteractionTarget] = useState(false);
-    const [pendingGuestAction, setPendingGuestAction] = useState<string | null>(null);
-    
-    const initialSetupAttemptedRef = useRef<Record<string, boolean>>({});
+     const [isInteractionDialogOpen, setIsInteractionDialogOpen] = useState(false);
+     const [currentInteraction, setCurrentInteraction] = useState<InteractionRequest | null>(null);
+     const [isInteractionTarget, setIsInteractionTarget] = useState(false);
+     const [pendingGuestAction, setPendingGuestAction] = useState<string | null>(null);
+     const [isOutgoingInteractionOpen, setIsOutgoingInteractionOpen] = useState(false);
+     const [outgoingTargetPeerId, setOutgoingTargetPeerId] = useState<string | null>(null);
+     const [outgoingInteractionType, setOutgoingInteractionType] = useState<'gift' | 'trade' | 'duel'>('trade');
+     const [outgoingInteractionDetails, setOutgoingInteractionDetails] = useState('');
+     
+     const initialSetupAttemptedRef = useRef<Record<string, boolean>>({});
     const actionInputRef = useRef<ActionInputRef>(null);
     const isMobile = useIsMobile();
     
@@ -301,6 +305,29 @@ export function Gameplay() {
         setIsInteractionDialogOpen(false);
         toast({ title: "Interaction Declined", description: "You declined the interaction." });
     }, [currentInteraction, isInteractionTarget, sendInteractionResponse, dispatch, toast]);
+
+    // Send interaction request to another player
+    const handleSendTradeRequest = useCallback((targetPeerId: string) => {
+        setOutgoingTargetPeerId(targetPeerId);
+        setIsOutgoingInteractionOpen(true);
+    }, []);
+
+    const handleOutgoingInteractionSubmit = useCallback(() => {
+        if (!outgoingTargetPeerId || !outgoingInteractionDetails.trim()) {
+            toast({ title: "Missing Details", description: "Please provide details for the interaction.", variant: "destructive" });
+            return;
+        }
+        sendInteractionRequest(outgoingTargetPeerId, outgoingInteractionType, outgoingInteractionDetails);
+        toast({ title: "Interaction Sent", description: `${outgoingInteractionType.charAt(0).toUpperCase() + outgoingInteractionType.slice(1)} request sent.` });
+        setIsOutgoingInteractionOpen(false);
+        setOutgoingInteractionDetails('');
+    }, [outgoingTargetPeerId, outgoingInteractionType, outgoingInteractionDetails, sendInteractionRequest, toast]);
+
+    const handleOutgoingInteractionCancel = useCallback(() => {
+        setIsOutgoingInteractionOpen(false);
+        setOutgoingTargetPeerId(null);
+        setOutgoingInteractionDetails('');
+    }, []);
 
     // --- AbortController for AI requests ---
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -1160,6 +1187,7 @@ export function Gameplay() {
                                 onSetTurnOrder={handleSetTurnOrder}
                                 onReconnect={reconnect}
                                 isReconnecting={isReconnecting}
+                                onSendTradeRequest={handleSendTradeRequest}
                             />
                         </div>
                         <Button 
@@ -1191,6 +1219,58 @@ export function Gameplay() {
                     onDecline={handleInteractionDecline}
                     onClose={() => setIsInteractionDialogOpen(false)}
                 />
+
+                {/* Outgoing Interaction Dialog */}
+                {isOutgoingInteractionOpen && (
+                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                        <div className="bg-card border rounded-lg w-full max-w-md p-6 space-y-4">
+                            <h3 className="text-lg font-semibold">Send Interaction Request</h3>
+                            <p className="text-sm text-muted-foreground">
+                                Sending to: {multiplayerState.partyState[outgoingTargetPeerId || '']?.name || outgoingTargetPeerId}
+                            </p>
+                            
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Interaction Type</label>
+                                <div className="flex gap-2">
+                                    {(['trade', 'gift', 'duel'] as const).map(type => (
+                                        <Button
+                                            key={type}
+                                            variant={outgoingInteractionType === type ? 'default' : 'outline'}
+                                            size="sm"
+                                            onClick={() => setOutgoingInteractionType(type)}
+                                            className="capitalize"
+                                        >
+                                            {type}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Details</label>
+                                <textarea
+                                    className="w-full p-2 border rounded-md bg-background text-sm min-h-[80px]"
+                                    value={outgoingInteractionDetails}
+                                    onChange={(e) => setOutgoingInteractionDetails(e.target.value)}
+                                    placeholder={
+                                        outgoingInteractionType === 'trade' ? 'What do you want to trade?' :
+                                        outgoingInteractionType === 'gift' ? 'What are you giving?' :
+                                        'Challenge details...'
+                                    }
+                                />
+                            </div>
+
+                            <div className="flex justify-end gap-2">
+                                <Button variant="outline" onClick={handleOutgoingInteractionCancel}>
+                                    Cancel
+                                </Button>
+                                <Button onClick={handleOutgoingInteractionSubmit}>
+                                    Send Request
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </TooltipProvider>
     );

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useGame } from "../../context/GameContext";
 import { Button } from "../../components/ui/button";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "../../components/game/CardboardCard";
-import { Play, Settings, Sparkles, FolderClock, ChevronDown, Dices, Swords } from "lucide-react";
+import { Play, Settings, Sparkles, FolderClock, ChevronDown, Dices, Swords, Users } from "lucide-react";
 import { SettingsPanel } from '../../components/screens/SettingsPanel';
 import {
   Sheet,
@@ -15,6 +15,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "../../components/ui/dropdown-menu";
 import type { AdventureType } from "../../types/adventure-types";
 
@@ -86,11 +87,10 @@ export function MainMenu() {
               <DropdownMenuItem onClick={() => handleNewGameFlow("Immersed")} className="cursor-pointer">
                 <Sparkles className="mr-2 h-4 w-4" /> Immersed Adventure
               </DropdownMenuItem>
-              {/* Co-op Disabled Temporarily */}
-              {/* <DropdownMenuSeparator />
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => handleNewGameFlow("Coop")} className="cursor-pointer">
                 <Users className="mr-2 h-4 w-4" /> Co-op Adventure
-              </DropdownMenuItem> */}
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 

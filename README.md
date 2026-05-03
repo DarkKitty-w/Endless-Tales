@@ -159,10 +159,18 @@ Deux modes :
 
 ---
 
-## 👥 Multijoueur Coopératif *(en développement)*
+## 👥 Multijoueur Coopératif
 
-Le jeu est architecturé pour supporter des sessions **P2P** via WebRTC.  
-Un lobby de création/rejoindre une partie est déjà présent dans l’interface, mais la fonctionnalité est actuellement désactivée en attente de la finalisation de la couche réseau.
+Le jeu supporte des sessions **P2P** via WebRTC.  
+Fonctionnalités disponibles :
+* 🎮 **Lobby de création/rejoindre** une partie (via offer/answer QR code ou copier-coller)
+* 💬 **Chat en temps réel** entre joueurs
+* 🤝 **Interactions entre joueurs** : trade, gift, duel (avec dialogue d'acceptation)
+* 📊 **Gestion de la partie** : tour par tour, pause, ordre des tours, expulsion (kick)
+* 🔄 **Synchronisation de l'état** : personnages, inventaire, carte du monde
+* 🔃 **Reconnexion automatique** en cas de déconnexion
+
+> **Note :** Nécessite un navigateur compatible WebRTC (Chrome, Firefox, Edge récent).
 
 ---
 

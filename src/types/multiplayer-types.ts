@@ -97,7 +97,7 @@ export interface ChatMessage {
 export interface ControlMessage {
   type: 'CONTROL';
   payload: {
-    action: 'kick' | 'pause' | 'resume' | 'set-turn-order' | 'reconnect' | 'interaction-request' | 'interaction-response';
+    action: 'kick' | 'pause' | 'resume' | 'set-turn-order' | 'reconnect' | 'interaction-request' | 'interaction-response' | 'request-sync' | 'sync-response' | 'sync-complete';
     targetPeerId?: string;
     data?: any;
   };

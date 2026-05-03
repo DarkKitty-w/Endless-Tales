@@ -392,6 +392,31 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
             controlMsg.payload.data?.interactionId,
             controlMsg.payload.data?.accepted
           );
+        } else if (controlMsg.payload.action === 'request-sync' && multiplayerState.isHost) {
+          // Host received a sync request from a reconnecting peer
+          console.log('Host: Sync request received, sending full state...');
+          // Send full state sync
+          sendMessage('control', { 
+            action: 'sync-response', 
+            data: { 
+              gameState: multiplayerStateRef.current,
+              partyState: multiplayerStateRef.current?.partyState,
+              turnOrder: multiplayerStateRef.current?.turnOrder,
+              currentTurnIndex: multiplayerStateRef.current?.currentTurnIndex,
+            }
+          });
+        } else if (controlMsg.payload.action === 'sync-response' && !multiplayerState.isHost) {
+          // Guest received state sync from host
+          console.log('Guest: Received state sync from host');
+          const { gameState, partyState, turnOrder, currentTurnIndex } = controlMsg.payload.data || {};
+          if (gameState && onStoryUpdate) {
+            // Apply the synced state - this will trigger a full state update
+            console.log('Guest: Applying synced state...');
+            // The actual state application will be done via dispatch in the component
+            if (onControlMessage) {
+              onControlMessage({ action: 'sync-complete', data: { gameState, partyState, turnOrder, currentTurnIndex } });
+            }
+          }
         }
         break;
       }

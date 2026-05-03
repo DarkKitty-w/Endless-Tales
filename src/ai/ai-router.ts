@@ -40,6 +40,16 @@ export function buildMessages(contents: string, systemMessage?: string): { role:
   return messages;
 }
 
+// Timeout for AI requests (30 seconds)
+const AI_TIMEOUT = 30000;
+function getSignalWithTimeout(signal?: AbortSignal): AbortSignal {
+  const timeoutSignal = AbortSignal.timeout(AI_TIMEOUT);
+  if (signal) {
+    return AbortSignal.any([signal, timeoutSignal]);
+  }
+  return timeoutSignal;
+}
+
 // ✅ Added 'openrouter'
 export type ProviderType = 'gemini' | 'openai' | 'claude' | 'deepseek' | 'webllm' | 'openrouter';
 
@@ -92,7 +102,7 @@ class GeminiProvider implements AIProvider {
         // Send user's API key if available (hybrid approach)
         ...(this.apiKey && { apiKey: this.apiKey }),
       }),
-      signal,
+      signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
@@ -130,7 +140,7 @@ class GeminiProvider implements AIProvider {
         // Send user's API key if available (hybrid approach)
         ...(this.apiKey && { apiKey: this.apiKey }),
       }),
-      signal,
+      signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
@@ -201,7 +211,7 @@ class OpenAIProvider implements AIProvider {
         // Send user's API key if available (hybrid approach)
         ...(this.apiKey && { apiKey: this.apiKey }),
       }),
-      signal,
+      signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
@@ -240,7 +250,7 @@ class OpenAIProvider implements AIProvider {
         // Send user's API key if available (hybrid approach)
         ...(this.apiKey && { apiKey: this.apiKey }),
       }),
-      signal,
+      signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
@@ -309,7 +319,7 @@ class ClaudeProvider implements AIProvider {
         // Send user's API key if available (hybrid approach)
         ...(this.apiKey && { apiKey: this.apiKey }),
       }),
-      signal,
+      signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
@@ -348,7 +358,7 @@ class ClaudeProvider implements AIProvider {
         // Send user's API key if available (hybrid approach)
         ...(this.apiKey && { apiKey: this.apiKey }),
       }),
-      signal,
+      signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
@@ -418,7 +428,7 @@ class DeepSeekProvider implements AIProvider {
         // Send user's API key if available (hybrid approach)
         ...(this.apiKey && { apiKey: this.apiKey }),
       }),
-      signal,
+      signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
@@ -457,7 +467,7 @@ class DeepSeekProvider implements AIProvider {
         // Send user's API key if available (hybrid approach)
         ...(this.apiKey && { apiKey: this.apiKey }),
       }),
-      signal,
+      signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
@@ -515,31 +525,23 @@ class OpenRouterProvider implements AIProvider {
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'z-ai/glm-4.5-air:free';
     const apiKey = this.getApiKey();
-    if (!apiKey) throw new Error('OpenRouter API key not configured. Please add your OpenRouter API key in Settings.');
 
-    const messages = [{ role: 'user', content: contents }];
-
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await fetch('/api/ai-proxy', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
-        'X-Title': 'Endless Tales',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        provider: 'openrouter',
         model: effectiveModel,
-        messages,
-        temperature: config?.temperature,
-        top_p: config?.topP,
-        response_format: config?.responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
+        contents,
+        config,
+        ...(apiKey && { apiKey }),
       }),
-      signal,
+      signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`OpenRouter API error: ${error.error?.message || 'Request failed'}`);
+      throw new Error(`OpenRouter API error: ${error.error || 'Request failed'}`);
     }
 
     const data = await response.json();
@@ -561,30 +563,24 @@ class OpenRouterProvider implements AIProvider {
   }): AsyncIterable<string> {
     const effectiveModel = model || 'z-ai/glm-4.5-air:free';
     const apiKey = this.getApiKey();
-    if (!apiKey) throw new Error('OpenRouter API key not configured');
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    const response = await fetch('/api/ai-proxy', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
-        'X-Title': 'Endless Tales',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        provider: 'openrouter',
         model: effectiveModel,
-        messages: [{ role: 'user', content: contents }],
-        temperature: config?.temperature,
-        top_p: config?.topP,
+        contents,
+        config,
         stream: true,
-        response_format: config?.responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
+        ...(apiKey && { apiKey }),
       }),
-      signal,
+      signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`OpenRouter API streaming error: ${error.error?.message || 'Streaming request failed'}`);
+      throw new Error(`OpenRouter API streaming error: ${error.error || 'Streaming request failed'}`);
     }
 
     const reader = response.body?.getReader();
@@ -618,9 +614,7 @@ class OpenRouterProvider implements AIProvider {
 
 // --- WebLLM Provider (Local AI) - Optional, lazy-loaded ---
 
-// --- WebLLM Provider (Local AI) - Optional, lazy-loaded ---
-
-let webllmModule: any = null; // <-- CHANGED: Store the whole module
+let webllmModule: any = null;
 let webllmLoadAttempted = false;
 let webllmAvailable = false;
 let webllmLoadPromise: Promise<any> | null = null;
@@ -631,7 +625,7 @@ async function loadWebLLM(): Promise<any> {
     throw new Error('[WebLLM] Can only be loaded in the browser');
   }
 
-  if (webllmModule) { // <-- CHANGED: Return the module
+  if (webllmModule) {
     console.log('[WebLLM] Returning cached module');
     return webllmModule;
   }
@@ -648,21 +642,19 @@ async function loadWebLLM(): Promise<any> {
       const module = await import('@mlc-ai/web-llm');
       console.log('[WebLLM] Module loaded, keys:', Object.keys(module));
       
-      // Verify the creator exists, but save the WHOLE module
       const creator = module.CreateMLCEngine || module.CreateWebWorkerMLCEngine;
       if (!creator) {
         console.error('[WebLLM] No engine creator found in module keys:', Object.keys(module));
         throw new Error('[WebLLM] No engine creator found (expected CreateMLCEngine or CreateWebWorkerMLCEngine)');
       }
       
-      webllmModule = module; // <-- CHANGED: Save the whole module into cache
+      webllmModule = module;
       webllmAvailable = true;
       console.log('[WebLLM] Engine creator found:', creator.name || 'anonymous');
       return module;
     } catch (e) {
       console.error('[WebLLM] Failed to load package:', e);
       webllmAvailable = false;
-      // Retry once after a short delay (network flakiness)
       if (!webllmLoadRetried) {
         webllmLoadRetried = true;
         console.log('[WebLLM] Retrying import once after 500ms...');
@@ -672,7 +664,7 @@ async function loadWebLLM(): Promise<any> {
       }
       throw e;
     } finally {
-      if (!webllmModule) { // <-- CHANGED: Check module instead of creator
+      if (!webllmModule) {
         webllmLoadPromise = null;
       }
     }
@@ -691,12 +683,15 @@ export function isWebLLMAvailable(): boolean {
   return webllmAvailable;
 }
 
+// Store progress callback in module-level variable instead of as static class property
+// This avoids the private property access issue
+let webllmProgressCallback: ((progress: number, text: string) => void) | null = null;
+
 class WebLLMProvider implements AIProvider {
   private static engine: any = null;
   private static currentModel: string = '';
   private static loadingPromise: Promise<any> | null = null;
   private static persistence: 'temporary' | 'persistent' = 'temporary';
-  static progressCallback: ((progress: number, text: string) => void) | null = null;
 
   constructor(private options?: { model?: string; persistence?: 'temporary' | 'persistent'; onProgress?: (progress: number, text: string) => void }) {
     console.log('[WebLLM Provider] Constructor called with options:', options);
@@ -704,8 +699,12 @@ class WebLLMProvider implements AIProvider {
       WebLLMProvider.persistence = options.persistence;
     }
     if (options?.onProgress) {
-      WebLLMProvider.progressCallback = options.onProgress;
+      webllmProgressCallback = options.onProgress;
     }
+  }
+
+  static setProgressCallback(cb: ((progress: number, text: string) => void) | null) {
+    webllmProgressCallback = cb;
   }
 
   private async getEngine(modelId?: string): Promise<any> {
@@ -739,7 +738,6 @@ class WebLLMProvider implements AIProvider {
     console.log('[WebLLM] prebuiltAppConfig:', prebuiltAppConfig);
     console.log('[WebLLM] prebuiltAppConfig.model_list:', prebuiltAppConfig?.model_list);
 
-    // Wait a bit for internal initialization
     await new Promise(resolve => setTimeout(resolve, 200));
 
     if (!prebuiltAppConfig || !Array.isArray(prebuiltAppConfig.model_list)) {
@@ -759,7 +757,6 @@ class WebLLMProvider implements AIProvider {
     ];
     console.log('[WebLLM] Fallback models:', fallbackModels);
 
-    // Use the model selected in settings (passed via options) or fallback
     let effectiveModel = this.options?.model || fallbackModels[0];
     console.log('[WebLLM] Effective model from options:', effectiveModel);
     console.log('[WebLLM] Is requested model in available list?', availableModels.includes(effectiveModel));
@@ -785,8 +782,8 @@ class WebLLMProvider implements AIProvider {
         const engineConfig: any = {
           initProgressCallback: (report: { progress: number; text: string }) => {
             console.log(`[WebLLM Progress] ${report.progress}: ${report.text}`);
-            if (WebLLMProvider.progressCallback) {
-              WebLLMProvider.progressCallback(report.progress, report.text);
+            if (webllmProgressCallback) {
+              webllmProgressCallback(report.progress, report.text);
             }
           },
           appConfig: {
@@ -811,9 +808,9 @@ class WebLLMProvider implements AIProvider {
         WebLLMProvider.loadingPromise = null;
         console.error('[WebLLM] Engine creation failed:', error);
         console.error('[WebLLM] Error details:', {
-          message: error.message,
-          stack: error.stack,
-          name: error.name,
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined,
+          name: error instanceof Error ? error.name : 'unknown',
         });
         throw error;
       } finally {
@@ -932,13 +929,9 @@ class WebLLMProvider implements AIProvider {
       WebLLMProvider.engine = null;
       WebLLMProvider.currentModel = '';
       console.log('[WebLLM] Cache cleared');
-    } catch (error: unknown) {
+    } catch (error) {
       console.error('[WebLLM] Failed to clear cache:', error);
-      if (error instanceof Error) {
-        throw error;
-      } else {
-        throw new Error(String(error));
-      }
+      throw error instanceof Error ? error : new Error(String(error));
     }
   }
 }
@@ -978,7 +971,7 @@ export function getAIProvider(
     case 'webllm':
       console.log('[AI Router] Creating WebLLM provider, webllmAvailable:', webllmAvailable);
       if (webllmAvailable) {
-        return new WebLLMProvider({ onProgress: WebLLMProvider.progressCallback || undefined });
+        return new WebLLMProvider({ onProgress: webllmProgressCallback || undefined });
       } else {
         console.warn('[AI Router] WebLLM not available, returning stub');
         return new WebLLMStubProvider();

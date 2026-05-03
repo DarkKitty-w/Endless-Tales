@@ -1,4 +1,3 @@
-// src/components/gameplay/AIStatusPanel.tsx
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -70,11 +69,11 @@ export function AIStatusPanel() {
         setWebllmProgress({ progress, text });
       };
       
-      // Set the callback on the WebLLMProvider
-      WebLLMProvider.progressCallback = updateProgress;
+      // Use the static method to set the callback
+      WebLLMProvider.setProgressCallback(updateProgress);
       
       return () => {
-        WebLLMProvider.progressCallback = null;
+        WebLLMProvider.setProgressCallback(null);
       };
     }
   }, [aiProvider]);

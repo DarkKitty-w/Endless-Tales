@@ -10,6 +10,7 @@ import { InventoryDisplay } from "../../components/game/InventoryDisplay";
 import { SkillTreeDisplay } from "../../components/game/SkillTreeDisplay";
 import { ReputationDisplay } from "../../components/game/ReputationDisplay";
 import { NpcRelationshipsDisplay } from "../../components/game/NpcRelationshipsDisplay";
+import { WorldMapDisplay } from "../../components/game/WorldMapDisplay";
 import { CardboardCard, CardContent } from "../../components/game/CardboardCard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { Separator } from "../../components/ui/separator";
@@ -17,7 +18,7 @@ import { Progress } from "../../components/ui/progress";
 import { Label } from "../../components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "../../components/ui/tooltip";
 import {
-    Award, Users, HeartPulse, CalendarClock, Milestone, Backpack, Workflow, Loader2, User
+    Award, Users, HeartPulse, CalendarClock, Milestone, Backpack, Workflow, Loader2, User, Map
 } from "lucide-react";
 import { ScrollArea } from "../../components/ui/scroll-area";
 
@@ -58,6 +59,9 @@ export function LeftPanel({
                             <Workflow className="w-4 h-4"/> Skills
                         </TabsTrigger>
                     )}
+                    <TabsTrigger value="map" className="flex-initial flex items-center justify-center gap-1.5 text-xs sm:text-sm px-2.5 py-1.5 h-9">
+                        <Map className="w-4 h-4"/> Map
+                    </TabsTrigger>
                 </TabsList>
                 
                 <div className="flex-grow overflow-hidden mt-0">
@@ -146,6 +150,10 @@ export function LeftPanel({
                             )}
                         </TabsContent>
                     )}
+
+                    <TabsContent value="map" className="h-full m-0">
+                        <WorldMapDisplay />
+                    </TabsContent>
                 </div>
             </Tabs>
         </div>

@@ -8,7 +8,7 @@ import { AdventureSetup } from "../components/screens/AdventureSetup";
 import { Gameplay } from "../components/screens/Gameplay";
 import { AdventureSummary } from "../components/screens/AdventureSummary";
 import { SavedAdventuresList } from "../components/screens/SavedAdventuresList";
-// import { CoopLobby } from "../components/screens/CoopLobby"; // Disabled
+import { CoopLobby } from "../components/screens/CoopLobby";
 import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 
@@ -41,10 +41,20 @@ export default function Home() {
             )}
           </ErrorBoundary>
         );
-      // Co-op modes temporarily disabled
-      case "CoopGameplay":
       case "CoopLobby":
-        return <ErrorBoundary><MainMenu /></ErrorBoundary>;
+        return <ErrorBoundary><CoopLobby /></ErrorBoundary>;
+      case "CoopGameplay":
+        return (
+          <ErrorBoundary>
+            {state.character ? (
+              <Gameplay />
+            ) : (
+              <div className="flex items-center justify-center min-h-screen">
+                <Loader2 className="h-8 w-8 animate-spin mr-2" /> Loading Character...
+              </div>
+            )}
+          </ErrorBoundary>
+        );
       case "AdventureSummary":
         return <ErrorBoundary><AdventureSummary /></ErrorBoundary>;
       case "ViewSavedAdventures":

@@ -2,7 +2,7 @@
 
 import React from "react";
 import type { MultiplayerState, PeerInfo, PlayerSummary } from "../../types/multiplayer-types";
-import { Users, Crown, Sword, MessageSquare } from "lucide-react";
+import { Users, Crown, Sword, MessageSquare, Handshake } from "lucide-react";
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
 import { Separator } from "../ui/separator";
@@ -17,6 +17,7 @@ interface PartySidebarProps {
   onSetTurnOrder?: (turnOrder: string[]) => void;
   onReconnect?: () => void;
   isReconnecting?: boolean;
+  onSendTradeRequest?: (targetPeerId: string) => void;
 }
 
 export function PartySidebar({ 
@@ -27,7 +28,8 @@ export function PartySidebar({
   onOpenChat,
   onSetTurnOrder,
   onReconnect,
-  isReconnecting
+  isReconnecting,
+  onSendTradeRequest
 }: PartySidebarProps) {
   const { peers, turnOrder, currentTurnIndex, isPaused, partyState, connectionStatus } = multiplayerState;
 
@@ -149,12 +151,23 @@ export function PartySidebar({
                       )}
                     </div>
                   )}
+                  {!isYou && onSendTradeRequest && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => onSendTradeRequest(peerId)}
+                      className="text-blue-600 hover:text-blue-700"
+                      title="Request Trade"
+                    >
+                      <Handshake className="h-4 w-4" />
+                    </Button>
+                  )}
                   {isHost && !isYou && onKickPeer && (
                     <Button 
                       variant="ghost" 
                       size="sm"
                       onClick={() => onKickPeer(peerId)}
-                      className="text-destructive hover:text-destructive"
+                      className="text-destructive hover:text-destructive text-xs"
                     >
                       Kick
                     </Button>
