@@ -1786,3 +1786,4 @@ for (const candidate of pkg.iceCandidates) {#  try {#    await pc.addIceCandidat
 - [ ] A11Y-10: Fix heading structure (use h1, h2, h3 properly)#
 - [ ] A11Y-11: Add aria-live to ChatPanel message container#
 - [ ] A11Y-12: Add role="alert" to error toasts#
+- [ ] A11Y-13: Fix Character Creation form accessibility#
