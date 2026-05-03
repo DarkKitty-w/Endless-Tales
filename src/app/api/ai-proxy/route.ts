@@ -1,189 +1,329 @@
 // src/app/api/ai-proxy/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 
-// Server-side API keys (fallback if user doesn't provide their own)
-const SERVER_API_KEYS = {
-  gemini: process.env.GEMINI_API_KEY,
-  openai: process.env.OPENAI_API_KEY,
-  claude: process.env.CLAUDE_API_KEY,
-  deepseek: process.env.DEEPSEEK_API_KEY,
-  openrouter: process.env.OPENROUTER_API_KEY,
-};
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-// Provider configurations
-const PROVIDER_CONFIGS = {
-  gemini: {
-    baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-  },
-  openai: {
-    baseUrl: 'https://api.openai.com/v1',
-  },
-  claude: {
-    baseUrl: 'https://api.anthropic.com/v1',
-  },
-  deepseek: {
-    baseUrl: 'https://api.deepseek.com/v1',
-  },
-  openrouter: {
-    baseUrl: 'https://openrouter.ai/api/v1',
-  },
-};
-
-function getEnvVarName(provider) {
-  const envVarMap = {
-    gemini: 'GEMINI_API_KEY',
-    openai: 'OPENAI_API_KEY',
-    claude: 'CLAUDE_API_KEY',
-    deepseek: 'DEEPSEEK_API_KEY',
-    openrouter: 'OPENROUTER_API_KEY',
-  };
-  return envVarMap[provider] || 'API_KEY';
-}
-
-export async function POST(request) {
+export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { provider = 'gemini', model, contents, config, stream, apiKey: clientApiKey } = body;
+    const { provider, model, contents, config, userApiKey, stream, systemMessage } = body;
 
-    if (!PROVIDER_CONFIGS[provider]) {
-      return NextResponse.json(
-        { error: 'Unsupported provider: ' + provider },
-        { status: 400 }
-      );
-    }
-
-    // Hybrid approach: Use client-provided key if available, otherwise fall back to server key
-    const apiKey = clientApiKey || SERVER_API_KEYS[provider];
+    // Determine which API key to use
+    const apiKey = userApiKey || getServerApiKey(provider);
     
-    if (!apiKey) {
+    if (!apiKey && provider !== 'webllm') {
+      const providerLabels: Record<string, string> = {
+        'gemini': 'Gemini',
+        'openai': 'OpenAI',
+        'claude': 'Claude',
+        'deepseek': 'DeepSeek',
+        'openrouter': 'OpenRouter'
+      };
+      const providerName = providerLabels[provider] || provider;
       return NextResponse.json(
-        { error: 'No API key available for provider: ' + provider + '. Please either provide your own key in Settings or set the ' + getEnvVarName(provider) + ' environment variable on the server.' },
-        { status: 500 }
+        { error: `${providerName} API key not configured. Please add your ${providerName} API key in Settings.` },
+        { status: 401 }
       );
     }
-
-    const providerConfig = PROVIDER_CONFIGS[provider];
 
     switch (provider) {
       case 'gemini':
-        return handleGeminiRequest({ model, contents, config, apiKey, stream });
+        return handleGemini(model, contents, config, apiKey, stream, systemMessage);
       case 'openai':
-      case 'deepseek':
-      case 'openrouter':
-        return handleOpenAICompatibleRequest({ provider, model, contents, config, apiKey, stream, baseUrl: providerConfig.baseUrl });
+        return handleOpenAI(model, contents, config, apiKey, stream, systemMessage);
       case 'claude':
-        return handleClaudeRequest({ model, contents, config, apiKey, stream });
+        return handleClaude(model, contents, config, apiKey, stream, systemMessage);
+      case 'deepseek':
+        return handleDeepSeek(model, contents, config, apiKey, stream, systemMessage);
+      case 'openrouter':
+        return handleOpenRouter(model, contents, config, apiKey, stream, systemMessage);
       default:
         return NextResponse.json(
-          { error: 'Unsupported provider: ' + provider },
+          { error: `Unsupported provider: ${provider}` },
           { status: 400 }
         );
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('AI Proxy error:', error);
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Internal server error' },
+      { error: message },
       { status: 500 }
     );
   }
 }
 
-async function handleGeminiRequest({ model, contents, config, apiKey, stream }) {
-  const endpoint = stream ? 'streamGenerateContent' : 'generateContent';
-  const url = `${PROVIDER_CONFIGS.gemini.baseUrl}/models/${model}:${endpoint}?key=${apiKey}`;
+function getServerApiKey(provider: string): string | undefined {
+  switch (provider) {
+    case 'gemini': return process.env.GEMINI_API_KEY;
+    case 'openai': return process.env.OPENAI_API_KEY;
+    case 'claude': return process.env.CLAUDE_API_KEY;
+    case 'deepseek': return process.env.DEEPSEEK_API_KEY;
+    case 'openrouter': return process.env.OPENROUTER_API_KEY;
+    default: return undefined;
+  }
+}
+
+// --- Gemini Handler ---
+async function handleGemini(
+  model: string | undefined,
+  contents: any,
+  config: any,
+  apiKey: string,
+  stream: boolean,
+  systemMessage: string | undefined
+) {
+  const effectiveModel = model || 'gemini-2.5-flash';
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${effectiveModel}:${stream ? 'streamGenerateContent' : 'generateContent'}?key=${apiKey}`;
+
+  const body: any = {
+    contents: typeof contents === 'string' ? [{ parts: [{ text: contents }] }] : contents,
+  };
+
+  // Add system instruction for Gemini
+  if (systemMessage) {
+    body.systemInstruction = { parts: [{ text: systemMessage }] };
+  }
+
+  if (config) {
+    body.generationConfig = config;
+  }
+
+  if (stream) {
+    body.generationConfig = { ...body.generationConfig, stream: true };
+  }
 
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: typeof contents === 'string' ? [{ parts: [{ text: contents }] }] : contents,
-      ...(config && { generationConfig: config }),
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
     const errorText = await response.text();
     console.error('Gemini API error:', response.status, errorText);
     return NextResponse.json(
-      { error: 'Gemini API error: ' + response.status },
+      { error: `Gemini API error: ${response.status}` },
       { status: response.status }
     );
   }
 
   if (stream) {
-    return createGeminiStreamResponse(response);
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        const reader = response.body?.getReader();
+        if (!reader) {
+          controller.close();
+          return;
+        }
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const text = new TextDecoder().decode(value, { stream: true });
+            const lines = text.split('\n');
+            for (const line of lines) {
+              if (line.trim()) {
+                controller.enqueue(encoder.encode(`data: ${line}\n\n`));
+              }
+            }
+          }
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        } catch (e) {
+          console.error('Streaming error:', e);
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
   } else {
     const data = await response.json();
     return NextResponse.json(data);
   }
 }
 
-async function handleOpenAICompatibleRequest({ provider, model, contents, config, apiKey, stream, baseUrl }) {
-  const messages = typeof contents === 'string' 
-    ? [{ role: 'user', content: contents }]
-    : contents;
+// --- OpenAI-compatible Handler (OpenAI, DeepSeek, OpenRouter) ---
+async function handleOpenAICompatible(
+  model: string | undefined,
+  contents: any,
+  config: any,
+  apiKey: string,
+  stream: boolean,
+  systemMessage: string | undefined,
+  baseUrl: string,
+  providerName: string
+) {
+  const effectiveModel = model || 'gpt-4o';
+  const url = `${baseUrl}/chat/completions`;
 
-  const body = {
-    model,
+  // Build messages array with system message separation
+  const messages: { role: string; content: string }[] = [];
+  if (systemMessage) {
+    messages.push({ role: 'system', content: systemMessage });
+  }
+  messages.push({ role: 'user', content: typeof contents === 'string' ? contents : JSON.stringify(contents) });
+
+  const body: any = {
+    model: effectiveModel,
     messages,
-    stream: !!stream,
+    stream: stream || false,
   };
 
-  if (config?.temperature !== undefined) body.temperature = config.temperature;
-  if (config?.topP !== undefined) body.top_p = config.topP;
+  if (config?.temperature) body.temperature = config.temperature;
+  if (config?.topP) body.top_p = config.topP;
   if (config?.responseMimeType === 'application/json') {
     body.response_format = { type: 'json_object' };
   }
 
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${apiKey}`,
-  };
-
-  if (provider === 'openrouter') {
-    headers['HTTP-Referer'] = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:9002';
-    headers['X-Title'] = 'Endless Tales';
-  }
-
-  const response = await fetch(`${baseUrl}/chat/completions`, {
+  const response = await fetch(url, {
     method: 'POST',
-    headers,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+    },
     body: JSON.stringify(body),
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
-    console.error(`${provider} API error:`, response.status, error);
+    const error = await response.json();
+    console.error(`${providerName} API error:`, response.status, error);
     return NextResponse.json(
-      { error: `${provider} API error: ${error.error?.message || response.status}` },
+      { error: `${providerName} API error: ${error.error?.message || response.status}` },
       { status: response.status }
     );
   }
 
   if (stream) {
-    return createOpenAIStreamResponse(response);
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        const reader = response.body?.getReader();
+        if (!reader) {
+          controller.close();
+          return;
+        }
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const text = new TextDecoder().decode(value, { stream: true });
+            const lines = text.split('\n');
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('data: ')) {
+                const data = trimmed.slice(6);
+                if (data === '[DONE]') {
+                  controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                  break;
+                }
+                try {
+                  const parsed = JSON.parse(data);
+                  const content = parsed.choices?.[0]?.delta?.content;
+                  if (content) {
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: content }] }] })}\n\n`));
+                  }
+                } catch (e) {
+                  // ignore malformed JSON
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Streaming error:', e);
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
   } else {
     const data = await response.json();
     return NextResponse.json(data);
   }
 }
 
-async function handleClaudeRequest({ model, contents, config, apiKey, stream }) {
-  const messages = typeof contents === 'string'
-    ? [{ role: 'user', content: contents }]
-    : contents;
+// --- OpenAI Handler ---
+async function handleOpenAI(
+  model: string | undefined,
+  contents: any,
+  config: any,
+  apiKey: string,
+  stream: boolean,
+  systemMessage: string | undefined
+) {
+  return handleOpenAICompatible(model, contents, config, apiKey, stream, systemMessage, 'https://api.openai.com/v1', 'OpenAI');
+}
 
-  const body = {
-    model,
-    max_tokens: 4096,
-    messages,
-    stream: !!stream,
+// --- DeepSeek Handler ---
+async function handleDeepSeek(
+  model: string | undefined,
+  contents: any,
+  config: any,
+  apiKey: string,
+  stream: boolean,
+  systemMessage: string | undefined
+) {
+  return handleOpenAICompatible(model, contents, config, apiKey, stream, systemMessage, 'https://api.deepseek.com/v1', 'DeepSeek');
+}
+
+// --- OpenRouter Handler ---
+async function handleOpenRouter(
+  model: string | undefined,
+  contents: any,
+  config: any,
+  apiKey: string,
+  stream: boolean,
+  systemMessage: string | undefined
+) {
+  return handleOpenAICompatible(model, contents, config, apiKey, stream, systemMessage, 'https://openrouter.ai/api/v1', 'OpenRouter');
+}
+
+// --- Claude Handler ---
+async function handleClaude(
+  model: string | undefined,
+  contents: any,
+  config: any,
+  apiKey: string,
+  stream: boolean,
+  systemMessage: string | undefined
+) {
+  const effectiveModel = model || 'claude-3-5-sonnet-20241022';
+  const url = `https://api.anthropic.com/v1/messages`;
+
+  const body: any = {
+    model: effectiveModel,
+    max_tokens: config?.maxTokens || 4096,
+    stream: stream || false,
   };
 
-  if (config?.temperature !== undefined) body.temperature = config.temperature;
-  if (config?.topP !== undefined) body.top_p = config.topP;
+  // Claude uses system prompt and messages array
+  if (systemMessage) {
+    body.system = systemMessage;
+  }
 
-  const response = await fetch(`${PROVIDER_CONFIGS.claude.baseUrl}/messages`, {
+  // Claude expects messages array
+  body.messages = [{ role: 'user', content: typeof contents === 'string' ? contents : JSON.stringify(contents) }];
+
+  if (config?.temperature) body.temperature = config.temperature;
+  if (config?.topP) body.top_p = config.topP;
+
+  const response = await fetch(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -194,7 +334,7 @@ async function handleClaudeRequest({ model, contents, config, apiKey, stream }) 
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+    const error = await response.json();
     console.error('Claude API error:', response.status, error);
     return NextResponse.json(
       { error: `Claude API error: ${error.error?.message || response.status}` },
@@ -203,137 +343,69 @@ async function handleClaudeRequest({ model, contents, config, apiKey, stream }) 
   }
 
   if (stream) {
-    return createClaudeStreamResponse(response);
+    const encoder = new TextEncoder();
+    const readable = new ReadableStream({
+      async start(controller) {
+        const reader = response.body?.getReader();
+        if (!reader) {
+          controller.close();
+          return;
+        }
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const text = new TextDecoder().decode(value, { stream: true });
+            const lines = text.split('\n');
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (trimmed.startsWith('data: ')) {
+                const data = trimmed.slice(6);
+                if (data === '[DONE]') {
+                  controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+                  break;
+                }
+                try {
+                  const parsed = JSON.parse(data);
+                  if (parsed.type === 'content_block_delta') {
+                    const text = parsed.delta?.text;
+                    if (text) {
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] }] })}\n\n`));
+                    }
+                  }
+                } catch (e) {
+                  // ignore malformed JSON
+                }
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Streaming error:', e);
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
   } else {
     const data = await response.json();
-    return NextResponse.json(data);
+    // Transform Claude response to match our expected format
+    const transformed = {
+      candidates: [{
+        content: {
+          parts: [{
+            text: data.content?.[0]?.text || ''
+          }]
+        }
+      }]
+    };
+    return NextResponse.json(transformed);
   }
-}
-
-function createGeminiStreamResponse(response) {
-  const encoder = new TextEncoder();
-  const readable = new ReadableStream({
-    async start(controller) {
-      const reader = response.body?.getReader();
-      if (!reader) {
-        controller.close();
-        return;
-      }
-      const decoder = new TextDecoder();
-      let buffer = '';
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          for (const line of lines) {
-            if (line.trim()) {
-              controller.enqueue(encoder.encode(`data: ${line}\n\n`));
-            }
-          }
-        }
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-      } catch (e) {
-        console.error('Gemini streaming error:', e);
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(readable, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
-  });
-}
-
-function createOpenAIStreamResponse(response) {
-  const encoder = new TextEncoder();
-  const readable = new ReadableStream({
-    async start(controller) {
-      const reader = response.body?.getReader();
-      if (!reader) {
-        controller.close();
-        return;
-      }
-      const decoder = new TextDecoder();
-      let buffer = '';
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('data: ')) {
-              controller.enqueue(encoder.encode(`${trimmed}\n\n`));
-            }
-          }
-        }
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-      } catch (e) {
-        console.error('OpenAI streaming error:', e);
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(readable, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
-  });
-}
-
-function createClaudeStreamResponse(response) {
-  const encoder = new TextEncoder();
-  const readable = new ReadableStream({
-    async start(controller) {
-      const reader = response.body?.getReader();
-      if (!reader) {
-        controller.close();
-        return;
-      }
-      const decoder = new TextDecoder();
-      let buffer = '';
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (trimmed.startsWith('data: ')) {
-              controller.enqueue(encoder.encode(`${trimmed}\n\n`));
-            }
-          }
-        }
-        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-      } catch (e) {
-        console.error('Claude streaming error:', e);
-      } finally {
-        controller.close();
-      }
-    },
-  });
-
-  return new Response(readable, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-    },
-  });
 }

@@ -1,14 +1,13 @@
-
 // src/lib/firebase.ts
-// FIREBASE DISABLED TEMPORARILY
-// This file now exports dummy objects to prevent initialization errors.
+// Firebase is no longer used. Multiplayer is now handled via WebRTC.
+// This file is kept to avoid import errors, but exports dummy objects.
 
 const app = {} as any;
 const db = {} as any;
 const auth = {
-    currentUser: null,
-    onAuthStateChanged: (cb: any) => { return () => {}; }, // Dummy unsubscribe
-    signOut: async () => {},
+  currentUser: null,
+  onAuthStateChanged: (cb: any) => { return () => {}; },
+  signOut: async () => {},
 } as any;
 
 export { app, db, auth };

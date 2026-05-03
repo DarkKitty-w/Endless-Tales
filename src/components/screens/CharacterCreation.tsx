@@ -62,7 +62,6 @@ const combinedSchema = z.discriminatedUnion("creationType", [
   basicCreationSchema,
   textCreationSchema,
 ]);
-// Note: Conditional validation (class required, description min length) moved to onSubmit.
 
 type FormData = z.infer<typeof combinedSchema>;
 
@@ -75,7 +74,6 @@ const staticDefaultValues: FormData = {
     background: "",
     description: "",
 };
-
 
 export function CharacterCreation() {
   const { state, dispatch } = useGame();
@@ -113,15 +111,20 @@ export function CharacterCreation() {
    });
    const { errors, isValid: formIsValid, isDirty, dirtyFields } = formState;
 
-  // --- FIX XC11: Show toast when statError changes (stale closure fix) ---
+  // Show toast when statError changes
   useEffect(() => {
     if (statError) {
       toast({ title: "Stat Allocation Incomplete", description: statError, variant: "destructive" });
     }
   }, [statError, toast]);
-  // -----------------------------------------------------------------
 
-  // No more global variable updates; validation now uses state directly in onSubmit.
+  // ✅ Compute correct API key for current AI provider
+  const activeApiKey = useMemo(() => {
+    const providerKey = state.providerApiKeys[state.aiProvider];
+    if (providerKey) return providerKey;
+    if (state.aiProvider === 'gemini' && state.userGoogleAiApiKey) return state.userGoogleAiApiKey;
+    return null;
+  }, [state.aiProvider, state.providerApiKeys, state.userGoogleAiApiKey]);
 
   useEffect(() => {
     if (isRandomizing || isGenerating) return;
@@ -161,7 +164,6 @@ export function CharacterCreation() {
     reset, getValues, trigger, isDirty, dirtyFields, isRandomizing, isGenerating
   ]);
 
-
   const handleStatChange = useCallback((newStats: CharacterStats) => {
     const newRemaining = calculateRemainingPoints(newStats);
     setStats(newStats);
@@ -175,7 +177,6 @@ export function CharacterCreation() {
       setStatError(null); 
     }
   }, [calculateRemainingPoints]);
-
 
   const randomizeStats = useCallback(() => {
     let pointsLeft = TOTAL_STAT_POINTS;
@@ -308,7 +309,7 @@ export function CharacterCreation() {
              isImmersedMode: currentAdvType === "Immersed",
              universeName: universeNameForAI,
              playerCharacterConcept: playerCharacterConceptForAI,
-             userApiKey: state.userGoogleAiApiKey,
+             userApiKey: activeApiKey, // ✅ corrected
         };
         const result: GenerateCharacterDescriptionOutput = await generateCharacterDescription(aiInput);
         
@@ -332,32 +333,27 @@ export function CharacterCreation() {
        const errorMessage = (err instanceof Error) ? err.message : String(err);
        toast({ title: "AI Generation Failed", description: errorMessage, variant: "destructive" });
      } finally { setIsGenerating(false); }
-   }, [getValues, setValue, trigger, dispatch, toast, state.adventureSettings, state.userGoogleAiApiKey]);
+   }, [getValues, setValue, trigger, dispatch, toast, state.adventureSettings, activeApiKey]);
 
 
   const onSubmit = (data: FormData) => {
      setError(null);
      
-     // Stat point validation
      if (remainingPoints !== 0) {
          const errorMsg = `Please allocate all ${TOTAL_STAT_POINTS} stat points. ${remainingPoints > 0 ? `${remainingPoints} point(s) remaining.` : `${Math.abs(remainingPoints)} point(s) over limit.`}`;
          setStatError(errorMsg);
-         // Toast is now triggered by the useEffect watching statError
          return;
      }
      setStatError(null);
 
-    // Additional conditional validation based on adventure type
     const advType = state.adventureSettings.adventureType;
     const originType = state.adventureSettings.characterOriginType;
 
-    // Class required for Randomized/Custom adventures when using basic creation
     if (data.creationType === "basic" && advType !== "Immersed" && (!data.class || data.class.trim() === "")) {
         toast({ title: "Validation Error", description: "Class is required for Randomized/Custom adventures.", variant: "destructive" });
         return;
     }
 
-    // Description minimum length for text creation
     if (data.creationType === "text") {
         const descLength = data.description?.trim().length ?? 0;
         const minDescLength = (advType === "Immersed" && originType === "original") ? 10 : 10;
@@ -373,7 +369,6 @@ export function CharacterCreation() {
         }
     }
 
-    // Zod validation (basic fields)
     trigger().then(isFormCurrentlyValid => {
         if (!isFormCurrentlyValid) {
             const fieldErrorMessages = Object.entries(errors).map(([key, err]) => {
@@ -436,8 +431,6 @@ export function CharacterCreation() {
     return generalDisabled || !nameValid || !specificFormFieldsValid;
   }, [isGenerating, isRandomizing, remainingPoints, statError, formIsValid, errors, watch, showCharacterDefinitionForms]);
 
-
-  // No more global variable updates useEffect
 
   if (state.adventureSettings.adventureType === "Immersed" && state.adventureSettings.characterOriginType === "existing" && !showCharacterDefinitionForms) {
     return (

@@ -8,6 +8,7 @@ import { characterReducer } from "./reducers/characterReducer";
 import { inventoryReducer } from "./reducers/inventoryReducer";
 import { settingsReducer } from "./reducers/settingsReducer";
 import { adventureReducer } from "./reducers/adventureReducer";
+import { multiplayerReducer } from "./reducers/multiplayerReducer";
 
 // Action type sets for routing to specific reducers
 const CHARACTER_ACTIONS = new Set<Action['type']>([
@@ -65,6 +66,29 @@ const ADVENTURE_ACTIONS = new Set<Action['type']>([
     "DELETE_ADVENTURE",
 ]);
 
+const MULTIPLAYER_ACTIONS = new Set<Action['type']>([
+    "PEER_CONNECTED",
+    "PEER_DISCONNECTED",
+    "SET_TURN_ORDER",
+    "ADVANCE_TURN",
+    "APPLY_REMOTE_STATE",
+    "APPLY_REMOTE_NARRATION",
+    "SEND_PLAYER_ACTION",
+    "UPDATE_PARTY_STATE",
+    "ADD_CHAT_MESSAGE",
+    "CLEAR_CHAT",
+    "SET_PENDING_INTERACTION",
+    "RESOLVE_PENDING_INTERACTION",
+    "KICK_PLAYER",
+    "PAUSE_GAME",
+    "RESUME_GAME",
+    "SET_CONNECTION_STATUS",
+    "SET_MY_TURN",
+    "SET_SESSION_ID",
+    "SET_IS_HOST",
+    "SET_PLAYERS",
+]);
+
 export function gameReducer(state: GameState, action: Action): GameState {
     if (process.env.NODE_ENV === 'development') {
         console.log(`GameReducer: Action received - ${action.type}`, 
@@ -115,6 +139,10 @@ export function gameReducer(state: GameState, action: Action): GameState {
 
     if (ADVENTURE_ACTIONS.has(action.type)) {
         nextState = adventureReducer(nextState, action);
+    }
+
+    if (MULTIPLAYER_ACTIONS.has(action.type)) {
+        nextState = multiplayerReducer(nextState, action);
     }
 
     switch (action.type) {

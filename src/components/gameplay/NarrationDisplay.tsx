@@ -29,11 +29,14 @@ interface NarrationDisplayProps {
     diceType: string;
     error: string | null;
     branchingChoices: NarrateAdventureOutput['branchingChoices'];
-    onChoiceClick: (action: string) => void; // renamed from handlePlayerAction
+    onChoiceClick: (action: string) => void;
     isInitialLoading: boolean;
     onRetryNarration: () => void;
     isStreaming?: boolean;
     streamingText?: string;
+    pendingGuestAction?: string | null;
+    isConnected?: boolean;
+    isMultiplayerHost?: boolean;
 }
 
 export function NarrationDisplay({
@@ -48,12 +51,14 @@ export function NarrationDisplay({
     onRetryNarration,
     isStreaming = false,
     streamingText = '',
+    pendingGuestAction = null,
+    isConnected = false,
+    isMultiplayerHost = false,
 }: NarrationDisplayProps) {
     const scrollEndRef = useRef<HTMLDivElement>(null);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
 
     const scrollToBottom = useCallback(() => {
-        // Use requestAnimationFrame to ensure DOM has been painted
         requestAnimationFrame(() => {
             const scrollAreaElement = scrollAreaRef.current?.querySelector('[data-radix-scroll-area-viewport]');
             if (scrollAreaElement) {
@@ -191,8 +196,26 @@ export function NarrationDisplay({
         if (!busy && !error && storyLog.length > 0 && (!branchingChoices || branchingChoices.length === 0)) {
             return <p className="py-2 text-muted-foreground italic text-center text-xs">What will you do next?</p>;
         }
-
+        
         return null;
+    };
+
+    // Show optimistic UI for pending guest action
+    const renderPendingGuestAction = () => {
+        if (!pendingGuestAction || !isConnected || isMultiplayerHost) return null;
+        
+        const displayAction = pendingGuestAction.length > 50 
+            ? pendingGuestAction.substring(0, 50) + '...' 
+            : pendingGuestAction;
+        
+        return (
+            <div className="mb-3 pb-3 border-b border-border/50">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="italic">Waiting for host to process: "{displayAction}"</span>
+                </div>
+            </div>
+        );
     };
 
     return (
@@ -244,6 +267,7 @@ export function NarrationDisplay({
                         ))
                     ) : null}
                     
+                    {renderPendingGuestAction()}
                     {renderDynamicContent()}
                     <div ref={scrollEndRef} className="h-1" />
                 </CardContent>

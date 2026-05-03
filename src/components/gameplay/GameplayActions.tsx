@@ -35,6 +35,8 @@ const PROVIDER_LABELS: Record<ProviderType, string> = {
     openai: "OpenAI",
     claude: "Claude",
     deepseek: "DeepSeek",
+    openrouter: "OpenRouter",
+    webllm: "Local AI",
 };
 
 export function GameplayActions({
@@ -84,7 +86,7 @@ export function GameplayActions({
             {/* AI Provider Indicator */}
             <Badge variant="outline" className="ml-0 sm:ml-2 gap-1 text-xs font-normal border-primary/30 bg-primary/5">
                 <Sparkles className="h-3 w-3 text-primary" />
-                <span className="capitalize">{PROVIDER_LABELS[aiProvider]}</span>
+                <span className="capitalize">{PROVIDER_LABELS[aiProvider] || aiProvider}</span>
             </Badge>
 
             {!isMobile && (

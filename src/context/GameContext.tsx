@@ -54,8 +54,22 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const colors = isDark ? theme.dark : theme.light;
     const root = document.documentElement;
     if (!root) return;
-    const cssText = Object.entries(colors).map(([prop, val]) => `${prop}: ${val};`).join(' ');
-    root.style.cssText += cssText;
+    
+    // Clear ALL theme CSS custom properties from all themes to prevent accumulation
+    const allProps = new Set<string>();
+    THEMES.forEach(t => {
+      Object.keys(t.light).forEach(prop => allProps.add(prop));
+      Object.keys(t.dark).forEach(prop => allProps.add(prop));
+    });
+    allProps.forEach(prop => {
+      root.style.removeProperty(prop);
+    });
+    
+    // Apply new theme properties
+    Object.entries(colors).forEach(([prop, val]) => {
+      root.style.setProperty(prop, val);
+    });
+    
     if (isDark) {
       root.classList.add('dark');
     } else {

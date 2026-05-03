@@ -1,8 +1,7 @@
-
 // src/components/screens/AdventureSetup.tsx
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useGame } from "../../context/GameContext";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
@@ -28,7 +27,6 @@ import { suggestOriginalCharacterConcepts } from "../../ai/flows/suggest-origina
 import type { Character, CharacterStats } from "../../types/character-types";
 import { initialCharacterState, initialAdventureSettings as defaultInitialAdventureSettings } from "../../context/game-initial-state";
 import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, getStarterSkillsForClass, calculateXpToNextLevel } from "../../lib/gameUtils";
-
 
 export function AdventureSetup() {
   const { state, dispatch } = useGame();
@@ -62,11 +60,18 @@ export function AdventureSetup() {
   // Component state
   const [customError, setCustomError] = useState<string | null>(null);
   const [isLoadingImmersedCharacter, setIsLoadingImmersedCharacter] = useState(false);
-  const [isSuggestingNameLoading, setIsSuggestingNameLoading] = useState(false); 
+  const [isSuggestingNameLoading, setIsSuggestingNameLoading] = useState(false);
+
+  // ✅ Compute correct API key for current AI provider
+  const activeApiKey = useMemo(() => {
+    const providerKey = state.providerApiKeys[state.aiProvider];
+    if (providerKey) return providerKey;
+    if (state.aiProvider === 'gemini' && state.userGoogleAiApiKey) return state.userGoogleAiApiKey;
+    return null;
+  }, [state.aiProvider, state.providerApiKeys, state.userGoogleAiApiKey]);
 
   useEffect(() => {
     // This effect ensures that local state for settings is in sync with game context
-    // This is useful if the user navigates away and comes back
     setPermanentDeath(state.adventureSettings.permanentDeath ?? defaultInitialAdventureSettings.permanentDeath);
     setDifficulty(state.adventureSettings.difficulty ?? defaultInitialAdventureSettings.difficulty);
 
@@ -121,10 +126,10 @@ export function AdventureSetup() {
     try {
       let suggestions: string[] = [];
       if (characterOriginType === 'existing') {
-        const result = await suggestExistingCharacters({ universeName, userApiKey: state.userGoogleAiApiKey });
+        const result = await suggestExistingCharacters({ universeName, userApiKey: activeApiKey });
         suggestions = result.suggestedNames || [];
       } else { // 'original'
-        const result = await suggestOriginalCharacterConcepts({ universeName, userApiKey: state.userGoogleAiApiKey });
+        const result = await suggestOriginalCharacterConcepts({ universeName, userApiKey: activeApiKey });
         suggestions = result.suggestedConcepts || [];
       }
 
@@ -175,15 +180,12 @@ export function AdventureSetup() {
 
     // --- FLOW LOGIC ---
     if (state.character && adventureTypeFromContext === "Randomized") {
-        // Randomized with existing character -> START GAMEPLAY
         dispatch({ type: "START_GAMEPLAY" });
         toast({ title: "Adventure Starting!", description: "The world awaits..." });
     } else if (adventureTypeFromContext === "Custom") {
-        // Custom flow -> GO TO CHARACTER CREATION
         dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
         toast({ title: "Adventure Setup Complete!", description: "Now, create your adventurer." });
     } else if (adventureTypeFromContext === "Immersed") {
-        // Immersed flow (both original and existing) -> GENERATE CHARACTER THEN START
         setIsLoadingImmersedCharacter(true);
         toast({ 
             title: characterOriginType === 'existing' ? "Fetching Character Lore..." : "Creating Character...", 
@@ -195,11 +197,11 @@ export function AdventureSetup() {
                  isImmersedMode: true, 
                  universeName: universeName, 
                  playerCharacterConcept: playerCharacterConcept,
-                 characterOriginType: characterOriginType, // Pass the origin type
-                 userApiKey: state.userGoogleAiApiKey
+                 characterOriginType: characterOriginType,
+                 userApiKey: activeApiKey // ✅ corrected
             });
 
-            // Random stats within reasonable range (or could be AI-determined later)
+            // Random stats within reasonable range
             const randomStr = Math.floor(Math.random() * 5) + 3; 
             const randomSta = Math.floor(Math.random() * 5) + 3; 
             const randomWis = 15 - randomStr - randomSta;       
@@ -238,7 +240,6 @@ export function AdventureSetup() {
             setIsLoadingImmersedCharacter(false);
         }
     } else if (adventureTypeFromContext === "Randomized") {
-        // Randomized without existing character -> GO TO CHARACTER CREATION
         dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
         toast({ title: "Adventure Setup Complete!", description: "Now, create your adventurer." });
     } else {

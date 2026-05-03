@@ -1,63 +1,36 @@
 // src/services/multiplayer-service.ts
-// Fully mocked to avoid importing firebase/firestore which causes crashes with dummy db object.
+// Multiplayer is now handled via WebRTC (see src/hooks/use-multiplayer.ts).
+// This file is kept for reference but is no longer used.
 
-import type { FirestoreCoopSession } from "../types/adventure-types";
-
-// Dummy type for Unsubscribe
-type Unsubscribe = () => void;
-
-/**
- * Generates a short, random session ID.
- * @returns A string like "ABC-XYZ"
- */
 export const generateSessionId = (): string => {
   const S4 = () => (((1 + Math.random()) * 0x10000) | 0).toString(16).substring(1).toUpperCase();
   return `${S4()}-${S4()}`;
 };
 
-/**
- * Creates a new co-op game session (MOCKED).
- */
+// All other functions are disabled.
 export async function createCoopSession(hostUid: string): Promise<string> {
-  console.warn("Multiplayer features are currently disabled.");
-  throw new Error("Multiplayer is currently disabled.");
+  throw new Error("Multiplayer is now handled via WebRTC.");
 }
 
-/**
- * Allows a player to join an existing co-op session (MOCKED).
- */
 export async function joinCoopSession(sessionId: string, playerUid: string): Promise<boolean> {
-  console.warn("Multiplayer features are currently disabled.");
-  throw new Error("Multiplayer is currently disabled.");
+  throw new Error("Multiplayer is now handled via WebRTC.");
 }
 
-/**
- * Sets up a real-time listener for updates (MOCKED).
- */
 export function listenToSessionUpdates(
   sessionId: string,
-  callback: (data: FirestoreCoopSession | null) => void
-): Unsubscribe {
-  console.warn("Multiplayer features are currently disabled.");
-  // Immediately return a no-op unsubscribe function
+  callback: (data: any) => void
+): (() => void) {
   return () => {};
 }
 
-/**
- * Allows the host to start the game (MOCKED).
- */
 export async function hostStartGame(sessionId: string, hostUid: string): Promise<void> {
-    console.warn("Multiplayer features are currently disabled.");
-    throw new Error("Multiplayer is currently disabled.");
+  throw new Error("Multiplayer is now handled via WebRTC.");
 }
 
-/**
- * Placeholder for updating the player's action (MOCKED).
- */
 export async function updatePlayerActionInSession(
   sessionId: string,
   playerUid: string,
   action: string
 ): Promise<void> {
-  console.warn("Multiplayer features are currently disabled.");
+  throw new Error("Multiplayer is now handled via WebRTC.");
 }

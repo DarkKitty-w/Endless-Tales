@@ -16,6 +16,7 @@ export interface AIProvider {
   generateContent(params: {
     model?: string;
     contents: string;
+    systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
   }): Promise<GenerateContentResponse>;
@@ -23,12 +24,24 @@ export interface AIProvider {
   generateContentStream(params: {
     model?: string;
     contents: string;
+    systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
   }): AsyncIterable<string>;
 }
 
-export type ProviderType = 'gemini' | 'openai' | 'claude' | 'deepseek' | 'webllm';
+// Helper to build messages array for providers that support system/user separation
+export function buildMessages(contents: string, systemMessage?: string): { role: string; content: string }[] {
+  const messages: { role: string; content: string }[] = [];
+  if (systemMessage) {
+    messages.push({ role: 'system', content: systemMessage });
+  }
+  messages.push({ role: 'user', content: contents });
+  return messages;
+}
+
+// ✅ Added 'openrouter'
+export type ProviderType = 'gemini' | 'openai' | 'claude' | 'deepseek' | 'webllm' | 'openrouter';
 
 export interface AIRouterConfig {
   defaultProvider: ProviderType;
@@ -84,7 +97,7 @@ class GeminiProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'AI request failed');
+      throw new Error(`Gemini API error: ${error.error || 'Request failed'}`);
     }
 
     const data = await response.json();
@@ -122,7 +135,7 @@ class GeminiProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'AI streaming request failed');
+      throw new Error(`Gemini API streaming error: ${error.error || 'Streaming request failed'}`);
     }
 
     const reader = response.body?.getReader();
@@ -193,7 +206,7 @@ class OpenAIProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'OpenAI request failed');
+      throw new Error(`OpenAI API error: ${error.error || 'Request failed'}`);
     }
 
     const data = await response.json();
@@ -232,7 +245,7 @@ class OpenAIProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'OpenAI streaming request failed');
+      throw new Error(`OpenAI API streaming error: ${error.error || 'Streaming request failed'}`);
     }
 
     const reader = response.body?.getReader();
@@ -301,7 +314,7 @@ class ClaudeProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Claude request failed');
+      throw new Error(`Claude API error: ${error.error || 'Request failed'}`);
     }
 
     const data = await response.json();
@@ -340,7 +353,7 @@ class ClaudeProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Claude streaming request failed');
+      throw new Error(`Claude API streaming error: ${error.error || 'Streaming request failed'}`);
     }
 
     const reader = response.body?.getReader();
@@ -410,7 +423,7 @@ class DeepSeekProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'DeepSeek request failed');
+      throw new Error(`DeepSeek API error: ${error.error || 'Request failed'}`);
     }
 
     const data = await response.json();
@@ -449,7 +462,129 @@ class DeepSeekProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'DeepSeek streaming request failed');
+      throw new Error(`DeepSeek API streaming error: ${error.error || 'Streaming request failed'}`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('No response body');
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('data: ')) {
+          const data = trimmed.slice(6);
+          if (data === '[DONE]') return;
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) yield content;
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+    }
+  }
+}
+
+// --- OpenRouter Provider (OpenAI-compatible) ---
+class OpenRouterProvider implements AIProvider {
+  constructor(private apiKey?: string | null) {}
+
+  private getApiKey(): string {
+    return this.apiKey || routerConfig.apiKeys.openrouter || '';
+  }
+
+  async generateContent({
+    model,
+    contents,
+    config,
+    signal,
+  }: {
+    model?: string;
+    contents: string;
+    config?: GenerateContentConfig;
+    signal?: AbortSignal;
+  }): Promise<GenerateContentResponse> {
+    const effectiveModel = model || 'z-ai/glm-4.5-air:free';
+    const apiKey = this.getApiKey();
+    if (!apiKey) throw new Error('OpenRouter API key not configured. Please add your OpenRouter API key in Settings.');
+
+    const messages = [{ role: 'user', content: contents }];
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
+        'X-Title': 'Endless Tales',
+      },
+      body: JSON.stringify({
+        model: effectiveModel,
+        messages,
+        temperature: config?.temperature,
+        top_p: config?.topP,
+        response_format: config?.responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
+      }),
+      signal,
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`OpenRouter API error: ${error.error?.message || 'Request failed'}`);
+    }
+
+    const data = await response.json();
+    const text = data.choices?.[0]?.message?.content;
+    if (!text) throw new Error('No text returned from OpenRouter');
+    return { text };
+  }
+
+  async *generateContentStream({
+    model,
+    contents,
+    config,
+    signal,
+  }: {
+    model?: string;
+    contents: string;
+    config?: GenerateContentConfig;
+    signal?: AbortSignal;
+  }): AsyncIterable<string> {
+    const effectiveModel = model || 'z-ai/glm-4.5-air:free';
+    const apiKey = this.getApiKey();
+    if (!apiKey) throw new Error('OpenRouter API key not configured');
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
+        'X-Title': 'Endless Tales',
+      },
+      body: JSON.stringify({
+        model: effectiveModel,
+        messages: [{ role: 'user', content: contents }],
+        temperature: config?.temperature,
+        top_p: config?.topP,
+        stream: true,
+        response_format: config?.responseMimeType === 'application/json' ? { type: 'json_object' } : undefined,
+      }),
+      signal,
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`OpenRouter API streaming error: ${error.error?.message || 'Streaming request failed'}`);
     }
 
     const reader = response.body?.getReader();
@@ -561,7 +696,7 @@ class WebLLMProvider implements AIProvider {
   private static currentModel: string = '';
   private static loadingPromise: Promise<any> | null = null;
   private static persistence: 'temporary' | 'persistent' = 'temporary';
-  private static progressCallback: ((progress: number, text: string) => void) | null = null;
+  static progressCallback: ((progress: number, text: string) => void) | null = null;
 
   constructor(private options?: { model?: string; persistence?: 'temporary' | 'persistent'; onProgress?: (progress: number, text: string) => void }) {
     console.log('[WebLLM Provider] Constructor called with options:', options);
@@ -797,9 +932,13 @@ class WebLLMProvider implements AIProvider {
       WebLLMProvider.engine = null;
       WebLLMProvider.currentModel = '';
       console.log('[WebLLM] Cache cleared');
-    } catch (e) {
-      console.error('[WebLLM] Failed to clear cache:', e);
-      throw e;
+    } catch (error: unknown) {
+      console.error('[WebLLM] Failed to clear cache:', error);
+      if (error instanceof Error) {
+        throw error;
+      } else {
+        throw new Error(String(error));
+      }
     }
   }
 }
@@ -834,10 +973,12 @@ export function getAIProvider(
       return new ClaudeProvider(effectiveApiKey);
     case 'deepseek':
       return new DeepSeekProvider(effectiveApiKey);
+    case 'openrouter':
+      return new OpenRouterProvider(effectiveApiKey);
     case 'webllm':
       console.log('[AI Router] Creating WebLLM provider, webllmAvailable:', webllmAvailable);
       if (webllmAvailable) {
-        return new WebLLMProvider();
+        return new WebLLMProvider({ onProgress: WebLLMProvider.progressCallback || undefined });
       } else {
         console.warn('[AI Router] WebLLM not available, returning stub');
         return new WebLLMStubProvider();

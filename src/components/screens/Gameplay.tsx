@@ -6,6 +6,7 @@ import type { StoryLogEntry, DifficultyLevel as AssessedDifficultyLevel, Adventu
 import type { InventoryItem } from '../../types/inventory-types';
 import type { Skill, CharacterStats } from '../../types/character-types';
 import { useGame } from "../../context/GameContext";
+import { useMultiplayer } from "../../hooks/use-multiplayer";
 import { AIStatusPanel } from '../../components/gameplay/AIStatusPanel';
 import { useToast } from "../../hooks/use-toast";
 import type { GameState, Character, SkillTree, Reputation, NpcRelationships, Location } from '../../types/game-types';
@@ -18,7 +19,7 @@ import { assessActionDifficulty, type AssessActionDifficultyInput } from "../../
 import { generateSkillTree } from "../../ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "../../ai/flows/attempt-crafting";
 import { cn } from "../../lib/utils";
-import { Loader2, Settings, ArrowLeft, Skull, Save, Info, Dices, Hammer, BookCopy, CalendarClock, GitBranch, RefreshCw } from "lucide-react";
+import { Loader2, Settings, ArrowLeft, Skull, Save, Info, Dices, Hammer, BookCopy, CalendarClock, GitBranch, RefreshCw, Users } from "lucide-react";
 import { SettingsPanel } from "../../components/screens/SettingsPanel";
 import { LeftPanel } from "../../components/game/LeftPanel";
 import { NarrationDisplay } from '../../components/gameplay/NarrationDisplay';
@@ -33,6 +34,10 @@ import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle } from "../.
 import { TooltipProvider } from "../../components/ui/tooltip";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Skeleton } from "../../components/ui/skeleton";
+import { PartySidebar } from "../../components/gameplay/PartySidebar";
+import { ChatPanel } from "../../components/gameplay/ChatPanel";
+import { InteractionDialog } from "../../components/gameplay/InteractionDialog";
+import type { InteractionRequest } from "../../types/multiplayer-types";
 
 // --- Dice Roller Service (Embedded) ---
 const localRollDie = (sides: number): number => {
@@ -79,8 +84,17 @@ export function Gameplay() {
         character, currentNarration, currentGameStateString, storyLog,
         adventureSettings, inventory, currentAdventureId,
         isGeneratingSkillTree: contextIsGeneratingSkillTree,
-        turnCount, userGoogleAiApiKey
+        turnCount,
     } = state;
+
+    // ✅ Compute the correct API key based on current provider
+    const activeApiKey = useMemo(() => {
+        const providerKey = state.providerApiKeys[state.aiProvider];
+        if (providerKey) return providerKey;
+        // Fallback for Gemini using legacy key
+        if (state.aiProvider === 'gemini' && state.userGoogleAiApiKey) return state.userGoogleAiApiKey;
+        return null;
+    }, [state.aiProvider, state.providerApiKeys, state.userGoogleAiApiKey]);
 
     const [isLoading, setIsLoading] = useState(false);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
@@ -99,17 +113,198 @@ export function Gameplay() {
     const [branchingChoices, setBranchingChoices] = useState<NarrateAdventureOutput['branchingChoices']>(GENERIC_BRANCHING_CHOICES);
     const [isCraftingDialogOpen, setIsCraftingDialogOpen] = useState(false);
     const [isDesktopSettingsOpen, setIsDesktopSettingsOpen] = useState(false);
+    const [isPartySidebarOpen, setIsPartySidebarOpen] = useState(true);
+    const [isChatPanelOpen, setIsChatPanelOpen] = useState(false);
+    const [isInteractionDialogOpen, setIsInteractionDialogOpen] = useState(false);
+    const [currentInteraction, setCurrentInteraction] = useState<InteractionRequest | null>(null);
+    const [isInteractionTarget, setIsInteractionTarget] = useState(false);
+    const [pendingGuestAction, setPendingGuestAction] = useState<string | null>(null);
     
-    // Streaming state
-    const [isStreaming, setIsStreaming] = useState(false);
-    const [streamingText, setStreamingText] = useState('');
-
     const initialSetupAttemptedRef = useRef<Record<string, boolean>>({});
     const actionInputRef = useRef<ActionInputRef>(null);
     const isMobile = useIsMobile();
     
+    // Refs for multiplayer state to avoid circular dependencies
+    const multiplayerStateRef = useRef<any>(null);
+    const isMultiplayerHostRef = useRef(false);
+    const sendGameActionRef = useRef<((action: string, turnNumber: number, isInitial: boolean) => boolean) | null>(null);
+    const broadcastStoryUpdateRef = useRef<((entry: any, newTurn: number, updatedGameState: string) => boolean) | null>(null);
+    const broadcastPartyStateRef = useRef<((partyState: any, turnOrder: string[], currentTurnIndex: number) => boolean) | null>(null);
+    const handlePlayerActionRef = useRef<((action: string, isInitialAction?: boolean) => void) | null>(null);
+
+    // Define handleGuestActionReceived using refs to avoid circular deps
+    const handleGuestActionReceived = useCallback(async (playerId: string, action: string, turnNumber: number, isInitial: boolean) => {
+      if (!isMultiplayerHostRef.current) return;
+      console.log(`Host processing action from ${playerId}: ${action}`);
+      
+      try {
+        // Process the action using the host's handlePlayerAction
+        if (handlePlayerActionRef.current) {
+          await handlePlayerActionRef.current(action, isInitial);
+        }
+        
+        // After processing, broadcast the updated story and party state
+        setTimeout(() => {
+          // Broadcast story update if available
+          if (state.storyLog.length > 0) {
+            const latestEntry = state.storyLog[state.storyLog.length - 1];
+            if (broadcastStoryUpdateRef.current) {
+              broadcastStoryUpdateRef.current(latestEntry, state.turnCount, '');
+            }
+          }
+          
+          // Broadcast party state
+          const partyState: Record<string, any> = {};
+          // Add host
+          if (state.character) {
+            partyState[state.peerId || 'host'] = {
+              peerId: state.peerId || 'host',
+              name: state.character.name,
+              class: state.character.class,
+              level: state.character.level,
+              currentHealth: state.character.currentHealth,
+              maxHealth: state.character.maxHealth,
+              currentStamina: state.character.currentStamina,
+              maxStamina: state.character.maxStamina,
+              currentMana: state.character.currentMana,
+              maxMana: state.character.maxMana,
+              inventorySummary: state.inventory?.map(i => i.name) || [],
+            };
+          }
+          // Add peers from multiplayerState ref
+          const mpState = multiplayerStateRef.current;
+          if (mpState?.partyState) {
+            Object.entries(mpState.partyState).forEach(([peerId, summary]) => {
+              partyState[peerId] = summary;
+            });
+          }
+          
+          if (broadcastPartyStateRef.current && mpState) {
+            broadcastPartyStateRef.current(partyState, mpState.turnOrder || [], mpState.currentTurnIndex || 0);
+          }
+        }, 100);
+        
+      } catch (error) {
+        console.error('Error processing guest action:', error);
+        toast({ title: "Error", description: "Failed to process guest action.", variant: "destructive" });
+      }
+    }, [state, toast]);
+
+    // Multiplayer hook
+    const { multiplayerState, sendGameAction, broadcastStoryUpdate, broadcastPartyState, sendChatMessage, sendControlMessage, sendInteractionRequest, sendInteractionResponse, disconnect, reconnect, setGameActionReceivedHandler, isConnected, isMyTurn, isHost: isMultiplayerHost, isReconnecting } = useMultiplayer({
+      playerName: state.character?.name || 'Player',
+      onGameActionReceived: handleGuestActionReceived,
+      onStoryUpdate: (entry, newTurn) => {
+        // Guest receives story update from host
+        console.log('Guest received story update', entry);
+        dispatch({ type: "UPDATE_NARRATION", payload: entry });
+      },
+      onPartyStateUpdate: (partyState) => {
+        console.log('Party state update', partyState);
+        dispatch({ type: "UPDATE_PARTY_STATE", payload: partyState });
+      },
+      onChatMessage: (msg) => {
+        console.log('Chat message', msg);
+        dispatch({ type: "ADD_CHAT_MESSAGE", payload: msg });
+      },
+      onControlMessage: (msg) => {
+        console.log('Control message', msg);
+      },
+      onInteractionRequest: (interaction) => {
+        console.log('Interaction request received', interaction);
+        setCurrentInteraction(interaction);
+        setIsInteractionDialogOpen(true);
+        if (interaction.targetPeerId === multiplayerState.peerId) {
+          setIsInteractionTarget(true);
+        } else {
+          setIsInteractionTarget(false);
+        }
+      },
+      onInteractionResponse: (interactionId, accepted) => {
+        console.log('Interaction response', interactionId, accepted);
+        if (currentInteraction && currentInteraction.id === interactionId) {
+          dispatch({ type: "RESOLVE_PENDING_INTERACTION", payload: { accepted } });
+          setIsInteractionDialogOpen(false);
+          if (accepted) {
+            toast({ title: "Interaction Accepted", description: "The interaction was accepted." });
+          } else {
+            toast({ title: "Interaction Declined", description: "The interaction was declined." });
+          }
+        }
+      },
+      onPeerConnected: (peer) => {
+        console.log('Peer connected', peer);
+        dispatch({ type: "PEER_CONNECTED", payload: { peerId: peer.peerId, name: peer.name, isHost: false } });
+      },
+      onPeerDisconnected: (peerId) => {
+        console.log('Peer disconnected', peerId);
+        dispatch({ type: "PEER_DISCONNECTED", payload: peerId });
+      },
+    });
+
+    // Update refs when values change
+    useEffect(() => {
+      multiplayerStateRef.current = multiplayerState;
+      sendGameActionRef.current = sendGameAction;
+      broadcastStoryUpdateRef.current = broadcastStoryUpdate;
+      broadcastPartyStateRef.current = broadcastPartyState;
+      isMultiplayerHostRef.current = isMultiplayerHost;
+    }, [multiplayerState, sendGameAction, broadcastStoryUpdate, broadcastPartyState, isMultiplayerHost]);
+
+    // Multiplayer handlers
+    const handleKickPeer = useCallback((peerId: string) => {
+        sendControlMessage('kick', peerId);
+    }, [sendControlMessage]);
+
+    const handleTogglePause = useCallback(() => {
+        if (multiplayerState.isPaused) {
+            sendControlMessage('resume');
+        } else {
+            sendControlMessage('pause');
+        }
+    }, [multiplayerState.isPaused, sendControlMessage]);
+
+    const handleSetTurnOrder = useCallback((newOrder: string[]) => {
+        if (!isMultiplayerHost) return;
+        sendControlMessage('set-turn-order', undefined, { turnOrder: newOrder });
+    }, [isMultiplayerHost, sendControlMessage]);
+
+    const handleOpenChat = useCallback(() => {
+        setIsChatPanelOpen(true);
+    }, []);
+
+    const handleCloseChat = useCallback(() => {
+        setIsChatPanelOpen(false);
+    }, []);
+
+    const handleSendChatMessage = useCallback((text: string) => {
+        sendChatMessage(text);
+    }, [sendChatMessage]);
+
+    // Interaction handlers
+    const handleInteractionAccept = useCallback(() => {
+        if (!currentInteraction) return;
+        if (isInteractionTarget) {
+            sendInteractionResponse(currentInteraction.id, true);
+        }
+        dispatch({ type: "RESOLVE_PENDING_INTERACTION", payload: { accepted: true } });
+        setIsInteractionDialogOpen(false);
+        toast({ title: "Interaction Accepted", description: "You accepted the interaction." });
+    }, [currentInteraction, isInteractionTarget, sendInteractionResponse, dispatch, toast]);
+
+    const handleInteractionDecline = useCallback(() => {
+        if (!currentInteraction) return;
+        if (isInteractionTarget) {
+            sendInteractionResponse(currentInteraction.id, false);
+        }
+        dispatch({ type: "RESOLVE_PENDING_INTERACTION", payload: { accepted: false } });
+        setIsInteractionDialogOpen(false);
+        toast({ title: "Interaction Declined", description: "You declined the interaction." });
+    }, [currentInteraction, isInteractionTarget, sendInteractionResponse, dispatch, toast]);
+
     // --- AbortController for AI requests ---
     const abortControllerRef = useRef<AbortController | null>(null);
+    const skillTreeAbortRef = useRef<AbortController | null>(null);
 
     const createAbortSignal = useCallback(() => {
         if (abortControllerRef.current) {
@@ -117,6 +312,15 @@ export function Gameplay() {
         }
         abortControllerRef.current = new AbortController();
         return abortControllerRef.current.signal;
+    }, []);
+
+    // Dedicated AbortController for skill tree generation
+    const createSkillTreeAbortSignal = useCallback(() => {
+        if (skillTreeAbortRef.current) {
+            skillTreeAbortRef.current.abort();
+        }
+        skillTreeAbortRef.current = new AbortController();
+        return skillTreeAbortRef.current.signal;
     }, []);
 
     // Cleanup on unmount
@@ -127,7 +331,6 @@ export function Gameplay() {
             }
         };
     }, []);
-    // --- End AbortController ---
 
     // --- Undo grace period for branching choices ---
     const pendingActionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -141,7 +344,6 @@ export function Gameplay() {
             }
         };
     }, []);
-    // --- End Undo grace period ---
 
     useEffect(() => {
         if (contextIsGeneratingSkillTree !== localIsGeneratingSkillTree) {
@@ -169,7 +371,6 @@ export function Gameplay() {
 
     const isGeneratingSkillTree = localIsGeneratingSkillTree || contextIsGeneratingSkillTree;
     const loadingPhase = useMemo<LoadingPhase>(() => {
-        if (isStreaming) return { type: 'narrating' };
         if (isInitialLoading) return { type: 'initial-loading' };
         if (isLoading) return { type: 'narrating' };
         if (isAssessingDifficulty) return { type: 'assessing' };
@@ -179,7 +380,7 @@ export function Gameplay() {
         if (isSaving) return { type: 'saving' };
         if (isCraftingLoading) return { type: 'crafting' };
         return { type: 'idle' };
-    }, [isStreaming, isInitialLoading, isLoading, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, isEnding, isSaving, isCraftingLoading]);
+    }, [isInitialLoading, isLoading, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, isEnding, isSaving, isCraftingLoading]);
 
     const handleEndAdventure = useCallback(async (finalNarrationEntry?: StoryLogEntry, characterIsDefeated = false) => {
         if (loadingPhase.type !== 'idle' && loadingPhase.type !== 'initial-loading') return;
@@ -200,7 +401,7 @@ export function Gameplay() {
             if (fullStory.trim().length > 0) {
                 try {
                     const signal = createAbortSignal();
-                    const summaryResult = await summarizeAdventure({ story: fullStory, userApiKey: userGoogleAiApiKey, signal });
+                    const summaryResult = await summarizeAdventure({ story: fullStory, userApiKey: activeApiKey, signal });
                     summary = summaryResult.summary;
                     toast({ title: "Summary Generated", description: "View your adventure outcome." });
                 } catch (summaryError: any) {
@@ -216,7 +417,7 @@ export function Gameplay() {
         }
         dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationEntry } });
         setIsEnding(false);
-    }, [loadingPhase, storyLog, character, userGoogleAiApiKey, dispatch, toast, createAbortSignal]);
+    }, [loadingPhase, storyLog, character, dispatch, toast, createAbortSignal, activeApiKey]);
 
     const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
         console.log(`Gameplay: handlePlayerAction called. Action: "${action.substring(0,50)}...", isInitialAction: ${isInitialAction}`);
@@ -226,6 +427,28 @@ export function Gameplay() {
             console.error("Gameplay: Character is null in handlePlayerAction.");
             return;
         }
+
+        // Multiplayer turn check: if connected and not my turn, ignore action
+        if (isConnected && !isMyTurn && !isInitialAction) {
+            toast({ title: "Not Your Turn", description: "Wait for your turn in multiplayer mode.", variant: "destructive" });
+            return;
+        }
+
+        // If guest in multiplayer, send action to host instead of processing locally
+        if (isConnected && !isMultiplayerHost && !isInitialAction) {
+            const sent = sendGameAction(action, turnCount, false);
+            if (sent) {
+                toast({ title: "Action Sent", description: "Waiting for host to process your action..." });
+                setIsLoading(true);
+                setPendingGuestAction(action); // Store pending action for optimistic UI
+            } else {
+                toast({ title: "Send Failed", description: "Could not send action to host.", variant: "destructive" });
+            }
+            return;
+        }
+        
+        // Store ref for multiplayer handler
+        handlePlayerActionRef.current = handlePlayerAction;
         
         setLastPlayerAction(action);
         if (isInitialAction) {
@@ -234,10 +457,7 @@ export function Gameplay() {
             setIsLoading(true);
         }
         setError(null); setDiceResult(null); setDiceType("None"); 
-        setIsStreaming(false);
-        setStreamingText('');
-
-        // Create new AbortSignal (cancels previous in-flight request)
+        
         const signal = createAbortSignal();
 
         let actionWithDice = action;
@@ -296,19 +516,16 @@ export function Gameplay() {
                     previousNarration: storyLog.length > 0 ? storyLog[storyLog.length - 1].narration : undefined,
                     adventureSettings: adventureSettings,
                     turnCount: turnCount,
-                    userApiKey: userGoogleAiApiKey,
+                    userApiKey: activeApiKey,
                     assessDifficulty: needsAssessment,
                     capabilitiesSummary: needsAssessment ? capabilitiesSummary : undefined,
-                    signal, // <-- Pass AbortSignal
+                    signal,
                 };
 
                 let narrationResult: NarrateAdventureOutput;
                 
                 if (!needsAssessment) {
-                    setIsStreaming(true);
                     narrationResult = await narrateAdventure(inputForAI);
-                    setIsStreaming(false);
-                    setStreamingText('');
                 } else {
                     narrationResult = await narrateAdventure(inputForAI);
                 }
@@ -409,10 +626,27 @@ export function Gameplay() {
                         }
                     }
 
+                    // Build StoryLogEntry from narrationResult
                     const logEntryPayload: StoryLogEntry = {
-                        ...narrationResult,
+                        narration: narrationResult.narration,
+                        updatedGameState: narrationResult.updatedGameState,
                         timestamp: Date.now(),
-                        gainedSkill: gainedSkillTyped
+                        gainedSkill: gainedSkillTyped,
+                        updatedStats: narrationResult.updatedStats ?? undefined,
+                        updatedTraits: narrationResult.updatedTraits ?? undefined,
+                        updatedKnowledge: narrationResult.updatedKnowledge ?? undefined,
+                        progressedToStage: narrationResult.progressedToStage ?? undefined,
+                        xpGained: narrationResult.xpGained ?? undefined,
+                        reputationChange: narrationResult.reputationChange ?? undefined,
+                        npcRelationshipChange: narrationResult.npcRelationshipChange ?? undefined,
+                        branchingChoices: narrationResult.branchingChoices ?? GENERIC_BRANCHING_CHOICES,
+                        dynamicEventTriggered: narrationResult.dynamicEventTriggered ?? undefined,
+                        isCharacterDefeated: narrationResult.isCharacterDefeated ?? undefined,
+                        turnNumber: turnCount + 1,
+                        healthChange: narrationResult.healthChange ?? undefined,
+                        staminaChange: narrationResult.staminaChange ?? undefined,
+                        manaChange: narrationResult.manaChange ?? undefined,
+                        suggestedClassChange: narrationResult.suggestedClassChange == null ? undefined : narrationResult.suggestedClassChange,
                     };
 
                     dispatch({ type: "UPDATE_NARRATION", payload: logEntryPayload });
@@ -461,21 +695,72 @@ export function Gameplay() {
                 setIsInitialLoading(false);
             }
             setIsLoading(false);
-            setIsStreaming(false);
-            setStreamingText('');
             if (isAssessingDifficulty) setIsAssessingDifficulty(false);
             if (isRollingDice) setIsRollingDice(false);
         }
-    }, [character, inventory, currentGameStateString, storyLog, adventureSettings, turnCount, dispatch, toast, handleEndAdventure, userGoogleAiApiKey, state.character, gameStateContext, state.worldMap.currentLocationId, createAbortSignal]);
+    }, [character, inventory, currentGameStateString, storyLog, adventureSettings, turnCount, dispatch, toast, handleEndAdventure, state.character, gameStateContext, state.worldMap.currentLocationId, createAbortSignal, activeApiKey]);
+
+    // Store handlePlayerAction in ref after it's defined
+    useEffect(() => {
+        handlePlayerActionRef.current = handlePlayerAction;
+    }, [handlePlayerAction]);
+
+    // Broadcast party state when story log changes (host only)
+    useEffect(() => {
+        if (!isMultiplayerHostRef.current || !isConnected || !broadcastPartyStateRef.current) return;
+        
+        // Only broadcast if we have a character
+        if (!state.character) return;
+        
+        const partyState: Record<string, any> = {};
+        
+        // Add host
+        partyState[state.peerId || 'host'] = {
+          peerId: state.peerId || 'host',
+          name: state.character.name,
+          class: state.character.class,
+          level: state.character.level,
+          currentHealth: state.character.currentHealth,
+          maxHealth: state.character.maxHealth,
+          currentStamina: state.character.currentStamina,
+          maxStamina: state.character.maxStamina,
+          currentMana: state.character.currentMana,
+          maxMana: state.character.maxMana,
+          inventorySummary: state.inventory?.map(i => i.name) || [],
+        };
+        
+        // Add peers from multiplayerState ref
+        const mpState = multiplayerStateRef.current;
+        if (mpState?.partyState) {
+            Object.entries(mpState.partyState).forEach(([peerId, summary]) => {
+                partyState[peerId] = summary;
+            });
+        }
+        
+        // Get current turn order from multiplayerState
+        const turnOrder = mpState?.turnOrder || [];
+        const currentTurnIndex = mpState?.currentTurnIndex || 0;
+        
+        broadcastPartyStateRef.current(partyState, turnOrder, currentTurnIndex);
+    }, [state.storyLog.length, isConnected, state.character, state.inventory]);
+
+    // Clear pending guest action when story log updates (guest receives host response)
+    useEffect(() => {
+        if (pendingGuestAction && state.storyLog.length > 0) {
+            const latestEntry = state.storyLog[state.storyLog.length - 1];
+            // Check if this is a response to our pending action
+            // (In a real implementation, you'd want to match turn numbers or action text)
+            setPendingGuestAction(null);
+            setIsLoading(false);
+        }
+    }, [state.storyLog.length, pendingGuestAction]);
 
     // Handler for branching choices with undo grace period
     const handleBranchingChoiceClick = useCallback((action: string, isInitialAction = false) => {
-        // Clear any existing pending action
         if (pendingActionTimeoutRef.current) {
             clearTimeout(pendingActionTimeoutRef.current);
         }
 
-        // Show toast with undo button
         toast({
             title: `You chose: "${action}"`,
             description: "Undo within 3 seconds if this was a misclick.",
@@ -498,7 +783,6 @@ export function Gameplay() {
             ),
         });
 
-        // Set timeout to execute the action after 3 seconds
         pendingActionTimeoutRef.current = setTimeout(() => {
             setPendingBranchingAction(null);
             pendingActionTimeoutRef.current = null;
@@ -515,16 +799,15 @@ export function Gameplay() {
         if (!actionToRetry && storyLog.length === 0) {
             actionToRetry = INITIAL_ACTION_STRING;
             isRetryInitial = true;
-            console.log("Gameplay: Retrying initial narration because no last action and story log is empty.");
         } else if (actionToRetry === INITIAL_ACTION_STRING) {
             isRetryInitial = true;
         }
         
         if (actionToRetry) {
-            toast({ title: "Retrying AI Narration...", description: `Re-sending action: "${actionToRetry.substring(0,30)}..."`});
+            toast({ title: "Retrying AI Narration...", description: `Re-sending action: "${actionToRetry.substring(0,30)}..."` });
             handlePlayerAction(actionToRetry, isRetryInitial);
         } else {
-            toast({ title: "Cannot Retry", description: "No previous action to retry, and initial narration was already attempted.", variant: "destructive"});
+            toast({ title: "Cannot Retry", description: "No previous action to retry, and initial narration was already attempted.", variant: "destructive" });
         }
     }, [lastPlayerAction, handlePlayerAction, toast, storyLog.length]);
 
@@ -547,7 +830,7 @@ export function Gameplay() {
         
         try {
             const signal = createAbortSignal();
-            const skillTreeResult = await generateSkillTree({ characterClass: charClass, userApiKey: userGoogleAiApiKey, signal });
+            const skillTreeResult = await generateSkillTree({ characterClass: charClass, userApiKey: activeApiKey, signal });
             if (skillTreeResult && skillTreeResult.stages.length === 5) { 
                 dispatch({ type: "SET_SKILL_TREE", payload: { class: charClass, skillTree: skillTreeResult } });
                 toast({ title: "Skill Tree Generated!", description: `The path of the ${charClass} is set.` });
@@ -568,7 +851,7 @@ export function Gameplay() {
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false });
             setLocalIsGeneratingSkillTree(false);
         }
-    }, [dispatch, toast, adventureSettings.adventureType, character, contextIsGeneratingSkillTree, userGoogleAiApiKey, createAbortSignal]);
+    }, [dispatch, toast, adventureSettings.adventureType, character, contextIsGeneratingSkillTree, createAbortSignal, activeApiKey]);
 
     useEffect(() => {
         const performInitialSetup = async () => {
@@ -631,7 +914,7 @@ export function Gameplay() {
         };
         try {
             const signal = createAbortSignal();
-            const result: AttemptCraftingOutput = await attemptCrafting({ ...craftingInput, signal });
+            const result: AttemptCraftingOutput = await attemptCrafting({ ...craftingInput, signal, userApiKey: activeApiKey });
             toast({ title: result.success ? "Crafting Successful!" : "Crafting Failed!", description: result.message, variant: result.success ? "default" : "destructive", duration: 5000 });
             let narrationText = `You attempted to craft ${goal} using ${ingredients.join(', ')}. ${result.message}`;
             if (result.success && result.craftedItem) {
@@ -652,7 +935,7 @@ export function Gameplay() {
         } finally {
             setIsCraftingLoading(false);
         }
-    }, [character, inventory, dispatch, toast, currentGameStateString, isCraftingLoading, createAbortSignal]);
+    }, [character, inventory, dispatch, toast, currentGameStateString, isCraftingLoading, createAbortSignal, activeApiKey]);
 
     const handleConfirmClassChange = useCallback(async (newClass: string) => {
         if (!character || !newClass || isGeneratingSkillTree || adventureSettings.adventureType === "Immersed") return;
@@ -664,7 +947,7 @@ export function Gameplay() {
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: true });
             setLocalIsGeneratingSkillTree(true);
             const signal = createAbortSignal();
-            newSkillTreeResult = await generateSkillTree({ characterClass: newClass, userApiKey: userGoogleAiApiKey, signal });
+            newSkillTreeResult = await generateSkillTree({ characterClass: newClass, userApiKey: activeApiKey, signal });
             if (newSkillTreeResult && newSkillTreeResult.stages.length === 5) { 
                 dispatch({ type: "CHANGE_CLASS_AND_RESET_SKILLS", payload: { newClass, newSkillTree: newSkillTreeResult } });
                 toast({ title: `Class Changed to ${newClass}!`, description: "Your abilities and progression have been reset." });
@@ -681,7 +964,7 @@ export function Gameplay() {
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false });
             setLocalIsGeneratingSkillTree(false);
         }
-    }, [character, dispatch, toast, isGeneratingSkillTree, adventureSettings.adventureType, userGoogleAiApiKey, createAbortSignal]);
+    }, [character, dispatch, toast, isGeneratingSkillTree, adventureSettings.adventureType, createAbortSignal, activeApiKey]);
 
     const handleGoBack = useCallback(() => {
         if (loadingPhase.type !== 'idle') return;
@@ -823,8 +1106,9 @@ export function Gameplay() {
                         onChoiceClick={handleBranchingChoiceClick}
                         isInitialLoading={isInitialLoading}
                         onRetryNarration={handleRetryNarration}
-                        isStreaming={isStreaming}
-                        streamingText={streamingText}
+                        pendingGuestAction={pendingGuestAction}
+                        isConnected={isConnected}
+                        isMultiplayerHost={isMultiplayerHost}
                     />
                     <ActionInput
                         ref={actionInputRef}
@@ -862,6 +1146,51 @@ export function Gameplay() {
                         <SettingsPanel isOpen={isDesktopSettingsOpen} onOpenChange={setIsDesktopSettingsOpen} />
                     </Sheet>
                 </div>
+
+                {/* Multiplayer Sidebar */}
+                {!!multiplayerState.sessionId && (
+                    <>
+                        <div className={`fixed left-4 top-4 bottom-4 w-64 z-50 transition-transform duration-300 ${isPartySidebarOpen ? 'translate-x-0' : '-translate-x-[120%]'}`}>
+                            <PartySidebar 
+                                multiplayerState={multiplayerState}
+                                isHost={isMultiplayerHost}
+                                onKickPeer={handleKickPeer}
+                                onTogglePause={handleTogglePause}
+                                onOpenChat={() => setIsChatPanelOpen(true)}
+                                onSetTurnOrder={handleSetTurnOrder}
+                                onReconnect={reconnect}
+                                isReconnecting={isReconnecting}
+                            />
+                        </div>
+                        <Button 
+                            variant="outline" 
+                            size="sm"
+                            className="fixed left-4 top-20 z-50"
+                            onClick={() => setIsPartySidebarOpen(!isPartySidebarOpen)}
+                        >
+                            <Users className="h-4 w-4" />
+                        </Button>
+                    </>
+                )}
+
+                {/* Chat Panel */}
+                <ChatPanel 
+                    isOpen={isChatPanelOpen}
+                    onClose={() => setIsChatPanelOpen(false)}
+                    messages={multiplayerState.chatMessages}
+                    onSendMessage={handleSendChatMessage}
+                    currentPlayerName={state.character?.name || 'Player'}
+                />
+
+                {/* Interaction Dialog */}
+                <InteractionDialog
+                    isOpen={isInteractionDialogOpen}
+                    interaction={currentInteraction}
+                    isTarget={isInteractionTarget}
+                    onAccept={handleInteractionAccept}
+                    onDecline={handleInteractionDecline}
+                    onClose={() => setIsInteractionDialogOpen(false)}
+                />
             </div>
         </TooltipProvider>
     );

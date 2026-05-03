@@ -49,7 +49,27 @@ export type Action =
   | { type: "UPDATE_LOCATION"; payload: { id: string; updates: Partial<Location> } }
   | { type: "DISCOVER_LOCATION"; payload: string }
   | { type: "SET_CURRENT_LOCATION"; payload: string }
-  // Multiplayer actions (stubbed for now)
+// Multiplayer actions
   | { type: "SET_SESSION_ID"; payload: string | null }
   | { type: "SET_IS_HOST"; payload: boolean }
-  | { type: "SET_PLAYERS"; payload: string[] };
+  | { type: "SET_PLAYERS"; payload: string[] }
+  | { type: "PEER_CONNECTED"; payload: { peerId: string; name: string; isHost: boolean } }
+  | { type: "PEER_DISCONNECTED"; payload: string }
+  | { type: "SET_TURN_ORDER"; payload: string[] }
+  | { type: "ADVANCE_TURN"; payload: number }
+  | { type: "APPLY_REMOTE_STATE"; payload: any }
+  | { type: "APPLY_REMOTE_NARRATION"; payload: { entry: any; newTurn: number } }
+  | { type: "SEND_PLAYER_ACTION"; payload: { action: string; turnNumber: number; isInitial?: boolean } }
+  | { type: "UPDATE_PARTY_STATE"; payload: Record<string, any> }
+  | { type: "ADD_CHAT_MESSAGE"; payload: any }
+  | { type: "CLEAR_CHAT" }
+  | { type: "SET_PENDING_INTERACTION"; payload: any | null }
+  | { type: "RESOLVE_PENDING_INTERACTION"; payload: { accepted: boolean } }
+  | { type: "KICK_PLAYER"; payload: string }
+  | { type: "PAUSE_GAME" }
+  | { type: "RESUME_GAME" }
+  | { type: "SET_CONNECTION_STATUS"; payload: any }
+  | { type: "SET_MY_TURN"; payload: boolean }
+  // New actions for trade and reconnection
+  | { type: "PROCESS_TRADE"; payload: { fromPeerId: string; toPeerId: string; items: string[] } }
+  | { type: "RECONNECT_SYNC"; payload: { gameState: any; partyState: Record<string, any>; turnOrder: string[]; currentTurnIndex: number } }

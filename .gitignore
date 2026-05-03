@@ -12,6 +12,8 @@ dist
 dist-ssr
 *.local
 .next
+package-lock.json
+.env.example
 
 # Editor directories and files
 .vscode/*

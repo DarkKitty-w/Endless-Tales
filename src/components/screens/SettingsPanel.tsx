@@ -100,11 +100,13 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
   const openaiKeyFromState = providerApiKeys?.openai ?? "";
   const claudeKeyFromState = providerApiKeys?.claude ?? "";
   const deepseekKeyFromState = providerApiKeys?.deepseek ?? "";
+  const openrouterKeyFromState = providerApiKeys?.openrouter ?? "";
 
   const [geminiKey, setGeminiKey] = useState(geminiKeyFromState);
   const [openaiKey, setOpenaiKey] = useState(openaiKeyFromState);
   const [claudeKey, setClaudeKey] = useState(claudeKeyFromState);
   const [deepseekKey, setDeepseekKey] = useState(deepseekKeyFromState);
+  const [openrouterKey, setOpenrouterKey] = useState(openrouterKeyFromState);
 
   // WebLLM state
   const [webllmSupported, setWebllmSupported] = useState(false);
@@ -120,6 +122,7 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
     setOpenaiKey(providerApiKeys?.openai ?? "");
     setClaudeKey(providerApiKeys?.claude ?? "");
     setDeepseekKey(providerApiKeys?.deepseek ?? "");
+    setOpenrouterKey(providerApiKeys?.openrouter ?? "");
   }, [providerApiKeys, userGoogleAiApiKey]);
 
   // Poll for WebLLM availability until it loads
@@ -240,6 +243,7 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
       { value: 'openai', label: 'OpenAI (GPT-4o)' },
       { value: 'claude', label: 'Anthropic Claude' },
       { value: 'deepseek', label: 'DeepSeek' },
+      { value: 'openrouter', label: 'OpenRouter' },
     ];
     if (webllmSupported) {
       options.push({ value: 'webllm', label: 'WebLLM (Local AI)' });
@@ -552,6 +556,36 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
                       Save
                     </Button>
                   </div>
+                </div>
+
+                {/* OpenRouter */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="openrouter-key" className="text-xs font-medium">
+                      OpenRouter
+                    </Label>
+                    {getKeyStatusIcon(openrouterKey)}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      id="openrouter-key"
+                      type="password"
+                      value={openrouterKey}
+                      onChange={(e) => setOpenrouterKey(e.target.value)}
+                      placeholder="Enter OpenRouter API Key"
+                      className="text-sm"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleSaveProviderKey('openrouter', openrouterKey)}
+                    >
+                      Save
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    OpenRouter gives access to many models. The default is openai/gpt-3.5-turbo.
+                  </p>
                 </div>
               </div>
 

@@ -22,29 +22,30 @@ export interface NarrateAdventureInput {
   assessDifficulty?: boolean;
   capabilitiesSummary?: string;
   signal?: AbortSignal;
+  systemMessage?: string;
 }
 
 export interface NarrateAdventureOutput {
   narration: string;
   updatedGameState: string;
-  updatedStats?: Partial<CharacterStats>;
-  updatedTraits?: string[];
-  updatedKnowledge?: string[];
-  progressedToStage?: number;
-  healthChange?: number;
-  staminaChange?: number;
-  manaChange?: number;
-  xpGained?: number;
-  reputationChange?: { faction: string; change: number };
-  npcRelationshipChange?: { npcName: string; change: number };
-  suggestedClassChange?: string;
-  gainedSkill?: { name: string; description: string; type?: string; manaCost?: number; staminaCost?: number };
+  updatedStats?: Partial<CharacterStats> | null;
+  updatedTraits?: string[] | null;
+  updatedKnowledge?: string[] | null;
+  progressedToStage?: number | null;
+  healthChange?: number | null;
+  staminaChange?: number | null;
+  manaChange?: number | null;
+  xpGained?: number | null;
+  reputationChange?: { faction: string; change: number } | null;
+  npcRelationshipChange?: { npcName: string; change: number } | null;
+  suggestedClassChange?: string | null;
+  gainedSkill?: { name: string; description: string; type?: string; manaCost?: number; staminaCost?: number } | null;
   branchingChoices: { text: string; consequenceHint?: string }[];
-  dynamicEventTriggered?: string;
-  isCharacterDefeated?: boolean;
-  assessedDifficulty?: DifficultyLevel;
-  diceRoll?: number;
-  diceType?: "d6" | "d10" | "d20" | "d100" | "None";
+  dynamicEventTriggered?: string | null;
+  isCharacterDefeated?: boolean | null;
+  assessedDifficulty?: DifficultyLevel | null;
+  diceRoll?: number | null;
+  diceType?: "d6" | "d10" | "d20" | "d100" | "None" | null;
   worldMapChanges?: {
     newLocations?: {
       id: string;
@@ -57,7 +58,7 @@ export interface NarrateAdventureOutput {
     }[];
     discoveredLocationIds?: string[];
     updatedLocations?: { id: string; updates: Partial<{ name: string; description: string; type: string; discovered: boolean; x: number; y: number; connectedLocationIds: string[] }> }[];
-  };
+  } | null;
 }
 
 const NarrateAdventureOutputSchema = z.object({
@@ -97,7 +98,7 @@ const NarrateAdventureOutputSchema = z.object({
   })),
   dynamicEventTriggered: z.string().optional().nullable(),
   isCharacterDefeated: z.boolean().optional().nullable(),
-  assessedDifficulty: z.enum(["Trivial", "Easy", "Normal", "Hard", "Very Hard", "Impossible"]).optional().nullable(),
+  assessedDifficulty: z.enum(["Trivial", "Easy", "Normal", "Hard", "Very Hard", "Impossible", "Nightmare"]).optional().nullable(),
   diceRoll: z.number().optional().nullable(),
   diceType: z.enum(["d6", "d10", "d20", "d100", "None"]).optional().nullable(),
   worldMapChanges: z.object({
@@ -131,6 +132,7 @@ const FALLBACK_DIFFICULTY_MAP: Record<string, { difficulty: DifficultyLevel; dic
     normal: { difficulty: "Normal", dice: "d10" },
     hard: { difficulty: "Hard", dice: "d20" },
     nightmare: { difficulty: "Very Hard", dice: "d20" },
+    impossible: { difficulty: "Impossible", dice: "None" },
 };
 
 export async function narrateAdventure(input: NarrateAdventureInput): Promise<NarrateAdventureOutput> {
@@ -191,9 +193,10 @@ If the action is "Impossible", the narration should reflect that the action cann
 `;
   }
 
-  const prompt = `
-You are a creative Game Master AI for "Endless Tales". Narrate the next segment.
+  // System message for providers that support it (OpenAI, Claude, DeepSeek)
+  const systemMessage = input.systemMessage || `You are a creative Game Master AI for "Endless Tales". Narrate the next segment.`;
 
+  const userPrompt = `
 **Character:**
 Name: ${character.name}
 Class: ${character.class}
@@ -229,10 +232,14 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
       const client = getClient(input.userApiKey);
       let text: string;
 
+      // Pass systemMessage separately for providers that support it
+      const systemMsg = systemMessage;
+
       if (!assessDifficulty) {
           const chunks: string[] = [];
           const stream = client.models.generateContentStream({
-              contents: prompt,
+              contents: userPrompt,
+              systemMessage: systemMsg,
               config: { responseMimeType: "application/json" },
               signal: input.signal,
           });
@@ -242,7 +249,8 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           text = chunks.join('');
       } else {
           const response = await client.models.generateContent({
-              contents: prompt,
+              contents: userPrompt,
+              systemMessage: systemMsg,
               config: { responseMimeType: "application/json" },
               signal: input.signal,
           });
@@ -270,6 +278,7 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
       const fallback: NarrateAdventureOutput = {
           narration: `The Narrator stumbled. (AI Error). Please retry.`,
           updatedGameState: input.gameState,
+          updatedStats: undefined,
           branchingChoices: [
             { text: "Look around." }, { text: "Think carefully." },
             { text: "Check inventory." }, { text: "Wait." }
@@ -280,42 +289,80 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
       };
 
       const normalizer = (data: any): NarrateAdventureOutput => {
-          // Handle case where jsonrepair produced an array
           if (Array.isArray(data)) data = data[0] || {};
 
-          // Extract narration from various possible fields
+          // --- narration ---
           const narrationText = data.narration 
               ?? data.outcome?.description 
               ?? data.description 
               ?? data.action?.outcome 
               ?? fallback.narration;
 
-          // Build updatedGameState string
-          const updatedGameState = data.updatedGameState 
-              ?? (data.update_game_state ? JSON.stringify(data.update_game_state) : null)
-              ?? input.gameState;
+          // --- updatedGameState: force string ---
+          let updatedGameState: string = input.gameState;
+          if (typeof data.updatedGameState === 'string') {
+              updatedGameState = data.updatedGameState;
+          } else if (typeof data.updatedGameState === 'object' && data.updatedGameState !== null) {
+              updatedGameState = JSON.stringify(data.updatedGameState);
+          } else if (data.update_game_state) {
+              updatedGameState = typeof data.update_game_state === 'string'
+                  ? data.update_game_state
+                  : JSON.stringify(data.update_game_state);
+          }
 
-          // Build branching choices
+          // --- branchingChoices ---
           let branchingChoices = data.branchingChoices;
           if (!branchingChoices && Array.isArray(data.choices)) {
               branchingChoices = data.choices.slice(0, 4).map((c: any) => ({
-                  text: c.name || c.text || c.prompt || 'Continue',
-                  consequenceHint: c.description || c.consequenceHint,
+                  text: c.text || c.name || c.prompt || c.description || 'Continue',
+                  consequenceHint: c.consequenceHint || c.gameEffect || c.hint,
               }));
           }
           if (!Array.isArray(branchingChoices) || branchingChoices.length === 0) {
               branchingChoices = fallback.branchingChoices;
           }
 
-          // Map difficulty
+          // --- difficulty / dice ---
           const assessedDifficulty = data.assessedDifficulty ?? data.difficulty ?? fallback.assessedDifficulty;
           const diceType = data.diceType ?? data.suggestedDice ?? fallback.diceType;
           const diceRoll = data.diceRoll ?? fallback.diceRoll;
 
-          // Extract resource changes
+          // --- resource changes ---
           const healthChange = data.healthChange ?? data.outcome?.health_change ?? data.action?.health_change;
           const staminaChange = data.staminaChange ?? data.outcome?.stamina_change ?? data.action?.stamina_change;
           const manaChange = data.manaChange ?? data.outcome?.mana_change ?? data.action?.mana_change;
+
+          // --- worldMapChanges: normalize coordinates, connections, and type defaults ---
+          let worldMapChanges = data.worldMapChanges;
+          if (worldMapChanges) {
+              const wmc = { ...worldMapChanges };
+              if (Array.isArray(wmc.newLocations)) {
+                  wmc.newLocations = wmc.newLocations.map((loc: any) => {
+                      const l = { ...loc };
+                      // Default type
+                      if (!l.type) l.type = 'unknown';
+                      // Ensure x & y are numbers (from coordinates or default)
+                      if (typeof l.x !== 'number' || typeof l.y !== 'number') {
+                          if (l.coordinates && typeof l.coordinates.x === 'number' && typeof l.coordinates.y === 'number') {
+                              l.x = l.coordinates.x;
+                              l.y = l.coordinates.y;
+                          } else {
+                              l.x = typeof l.x === 'number' ? l.x : 50;
+                              l.y = typeof l.y === 'number' ? l.y : 50;
+                          }
+                      }
+                      // Handle connections -> connectedTo
+                      if (Array.isArray(l.connections) && !l.connectedTo) {
+                          l.connectedTo = l.connections;
+                      }
+                      // Clean up non-standard fields
+                      delete l.coordinates;
+                      delete l.connections;
+                      return l;
+                  });
+              }
+              worldMapChanges = wmc;
+          }
 
           return {
               narration: narrationText,
@@ -338,7 +385,7 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
               assessedDifficulty,
               diceRoll,
               diceType,
-              worldMapChanges: data.worldMapChanges,
+              worldMapChanges,
           };
       };
 

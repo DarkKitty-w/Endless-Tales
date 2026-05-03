@@ -1,216 +1,174 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useGame } from "../../context/GameContext";
+import { useMultiplayer } from "../../hooks/use-multiplayer";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
-import { ScrollArea } from "../../components/ui/scroll-area";
 import { CardboardCard, CardHeader, CardTitle, CardContent, CardFooter } from "../../components/game/CardboardCard";
-import { Alert, AlertDescription } from "../../components/ui/alert";
-import { Loader2, Users, Copy, Play, ArrowLeft } from "lucide-react";
+import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
+import { Loader2, Users, Copy, Play, ArrowLeft, QrCode, CheckCircle, XCircle } from "lucide-react";
 import { useToast } from "../../hooks/use-toast";
-import {
-  createCoopSession,
-  joinCoopSession,
-  listenToSessionUpdates,
-  hostStartGame,
-} from "../../services/multiplayer-service";
-import type { FirestoreCoopSession } from "../../types/adventure-types";
-
-// Feature flag – set to true when Firebase is fully integrated
-const FIREBASE_ENABLED = false;
+import { QRCodeSVG } from "qrcode.react";
 
 export function CoopLobby() {
   const { state, dispatch } = useGame();
-  const { currentPlayerUid, sessionId, isHost, players: contextPlayers } = state;
   const { toast } = useToast();
-
-  const [isLoading, setIsLoading] = useState(false);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [sessionToJoin, setSessionToJoin] = useState("");
+  
+  const [playerName, setPlayerName] = useState("Player" + Math.floor(Math.random() * 1000));
+  const [offerString, setOfferString] = useState<string | null>(null);
+  const [answerString, setAnswerString] = useState<string | null>(null);
+  const [inputOffer, setInputOffer] = useState("");
+  const [inputAnswer, setInputAnswer] = useState("");
+  const [isInitializing, setIsInitializing] = useState(false);
+  const [connectionStep, setConnectionStep] = useState<'idle' | 'host-waiting' | 'guest-input' | 'guest-waiting' | 'connected'>('idle');
   const [error, setError] = useState<string | null>(null);
-  const [sessionData, setSessionData] = useState<FirestoreCoopSession | null>(null);
 
-  // If Firebase is disabled, show a coming soon placeholder.
-  // This prevents any calls to the stubbed Firebase service.
-  if (!FIREBASE_ENABLED) {
+  const {
+    multiplayerState,
+    createSession,
+    joinSession,
+    applyGuestAnswer,
+    disconnect,
+    isConnected,
+    isHost,
+  } = useMultiplayer({
+    playerName,
+    onGameStateUpdate: (stateUpdate) => {
+      // Host receives game actions from guests
+      console.log("Host received game state update:", stateUpdate);
+    },
+    onStoryUpdate: (entry, newTurn) => {
+      dispatch({ type: "APPLY_REMOTE_NARRATION", payload: { entry, newTurn } });
+    },
+    onPartyStateUpdate: (partyState) => {
+      dispatch({ type: "UPDATE_PARTY_STATE", payload: partyState });
+    },
+    onChatMessage: (msg) => {
+      dispatch({ type: "ADD_CHAT_MESSAGE", payload: msg });
+    },
+    onControlMessage: (msg) => {
+      console.log("Control message received:", msg);
+    },
+  });
+
+  // Update connection step based on multiplayer state
+  useEffect(() => {
+    if (isConnected) {
+      setConnectionStep('connected');
+      dispatch({ type: "SET_CONNECTION_STATUS", payload: multiplayerState.connectionStatus });
+      toast({ title: "Connected!", description: "Successfully connected to co-op session." });
+    }
+  }, [isConnected, multiplayerState.connectionStatus, dispatch, toast]);
+
+  const handleCreateSession = useCallback(async () => {
+    setIsInitializing(true);
+    setError(null);
+    try {
+      const encodedOffer = await createSession();
+      setOfferString(encodedOffer);
+      setConnectionStep('host-waiting');
+      dispatch({ type: "SET_IS_HOST", payload: true });
+      dispatch({ type: "SET_SESSION_ID", payload: multiplayerState.peerId });
+      toast({ title: "Session Created!", description: "Share the QR code or code with your friends." });
+    } catch (err: any) {
+      setError(err.message || "Failed to create session.");
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setIsInitializing(false);
+    }
+  }, [createSession, multiplayerState.peerId, dispatch, toast]);
+
+  const handleJoinSession = useCallback(async () => {
+    if (!inputOffer.trim()) {
+      setError("Please enter the invitation code.");
+      return;
+    }
+    setIsInitializing(true);
+    setError(null);
+    try {
+      const encodedAnswer = await joinSession(inputOffer.trim());
+      setAnswerString(encodedAnswer);
+      setConnectionStep('guest-waiting');
+      dispatch({ type: "SET_IS_HOST", payload: false });
+      toast({ title: "Code Generated!", description: "Send this code back to the host." });
+    } catch (err: any) {
+      setError(err.message || "Failed to join session.");
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setIsInitializing(false);
+    }
+  }, [inputOffer, joinSession, dispatch, toast]);
+
+  const handleHostApplyAnswer = useCallback(async () => {
+    if (!inputAnswer.trim()) {
+      setError("Please enter the return code from your guest.");
+      return;
+    }
+    setIsInitializing(true);
+    setError(null);
+    try {
+      await applyGuestAnswer(inputAnswer.trim());
+      toast({ title: "Answer Applied!", description: "Connection should now be established." });
+    } catch (err: any) {
+      setError(err.message || "Failed to apply answer.");
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setIsInitializing(false);
+    }
+  }, [inputAnswer, applyGuestAnswer, toast]);
+
+  const copyToClipboard = useCallback((text: string, label: string) => {
+    navigator.clipboard.writeText(text)
+      .then(() => toast({ title: "Copied!", description: `${label} copied to clipboard.` }))
+      .catch(() => toast({ title: "Copy Failed", description: "Could not copy to clipboard.", variant: "destructive" }));
+  }, [toast]);
+
+  const handleStartGame = useCallback(() => {
+    if (!isHost) return;
+    dispatch({ type: "SET_GAME_STATUS", payload: "CoopGameplay" });
+    // Host sets initial turn order
+    const turnOrder = [state.peerId || multiplayerState.peerId, ...state.players];
+    dispatch({ type: "SET_TURN_ORDER", payload: turnOrder });
+    toast({ title: "Game Starting!", description: "The adventure begins now." });
+  }, [isHost, state.peerId, multiplayerState.peerId, state.players, dispatch, toast]);
+
+  const handleBackToMenu = useCallback(() => {
+    disconnect();
+    dispatch({ type: "RESET_GAME" });
+  }, [disconnect, dispatch]);
+
+  if (connectionStep === 'connected') {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
         <CardboardCard className="w-full max-w-md text-center">
           <CardHeader>
             <CardTitle className="flex items-center justify-center gap-2">
-              <Users className="w-7 h-7" /> Co‑op Multiplayer
+              <CheckCircle className="w-7 h-7 text-green-500" /> Connected!
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">
-              Co‑op multiplayer is temporarily disabled while we re‑architect the feature.
-              <br />
-              <br />
-              Stay tuned – it will return in a future update!
+            <p className="text-muted-foreground mb-4">
+              You are connected as <span className="font-bold">{playerName}</span>.
+              {isHost ? " You are the host." : " Waiting for host to start the game."}
             </p>
+            {isHost && (
+              <Button onClick={handleStartGame} className="w-full bg-green-600 hover:bg-green-700">
+                <Play className="mr-2 h-4 w-4" /> Start Game
+              </Button>
+            )}
+            {!isHost && (
+              <p className="text-sm text-muted-foreground italic">Waiting for the host to start the game...</p>
+            )}
           </CardContent>
           <CardFooter>
-            <Button onClick={() => dispatch({ type: "RESET_GAME" })} className="w-full">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Main Menu
+            <Button onClick={handleBackToMenu} variant="outline" className="w-full">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Disconnect
             </Button>
           </CardFooter>
         </CardboardCard>
       </div>
-    );
-  }
-
-  // ---------- Original Firebase‑enabled logic below ----------
-  // Effect to manage the initial authentication loading state
-  useEffect(() => {
-    if (currentPlayerUid) {
-      setIsAuthLoading(false);
-    } else {
-      // Give Firebase a moment to sign in anonymously
-      const timer = setTimeout(() => {
-        if (!state.currentPlayerUid) { // Check context state again after delay
-          console.warn("CoopLobby: currentPlayerUid still null after delay. Showing auth required message.");
-        }
-        setIsAuthLoading(false);
-      }, 2000); // Wait 2 seconds for auth to settle
-      return () => clearTimeout(timer);
-    }
-  }, [currentPlayerUid, state.currentPlayerUid]);
-
-
-  // Listen to session updates from Firestore
-  useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    if (sessionId) {
-      setIsLoading(true); // Loading session data
-      unsubscribe = listenToSessionUpdates(sessionId, (data) => {
-        setSessionData(data);
-        setIsLoading(false); // Finished loading session data
-        if (data) {
-          // Sync local player list with Firestore one if different
-          if (JSON.stringify(data.players.sort()) !== JSON.stringify(contextPlayers.sort())) {
-            dispatch({ type: "SET_PLAYERS", payload: data.players });
-          }
-          // If Firestore says game is playing, and local state is still lobby, transition
-          if (data.status === 'playing' && state.status === 'CoopLobby') {
-            console.log("CoopLobby: Session status changed to 'playing', transitioning to CoopGameplay.");
-            dispatch({
-                type: "SET_ADVENTURE_SETTINGS", // Sync basic settings
-                payload: { ...data.adventureSettings, adventureType: "Coop" }
-            });
-            dispatch({ type: "SET_GAME_STATUS", payload: "CoopGameplay" });
-          }
-        } else {
-            // Session deleted or error
-            toast({ title: "Session Ended", description: "The co-op session is no longer available.", variant: "destructive"});
-            dispatch({type: "RESET_GAME"}); // Go back to main menu
-        }
-      });
-    }
-    return () => {
-      if (unsubscribe) unsubscribe();
-    };
-  }, [sessionId, dispatch, toast, contextPlayers, state.status]);
-
-  const handleCreateSession = async () => {
-    if (!currentPlayerUid) {
-      setError("You must be signed in to create a session.");
-      toast({ title: "Authentication Required", description: "Please sign in to create a co-op game.", variant: "destructive" });
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    try {
-      const newSessionId = await createCoopSession(currentPlayerUid);
-      dispatch({ type: "SET_SESSION_ID", payload: newSessionId });
-      dispatch({ type: "SET_IS_HOST", payload: true });
-      dispatch({ type: "SET_PLAYERS", payload: [currentPlayerUid] }); // Host is the first player
-      toast({ title: "Session Created!", description: `Session ID: ${newSessionId}. Share this with your friends!` });
-    } catch (err: any) {
-      setError(err.message || "Failed to create session.");
-      toast({ title: "Error Creating Session", description: err.message, variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleJoinSession = async () => {
-    if (!currentPlayerUid) {
-      setError("You must be signed in to join a session.");
-      toast({ title: "Authentication Required", description: "Please sign in to join a co-op game.", variant: "destructive" });
-      return;
-    }
-    if (!sessionToJoin.trim()) {
-      setError("Please enter a Session ID to join.");
-      return;
-    }
-    setIsLoading(true);
-    setError(null);
-    try {
-      await joinCoopSession(sessionToJoin.trim().toUpperCase(), currentPlayerUid);
-      dispatch({ type: "SET_SESSION_ID", payload: sessionToJoin.trim().toUpperCase() });
-      dispatch({ type: "SET_IS_HOST", payload: false });
-      // Players list will be updated by the Firestore listener
-      toast({ title: "Joined Session!", description: `Successfully joined session: ${sessionToJoin.trim().toUpperCase()}` });
-    } catch (err: any) {
-      setError(err.message || "Failed to join session.");
-      toast({ title: "Error Joining Session", description: err.message, variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleStartGame = async () => {
-    if (!sessionId || !currentPlayerUid || !isHost || !sessionData || sessionData.status !== 'lobby') return;
-    setIsLoading(true);
-    setError(null);
-    try {
-        await hostStartGame(sessionId, currentPlayerUid);
-        // Game status transition to CoopGameplay will be handled by the Firestore listener
-        toast({ title: "Game Starting!", description: "The adventure begins now."});
-    } catch (err: any) {
-        setError(err.message || "Failed to start game.");
-        toast({ title: "Error Starting Game", description: err.message, variant: "destructive" });
-    } finally {
-        setIsLoading(false);
-    }
-  };
-
-  const copySessionId = () => {
-    if (sessionId) {
-      navigator.clipboard.writeText(sessionId)
-        .then(() => toast({ title: "Session ID Copied!", description: sessionId }))
-        .catch(() => toast({ title: "Copy Failed", description: "Could not copy Session ID.", variant: "destructive" }));
-    }
-  };
-
-  const handleBackToMenu = () => {
-    // If in a session, consider if leaving the session is needed (e.g., update Firestore)
-    // For now, just resets local state
-    dispatch({ type: "RESET_GAME" });
-  };
-
-  if (isAuthLoading) {
-    return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-4">
-            <CardboardCard className="w-full max-w-md text-center">
-                 <CardHeader><CardTitle className="flex items-center justify-center gap-2"><Loader2 className="w-6 h-6 animate-spin"/> Connecting...</CardTitle></CardHeader>
-                 <CardContent><p className="text-muted-foreground">Initializing session services...</p></CardContent>
-            </CardboardCard>
-        </div>
-    );
-  }
-
-  if (!currentPlayerUid) {
-    return (
-        <div className="flex flex-col items-center justify-center min-h-screen p-4">
-            <CardboardCard className="w-full max-w-md text-center">
-                 <CardHeader><CardTitle>Authentication Required</CardTitle></CardHeader>
-                 <CardContent><p className="text-muted-foreground">Please ensure you are signed in (e.g., via Anonymous Authentication in Firebase) to use co-op features. If this persists, check your internet connection or Firebase setup.</p></CardContent>
-                 <CardFooter><Button onClick={handleBackToMenu} className="w-full">Back to Main Menu</Button></CardFooter>
-            </CardboardCard>
-        </div>
     );
   }
 
@@ -219,85 +177,146 @@ export function CoopLobby() {
       <CardboardCard className="w-full max-w-lg shadow-xl">
         <CardHeader className="border-b">
           <CardTitle className="text-3xl font-bold text-center flex items-center justify-center gap-2">
-            <Users className="w-7 h-7"/> Co-op Lobby
+            <Users className="w-7 h-7" /> Co-op Lobby
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6 pt-6">
-          {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription></Alert>}
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-          {!sessionId ? (
+          <div className="space-y-2">
+            <Label htmlFor="player-name">Your Name</Label>
+            <Input
+              id="player-name"
+              value={playerName}
+              onChange={(e) => setPlayerName(e.target.value)}
+              disabled={isInitializing}
+            />
+          </div>
+
+          {connectionStep === 'idle' && (
             <>
-              <div className="space-y-2">
-                <Button onClick={handleCreateSession} disabled={isLoading} className="w-full bg-accent hover:bg-accent/90">
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Create New Session
-                </Button>
-              </div>
+              <Button 
+                onClick={handleCreateSession} 
+                disabled={isInitializing} 
+                className="w-full bg-accent hover:bg-accent/90"
+              >
+                {isInitializing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} 
+                Create New Session (Host)
+              </Button>
+
               <div className="relative my-4">
-                <div className="absolute inset-0 flex items-center"> <span className="w-full border-t" /> </div>
-                <div className="relative flex justify-center text-xs uppercase"> <span className="bg-background px-2 text-muted-foreground">Or</span> </div>
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">Or</span>
+                </div>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="session-id-join">Join Existing Session</Label>
+                <Label htmlFor="join-offer">Join Existing Session</Label>
                 <div className="flex gap-2">
                   <Input
-                    id="session-id-join"
-                    placeholder="Enter Session ID (e.g., ABC-XYZ)"
-                    value={sessionToJoin}
-                    onChange={(e) => setSessionToJoin(e.target.value.toUpperCase())}
-                    disabled={isLoading}
-                    className="uppercase"
+                    id="join-offer"
+                    placeholder="Paste invitation code here..."
+                    value={inputOffer}
+                    onChange={(e) => setInputOffer(e.target.value)}
+                    disabled={isInitializing}
+                    className="font-mono text-xs"
                   />
-                  <Button onClick={handleJoinSession} disabled={isLoading || !sessionToJoin.trim()} variant="secondary">
-                    {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Join
+                  <Button onClick={handleJoinSession} disabled={isInitializing || !inputOffer.trim()} variant="secondary">
+                    {isInitializing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Join
                   </Button>
                 </div>
               </div>
             </>
-          ) : (
+          )}
+
+          {connectionStep === 'host-waiting' && offerString && (
             <div className="space-y-4">
-              <div>
-                <Label>Session ID (Share with friends):</Label>
-                <div className="flex items-center gap-2 mt-1 p-2 border rounded-md bg-muted">
-                  <p className="text-lg font-mono font-semibold text-primary flex-grow">{sessionId}</p>
-                  <Button variant="ghost" size="icon" onClick={copySessionId} aria-label="Copy Session ID">
-                    <Copy className="w-4 h-4"/>
-                  </Button>
-                </div>
-              </div>
-              <div>
-                <Label>Players in Lobby ({sessionData?.players?.length || contextPlayers.length || 0}):</Label>
-                <ScrollArea className="h-24 mt-1 border rounded-md p-2">
-                  {(sessionData?.players || contextPlayers) && (sessionData?.players || contextPlayers).length > 0 ? (
-                    (sessionData?.players || contextPlayers).map((uid) => (
-                      <div key={uid} className="text-sm p-1 bg-background/50 rounded mb-1">
-                        Player {uid.substring(0, 6)}... {uid === currentPlayerUid && "(You)"} {uid === (sessionData?.hostUid || (isHost ? currentPlayerUid : '')) && "(Host)"}
+              <Alert>
+                <AlertTitle>Share this code with your friend:</AlertTitle>
+                <AlertDescription>
+                  <div className="flex flex-col items-center gap-4 mt-2">
+                    <div className="bg-white p-4 rounded-lg">
+                      <QRCodeSVG value={offerString} size={200} />
+                    </div>
+                    <div className="w-full">
+                      <Label>Invitation Code:</Label>
+                      <div className="flex items-center gap-2 mt-1 p-2 border rounded-md bg-muted">
+                        <p className="text-xs font-mono font-semibold text-primary flex-grow break-all">{offerString}</p>
+                        <Button variant="ghost" size="icon" onClick={() => copyToClipboard(offerString, "Invitation code")} aria-label="Copy invitation code">
+                          <Copy className="w-4 h-4"/>
+                        </Button>
                       </div>
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic text-center py-2">Waiting for players...</p>
-                  )}
-                </ScrollArea>
-              </div>
-              {isHost && sessionData?.status === 'lobby' && (
-                <Button onClick={handleStartGame} disabled={isLoading || (sessionData?.players?.length ?? 0) < 1} className="w-full bg-green-600 hover:bg-green-700">
-                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Start Game
+                    </div>
+                    <div className="space-y-2 w-full">
+                      <Label htmlFor="host-answer">Enter Guest's Return Code:</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="host-answer"
+                          placeholder="Paste guest's return code..."
+                          value={inputAnswer}
+                          onChange={(e) => setInputAnswer(e.target.value)}
+                          disabled={isInitializing}
+                          className="font-mono text-xs"
+                        />
+                        <Button onClick={handleHostApplyAnswer} disabled={isInitializing || !inputAnswer.trim()} variant="secondary">
+                          {isInitializing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Confirm
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
+          {connectionStep === 'guest-waiting' && answerString && (
+            <div className="space-y-4">
+              <Alert>
+                <AlertTitle>Send this code back to the host:</AlertTitle>
+                <AlertDescription>
+                  <div className="mt-2">
+                    <div className="flex items-center gap-2 p-2 border rounded-md bg-muted">
+                      <p className="text-xs font-mono font-semibold text-primary flex-grow break-all">{answerString}</p>
+                      <Button variant="ghost" size="icon" onClick={() => copyToClipboard(answerString, "Return code")} aria-label="Copy return code">
+                        <Copy className="w-4 h-4"/>
+                      </Button>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-2 italic">Waiting for host to confirm connection...</p>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+
+          {connectionStep === 'guest-input' && (
+            <div className="space-y-2">
+              <Label htmlFor="join-offer-2">Enter Invitation Code:</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="join-offer-2"
+                  placeholder="Paste invitation code here..."
+                  value={inputOffer}
+                  onChange={(e) => setInputOffer(e.target.value)}
+                  disabled={isInitializing}
+                  className="font-mono text-xs"
+                />
+                <Button onClick={handleJoinSession} disabled={isInitializing || !inputOffer.trim()} variant="secondary">
+                  {isInitializing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Join
                 </Button>
-              )}
-              {!isHost && sessionData?.status === 'lobby' && (
-                <p className="text-center text-muted-foreground italic">Waiting for the host ({sessionData?.hostUid ? sessionData.hostUid.substring(0,6) + '...' : 'Host'}) to start the game.</p>
-              )}
-              {sessionData?.status === 'playing' && (
-                 <p className="text-center text-green-600 font-semibold">Game in progress! You should be redirected shortly...</p>
-              )}
-               {sessionData?.status === 'ended' && (
-                 <p className="text-center text-destructive font-semibold">This session has ended.</p>
-              )}
+              </div>
             </div>
           )}
         </CardContent>
         <CardFooter className="border-t pt-4">
-          <Button variant="outline" onClick={handleBackToMenu} disabled={isLoading}>
-            <ArrowLeft className="mr-2 h-4 w-4"/> Back to Main Menu
+          <Button variant="outline" onClick={handleBackToMenu} disabled={isInitializing} className="w-full">
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Main Menu
           </Button>
         </CardFooter>
       </CardboardCard>

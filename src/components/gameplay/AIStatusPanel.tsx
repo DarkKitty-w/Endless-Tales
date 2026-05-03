@@ -28,6 +28,7 @@ const PROVIDER_LABELS: Record<ProviderType, string> = {
   openai: "OpenAI",
   claude: "Claude",
   deepseek: "DeepSeek",
+  openrouter: "OpenRouter",
   webllm: "Local AI",
 };
 
@@ -36,6 +37,7 @@ const PROVIDER_ICONS: Record<ProviderType, React.ReactNode> = {
   openai: <Sparkles className="h-3 w-3" />,
   claude: <Sparkles className="h-3 w-3" />,
   deepseek: <Sparkles className="h-3 w-3" />,
+  openrouter: <Sparkles className="h-3 w-3" />,
   webllm: <Cpu className="h-3 w-3" />,
 };
 
@@ -60,6 +62,22 @@ export function AIStatusPanel() {
     };
     check();
   }, []);
+
+  // Register progress callback for WebLLM loading
+  useEffect(() => {
+    if (aiProvider === 'webllm') {
+      const updateProgress = (progress: number, text: string) => {
+        setWebllmProgress({ progress, text });
+      };
+      
+      // Set the callback on the WebLLMProvider
+      WebLLMProvider.progressCallback = updateProgress;
+      
+      return () => {
+        WebLLMProvider.progressCallback = null;
+      };
+    }
+  }, [aiProvider]);
 
   const handleClearCache = async () => {
     setIsClearing(true);

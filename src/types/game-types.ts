@@ -4,6 +4,7 @@ import type { Character } from "./character-types";
 import type { InventoryItem, ItemQuality } from "./inventory-types";
 import type { AdventureSettings, StoryLogEntry, SavedAdventure, DifficultyLevel, AdventureType } from "./adventure-types";
 import type { ProviderType } from "../ai/ai-router";
+import type { ConnectionStatus, PendingInteraction, PlayerSummary } from "./multiplayer-types";
 
 export type GameStatus =
   | "MainMenu"
@@ -42,6 +43,17 @@ export interface GameState {
   players: string[];
   currentPlayerUid: string | null;
   isHost: boolean;
+
+  // Multiplayer state
+  peerId: string;
+  connectionStatus: ConnectionStatus;
+  turnOrder: string[];
+  currentTurnIndex: number;
+  isMyTurn: boolean;
+  pendingInteraction: PendingInteraction | null;
+  partyState: Record<string, PlayerSummary>;
+  chatMessages: any[]; // ChatMessage['payload'][]
+  isPaused: boolean;
 
   adventureSettings: AdventureSettings;
   currentNarration: StoryLogEntry | null;
