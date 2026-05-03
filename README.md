@@ -1,234 +1,178 @@
-# 🎮 Endless Tales — Aventure Textuelle IA 🧙‍♂️
+# Endless Tales — AI-Powered Text Adventure with Multiplayer Co-op
 
-**Endless Tales** est un jeu d’aventure textuel nouvelle génération où chaque histoire est narrée, façonnée et gérée par un **Game Master IA** 🤖.  
-Le système va bien au‑delà d’une simple suite de prompts : il s’agit d’un véritable **moteur de jeu narratif**, doté de logique interne, d’évolution de personnage, d’événements dynamiques et d’un monde réactif.
+Endless Tales is a browser-based, AI-driven text adventure game with support for solo play and WebRTC-based peer-to-peer cooperative multiplayer. It features dynamic AI narration, character progression, crafting, skill trees, and a fully host-authoritative multiplayer system.
 
----
+## Table of Contents
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+- [Architecture Overview](#architecture-overview)
+- [Project Structure](#project-structure)
+- [Multiplayer Co-op](#multiplayer-co-op)
+- [Contributing](#contributing)
+- [License](#license)
 
-## 🌟 Caractéristiques principales
+## Features
+All features below are fully implemented in the codebase:
+- **Adventure Modes**: Three solo modes (Randomized, Custom, Immersed) plus Co-op P2P multiplayer (no enforced player limit)
+  - **Randomized**: Fully random adventure generation with minimal setup
+  - **Custom**: Define your own world settings (genre, magic system, tech level, tone, etc.)
+  - **Immersed**: Play in existing fictional universes (e.g., Star Wars, Harry Potter, Lord of the Rings) as existing characters or original creations, with AI-generated character profiles
+  - **Co-op**: Host/join P2P sessions with manual QR code/invite code signalling
+- **6 AI Providers**: Google Gemini, OpenAI, Anthropic Claude, DeepSeek, OpenRouter, and local browser-based WebLLM (no API key required)
+- **Dynamic Character System**: Stat allocation (STR/STA/WIS), class selection, AI-generated character descriptions, XP progression, and leveling
+- **AI-Driven Gameplay**: Dynamic narration, adventure generation, skill tree creation, action difficulty assessment, and adventure summarization
+- **Progression Systems**: Crafting, skill trees, world map with discoverable locations, inventory management, NPC relationships, and faction reputation
+- **Save/Load System**: Local browser storage with schema versioning for backwards compatibility
+- **Customization**: UI themes (dark/light mode, 6+ prebuilt themes), configurable adventure settings (genre, magic system, tech level, narrative tone)
+- **Multiplayer Features**: Real-time chat, player trading, turn-based host-authoritative gameplay, party management, and manual P2P signalling via QR codes or invite codes
 
-### 🛠️ Personnalisation Totale du Monde
+## Tech Stack
+- **Framework**: Next.js 16.2.3 (React 18, TypeScript 5+)
+- **State Management**: React Context API with `useReducer`, split into modular sub-reducers (adventure, character, inventory, multiplayer, settings)
+- **AI Integration**: `@google/genai` for cloud providers, `@mlc-ai/webllm` for local models, custom AI router for multi-provider support
+- **UI**: Radix UI headless components, Tailwind CSS v3, shadcn/ui component library, Lucide icons
+- **Multiplayer**: Native WebRTC with manual SDP signalling, 5 dedicated data channels (game-actions, story-update, party-state, chat, control)
+- **Utilities**: Zod for schema validation, react-hook-form for forms, `jsonrepair` for AI response handling, `dice-roller` for in-game dice roll calculations
 
-En mode **Custom**, vous définissez entièrement votre univers :
+## Getting Started
 
-* 🏰 Genre (Fantasy, Sci‑Fi, Horreur…)
-* ✨ Système de magie (Haute magie, basse magie, aucune)
-* ⚙️ Niveau technologique (Primitif → Futuriste)
-* 🎭 Ton dominant (Sérieux, Ironique, Comique)
-* ⚔️ Fréquences des combats, énigmes et interactions sociales
+### Prerequisites
+- Node.js 18+ (LTS recommended)
+- Package manager: npm, yarn, or pnpm
+- Modern browser with WebGPU support for local WebLLM models (Chrome 113+, Edge 113+)
 
-L’IA s’en sert comme base pour générer une histoire **totalement cohérente**.
-
----
-
-### 🤖 Un Maître du Jeu IA
-
-L’IA joue le rôle de **MJ actif**, capable de :
-
-* 📝 Gérer la fiche de personnage
-* 📈 Faire progresser vos compétences (`progressedToStage`)
-* 🛡️ Suivre la réputation auprès des factions
-* 💬 Gérer les relations avec les PNJ
-* ⭐ Attribuer l’XP (`xpGained`)
-* 🎲 Déclencher des événements dynamiques selon vos choix
-
----
-
-### 🌐 **Multi‑Provider AI** – Choisissez votre moteur d’IA
-
-Endless Tales prend désormais en charge plusieurs fournisseurs d’IA, vous permettant de choisir celui qui correspond le mieux à vos besoins :
-
-| Fournisseur | Modèle par défaut | Connexion | Coût |
-|------------|------------------|-----------|------|
-| **Google Gemini** | `gemini-2.5-flash` | API Cloud | Gratuit / Payant selon quota |
-| **OpenAI** | `gpt-4o` | API Cloud | Payant |
-| **Anthropic Claude** | `claude-3-5-sonnet` | API Cloud | Payant |
-| **DeepSeek** | `deepseek-chat` | API Cloud | Payant |
-| **🖥️ WebLLM (Local)** | *Choix utilisateur* | 100 % local (WebGPU) | **Gratuit** |
-
-* **WebLLM** exécute des modèles d’IA directement dans votre navigateur (via `@mlc-ai/web-llm`).  
-  Aucune clé API, aucune donnée ne quitte votre machine.  
-  Modèles disponibles : TinyLlama, Qwen 2.5, Llama 3.2, Phi‑3, Mistral 7B, etc.
-
----
-
-### 🧙‍♂️ Mécaniques JDR
-
-* **Stats :** FOR (STR), END (STA), SAG (WIS)
-* **Lancers de dés :** d6, d10, d20 (calculés côté code)
-* **Compétences :** arbre dynamique généré par l’IA
-* **Barres :** Santé / Endurance / Mana
-* **Effets de statut :** buffs et débuffs temporaires (ex : “Affaibli” après une résurrection)
-* **Carte du monde** mise à jour dynamiquement par l’IA
-
----
-
-### 🖥️ Technique
-
-* **Next.js 16** / React 19
-* **State management** complexe via `useReducer`
-* **UI moderne :** Tailwind CSS + shadcn/ui + Lucide icons
-* **Persistance** locale (`localStorage` / `sessionStorage`) avec migration de schéma
-* **Architecture “Client‑First”**
-* **Sécurité :** les clés API sont stockées uniquement en `sessionStorage` (effacées à la fermeture de l’onglet)
-
----
-
-## 🚀 Installation
-
-### 🛠️ Prérequis
-
-* Node.js 18+
-* npm ou yarn
-* Une clé API pour le fournisseur de votre choix (sauf WebLLM)
-
-### 📦 Étapes
-
+### Installation
 ```bash
-git clone https://github.com/votre-utilisateur/votre-repo.git
-cd votre-repo
+git clone https://github.com/DarkKitty-w/Endless-Tales.git
+cd Endless-Tales
 npm install
 ```
 
-**Optionnel – Support WebLLM (IA locale) :**
+### Environment Variables
+Create a `.env.local` file in the project root with the following keys (only required for cloud AI providers, WebLLM needs no keys):
+| Variable | Description | Required For |
+|----------|-------------|--------------|
+| `GEMINI_API_KEY` | Google Gemini API key | Gemini provider |
+| `OPENAI_API_KEY` | OpenAI API key | OpenAI provider |
+| `ANTHROPIC_API_KEY` | Anthropic Claude API key | Claude provider |
+| `DEEPSEEK_API_KEY` | DeepSeek API key | DeepSeek provider |
+| `OPENROUTER_API_KEY` | OpenRouter API key | OpenRouter provider |
 
-```bash
-npm install @mlc-ai/web-llm
-```
+API keys are stored only in sessionStorage and cleared when the browser tab is closed.
 
-Lancez le serveur de développement :
-
+### Development
+Start the Next.js development server with Turbopack:
 ```bash
 npm run dev
 ```
+The app will be available at **http://localhost:9002**.
 
-L’application est disponible sur **[http://localhost:9002](http://localhost:9002)**.
-
-> **Note :** Aucune clé API n’est nécessaire pour utiliser WebLLM. Les modèles sont téléchargés et exécutés localement dans votre navigateur.
-
----
-
-## 🎯 Utilisation
-
-### 🏠 Menu Principal
-
-* 🎲 **Randomized** : aventure entièrement aléatoire
-* 🛠️ **Custom** : paramètres d’univers personnalisés
-* 📖 **Immersed** : aventures dans des univers existants (Harry Potter, Star Wars…)
-* ⚙️ **Paramètres** : choix du fournisseur d’IA et entrée des clés API
-
-### ⚙️ Configuration de l’Aventure
-
-* Genre / Thème
-* Système de magie
-* Niveau technologique
-* Ton narratif
-* Fréquences : combats / énigmes / interactions sociales
-* Difficulté & Permadeath ☠️
-
-### 🧝‍♂️ Création de Personnage
-
-Deux modes :
-
-* **Formulaire simple** (nom, classe, traits, etc.)
-* **Description textuelle** (génération IA complète du profil)
-
-### 🎮 Pendant la Partie
-
-* Narration évolutive générée par l’IA
-* Choix prédéfinis **ou actions libres**
-* Mise à jour automatique : santé, XP, compétences, réputation…
-* Carte du monde qui s’enrichit au fil de l’histoire
-* Indicateur en temps réel du fournisseur d’IA utilisé
-
-### 🏁 Fin d’Aventure
-
-* Résumé généré par l’IA
-* Journal sauvegardé dans le navigateur
-
----
-
-## 🌍 WebLLM – IA Locale (Détails)
-
-* **Fonctionne entièrement hors‑ligne** une fois le modèle téléchargé
-* **Choix du modèle** dans les paramètres (taille, performance, recommandations automatiques selon votre mémoire)
-* **Progression du téléchargement** affichée en temps réel
-* **Cache persistant** : option pour conserver le modèle entre deux sessions (IndexedDB)
-* **Nettoyage facile** : bouton pour supprimer les modèles téléchargés et libérer de l’espace
-* **Détection matérielle** : WebGPU et mémoire estimée
-
----
-
-## 👥 Multijoueur Coopératif
-
-Le jeu supporte des sessions **P2P** via WebRTC.  
-Fonctionnalités disponibles :
-* 🎮 **Lobby de création/rejoindre** une partie (via offer/answer QR code ou copier-coller)
-* 💬 **Chat en temps réel** entre joueurs
-* 🤝 **Interactions entre joueurs** : trade, gift, duel (avec dialogue d'acceptation)
-* 📊 **Gestion de la partie** : tour par tour, pause, ordre des tours, expulsion (kick)
-* 🔄 **Synchronisation de l'état** : personnages, inventaire, carte du monde
-* 🔃 **Reconnexion automatique** en cas de déconnexion
-
-> **Note :** Nécessite un navigateur compatible WebRTC (Chrome, Firefox, Edge récent).
-
----
-
-## 🗂️ Structure du Projet
-
-```
-src/
-├── ai/                 # Logique IA (multi‑providers)
-│   ├── flows/          # Flux narratifs et systèmes
-│   ├── schemas/        # Schémas des réponses JSON
-│   └── ai-router.ts    # Routeur multi‑fournisseurs
-├── app/                # Pages Next.js
-├── components/
-│   ├── screens/        # Pages complètes
-│   ├── game/           # UI du gameplay
-│   ├── gameplay/       # Actions, narration…
-│   └── ui/             # Composants génériques Shadcn
-├── context/            # State global (reducers)
-├── lib/                # Utilitaires
-├── services/           # Services (dés, futur networking)
-└── types/              # TypeScript types
+### Production Build
+```bash
+npm run build
+npm start
 ```
 
----
+### AI Proxy
+Cloud AI requests for Gemini, OpenAI, Claude, DeepSeek, and OpenRouter are routed through the built-in Next.js API route at `src/app/api/ai-proxy/route.ts` — WebLLM runs locally and requires no proxy. No separate proxy server is required.
 
-## ⚠️ Limitations actuelles
+## Usage
 
-* **WebLLM** nécessite un navigateur compatible WebGPU (Chrome 113+, Edge 113+)
-* Les modèles locaux (>2 Go) peuvent approcher les limites de stockage IndexedDB
-* Le multijoueur P2P n’est pas encore actif
-* Pas de support mobile natif (PWA possible mais non optimisé)
+### Main Menu
+After starting the app, choose from four adventure types:
+1. **Randomized Adventure**: Jump into a fully random adventure (goes directly to character creation)
+2. **Custom Adventure**: Configure your world settings (genre, magic system, tech level, etc.) before creating your character
+3. **Immersed Adventure**: Enter an existing universe name (e.g., "Star Wars") and play as an existing character or create an original one
+4. **Co-op Adventure**: Access the Co-op Lobby to host a new session or join an existing one via invite code/QR code
 
----
+### Adventure Setup
+Depending on your chosen mode:
+- **Custom**: Fill in world details (genre, magic system, tech level, etc.), then proceed to character creation
+- **Immersed**: Enter universe name and character details, with AI generating your character profile automatically
+- **Randomized**: Proceed directly to character creation after optional difficulty/permanent death settings
 
-## 🚧 Roadmap
+## Architecture Overview
+Endless Tales uses a client-first architecture with host-authoritative multiplayer:
+1. **State Management**: Central `GameContext` uses a main reducer split into 5 sub-reducers, with actions defined in `game-actions.ts`.
+2. **AI Integration**: `ai-router.ts` routes requests to the selected provider, with cloud requests proxied through the Next.js API route to protect API keys.
+3. **Multiplayer**: Host creates a WebRTC session with a base64-encoded SDP offer (shared via QR code or copy-paste). Guests join with an SDP answer, using STUN servers for NAT traversal. The host acts as the authoritative game master for all players.
+4. **Persistence**: Adventure state is saved to localStorage with schema versioning for backwards compatibility.
 
-### 🚀 Priorité 1 – Stabilité
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Browser UI    │────▶│  GameContext    │────▶│  AI Router     │
+│ (React/Next.js) │     │ (Reducer State) │     │ (Multi-Provider)│
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+         │                        │                        │
+         ▼                        ▼                        ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  WebRTC P2P     │     │  LocalStorage   │     │ Cloud / WebLLM  │
+│ (Manual Signal) │     │  (Save/Load)    │     │ (AI Providers)  │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
 
-* ✅ Correction de tous les bugs critiques (V4)
-* ✅ Support multi‑providers (Gemini, OpenAI, Claude, DeepSeek, WebLLM)
-* 🔜 Finalisation des tâches HIGH (gestion asynchrone, recalcul des ressources, confirmation changement de classe)
+## Project Structure
+```
+Endless-Tales/
+├── src/
+│   ├── ai/                 # AI integration
+│   │   ├── flows/          # Genkit-style AI flows (narration, crafting, skill trees)
+│   │   ├── schemas/        # Zod validation schemas for AI responses
+│   │   ├── ai-instance.ts  # AI client initialization
+│   │   └── ai-router.ts    # Multi-provider routing logic
+│   ├── app/                # Next.js app router
+│   │   ├── api/            # API routes (AI proxy)
+│   │   ├── favicon.ico     # Site favicon
+│   │   ├── globals.css     # Global styles and theme variables
+│   │   ├── layout.tsx      # Root layout
+│   │   └── page.tsx        # Main entry point
+│   ├── components/         # React components
+│   │   ├── ErrorBoundary.tsx # Error boundary component
+│   │   ├── character/      # Character creation forms
+│   │   ├── gameplay/       # Core gameplay UI (narration, chat, actions)
+│   │   ├── game/           # Game display components (map, inventory, skill trees)
+│   │   ├── icons/          # Custom icons (HandDrawnIcons.tsx)
+│   │   ├── screens/        # Full-page screens (main menu, coop lobby, gameplay)
+│   │   └── ui/             # shadcn/ui generic components
+│   ├── context/            # State management
+│   │   ├── reducers/       # Modular sub-reducers
+│   │   ├── GameContext.tsx # Main context provider
+│   │   ├── game-actions.ts # Action definitions
+│   │   ├── game-initial-state.ts # Initial game state
+│   │   ├── game-reducer.ts # Main game reducer
+│   │   └── game-state-utils.ts # State utility functions
+│   ├── hooks/              # Custom hooks (use-multiplayer, use-mobile, use-toast)
+│   ├── lib/                # Utilities
+│   │   ├── webrtc-signalling.ts # WebRTC SDP handling
+│   │   ├── firebase.ts     # Firebase config (unused for signalling)
+│   │   ├── gameUtils.ts    # Game logic utilities
+│   │   ├── themes.ts       # UI theme definitions
+│   │   └── constants.ts    # App-wide constants
+│   ├── services/           # Services (multiplayer service)
+│   └── types/              # TypeScript type definitions
+├── public/                 # Static assets
+├── next.config.ts          # Next.js configuration
+├── tailwind.config.ts      # Tailwind CSS configuration
+└── package.json            # Dependencies and scripts
+```
 
-### ✨ Priorité 2 – Gameplay & Expérience
+## Multiplayer Co-op
+Endless Tales uses **pure P2P WebRTC with no signalling server or Firebase dependency**:
+1. **Host**: Creates a session and generates a base64-encoded SDP offer (shared via QR code or copy-paste)
+2. **Guest**: Imports the offer, generates an SDP answer, and shares it back with the host
+3. **Connection**: Uses Google STUN servers for NAT traversal, with 5 dedicated data channels for game state, chat, and control
+4. **Gameplay**: Host acts as the authoritative game master; all players take turns, with real-time chat and player-to-player trading
+5. **Reconnection**: Automatic reconnection logic for disconnected peers
 
-* 🔜 Multijoueur P2P (WebRTC)
-* 🔜 Améliorations UX (streaming pour toutes les actions, validation des clés API)
-* 💡 Génération d’illustrations (portraits, cartes)
-* 💡 Système de commerce / équipement
+## Contributing
+Contributions are welcome! Please follow these guidelines:
+- All work must be done on the `community` branch
+- Submit pull requests to the `main` branch
+- The `main` branch is protected; PRs require review
+- Follow the existing code style and TypeScript best practices
 
-### 🔮 Priorité 3 – Architecture & Communauté
+See [CONTRIBUTING.md](CONTRIBUTING.md) for basic contribution guidelines.
 
-* Compression des sauvegardes (lz‑string)
-* Headers de sécurité (CSP)
-* Mode “Maître du Jeu Humain”
-* Narration vocale (TTS)
-
----
-
-## 📜 Licence
-
-Publié sous licence **MIT**.
+## License
+Released under the [MIT License](LICENSE). Copyright 2025 DarkKitty-w.
