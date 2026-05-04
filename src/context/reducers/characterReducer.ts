@@ -287,33 +287,23 @@ export function characterReducer(state: Character | null, action: Action): Chara
 
             const updatedStatusEffects = [...state.statusEffects, weakenedDebuff];
 
-            // Compute effective stats with all active modifiers (including the new debuff)
-            const baseStats = { ...state.stats };
-            let effectiveStats = { ...baseStats };
-            for (const effect of updatedStatusEffects) {
-                if (effect.statModifiers) {
-                    effectiveStats.strength = Math.max(1, effectiveStats.strength + (effect.statModifiers.strength ?? 0));
-                    effectiveStats.stamina = Math.max(1, effectiveStats.stamina + (effect.statModifiers.stamina ?? 0));
-                    effectiveStats.wisdom = Math.max(1, effectiveStats.wisdom + (effect.statModifiers.wisdom ?? 0));
-                }
-            }
-
-            const newMaxHealth = calculateMaxHealth(effectiveStats);
-            const newMaxStamina = calculateMaxActionStamina(effectiveStats);
-            const newMaxMana = calculateMaxMana(effectiveStats, state.knowledge);
+            // Calculate max stats using BASE STATS (state.stats), NOT effectiveStats
+            // Max stats should not be affected by temporary debuffs
+            const newMaxHealth = calculateMaxHealth(state.stats);
+            const newMaxStamina = calculateMaxActionStamina(state.stats);
+            const newMaxMana = calculateMaxMana(state.stats, state.knowledge);
 
             return {
                 ...state,
                 xp: newXp,
-                // IMPORTANT: Do NOT overwrite state.stats with effectiveStats.
-                // Base stats remain unchanged; debuff is tracked via statusEffects.
+                // IMPORTANT: Base stats remain unchanged; debuff is tracked via statusEffects.
                 stats: state.stats,
                 maxHealth: newMaxHealth,
-                currentHealth: newMaxHealth,
+                currentHealth: newMaxHealth,  // Respawn with full health (based on base stats)
                 maxStamina: newMaxStamina,
-                currentStamina: newMaxStamina,
+                currentStamina: newMaxStamina,  // Respawn with full stamina (based on base stats)
                 maxMana: newMaxMana,
-                currentMana: newMaxMana,
+                currentMana: newMaxMana,  // Respawn with full mana (based on base stats)
                 statusEffects: updatedStatusEffects,
             };
         }
