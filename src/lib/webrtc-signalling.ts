@@ -27,17 +27,90 @@ export function encodeSignallingData(pkg: SignallingPackage): string {
 
 /**
  * Decode a base64 string back to a signalling package
+ * Includes validation for security (SEC-3)
  */
 export function decodeSignallingData(encoded: string): SignallingPackage {
   try {
-    const json = decodeURIComponent(escape(atob(encoded)));
-    const pkg = JSON.parse(json);
-    if (!pkg.sdp || !pkg.type || !pkg.peerInfo) {
-      throw new Error('Invalid signalling data format');
+    // SEC-3: Validate input
+    if (!encoded || typeof encoded !== 'string') {
+      throw new Error('Invalid input: encoded data must be a non-empty string');
     }
+    
+    // Check size limit (max 100KB when decoded)
+    if (encoded.length > 150000) { // base64 is ~4/3 of original size
+      throw new Error('Input too large: maximum size is 100KB');
+    }
+    
+    // Validate base64 format (basic check)
+    const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+    if (!base64Regex.test(encoded)) {
+      throw new Error('Invalid base64 format');
+    }
+    
+    const json = decodeURIComponent(escape(atob(encoded)));
+    
+    // Check JSON size after decoding
+    if (json.length > 100 * 1024) {
+      throw new Error('Decoded data too large: maximum size is 100KB');
+    }
+    
+    const pkg = JSON.parse(json);
+    
+    // Validate required fields
+    if (!pkg || typeof pkg !== 'object') {
+      throw new Error('Invalid signalling data: not an object');
+    }
+    
+    // Validate SDP
+    if (!pkg.sdp || typeof pkg.sdp !== 'string') {
+      throw new Error('Invalid signalling data: missing or invalid sdp');
+    }
+    
+    // Validate type
+    if (!pkg.type || !['offer', 'answer'].includes(pkg.type)) {
+      throw new Error('Invalid signalling data: missing or invalid type (must be offer or answer)');
+    }
+    
+    // Validate peerInfo
+    if (!pkg.peerInfo || typeof pkg.peerInfo !== 'object') {
+      throw new Error('Invalid signalling data: missing or invalid peerInfo');
+    }
+    if (!pkg.peerInfo.peerId || typeof pkg.peerInfo.peerId !== 'string') {
+      throw new Error('Invalid signalling data: missing or invalid peerInfo.peerId');
+    }
+    if (!pkg.peerInfo.name || typeof pkg.peerInfo.name !== 'string') {
+      throw new Error('Invalid signalling data: missing or invalid peerInfo.name');
+    }
+    
+    // Validate ICE candidates (if present)
+    if (pkg.iceCandidates) {
+      if (!Array.isArray(pkg.iceCandidates)) {
+        throw new Error('Invalid signalling data: iceCandidates must be an array');
+      }
+      
+      // Validate each ICE candidate (basic structure check)
+      for (const candidate of pkg.iceCandidates) {
+        if (!candidate || typeof candidate !== 'object') {
+          throw new Error('Invalid signalling data: invalid ICE candidate');
+        }
+        // At minimum, candidate should have a candidate string or be null
+        if (candidate.candidate && typeof candidate.candidate !== 'string') {
+          throw new Error('Invalid signalling data: invalid ICE candidate format');
+        }
+      }
+      
+      // Limit number of ICE candidates
+      if (pkg.iceCandidates.length > 50) {
+        throw new Error('Invalid signalling data: too many ICE candidates (max 50)');
+      }
+    }
+    
     return pkg;
   } catch (error) {
     console.error('Failed to decode signalling data:', error);
+    if (error instanceof Error) {
+      throw new Error(`Invalid signalling data: ${error.message}`);
+    }
     throw new Error('Invalid signalling data. Please check the code and try again.');
   }
 }
@@ -197,9 +270,25 @@ export async function createAnswer(
   const offerDesc = new RTCSessionDescription({ type: 'offer', sdp: pkg.sdp });
   await pc.setRemoteDescription(offerDesc);
 
-  // Add host's ICE candidates
-  for (const candidate of pkg.iceCandidates) {
-    await pc.addIceCandidate(candidate);
+  // Add host's ICE candidates (SEC-7: validate before adding)
+  if (pkg.iceCandidates && Array.isArray(pkg.iceCandidates)) {
+    for (const candidate of pkg.iceCandidates) {
+      // Validate ICE candidate structure before adding
+      if (!candidate || typeof candidate !== 'object') {
+        console.warn('Invalid ICE candidate received, skipping');
+        continue;
+      }
+      // Basic validation: candidate should have candidate string or be null/empty
+      if (candidate.candidate && typeof candidate.candidate !== 'string') {
+        console.warn('Invalid ICE candidate format, skipping');
+        continue;
+      }
+      try {
+        await pc.addIceCandidate(candidate);
+      } catch (e) {
+        console.warn('Failed to add ICE candidate:', e);
+      }
+    }
   }
 
   const answer = await pc.createAnswer();
@@ -234,9 +323,25 @@ export async function applyAnswer(
   const answerDesc = new RTCSessionDescription({ type: 'answer', sdp: pkg.sdp });
   await peerConnection.setRemoteDescription(answerDesc);
 
-  // Add guest's ICE candidates
-  for (const candidate of pkg.iceCandidates) {
-    await peerConnection.addIceCandidate(candidate);
+  // Add guest's ICE candidates (SEC-7: validate before adding)
+  if (pkg.iceCandidates && Array.isArray(pkg.iceCandidates)) {
+    for (const candidate of pkg.iceCandidates) {
+      // Validate ICE candidate structure before adding
+      if (!candidate || typeof candidate !== 'object') {
+        console.warn('Invalid ICE candidate received, skipping');
+        continue;
+      }
+      // Basic validation: candidate should have candidate string or be null/empty
+      if (candidate.candidate && typeof candidate.candidate !== 'string') {
+        console.warn('Invalid ICE candidate format, skipping');
+        continue;
+      }
+      try {
+        await peerConnection.addIceCandidate(candidate);
+      } catch (e) {
+        console.warn('Failed to add ICE candidate:', e);
+      }
+    }
   }
 }
 
