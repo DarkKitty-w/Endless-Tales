@@ -727,14 +727,13 @@ export function isWebLLMAvailable(): boolean {
 // This avoids the private property access issue
 let webllmProgressCallback: ((progress: number, text: string) => void) | null = null;
 
-// Static registry to track engines by model (avoids recreating the same model)
-const engineRegistry = new Map<string, { engine: any; promise: Promise<any> | null }>();
-
 class WebLLMProvider implements AIProvider {
   private engine: any = null;
   private currentModel: string = '';
   private loadingPromise: Promise<any> | null = null;
   private persistence: 'temporary' | 'persistent' = 'temporary';
+  // Instance-level registry to track engines by model (avoids recreating the same model)
+  private engineRegistry = new Map<string, { engine: any; promise: Promise<any> | null }>();
 
   constructor(private options?: { model?: string; persistence?: 'temporary' | 'persistent'; onProgress?: (progress: number, text: string) => void }) {
     console.log('[WebLLM Provider] Constructor called with options:', options);
@@ -772,7 +771,7 @@ class WebLLMProvider implements AIProvider {
     }
 
     // Check the registry for an existing engine (cross-instance sharing for same model)
-    const cached = engineRegistry.get(effectiveModel);
+    const cached = this.engineRegistry.get(effectiveModel);
     if (cached && cached.engine) {
       console.log('[WebLLM] Reusing engine from registry for model:', effectiveModel);
       this.engine = cached.engine;
@@ -859,7 +858,7 @@ class WebLLMProvider implements AIProvider {
         console.log('[WebLLM] CreateMLCEngine returned successfully, engine:', !!engine);
 
         // Store in registry and instance
-        engineRegistry.set(effectiveModel, { engine, promise: null });
+        this.engineRegistry.set(effectiveModel, { engine, promise: null });
         this.engine = engine;
         this.currentModel = effectiveModel;
         console.log('[WebLLM] Engine stored successfully');
@@ -872,11 +871,11 @@ class WebLLMProvider implements AIProvider {
           name: error instanceof Error ? error.name : 'unknown',
         });
         // Remove from registry on failure
-        engineRegistry.delete(effectiveModel);
+        this.engineRegistry.delete(effectiveModel);
         throw error;
       } finally {
         // Clear the loading promise from registry
-        const entry = engineRegistry.get(effectiveModel);
+        const entry = this.engineRegistry.get(effectiveModel);
         if (entry) {
           entry.promise = null;
         }
@@ -884,7 +883,7 @@ class WebLLMProvider implements AIProvider {
     })();
     
     // Store the loading promise in registry
-    engineRegistry.set(effectiveModel, { engine: null, promise: loadingPromise });
+    this.engineRegistry.set(effectiveModel, { engine: null, promise: loadingPromise });
 
     const engine = await loadingPromise;
     return engine;
@@ -950,7 +949,7 @@ class WebLLMProvider implements AIProvider {
     console.log('[WebLLM] Stream completed');
   }
 
-  static async getAvailableModels(): Promise<{ id: string; name: string; size: string }[]> {
+  async getAvailableModels(): Promise<{ id: string; name: string; size: string }[]> {
     return [
       { id: 'TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC', name: 'TinyLlama 1.1B', size: '~0.7 GB (Fastest)' },
       { id: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC', name: 'Qwen 2.5 1.5B', size: '~1 GB 🔥 Best Lightweight' },
@@ -964,7 +963,7 @@ class WebLLMProvider implements AIProvider {
     ];
   }
 
-  static async checkHardware(): Promise<{ webgpu: boolean; memory: number }> {
+  async checkHardware(): Promise<{ webgpu: boolean; memory: number }> {
     console.log('[WebLLM] checkHardware called');
     if (typeof window === 'undefined') return { webgpu: false, memory: 0 };
     const webgpu = 'gpu' in navigator;
@@ -973,7 +972,7 @@ class WebLLMProvider implements AIProvider {
     return { webgpu, memory };
   }
 
-  static async clearCache(): Promise<void> {
+  async clearCache(): Promise<void> {
     console.log('[WebLLM] clearCache called');
     if (typeof window === 'undefined') return;
     try {
@@ -996,7 +995,7 @@ class WebLLMProvider implements AIProvider {
         }
       }
       // Clear all engines from registry
-      engineRegistry.clear();
+      this.engineRegistry.clear();
       console.log('[WebLLM] Cache cleared');
     } catch (error) {
       console.error('[WebLLM] Failed to clear cache:', error);
@@ -1007,7 +1006,8 @@ class WebLLMProvider implements AIProvider {
 
 export async function clearWebLLMCache(): Promise<void> {
   console.log('[WebLLM] clearWebLLMCache called');
-  await WebLLMProvider.clearCache();
+  const provider = new WebLLMProvider();
+  await provider.clearCache();
 }
 
 class WebLLMStubProvider implements AIProvider {

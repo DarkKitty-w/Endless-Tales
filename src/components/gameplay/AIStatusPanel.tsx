@@ -55,7 +55,8 @@ export function AIStatusPanel() {
       const available = isWebLLMAvailable();
       setWebllmAvailable(available);
       if (available) {
-        const hw = await WebLLMProvider.checkHardware();
+        const provider = new WebLLMProvider();
+        const hw = await provider.checkHardware();
         setHardwareInfo(hw);
       }
     };

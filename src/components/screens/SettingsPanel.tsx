@@ -138,7 +138,8 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
         setWebllmSupported(available);
         if (available) {
           setWebllmChecking(false);
-          WebLLMProvider.checkHardware().then(info => {
+          const provider = new WebLLMProvider();
+          provider.checkHardware().then(info => {
             console.log('[SettingsPanel] Hardware info:', info);
             setHardwareInfo(info);
           });
