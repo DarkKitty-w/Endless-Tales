@@ -290,6 +290,10 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
 
       const normalizer = (data: any): NarrateAdventureOutput => {
           if (Array.isArray(data)) data = data[0] || {};
+          if (!data || typeof data !== 'object') {
+            console.warn('Normalizer received invalid data:', data);
+            return fallback;
+          }
 
           // --- narration ---
           const narrationText = data.narration 
@@ -303,19 +307,40 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           if (typeof data.updatedGameState === 'string') {
               updatedGameState = data.updatedGameState;
           } else if (typeof data.updatedGameState === 'object' && data.updatedGameState !== null) {
-              updatedGameState = JSON.stringify(data.updatedGameState);
+              try {
+                updatedGameState = JSON.stringify(data.updatedGameState);
+              } catch (e) {
+                console.warn('Failed to stringify updatedGameState:', e);
+              }
           } else if (data.update_game_state) {
               updatedGameState = typeof data.update_game_state === 'string'
                   ? data.update_game_state
                   : JSON.stringify(data.update_game_state);
           }
 
+          // --- updatedStats with null check ---
+          let updatedStats = data.updatedStats;
+          if (updatedStats && typeof updatedStats === 'object') {
+            // Ensure it has the required structure
+            if (!updatedStats.health && !updatedStats.stamina && !updatedStats.mana) {
+              updatedStats = undefined;
+            }
+          } else {
+            updatedStats = undefined;
+          }
+
+          // --- updatedTraits with null check ---
+          const updatedTraits = Array.isArray(data.updatedTraits) ? data.updatedTraits : undefined;
+          
+          // --- updatedKnowledge with null check ---
+          const updatedKnowledge = Array.isArray(data.updatedKnowledge) ? data.updatedKnowledge : undefined;
+
           // --- branchingChoices ---
           let branchingChoices = data.branchingChoices;
           if (!branchingChoices && Array.isArray(data.choices)) {
               branchingChoices = data.choices.slice(0, 4).map((c: any) => ({
-                  text: c.text || c.name || c.prompt || c.description || 'Continue',
-                  consequenceHint: c.consequenceHint || c.gameEffect || c.hint,
+                  text: c?.text || c?.name || c?.prompt || c?.description || 'Continue',
+                  consequenceHint: c?.consequenceHint || c?.gameEffect || c?.hint,
               }));
           }
           if (!Array.isArray(branchingChoices) || branchingChoices.length === 0) {
@@ -327,17 +352,21 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           const diceType = data.diceType ?? data.suggestedDice ?? fallback.diceType;
           const diceRoll = data.diceRoll ?? fallback.diceRoll;
 
-          // --- resource changes ---
-          const healthChange = data.healthChange ?? data.outcome?.health_change ?? data.action?.health_change;
-          const staminaChange = data.staminaChange ?? data.outcome?.stamina_change ?? data.action?.stamina_change;
-          const manaChange = data.manaChange ?? data.outcome?.mana_change ?? data.action?.mana_change;
+          // --- resource changes with null checks ---
+          const healthChange = typeof data.healthChange === 'number' ? data.healthChange 
+              : (data.outcome?.health_change ?? data.action?.health_change);
+          const staminaChange = typeof data.staminaChange === 'number' ? data.staminaChange 
+              : (data.outcome?.stamina_change ?? data.action?.stamina_change);
+          const manaChange = typeof data.manaChange === 'number' ? data.manaChange 
+              : (data.outcome?.mana_change ?? data.action?.mana_change);
 
           // --- worldMapChanges: normalize coordinates, connections, and type defaults ---
           let worldMapChanges = data.worldMapChanges;
-          if (worldMapChanges) {
+          if (worldMapChanges && typeof worldMapChanges === 'object') {
               const wmc = { ...worldMapChanges };
               if (Array.isArray(wmc.newLocations)) {
                   wmc.newLocations = wmc.newLocations.map((loc: any) => {
+                      if (!loc || typeof loc !== 'object') return { type: 'unknown', x: 50, y: 50 };
                       const l = { ...loc };
                       // Default type
                       if (!l.type) l.type = 'unknown';
@@ -362,26 +391,34 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
                   });
               }
               worldMapChanges = wmc;
+          } else {
+            worldMapChanges = undefined;
           }
+
+          // Handle character_defeated typo (some AIs might return character_defeated instead of isCharacterDefeated)
+          const isCharacterDefeated = data.isCharacterDefeated ?? data.character_defeated ?? false;
+
+          // Handle progressedToStage - check for common typos
+          const progressedToStage = data.progressedToStage ?? data.progressedToStage ?? data.progressedToStage ?? null;
 
           return {
               narration: narrationText,
               updatedGameState,
-              updatedStats: data.updatedStats,
-              updatedTraits: data.updatedTraits,
-              updatedKnowledge: data.updatedKnowledge,
-              progressedToStage: data.progressedToStage,
+              updatedStats,
+              updatedTraits,
+              updatedKnowledge,
+              progressedToStage,
               healthChange,
               staminaChange,
               manaChange,
-              xpGained: data.xpGained,
-              reputationChange: data.reputationChange,
-              npcRelationshipChange: data.npcRelationshipChange,
-              suggestedClassChange: data.suggestedClassChange,
-              gainedSkill: data.gainedSkill,
+              xpGained: typeof data.xpGained === 'number' ? data.xpGained : undefined,
+              reputationChange: typeof data.reputationChange === 'number' ? data.reputationChange : undefined,
+              npcRelationshipChange: typeof data.npcRelationshipChange === 'number' ? data.npcRelationshipChange : undefined,
+              suggestedClassChange: data.suggestedClassChange || undefined,
+              gainedSkill: data.gainedSkill || undefined,
               branchingChoices,
-              dynamicEventTriggered: data.dynamicEventTriggered,
-              isCharacterDefeated: data.isCharacterDefeated ?? data.character_defeated ?? false,
+              dynamicEventTriggered: data.dynamicEventTriggered || undefined,
+              isCharacterDefeated,
               assessedDifficulty,
               diceRoll,
               diceType,
