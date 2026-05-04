@@ -9,6 +9,9 @@ import type { DifficultyLevel, GameStateContext } from '../../types/game-types';
 import { formatGameStateContextForPrompt } from '../../context/game-state-utils';
 import { processAiResponse } from '../../lib/utils';
 import { sanitizePlayerAction } from '../../lib/utils';
+import { createLogger } from '../../lib/logger';
+
+const narrateLogger = createLogger('Narrate');
 
 export interface NarrateAdventureInput {
   character: any;

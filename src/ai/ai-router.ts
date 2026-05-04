@@ -1,4 +1,7 @@
 // src/ai/ai-router.ts
+import { createLogger } from './logger';
+
+const webllmLogger = createLogger('WebLLM');
 
 export interface GenerateContentConfig {
   responseMimeType?: string;
@@ -666,38 +669,38 @@ async function loadWebLLM(): Promise<any> {
   }
 
   if (webllmModule) {
-    console.log('[WebLLM] Returning cached module');
+    webllmLogger.log('[WebLLM] Returning cached module');
     return webllmModule;
   }
   if (webllmLoadPromise) {
-    console.log('[WebLLM] Load already in progress, waiting...');
+    webllmLogger.log('[WebLLM] Load already in progress, waiting...');
     return webllmLoadPromise;
   }
 
   webllmLoadAttempted = true;
-  console.log('[WebLLM] Attempting to load @mlc-ai/web-llm...');
+  webllmLogger.log('[WebLLM] Attempting to load @mlc-ai/web-llm...');
 
   webllmLoadPromise = (async () => {
     try {
       const module = await import('@mlc-ai/web-llm');
-      console.log('[WebLLM] Module loaded, keys:', Object.keys(module));
+      webllmLogger.log('[WebLLM] Module loaded, keys:', Object.keys(module));
       
       const creator = module.CreateMLCEngine || module.CreateWebWorkerMLCEngine;
       if (!creator) {
-        console.error('[WebLLM] No engine creator found in module keys:', Object.keys(module));
+        webllmLogger.error('[WebLLM] No engine creator found in module keys:', Object.keys(module));
         throw new Error('[WebLLM] No engine creator found (expected CreateMLCEngine or CreateWebWorkerMLCEngine)');
       }
       
       webllmModule = module;
       webllmAvailable = true;
-      console.log('[WebLLM] Engine creator found:', creator.name || 'anonymous');
+      webllmLogger.log('[WebLLM] Engine creator found:', creator.name || 'anonymous');
       return module;
     } catch (e) {
-      console.error('[WebLLM] Failed to load package:', e);
+      webllmLogger.error('[WebLLM] Failed to load package:', e);
       webllmAvailable = false;
       if (!webllmLoadRetried) {
         webllmLoadRetried = true;
-        console.log('[WebLLM] Retrying import once after 500ms...');
+        webllmLogger.log('[WebLLM] Retrying import once after 500ms...');
         webllmLoadPromise = null;
         await new Promise(resolve => setTimeout(resolve, 500));
         return loadWebLLM();
@@ -715,9 +718,9 @@ async function loadWebLLM(): Promise<any> {
 
 export function isWebLLMAvailable(): boolean {
   if (typeof window === 'undefined') return false;
-  console.log('[WebLLM] isWebLLMAvailable called, current state:', webllmAvailable);
+  webllmLogger.log('[WebLLM] isWebLLMAvailable called, current state:', webllmAvailable);
   if (!webllmLoadAttempted) {
-    console.log('[WebLLM] Triggering background load...');
+    webllmLogger.log('[WebLLM] Triggering background load...');
     loadWebLLM().catch(() => {});
   }
   return webllmAvailable;
@@ -736,7 +739,7 @@ class WebLLMProvider implements AIProvider {
   private engineRegistry = new Map<string, { engine: any; promise: Promise<any> | null }>();
 
   constructor(private options?: { model?: string; persistence?: 'temporary' | 'persistent'; onProgress?: (progress: number, text: string) => void }) {
-    console.log('[WebLLM Provider] Constructor called with options:', options);
+    webllmLogger.log('[WebLLM Provider] Constructor called with options:', options);
     if (options?.persistence) {
       this.persistence = options.persistence;
     }
@@ -750,7 +753,7 @@ class WebLLMProvider implements AIProvider {
   }
 
   private async getEngine(modelId?: string): Promise<any> {
-    console.log('[WebLLM] getEngine called with modelId:', modelId);
+    webllmLogger.log('[WebLLM] getEngine called with modelId:', modelId);
     
     // Determine which model to use
     const fallbackModels = [
@@ -762,18 +765,18 @@ class WebLLMProvider implements AIProvider {
     
     let effectiveModel = this.options?.model || modelId || fallbackModels[0];
     
-    console.log('[WebLLM] Effective model:', effectiveModel);
+    webllmLogger.log('[WebLLM] Effective model:', effectiveModel);
 
     // Check if we already have an engine for this model (instance-level)
     if (this.engine && this.currentModel === effectiveModel) {
-      console.log('[WebLLM] Reusing existing engine for model:', this.currentModel);
+      webllmLogger.log('[WebLLM] Reusing existing engine for model:', this.currentModel);
       return this.engine;
     }
 
     // Check the registry for an existing engine (cross-instance sharing for same model)
     const cached = this.engineRegistry.get(effectiveModel);
     if (cached && cached.engine) {
-      console.log('[WebLLM] Reusing engine from registry for model:', effectiveModel);
+      webllmLogger.log('[WebLLM] Reusing engine from registry for model:', effectiveModel);
       this.engine = cached.engine;
       this.currentModel = effectiveModel;
       return this.engine;
@@ -785,53 +788,53 @@ class WebLLMProvider implements AIProvider {
 
     // Check if there's already a loading promise for this model
     if (cached?.promise) {
-      console.log('[WebLLM] Engine load already in progress for model:', effectiveModel);
+      webllmLogger.log('[WebLLM] Engine load already in progress for model:', effectiveModel);
       const engine = await cached.promise;
       this.engine = engine;
       this.currentModel = effectiveModel;
       return engine;
     }
 
-    console.log('[WebLLM] Loading WebLLM module...');
+    webllmLogger.log('[WebLLM] Loading WebLLM module...');
     const webllm = await loadWebLLM();
-    console.log('[WebLLM] webllm module obtained, keys:', Object.keys(webllm));
+    webllmLogger.log('[WebLLM] webllm module obtained, keys:', Object.keys(webllm));
 
     const CreateMLCEngine = webllm.CreateMLCEngine || webllm.CreateWebWorkerMLCEngine;
     if (!CreateMLCEngine) {
-      console.error('[WebLLM] webllm module contents:', webllm);
+      webllmLogger.error('[WebLLM] webllm module contents:', webllm);
       throw new Error('[WebLLM] Engine creator not found in module. Check console for module keys.');
     }
 
     const { prebuiltAppConfig } = webllm;
-    console.log('[WebLLM] prebuiltAppConfig:', prebuiltAppConfig);
-    console.log('[WebLLM] prebuiltAppConfig.model_list:', prebuiltAppConfig?.model_list);
+    webllmLogger.log('[WebLLM] prebuiltAppConfig:', prebuiltAppConfig);
+    webllmLogger.log('[WebLLM] prebuiltAppConfig.model_list:', prebuiltAppConfig?.model_list);
 
     await new Promise(resolve => setTimeout(resolve, 200));
 
     if (!prebuiltAppConfig || !Array.isArray(prebuiltAppConfig.model_list)) {
-      console.error('[WebLLM] prebuiltAppConfig is not properly initialized:', prebuiltAppConfig);
+      webllmLogger.error('[WebLLM] prebuiltAppConfig is not properly initialized:', prebuiltAppConfig);
       throw new Error('[WebLLM] Model registry is not initialized. Please try again later.');
     }
 
     const availableModels: string[] = prebuiltAppConfig.model_list.map((m: any) => m.model_id);
-    console.log('[WebLLM] Available models:', availableModels);
-    console.log('[WebLLM] Available models count:', availableModels.length);
+    webllmLogger.log('[WebLLM] Available models:', availableModels);
+    webllmLogger.log('[WebLLM] Available models count:', availableModels.length);
 
-    console.log('[WebLLM] Fallback models:', fallbackModels);
+    webllmLogger.log('[WebLLM] Fallback models:', fallbackModels);
 
-    console.log('[WebLLM] Is requested model in available list?', availableModels.includes(effectiveModel));
+    webllmLogger.log('[WebLLM] Is requested model in available list?', availableModels.includes(effectiveModel));
 
     if (!availableModels.includes(effectiveModel)) {
-      console.warn(`[WebLLM] Model "${effectiveModel}" not found in registry.`);
+      webllmLogger.warn(`[WebLLM] Model "${effectiveModel}" not found in registry.`);
       const fallback = fallbackModels.find(m => availableModels.includes(m)) || availableModels[0];
       if (!fallback) {
         throw new Error('[WebLLM] No usable model found in WebLLM registry.');
       }
       effectiveModel = fallback;
-      console.log(`[WebLLM] Using fallback model: ${effectiveModel}`);
+      webllmLogger.log(`[WebLLM] Using fallback model: ${effectiveModel}`);
     }
 
-    console.log('[WebLLM] Starting engine creation for model:', effectiveModel);
+    webllmLogger.log('[WebLLM] Starting engine creation for model:', effectiveModel);
     
     // Create the loading promise and store in registry
     const loadingPromise = (async () => {
@@ -849,23 +852,23 @@ class WebLLMProvider implements AIProvider {
           },
         };
 
-        console.log('[WebLLM] engineConfig.appConfig:', engineConfig.appConfig);
-        console.log('[WebLLM] engineConfig.appConfig.model_list exists?', !!engineConfig.appConfig.model_list);
-        console.log('[WebLLM] engineConfig.appConfig.model_list length:', engineConfig.appConfig.model_list?.length);
+        webllmLogger.log('[WebLLM] engineConfig.appConfig:', engineConfig.appConfig);
+        webllmLogger.log('[WebLLM] engineConfig.appConfig.model_list exists?', !!engineConfig.appConfig.model_list);
+        webllmLogger.log('[WebLLM] engineConfig.appConfig.model_list length:', engineConfig.appConfig.model_list?.length);
 
-        console.log(`[WebLLM] Calling CreateMLCEngine with model: ${effectiveModel}`);
+        webllmLogger.log(`[WebLLM] Calling CreateMLCEngine with model: ${effectiveModel}`);
         const engine = await CreateMLCEngine(effectiveModel, engineConfig);
-        console.log('[WebLLM] CreateMLCEngine returned successfully, engine:', !!engine);
+        webllmLogger.log('[WebLLM] CreateMLCEngine returned successfully, engine:', !!engine);
 
         // Store in registry and instance
         this.engineRegistry.set(effectiveModel, { engine, promise: null });
         this.engine = engine;
         this.currentModel = effectiveModel;
-        console.log('[WebLLM] Engine stored successfully');
+        webllmLogger.log('[WebLLM] Engine stored successfully');
         return engine;
       } catch (error) {
-        console.error('[WebLLM] Engine creation failed:', error);
-        console.error('[WebLLM] Error details:', {
+        webllmLogger.error('[WebLLM] Engine creation failed:', error);
+        webllmLogger.error('[WebLLM] Error details:', {
           message: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
           name: error instanceof Error ? error.name : 'unknown',
@@ -900,17 +903,17 @@ class WebLLMProvider implements AIProvider {
     config?: GenerateContentConfig;
     signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
-    console.log('[WebLLM] generateContent called');
+    webllmLogger.log('[WebLLM] generateContent called');
     const engine = await this.getEngine(model);
     const messages = [{ role: 'user', content: contents }];
-    console.log('[WebLLM] Sending chat completion request...');
+    webllmLogger.log('[WebLLM] Sending chat completion request...');
     const response = await engine.chat.completions.create({
       messages,
       temperature: config?.temperature,
       top_p: config?.topP,
       stream: false,
     });
-    console.log('[WebLLM] Chat completion response received');
+    webllmLogger.log('[WebLLM] Chat completion response received');
     const text = response.choices?.[0]?.message?.content;
     if (!text) throw new Error('No text returned from WebLLM');
     return { text };
@@ -927,26 +930,26 @@ class WebLLMProvider implements AIProvider {
     config?: GenerateContentConfig;
     signal?: AbortSignal;
   }): AsyncIterable<string> {
-    console.log('[WebLLM] generateContentStream called');
+    webllmLogger.log('[WebLLM] generateContentStream called');
     const engine = await this.getEngine(model);
     const messages = [{ role: 'user', content: contents }];
-    console.log('[WebLLM] Creating streaming chat completion...');
+    webllmLogger.log('[WebLLM] Creating streaming chat completion...');
     const stream = await engine.chat.completions.create({
       messages,
       temperature: config?.temperature,
       top_p: config?.topP,
       stream: true,
     });
-    console.log('[WebLLM] Stream created');
+    webllmLogger.log('[WebLLM] Stream created');
     for await (const chunk of stream) {
       if (signal?.aborted) {
-        console.log('[WebLLM] Stream aborted');
+        webllmLogger.log('[WebLLM] Stream aborted');
         break;
       }
       const content = chunk.choices?.[0]?.delta?.content;
       if (content) yield content;
     }
-    console.log('[WebLLM] Stream completed');
+    webllmLogger.log('[WebLLM] Stream completed');
   }
 
   async getAvailableModels(): Promise<{ id: string; name: string; size: string }[]> {
@@ -964,48 +967,48 @@ class WebLLMProvider implements AIProvider {
   }
 
   async checkHardware(): Promise<{ webgpu: boolean; memory: number }> {
-    console.log('[WebLLM] checkHardware called');
+    webllmLogger.log('[WebLLM] checkHardware called');
     if (typeof window === 'undefined') return { webgpu: false, memory: 0 };
     const webgpu = 'gpu' in navigator;
     const memory = (navigator as any).deviceMemory || 4;
-    console.log('[WebLLM] Hardware:', { webgpu, memory });
+    webllmLogger.log('[WebLLM] Hardware:', { webgpu, memory });
     return { webgpu, memory };
   }
 
   async clearCache(): Promise<void> {
-    console.log('[WebLLM] clearCache called');
+    webllmLogger.log('[WebLLM] clearCache called');
     if (typeof window === 'undefined') return;
     try {
       const dbs = await indexedDB.databases();
-      console.log('[WebLLM] IndexedDB databases:', dbs.map(db => db.name));
+      webllmLogger.log('[WebLLM] IndexedDB databases:', dbs.map(db => db.name));
       for (const db of dbs) {
         if (db.name?.includes('webllm') || db.name?.includes('mlc')) {
-          console.log('[WebLLM] Deleting database:', db.name);
+          webllmLogger.log('[WebLLM] Deleting database:', db.name);
           indexedDB.deleteDatabase(db.name!);
         }
       }
       if ('caches' in window) {
         const cacheNames = await caches.keys();
-        console.log('[WebLLM] Cache storage keys:', cacheNames);
+        webllmLogger.log('[WebLLM] Cache storage keys:', cacheNames);
         for (const name of cacheNames) {
           if (name.includes('webllm') || name.includes('mlc')) {
-            console.log('[WebLLM] Deleting cache:', name);
+            webllmLogger.log('[WebLLM] Deleting cache:', name);
             await caches.delete(name);
           }
         }
       }
       // Clear all engines from registry
       this.engineRegistry.clear();
-      console.log('[WebLLM] Cache cleared');
+      webllmLogger.log('[WebLLM] Cache cleared');
     } catch (error) {
-      console.error('[WebLLM] Failed to clear cache:', error);
+      webllmLogger.error('[WebLLM] Failed to clear cache:', error);
       throw error instanceof Error ? error : new Error(String(error));
     }
   }
 }
 
 export async function clearWebLLMCache(): Promise<void> {
-  console.log('[WebLLM] clearWebLLMCache called');
+  webllmLogger.log('[WebLLM] clearWebLLMCache called');
   const provider = new WebLLMProvider();
   await provider.clearCache();
 }

@@ -13,6 +13,9 @@ import {
   type SignallingPackage
 } from "../lib/webrtc-signalling";
 import type { StoryLogEntry, GameState } from "../types/game-types";
+import { createLogger } from "../lib/logger";
+
+const multiplayerLogger = createLogger('Multiplayer');
 
 interface UseMultiplayerOptions {
   playerName: string;
@@ -85,7 +88,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   const sendMessage = useCallback((type: MultiplayerMessage['type'], payload: any) => {
     const channel = dataChannelsRef.current[type];
     if (!channel) {
-      console.error(`Data channel ${type} not available`);
+      multiplayerLogger.error(`Data channel ${type} not available`);
       return false;
     }
 
@@ -140,7 +143,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   // Send control message (host only)
   const sendControlMessage = useCallback((action: ControlMessage['payload']['action'], targetPeerId?: string, data?: any) => {
     if (!multiplayerState.isHost) {
-      console.error('Only host can send control messages');
+      multiplayerLogger.error('Only host can send control messages');
       return false;
     }
     return sendMessage('control', { action, targetPeerId, data });
@@ -198,7 +201,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
       return encodedOffer;
     } catch (error) {
-      console.error('Failed to create session:', error);
+      multiplayerLogger.error('Failed to create session:', error);
       setMultiplayerState(prev => ({ ...prev, connectionStatus: 'failed' }));
       throw error;
     }
@@ -237,7 +240,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
       return encodedAnswer;
     } catch (error) {
-      console.error('Failed to join session:', error);
+      multiplayerLogger.error('Failed to join session:', error);
       setMultiplayerState(prev => ({ ...prev, connectionStatus: 'failed' }));
       throw error;
     }
@@ -252,7 +255,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     try {
       await applyAnswer(peerConnectionRef.current, encodedAnswer);
     } catch (error) {
-      console.error('Failed to apply answer:', error);
+      multiplayerLogger.error('Failed to apply answer:', error);
       throw error;
     }
   }, [multiplayerState.isHost]);
@@ -263,7 +266,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     
     // Check if we've exceeded max attempts
     if (reconnectAttempts.current >= maxReconnectAttempts) {
-      console.log(`Max reconnect attempts (${maxReconnectAttempts}) reached. Giving up.`);
+      multiplayerLogger.log(`Max reconnect attempts (${maxReconnectAttempts}) reached. Giving up.`);
       setIsReconnectingState(false);
       return;
     }
@@ -275,7 +278,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     // Calculate exponential backoff delay: 1s, 2s, 4s, 8s...
     const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts.current - 1), 30000); // Cap at 30s
     
-    console.log(`Attempting reconnect #${reconnectAttempts.current} (delay: ${backoffDelay}ms)...`);
+    multiplayerLogger.log(`Attempting reconnect #${reconnectAttempts.current} (delay: ${backoffDelay}ms)...`);
     
     // Wait for backoff delay before attempting
     if (backoffDelay > 0) {
@@ -292,20 +295,20 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       }
       // Reset on success
       reconnectAttempts.current = 0;
-      console.log('Reconnect successful!');
+      multiplayerLogger.log('Reconnect successful!');
     } catch (error) {
-      console.error(`Reconnect attempt #${reconnectAttempts.current} failed:`, error);
+      multiplayerLogger.error(`Reconnect attempt #${reconnectAttempts.current} failed:`, error);
       
       // Schedule next retry with exponential backoff if we haven't exceeded max attempts
       if (reconnectAttempts.current < maxReconnectAttempts) {
         const nextDelay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
-        console.log(`Scheduling reconnect #${reconnectAttempts.current + 1} in ${nextDelay}ms...`);
+        multiplayerLogger.log(`Scheduling reconnect #${reconnectAttempts.current + 1} in ${nextDelay}ms...`);
         reconnectTimeoutRef.current = setTimeout(() => {
           isReconnectingRef.current = false; // Allow the next attempt
           reconnect();
         }, nextDelay);
       } else {
-        console.log('Max reconnect attempts reached. Giving up.');
+        multiplayerLogger.log('Max reconnect attempts reached. Giving up.');
         setIsReconnectingState(false);
       }
     } finally {
@@ -325,7 +328,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       channel,
       (data: any) => handleMessage(data, channel.label),
       () => {
-        console.log(`Channel ${channel.label} opened`);
+        multiplayerLogger.log(`Channel ${channel.label} opened`);
         dataChannelsRef.current[channel.label] = channel;
         
         // Register callback to send ICE candidates via this data channel
@@ -340,14 +343,14 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
                   candidate
                 }));
               } catch (error) {
-                console.error('Failed to send ICE candidate via data channel:', error);
+                multiplayerLogger.error('Failed to send ICE candidate via data channel:', error);
               }
             }
           });
         }
       },
       () => {
-        console.log(`Channel ${channel.label} closed`);
+        multiplayerLogger.log(`Channel ${channel.label} closed`);
         delete dataChannelsRef.current[channel.label];
         
         // Unregister the ICE candidate callback
@@ -360,7 +363,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         // Attempt reconnection if not intentional disconnect and not already reconnecting
         // The reconnect function has built-in exponential backoff
         if (!intentionalDisconnect.current && lastInitParams.current && !isReconnectingRef.current) {
-          console.log('Data channel closed unexpectedly, attempting reconnect...');
+          multiplayerLogger.log('Data channel closed unexpectedly, attempting reconnect...');
           reconnect();
         }
       }
@@ -369,7 +372,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
   // Handle incoming messages
   const handleMessage = useCallback((data: any, channelLabel: string) => {
-    console.log(`Received message on ${channelLabel}:`, data);
+    multiplayerLogger.log(`Received message on ${channelLabel}:`, data);
 
     // Get current state from ref to avoid stale closures
     const currentState = multiplayerStateRef.current;
@@ -440,7 +443,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         if (controlMsg.payload.action === 'kick') {
           if (controlMsg.payload.targetPeerId === currentState.peerId) {
             // We are kicked
-            console.log('Kicked from game');
+            multiplayerLogger.log('Kicked from game');
             disconnect();
           }
         } else if (controlMsg.payload.action === 'pause') {
@@ -474,7 +477,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
           );
         } else if (controlMsg.payload.action === 'request-sync' && currentState.isHost) {
           // Host received a sync request from a reconnecting peer
-          console.log('Host: Sync request received, sending full state...');
+          multiplayerLogger.log('Host: Sync request received, sending full state...');
           // Send full state sync
           sendMessage('control', { 
             action: 'sync-response', 
@@ -487,11 +490,11 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
           });
         } else if (controlMsg.payload.action === 'sync-response' && !currentState.isHost) {
           // Guest received state sync from host
-          console.log('Guest: Received state sync from host');
+          multiplayerLogger.log('Guest: Received state sync from host');
           const { gameState, partyState, turnOrder, currentTurnIndex } = controlMsg.payload.data || {};
           if (gameState && onStoryUpdate) {
             // Apply the synced state - this will trigger a full state update
-            console.log('Guest: Applying synced state...');
+            multiplayerLogger.log('Guest: Applying synced state...');
             // The actual state application will be done via dispatch in the component
             if (onControlMessage) {
               onControlMessage({ action: 'sync-complete', data: { gameState, partyState, turnOrder, currentTurnIndex } });
