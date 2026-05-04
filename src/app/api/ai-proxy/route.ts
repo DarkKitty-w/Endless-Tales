@@ -3,25 +3,162 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
+// Simple in-memory rate limiting (per-process, resets on server restart)
+// For production, use a proper rate limiting solution like Redis
+const requestCounts = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 30; // 30 requests per minute per IP
+
+function getClientIp(request: NextRequest): string {
+  // Try to get IP from various headers (Vercel, Cloudflare, etc.)
+  const forwarded = request.headers.get('x-forwarded-for');
+  const realIp = request.headers.get('x-real-ip');
+  const cfIp = request.headers.get('cf-connecting-ip');
+  
+  if (forwarded) return forwarded.split(',')[0].trim();
+  if (realIp) return realIp;
+  if (cfIp) return cfIp;
+  return 'unknown';
+}
+
+function checkRateLimit(ip: string): { allowed: boolean; retryAfter?: number } {
+  const now = Date.now();
+  const record = requestCounts.get(ip);
+  
+  if (!record || now > record.resetTime) {
+    // New window
+    requestCounts.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return { allowed: true };
+  }
+  
+  if (record.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return { allowed: false, retryAfter: Math.ceil((record.resetTime - now) / 1000) };
+  }
+  
+  record.count++;
+  return { allowed: true };
+}
+
+// Validate and sanitize input
+function validateInput(body: any): { valid: boolean; error?: string } {
+  // Check required fields
+  if (!body.provider) {
+    return { valid: false, error: 'Missing provider field' };
+  }
+  
+  // Validate provider
+  const validProviders = ['gemini', 'openai', 'claude', 'deepseek', 'openrouter', 'webllm'];
+  if (!validProviders.includes(body.provider)) {
+    return { valid: false, error: 'Invalid provider' };
+  }
+  
+  // Validate contents
+  if (!body.contents && body.provider !== 'webllm') {
+    return { valid: false, error: 'Missing contents field' };
+  }
+  
+  // Check contents size (max 100KB)
+  const contentsStr = typeof body.contents === 'string' ? body.contents : JSON.stringify(body.contents);
+  if (contentsStr.length > 100 * 1024) {
+    return { valid: false, error: 'Contents too large (max 100KB)' };
+  }
+  
+  // Validate model if provided
+  if (body.model && typeof body.model !== 'string') {
+    return { valid: false, error: 'Invalid model field' };
+  }
+  
+  // Validate config if provided
+  if (body.config && typeof body.config !== 'object') {
+    return { valid: false, error: 'Invalid config field' };
+  }
+  
+  return { valid: true };
+}
+
+// Sanitize error messages for production
+function sanitizeErrorMessage(error: any): string {
+  const isDev = process.env.NODE_ENV === 'development';
+  
+  if (isDev) {
+    // In development, return detailed error
+    return error instanceof Error ? error.message : String(error);
+  }
+  
+  // In production, use generic messages
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    
+    // Check for common error patterns and return generic messages
+    if (message.includes('api key') || message.includes('unauthorized') || message.includes('401')) {
+      return 'Authentication failed. Please check your API configuration.';
+    }
+    if (message.includes('quota') || message.includes('billing') || message.includes('429')) {
+      return 'Service temporarily unavailable due to quota limits.';
+    }
+    if (message.includes('rate limit') || message.includes('too many requests')) {
+      return 'Too many requests. Please try again later.';
+    }
+    if (message.includes('invalid') && message.includes('request')) {
+      return 'Invalid request. Please check your input.';
+    }
+  }
+  
+  return 'An error occurred while processing your request. Please try again.';
+}
+
 export async function POST(request: NextRequest) {
   try {
+    // Check content length for payload size limit (SEC-10)
+    const contentLength = request.headers.get('content-length');
+    if (contentLength && parseInt(contentLength) > 100 * 1024) {  // 100KB limit
+      return NextResponse.json(
+        { error: 'Request too large (max 100KB)' },
+        { status: 413 }
+      );
+    }
+
+    // Check rate limit (SEC-2)
+    const clientIp = getClientIp(request);
+    const rateLimitResult = checkRateLimit(clientIp);
+    if (!rateLimitResult.allowed) {
+      return NextResponse.json(
+        { error: 'Rate limit exceeded. Please try again later.' },
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': String(rateLimitResult.retryAfter || 60),
+            'X-RateLimit-Limit': String(RATE_LIMIT_MAX_REQUESTS),
+            'X-RateLimit-Remaining': '0',
+          }
+        }
+      );
+    }
+
     const body = await request.json();
+    
+    // Validate input (SEC-2)
+    const validation = validateInput(body);
+    if (!validation.valid) {
+      return NextResponse.json(
+        { error: validation.error || 'Invalid request' },
+        { status: 400 }
+      );
+    }
+    
     const { provider, model, contents, config, userApiKey, stream, systemMessage } = body;
 
     // Determine which API key to use
     const apiKey = userApiKey || getServerApiKey(provider);
     
     if (!apiKey && provider !== 'webllm') {
-      const providerLabels: Record<string, string> = {
-        'gemini': 'Gemini',
-        'openai': 'OpenAI',
-        'claude': 'Claude',
-        'deepseek': 'DeepSeek',
-        'openrouter': 'OpenRouter'
-      };
-      const providerName = providerLabels[provider] || provider;
+      // SEC-9: Use generic error message in production
+      const isDev = process.env.NODE_ENV === 'development';
+      const errorMessage = isDev 
+        ? `API key not configured. Please check your settings.`
+        : `API key not configured. Please check your settings.`;
       return NextResponse.json(
-        { error: `${providerName} API key not configured. Please add your ${providerName} API key in Settings.` },
+        { error: errorMessage },
         { status: 401 }
       );
     }
@@ -45,9 +182,10 @@ export async function POST(request: NextRequest) {
     }
   } catch (error: unknown) {
     console.error('AI Proxy error:', error);
-    const message = error instanceof Error ? error.message : String(error);
+    // SEC-4: Sanitize error messages before returning to client
+    const sanitizedMessage = sanitizeErrorMessage(error);
     return NextResponse.json(
-      { error: message },
+      { error: sanitizedMessage },
       { status: 500 }
     );
   }
@@ -102,8 +240,12 @@ async function handleGemini(
   if (!response.ok) {
     const errorText = await response.text();
     console.error('Gemini API error:', response.status, errorText);
+    // SEC-4: Sanitize error messages
+    const sanitizedMessage = process.env.NODE_ENV === 'development' 
+      ? `Gemini API error: ${response.status}` 
+      : 'AI service error. Please try again.';
     return NextResponse.json(
-      { error: `Gemini API error: ${response.status}` },
+      { error: sanitizedMessage },
       { status: response.status }
     );
   }
@@ -196,8 +338,12 @@ async function handleOpenAICompatible(
   if (!response.ok) {
     const error = await response.json();
     console.error(`${providerName} API error:`, response.status, error);
+    // SEC-4: Sanitize error messages
+    const sanitizedMessage = process.env.NODE_ENV === 'development' 
+      ? `${providerName} API error: ${error.error?.message || response.status}`
+      : 'AI service error. Please try again.';
     return NextResponse.json(
-      { error: `${providerName} API error: ${error.error?.message || response.status}` },
+      { error: sanitizedMessage },
       { status: response.status }
     );
   }
@@ -336,8 +482,12 @@ async function handleClaude(
   if (!response.ok) {
     const error = await response.json();
     console.error('Claude API error:', response.status, error);
+    // SEC-4: Sanitize error messages
+    const sanitizedMessage = process.env.NODE_ENV === 'development' 
+      ? `Claude API error: ${error.error?.message || response.status}`
+      : 'AI service error. Please try again.';
     return NextResponse.json(
-      { error: `Claude API error: ${error.error?.message || response.status}` },
+      { error: sanitizedMessage },
       { status: response.status }
     );
   }
