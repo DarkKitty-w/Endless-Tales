@@ -9,6 +9,20 @@ export interface SignallingPackage {
     name: string;
   };
   type: 'offer' | 'answer';
+  // Optional password protection (SEC-8)
+  passwordHash?: string; // Simple hash of the session password (base64 encoded)
+}
+
+// Simple password hashing function (SEC-8)
+// Note: This is not cryptographically secure - just a basic deterrent
+export function hashPassword(password: string): string {
+  // Use a simple encoding - in production, use a proper hashing library
+  return btoa(password).replace(/=/g, '');
+}
+
+// Validate password against hash (SEC-8)
+export function validatePassword(password: string, hash: string): boolean {
+  return hashPassword(password) === hash;
 }
 
 /**
@@ -198,11 +212,13 @@ export async function handleIncomingIceCandidate(
 /**
  * Host: Create an offer with ICE candidates
  * Returns a base64-encoded string containing the offer and ICE candidates
+ * @param password Optional password to protect the session (SEC-8)
  */
 export async function createOffer(
   peerId: string,
   name: string,
-  onIceCandidate: (candidate: RTCIceCandidateInit) => void
+  onIceCandidate: (candidate: RTCIceCandidateInit) => void,
+  password?: string
 ): Promise<{ peerConnection: RTCPeerConnection; encodedOffer: string }> {
   const iceCandidates: RTCIceCandidateInit[] = [];
   const pcId = `offer-${peerId}`;
@@ -235,6 +251,11 @@ export async function createOffer(
     peerInfo: { peerId, name },
     type: 'offer',
   };
+  
+  // Add password hash if password is provided (SEC-8)
+  if (password) {
+    pkg.passwordHash = hashPassword(password);
+  }
 
   const encodedOffer = encodeSignallingData(pkg);
   return { peerConnection: pc, encodedOffer };
@@ -243,12 +264,15 @@ export async function createOffer(
 /**
  * Guest: Create an answer from a host's offer string
  * Returns a base64-encoded string containing the answer and ICE candidates
+ * @param password Optional password to validate against the offer (SEC-8)
+ * @throws Error if password is required but incorrect
  */
 export async function createAnswer(
   encodedOffer: string,
   peerId: string,
   name: string,
-  onIceCandidate: (candidate: RTCIceCandidateInit) => void
+  onIceCandidate: (candidate: RTCIceCandidateInit) => void,
+  password?: string
 ): Promise<{ peerConnection: RTCPeerConnection; encodedAnswer: string }> {
   const iceCandidates: RTCIceCandidateInit[] = [];
   const pcId = `answer-${peerId}`;
@@ -265,6 +289,16 @@ export async function createAnswer(
   const pkg = decodeSignallingData(encodedOffer);
   if (pkg.type !== 'offer') {
     throw new Error('Invalid offer data');
+  }
+
+  // SEC-8: Validate password if required
+  if (pkg.passwordHash) {
+    if (!password) {
+      throw new Error('PASSWORD_REQUIRED: This session requires a password');
+    }
+    if (!validatePassword(password, pkg.passwordHash)) {
+      throw new Error('INVALID_PASSWORD: Incorrect password for this session');
+    }
   }
 
   const offerDesc = new RTCSessionDescription({ type: 'offer', sdp: pkg.sdp });

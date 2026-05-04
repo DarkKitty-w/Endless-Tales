@@ -24,6 +24,9 @@ export function CoopLobby() {
   const [isInitializing, setIsInitializing] = useState(false);
   const [connectionStep, setConnectionStep] = useState<'idle' | 'host-waiting' | 'guest-input' | 'guest-waiting' | 'connected'>('idle');
   const [error, setError] = useState<string | null>(null);
+  // SEC-8: Password support
+  const [sessionPassword, setSessionPassword] = useState("");
+  const [joinPassword, setJoinPassword] = useState("");
 
   const {
     multiplayerState,
@@ -66,19 +69,21 @@ export function CoopLobby() {
     setIsInitializing(true);
     setError(null);
     try {
-      const encodedOffer = await createSession();
+      // SEC-8: Pass password if provided
+      const password = sessionPassword.trim() || undefined;
+      const encodedOffer = await createSession(password);
       setOfferString(encodedOffer);
       setConnectionStep('host-waiting');
       dispatch({ type: "SET_IS_HOST", payload: true });
       dispatch({ type: "SET_SESSION_ID", payload: multiplayerState.peerId });
-      toast({ title: "Session Created!", description: "Share the QR code or code with your friends." });
+      toast({ title: "Session Created!", description: password ? "Password-protected session created." : "Share the QR code or code with your friends." });
     } catch (err: any) {
       setError(err.message || "Failed to create session.");
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setIsInitializing(false);
     }
-  }, [createSession, multiplayerState.peerId, dispatch, toast]);
+  }, [createSession, multiplayerState.peerId, dispatch, toast, sessionPassword]);
 
   const handleJoinSession = useCallback(async () => {
     if (!inputOffer.trim()) {
@@ -88,18 +93,28 @@ export function CoopLobby() {
     setIsInitializing(true);
     setError(null);
     try {
-      const encodedAnswer = await joinSession(inputOffer.trim());
+      // SEC-8: Pass password if provided
+      const password = joinPassword.trim() || undefined;
+      const encodedAnswer = await joinSession(inputOffer.trim(), password);
       setAnswerString(encodedAnswer);
       setConnectionStep('guest-waiting');
       dispatch({ type: "SET_IS_HOST", payload: false });
       toast({ title: "Code Generated!", description: "Send this code back to the host." });
     } catch (err: any) {
-      setError(err.message || "Failed to join session.");
+      // Check if password is required
+      if (err.message && err.message.includes('PASSWORD_REQUIRED')) {
+        setError("This session requires a password. Please enter the password.");
+        setConnectionStep('guest-input'); // Show password input
+      } else if (err.message && err.message.includes('INVALID_PASSWORD')) {
+        setError("Incorrect password. Please try again.");
+      } else {
+        setError(err.message || "Failed to join session.");
+      }
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setIsInitializing(false);
     }
-  }, [inputOffer, joinSession, dispatch, toast]);
+  }, [inputOffer, joinSession, dispatch, toast, joinPassword]);
 
   const handleHostApplyAnswer = useCallback(async () => {
     if (!inputAnswer.trim()) {
@@ -199,6 +214,20 @@ export function CoopLobby() {
 
           {connectionStep === 'idle' && (
             <>
+              {/* SEC-8: Optional password for session */}
+              <div className="space-y-2">
+                <Label htmlFor="session-password">Session Password (Optional)</Label>
+                <Input
+                  id="session-password"
+                  type="password"
+                  placeholder="Set a password to protect your session..."
+                  value={sessionPassword}
+                  onChange={(e) => setSessionPassword(e.target.value)}
+                  disabled={isInitializing}
+                />
+                <p className="text-xs text-muted-foreground">If set, guests will need this password to join.</p>
+              </div>
+
               <Button 
                 onClick={handleCreateSession} 
                 disabled={isInitializing} 
@@ -296,20 +325,36 @@ export function CoopLobby() {
           )}
 
           {connectionStep === 'guest-input' && (
-            <div className="space-y-2">
-              <Label htmlFor="join-offer-2">Enter Invitation Code:</Label>
-              <div className="flex gap-2">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="join-offer-2">Enter Invitation Code:</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="join-offer-2"
+                    placeholder="Paste invitation code here..."
+                    value={inputOffer}
+                    onChange={(e) => setInputOffer(e.target.value)}
+                    disabled={isInitializing}
+                    className="font-mono text-xs"
+                  />
+                  <Button onClick={handleJoinSession} disabled={isInitializing || !inputOffer.trim()} variant="secondary">
+                    {isInitializing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Join
+                  </Button>
+                </div>
+              </div>
+              
+              {/* SEC-8: Password input for protected sessions */}
+              <div className="space-y-2">
+                <Label htmlFor="join-password">Session Password:</Label>
                 <Input
-                  id="join-offer-2"
-                  placeholder="Paste invitation code here..."
-                  value={inputOffer}
-                  onChange={(e) => setInputOffer(e.target.value)}
+                  id="join-password"
+                  type="password"
+                  placeholder="Enter session password..."
+                  value={joinPassword}
+                  onChange={(e) => setJoinPassword(e.target.value)}
                   disabled={isInitializing}
-                  className="font-mono text-xs"
                 />
-                <Button onClick={handleJoinSession} disabled={isInitializing || !inputOffer.trim()} variant="secondary">
-                  {isInitializing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Join
-                </Button>
+                <p className="text-xs text-muted-foreground">This session requires a password.</p>
               </div>
             </div>
           )}

@@ -168,7 +168,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   }, [sendMessage]);
 
   // Initialize as host
-  const createSession = useCallback(async (): Promise<string> => {
+  const createSession = useCallback(async (password?: string): Promise<string> => {
     setMultiplayerState(prev => ({ ...prev, connectionStatus: 'connecting', isHost: true }));
 
     try {
@@ -177,7 +177,8 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         playerName,
         (candidate) => {
           iceCandidatesRef.current.push(candidate);
-        }
+        },
+        password // Pass password to createOffer (SEC-8)
       );
 
       peerConnectionRef.current = peerConnection;
@@ -208,7 +209,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   }, [multiplayerState.peerId, playerName]);
 
   // Initialize as guest
-  const joinSession = useCallback(async (encodedOffer: string): Promise<string> => {
+  const joinSession = useCallback(async (encodedOffer: string, password?: string): Promise<string> => {
     setMultiplayerState(prev => ({ ...prev, connectionStatus: 'connecting', isHost: false }));
 
     try {
@@ -218,7 +219,8 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         playerName,
         (candidate) => {
           iceCandidatesRef.current.push(candidate);
-        }
+        },
+        password // Pass password to createAnswer (SEC-8)
       );
 
       peerConnectionRef.current = peerConnection;
