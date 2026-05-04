@@ -68,6 +68,10 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
 
     case "ADVANCE_TURN": {
       const newIndex = action.payload;
+      if (newIndex < 0 || newIndex >= state.turnOrder.length) {
+        console.error('ADVANCE_TURN: Invalid turn index', newIndex, 'turnOrder length:', state.turnOrder.length);
+        return state;
+      }
       return {
         ...state,
         currentTurnIndex: newIndex,
@@ -260,13 +264,21 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
     case "RECONNECT_SYNC": {
       const { gameState, partyState, turnOrder, currentTurnIndex } = action.payload;
       // Full state sync for reconnection
+      const newTurnOrder = turnOrder || state.turnOrder;
+      const newTurnIndex = currentTurnIndex || state.currentTurnIndex;
+      
+      // Validate turn index
+      const validTurnIndex = (newTurnOrder.length > 0 && newTurnIndex >= 0 && newTurnIndex < newTurnOrder.length) 
+        ? newTurnIndex 
+        : 0;
+      
       return {
         ...state,
         ...gameState,
         partyState: partyState || state.partyState,
-        turnOrder: turnOrder || state.turnOrder,
-        currentTurnIndex: currentTurnIndex || state.currentTurnIndex,
-        isMyTurn: turnOrder ? turnOrder[currentTurnIndex || 0] === state.peerId : state.isMyTurn,
+        turnOrder: newTurnOrder,
+        currentTurnIndex: validTurnIndex,
+        isMyTurn: newTurnOrder[validTurnIndex] === state.peerId,
       };
     }
 
