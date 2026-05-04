@@ -161,6 +161,43 @@ export function gameReducer(state: GameState, action: Action): GameState {
             };
         }
         default:
+            // PERF-1 Fix: Return old state reference if nothing changed to prevent unnecessary re-renders
+            // Check if any of the potentially updated properties actually changed
+            if (
+                nextState.character === state.character &&
+                nextState.inventory === state.inventory &&
+                nextState.adventureSettings === state.adventureSettings &&
+                nextState.selectedThemeId === state.selectedThemeId &&
+                nextState.isDarkMode === state.isDarkMode &&
+                nextState.userGoogleAiApiKey === state.userGoogleAiApiKey &&
+                nextState.aiProvider === state.aiProvider &&
+                nextState.providerApiKeys === state.providerApiKeys &&
+                nextState.storyLog === state.storyLog &&
+                nextState.turnCount === state.turnCount &&
+                nextState.currentNarration === state.currentNarration &&
+                nextState.adventureSummary === state.adventureSummary &&
+                nextState.currentGameStateString === state.currentGameStateString &&
+                nextState.isGeneratingSkillTree === state.isGeneratingSkillTree &&
+                nextState.currentAdventureId === state.currentAdventureId &&
+                nextState.status === state.status &&
+                nextState.sessionId === state.sessionId &&
+                nextState.players === state.players &&
+                nextState.currentPlayerUid === state.currentPlayerUid &&
+                nextState.isHost === state.isHost &&
+                nextState.peerId === state.peerId &&
+                nextState.connectionStatus === state.connectionStatus &&
+                nextState.turnOrder === state.turnOrder &&
+                nextState.currentTurnIndex === state.currentTurnIndex &&
+                nextState.isMyTurn === state.isMyTurn &&
+                nextState.pendingInteraction === state.pendingInteraction &&
+                nextState.partyState === state.partyState &&
+                nextState.chatMessages === state.chatMessages &&
+                nextState.isPaused === state.isPaused &&
+                nextState.savedAdventures === state.savedAdventures &&
+                nextState.worldMap === state.worldMap
+            ) {
+                return state;  // Return OLD reference if nothing changed
+            }
             return nextState;
     }
 }
