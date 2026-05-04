@@ -1,7 +1,7 @@
 // src/components/gameplay/NarrationDisplay.tsx
 "use client";
 
-import React, { useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useCallback, useState, useMemo } from "react";
 import type { StoryLogEntry } from "../../types/adventure-types";
 import type { NarrateAdventureOutput } from "../../ai/flows/narrate-adventure";
 import { ScrollArea } from "../../components/ui/scroll-area";
@@ -69,11 +69,24 @@ export function NarrationDisplay({
         });
     }, []);
 
-    useEffect(() => {
-        scrollToBottom();
-    }, [storyLog, loadingPhase, diceResult, error, branchingChoices, isInitialLoading, isStreaming, streamingText, scrollToBottom]);
+    const [lastScrollTime, setLastScrollTime] = useState(0);
 
-    const displayLog = storyLog.slice(-50);
+    useEffect(() => {
+        // PERF-2 Fix: Throttle scrollToBottom during streaming to prevent excessive scroll operations
+        if (isStreaming && streamingText) {
+            const now = Date.now();
+            if (now - lastScrollTime > 100) {  // Throttle to max 10 scrolls per second
+                scrollToBottom();
+                setLastScrollTime(now);
+            }
+        } else {
+            // For non-streaming updates, scroll immediately
+            scrollToBottom();
+        }
+    }, [storyLog, loadingPhase, diceResult, error, branchingChoices, isInitialLoading, isStreaming, streamingText, scrollToBottom, lastScrollTime]);
+
+    // PERF-6 Fix: Memoize displayLog to prevent unnecessary array copies on every render
+    const displayLog = useMemo(() => storyLog.slice(-50), [storyLog]);
     const busy = loadingPhase.type !== 'idle' || isStreaming;
 
     const renderDynamicContent = () => {
