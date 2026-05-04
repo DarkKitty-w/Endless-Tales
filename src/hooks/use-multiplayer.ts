@@ -257,14 +257,32 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     }
   }, [multiplayerState.isHost]);
 
-  // Reconnect to last session
+  // Reconnect to last session with exponential backoff
   const reconnect = useCallback(async () => {
     if (!lastInitParams.current || isReconnectingRef.current) return;
+    
+    // Check if we've exceeded max attempts
+    if (reconnectAttempts.current >= maxReconnectAttempts) {
+      console.log(`Max reconnect attempts (${maxReconnectAttempts}) reached. Giving up.`);
+      setIsReconnectingState(false);
+      return;
+    }
     
     isReconnectingRef.current = true;
     setIsReconnectingState(true);
     reconnectAttempts.current += 1;
-    console.log(`Attempting reconnect #${reconnectAttempts.current}...`);
+    
+    // Calculate exponential backoff delay: 1s, 2s, 4s, 8s...
+    const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts.current - 1), 30000); // Cap at 30s
+    
+    console.log(`Attempting reconnect #${reconnectAttempts.current} (delay: ${backoffDelay}ms)...`);
+    
+    // Wait for backoff delay before attempting
+    if (backoffDelay > 0) {
+      await new Promise(resolve => {
+        reconnectTimeoutRef.current = setTimeout(resolve, backoffDelay);
+      });
+    }
     
     try {
       if (lastInitParams.current.type === 'host') {
@@ -272,14 +290,34 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       } else {
         await joinSession(lastInitParams.current.offer);
       }
-      reconnectAttempts.current = 0; // reset on success
+      // Reset on success
+      reconnectAttempts.current = 0;
+      console.log('Reconnect successful!');
     } catch (error) {
-      console.error('Reconnect failed:', error);
+      console.error(`Reconnect attempt #${reconnectAttempts.current} failed:`, error);
+      
+      // Schedule next retry with exponential backoff if we haven't exceeded max attempts
+      if (reconnectAttempts.current < maxReconnectAttempts) {
+        const nextDelay = Math.min(1000 * Math.pow(2, reconnectAttempts.current), 30000);
+        console.log(`Scheduling reconnect #${reconnectAttempts.current + 1} in ${nextDelay}ms...`);
+        reconnectTimeoutRef.current = setTimeout(() => {
+          isReconnectingRef.current = false; // Allow the next attempt
+          reconnect();
+        }, nextDelay);
+      } else {
+        console.log('Max reconnect attempts reached. Giving up.');
+        setIsReconnectingState(false);
+      }
     } finally {
-      isReconnectingRef.current = false;
-      setIsReconnectingState(false);
+      // Only clear the flag if we're not scheduling another attempt
+      if (reconnectAttempts.current >= maxReconnectAttempts || reconnectAttempts.current === 0) {
+        isReconnectingRef.current = false;
+        if (reconnectAttempts.current === 0) {
+          setIsReconnectingState(false);
+        }
+      }
     }
-  }, [createSession, joinSession, setIsReconnectingState]);
+  }, [createSession, joinSession, setIsReconnectingState, maxReconnectAttempts]);
 
   // Setup data channel event handlers
   const setupDataChannelForPeer = useCallback((channel: RTCDataChannel) => {
@@ -319,10 +357,11 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
           unregisterIceCandidateSendCallback(pcId);
         }
         
-        // Attempt reconnection if not intentional disconnect
-        if (!intentionalDisconnect.current && lastInitParams.current) {
+        // Attempt reconnection if not intentional disconnect and not already reconnecting
+        // The reconnect function has built-in exponential backoff
+        if (!intentionalDisconnect.current && lastInitParams.current && !isReconnectingRef.current) {
           console.log('Data channel closed unexpectedly, attempting reconnect...');
-          setTimeout(() => reconnect(), 1000);
+          reconnect();
         }
       }
     );
@@ -468,6 +507,12 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   const disconnect = useCallback(() => {
     intentionalDisconnect.current = true;
     
+    // Clear any pending reconnect timeouts
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    
     // Close all data channels
     Object.values(dataChannelsRef.current).forEach(channel => {
       try { channel.close(); } catch (e) {}
@@ -493,6 +538,8 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     }));
 
     iceCandidatesRef.current = [];
+    reconnectAttempts.current = 0;
+    isReconnectingRef.current = false;
     
     // Reset intentional disconnect flag after a short delay
     setTimeout(() => {
