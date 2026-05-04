@@ -16,6 +16,7 @@ import {
 } from "../lib/constants";
 import type { SavedAdventure } from "../types/adventure-types";
 import { configureAIRouter, type ProviderType } from "../ai/ai-router";
+import { secureGetSessionItem, secureSetSessionItem, secureRemoveSessionItem } from "../lib/storage-encryption";
 
 // Storage keys
 const AI_PROVIDER_KEY = "endlessTales_aiProvider";
@@ -105,8 +106,8 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const initialDarkMode = savedMode === 'dark' || (savedMode === null && prefersDark);
 
-    // Load API key from sessionStorage (more secure, cleared on session end)
-    const savedUserApiKey = sessionStorage.getItem(USER_API_KEY_KEY);
+    // Load API key from sessionStorage (encrypted, more secure)
+    const savedUserApiKey = secureGetSessionItem(USER_API_KEY_KEY);
     if (savedUserApiKey) {
       dispatch({ type: 'SET_USER_API_KEY', payload: savedUserApiKey });
     }
@@ -117,9 +118,9 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
       dispatch({ type: 'SET_AI_PROVIDER', payload: savedProvider });
     }
 
-    // Load provider API keys from sessionStorage (moved from localStorage for security)
+    // Load provider API keys from sessionStorage (encrypted for security)
     try {
-      const savedKeys = sessionStorage.getItem(PROVIDER_API_KEYS_KEY);
+      const savedKeys = secureGetSessionItem(PROVIDER_API_KEYS_KEY);
       if (savedKeys) {
         const keys = JSON.parse(savedKeys);
         Object.entries(keys).forEach(([provider, key]) => {
@@ -164,11 +165,11 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
       localStorage.setItem(THEME_ID_KEY, state.selectedThemeId);
       localStorage.setItem(THEME_MODE_KEY, state.isDarkMode ? 'dark' : 'light');
 
-      // Google AI key (sessionStorage)
+      // Google AI key (sessionStorage with encryption)
       if (state.userGoogleAiApiKey) {
-        sessionStorage.setItem(USER_API_KEY_KEY, state.userGoogleAiApiKey);
+        secureSetSessionItem(USER_API_KEY_KEY, state.userGoogleAiApiKey);
       } else if (state.userGoogleAiApiKey === null) {
-        sessionStorage.removeItem(USER_API_KEY_KEY);
+        secureRemoveSessionItem(USER_API_KEY_KEY);
       }
 
       // Saved adventures (localStorage)
@@ -177,11 +178,11 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
       // AI provider preference (localStorage)
       localStorage.setItem(AI_PROVIDER_KEY, state.aiProvider);
 
-      // Provider API keys (sessionStorage)
+      // Provider API keys (sessionStorage with encryption)
       if (Object.keys(state.providerApiKeys).length > 0) {
-        sessionStorage.setItem(PROVIDER_API_KEYS_KEY, JSON.stringify(state.providerApiKeys));
+        secureSetSessionItem(PROVIDER_API_KEYS_KEY, JSON.stringify(state.providerApiKeys));
       } else {
-        sessionStorage.removeItem(PROVIDER_API_KEYS_KEY);
+        secureRemoveSessionItem(PROVIDER_API_KEYS_KEY);
       }
 
       // REMOVED: configureAIRouter call – now handled by immediate effect above
