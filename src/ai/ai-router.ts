@@ -687,16 +687,19 @@ export function isWebLLMAvailable(): boolean {
 // This avoids the private property access issue
 let webllmProgressCallback: ((progress: number, text: string) => void) | null = null;
 
+// Static registry to track engines by model (avoids recreating the same model)
+const engineRegistry = new Map<string, { engine: any; promise: Promise<any> | null }>();
+
 class WebLLMProvider implements AIProvider {
-  private static engine: any = null;
-  private static currentModel: string = '';
-  private static loadingPromise: Promise<any> | null = null;
-  private static persistence: 'temporary' | 'persistent' = 'temporary';
+  private engine: any = null;
+  private currentModel: string = '';
+  private loadingPromise: Promise<any> | null = null;
+  private persistence: 'temporary' | 'persistent' = 'temporary';
 
   constructor(private options?: { model?: string; persistence?: 'temporary' | 'persistent'; onProgress?: (progress: number, text: string) => void }) {
     console.log('[WebLLM Provider] Constructor called with options:', options);
     if (options?.persistence) {
-      WebLLMProvider.persistence = options.persistence;
+      this.persistence = options.persistence;
     }
     if (options?.onProgress) {
       webllmProgressCallback = options.onProgress;
@@ -709,19 +712,45 @@ class WebLLMProvider implements AIProvider {
 
   private async getEngine(modelId?: string): Promise<any> {
     console.log('[WebLLM] getEngine called with modelId:', modelId);
-    console.log('[WebLLM] Current engine state:', {
-      hasEngine: !!WebLLMProvider.engine,
-      currentModel: WebLLMProvider.currentModel,
-      isLoading: !!WebLLMProvider.loadingPromise,
-    });
+    
+    // Determine which model to use
+    const fallbackModels = [
+      'TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC',
+      'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
+      'gemma-2b-it-q4f16_1-MLC',
+      'Llama-3.2-3B-Instruct-q4f16_1-MLC',
+    ];
+    
+    let effectiveModel = this.options?.model || modelId || fallbackModels[0];
+    
+    console.log('[WebLLM] Effective model:', effectiveModel);
 
-    if (WebLLMProvider.engine) {
-      console.log('[WebLLM] Reusing existing engine for model:', WebLLMProvider.currentModel);
-      return WebLLMProvider.engine;
+    // Check if we already have an engine for this model (instance-level)
+    if (this.engine && this.currentModel === effectiveModel) {
+      console.log('[WebLLM] Reusing existing engine for model:', this.currentModel);
+      return this.engine;
+    }
+
+    // Check the registry for an existing engine (cross-instance sharing for same model)
+    const cached = engineRegistry.get(effectiveModel);
+    if (cached && cached.engine) {
+      console.log('[WebLLM] Reusing engine from registry for model:', effectiveModel);
+      this.engine = cached.engine;
+      this.currentModel = effectiveModel;
+      return this.engine;
     }
 
     if (typeof window === 'undefined') {
       throw new Error('[WebLLM] Engine cannot be created on the server');
+    }
+
+    // Check if there's already a loading promise for this model
+    if (cached?.promise) {
+      console.log('[WebLLM] Engine load already in progress for model:', effectiveModel);
+      const engine = await cached.promise;
+      this.engine = engine;
+      this.currentModel = effectiveModel;
+      return engine;
     }
 
     console.log('[WebLLM] Loading WebLLM module...');
@@ -749,16 +778,8 @@ class WebLLMProvider implements AIProvider {
     console.log('[WebLLM] Available models:', availableModels);
     console.log('[WebLLM] Available models count:', availableModels.length);
 
-    const fallbackModels = [
-      'TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC',
-      'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
-      'gemma-2b-it-q4f16_1-MLC',
-      'Llama-3.2-3B-Instruct-q4f16_1-MLC',
-    ];
     console.log('[WebLLM] Fallback models:', fallbackModels);
 
-    let effectiveModel = this.options?.model || fallbackModels[0];
-    console.log('[WebLLM] Effective model from options:', effectiveModel);
     console.log('[WebLLM] Is requested model in available list?', availableModels.includes(effectiveModel));
 
     if (!availableModels.includes(effectiveModel)) {
@@ -771,13 +792,10 @@ class WebLLMProvider implements AIProvider {
       console.log(`[WebLLM] Using fallback model: ${effectiveModel}`);
     }
 
-    if (WebLLMProvider.loadingPromise) {
-      console.log('[WebLLM] Engine load already in progress, waiting...');
-      return WebLLMProvider.loadingPromise;
-    }
-
     console.log('[WebLLM] Starting engine creation for model:', effectiveModel);
-    WebLLMProvider.loadingPromise = (async () => {
+    
+    // Create the loading promise and store in registry
+    const loadingPromise = (async () => {
       try {
         const engineConfig: any = {
           initProgressCallback: (report: { progress: number; text: string }) => {
@@ -788,7 +806,7 @@ class WebLLMProvider implements AIProvider {
           },
           appConfig: {
             ...webllm.prebuiltAppConfig,
-            useIndexedDBCache: WebLLMProvider.persistence === 'persistent',
+            useIndexedDBCache: this.persistence === 'persistent',
           },
         };
 
@@ -800,25 +818,36 @@ class WebLLMProvider implements AIProvider {
         const engine = await CreateMLCEngine(effectiveModel, engineConfig);
         console.log('[WebLLM] CreateMLCEngine returned successfully, engine:', !!engine);
 
-        WebLLMProvider.engine = engine;
-        WebLLMProvider.currentModel = effectiveModel;
+        // Store in registry and instance
+        engineRegistry.set(effectiveModel, { engine, promise: null });
+        this.engine = engine;
+        this.currentModel = effectiveModel;
         console.log('[WebLLM] Engine stored successfully');
         return engine;
       } catch (error) {
-        WebLLMProvider.loadingPromise = null;
         console.error('[WebLLM] Engine creation failed:', error);
         console.error('[WebLLM] Error details:', {
           message: error instanceof Error ? error.message : String(error),
           stack: error instanceof Error ? error.stack : undefined,
           name: error instanceof Error ? error.name : 'unknown',
         });
+        // Remove from registry on failure
+        engineRegistry.delete(effectiveModel);
         throw error;
       } finally {
-        WebLLMProvider.loadingPromise = null;
+        // Clear the loading promise from registry
+        const entry = engineRegistry.get(effectiveModel);
+        if (entry) {
+          entry.promise = null;
+        }
       }
     })();
+    
+    // Store the loading promise in registry
+    engineRegistry.set(effectiveModel, { engine: null, promise: loadingPromise });
 
-    return WebLLMProvider.loadingPromise;
+    const engine = await loadingPromise;
+    return engine;
   }
 
   async generateContent({
@@ -926,8 +955,8 @@ class WebLLMProvider implements AIProvider {
           }
         }
       }
-      WebLLMProvider.engine = null;
-      WebLLMProvider.currentModel = '';
+      // Clear all engines from registry
+      engineRegistry.clear();
       console.log('[WebLLM] Cache cleared');
     } catch (error) {
       console.error('[WebLLM] Failed to clear cache:', error);
