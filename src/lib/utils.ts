@@ -31,27 +31,58 @@ export function sanitizePlayerAction(input: string): string {
 
   let sanitized = input;
 
-  sanitized = sanitized.replace(/```[\s\S]*?```/g, "");
-  sanitized = sanitized.replace(/`[^`]*`/g, "");
-  sanitized = sanitized.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  // Remove code blocks and inline code (could confuse AI parsing)
+  sanitized = sanitized.replace(/```[\s\S]*?```/g, "[code block removed]");
+  sanitized = sanitized.replace(/`[^`]*`/g, "[code removed]");
+  
+  // HTML entity encode for safety (React will decode when rendering)
+  // This provides defense-in-depth even though React escapes by default
+  sanitized = sanitized
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
+  // Pattern-based prompt injection prevention
+  // These patterns attempt to catch common prompt injection attempts
   const injectionPatterns = [
-    /ignore (previous|all) instructions?/gi,
-    /you are now/gi,
-    /act as if/gi,
-    /system prompt/gi,
+    // Instruction override attempts
+    /ignore\s+(previous|all|above|prior)\s+instructions?/gi,
+    /you\s+are\s+now\s+[^\s]/gi,
+    /act\s+as\s+if\s+[^\s]/gi,
+    /system\s*prompt/gi,
     /\[INST\]/gi,
     /<\/?system>/gi,
-    /override/gi,
-    /bypass/gi,
+    /override\s*\(\s*\)/gi,
+    /bypass\s*\(\s*\)/gi,
+    
+    // Role-playing attempts that try to change AI behavior
+    /(you\s+)?(are|will\s+be)\s+(now\s+)?(a|an)\s+/gi,
+    /pretend\s+(to\s+be|you\s+are)/gi,
+    /roleplay\s+as/gi,
+    
+    // Direct command attempts
+    /^(output|print|display|show)\s*:/gim,
+    /^(console\.log|alert|eval)\s*\(/gim,
+    
+    // Attempts to access system/internal commands
+    /admin\s+mode/gi,
+    /debug\s+mode/gi,
+    /sudo\s+/gi,
   ];
 
   for (const pattern of injectionPatterns) {
     sanitized = sanitized.replace(pattern, "[filtered]");
   }
 
-  sanitized = sanitized.trim();
-  if (sanitized.length > 500) sanitized = sanitized.substring(0, 500);
+  // Remove multiple spaces and trim
+  sanitized = sanitized.replace(/\s+/g, " ").trim();
+  
+  // Limit length to prevent token abuse
+  if (sanitized.length > 500) {
+    sanitized = sanitized.substring(0, 500) + "...";
+  }
 
   return sanitized;
 }
