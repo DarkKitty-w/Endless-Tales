@@ -153,12 +153,20 @@ class GeminiProvider implements AIProvider {
 
     const decoder = new TextDecoder();
     let buffer = '';
+    const MAX_BUFFER_SIZE = 1024 * 1024; // 1MB safety limit
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
+      
+      // Safety check: prevent buffer from growing too large
+      if (buffer.length > MAX_BUFFER_SIZE) {
+        console.warn('SSE buffer exceeded maximum size, resetting');
+        buffer = buffer.slice(-MAX_BUFFER_SIZE);
+      }
+      
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
 
@@ -262,11 +270,19 @@ class OpenAIProvider implements AIProvider {
     if (!reader) throw new Error('No response body');
     const decoder = new TextDecoder();
     let buffer = '';
+    const MAX_BUFFER_SIZE = 1024 * 1024; // 1MB safety limit
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
+      
+      // Safety check: prevent buffer from growing too large
+      if (buffer.length > MAX_BUFFER_SIZE) {
+        console.warn('SSE buffer exceeded maximum size, resetting');
+        buffer = buffer.slice(-MAX_BUFFER_SIZE);
+      }
+      
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
       for (const line of lines) {
@@ -370,11 +386,19 @@ class ClaudeProvider implements AIProvider {
     if (!reader) throw new Error('No response body');
     const decoder = new TextDecoder();
     let buffer = '';
+    const MAX_BUFFER_SIZE = 1024 * 1024; // 1MB safety limit
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
+      
+      // Safety check: prevent buffer from growing too large
+      if (buffer.length > MAX_BUFFER_SIZE) {
+        console.warn('SSE buffer exceeded maximum size, resetting');
+        buffer = buffer.slice(-MAX_BUFFER_SIZE);
+      }
+      
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
       for (const line of lines) {
@@ -479,11 +503,19 @@ class DeepSeekProvider implements AIProvider {
     if (!reader) throw new Error('No response body');
     const decoder = new TextDecoder();
     let buffer = '';
+    const MAX_BUFFER_SIZE = 1024 * 1024; // 1MB safety limit
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
+      
+      // Safety check: prevent buffer from growing too large
+      if (buffer.length > MAX_BUFFER_SIZE) {
+        console.warn('SSE buffer exceeded maximum size, resetting');
+        buffer = buffer.slice(-MAX_BUFFER_SIZE);
+      }
+      
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
       for (const line of lines) {
@@ -587,11 +619,19 @@ class OpenRouterProvider implements AIProvider {
     if (!reader) throw new Error('No response body');
     const decoder = new TextDecoder();
     let buffer = '';
+    const MAX_BUFFER_SIZE = 1024 * 1024; // 1MB safety limit
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
+      
+      // Safety check: prevent buffer from growing too large
+      if (buffer.length > MAX_BUFFER_SIZE) {
+        console.warn('SSE buffer exceeded maximum size, resetting');
+        buffer = buffer.slice(-MAX_BUFFER_SIZE);
+      }
+      
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
       for (const line of lines) {
