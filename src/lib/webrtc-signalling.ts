@@ -42,12 +42,20 @@ export function decodeSignallingData(encoded: string): SignallingPackage {
   }
 }
 
+// Store for the ICE candidate send callback
+const iceCandidateSendCallbacks = new Map<string, (candidate: RTCIceCandidateInit) => void>();
+
 /**
  * Create an RTCPeerConnection with ICE candidate collection
+ * @param onIceCandidate Callback for each new ICE candidate (for initial collection)
+ * @param onConnectionStateChange Optional callback for connection state changes
+ * @param peerConnectionId Optional ID to register for ongoing ICE candidate sending
+ * @param onIceCandidateForSending Optional callback to send ICE candidates via data channel
  */
 export function createPeerConnection(
   onIceCandidate: (candidate: RTCIceCandidate) => void,
-  onConnectionStateChange?: (state: RTCPeerConnectionState) => void
+  onConnectionStateChange?: (state: RTCPeerConnectionState) => void,
+  peerConnectionId?: string
 ): RTCPeerConnection {
   const pc = new RTCPeerConnection({
     iceServers: [
@@ -58,7 +66,16 @@ export function createPeerConnection(
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
-      onIceCandidate(event.candidate.toJSON());
+      const candidateJson = event.candidate.toJSON();
+      onIceCandidate(candidateJson);
+      
+      // If we have a registered send callback, call it
+      if (peerConnectionId) {
+        const sendCallback = iceCandidateSendCallbacks.get(peerConnectionId);
+        if (sendCallback) {
+          sendCallback(candidateJson);
+        }
+      }
     }
   };
 
@@ -72,6 +89,40 @@ export function createPeerConnection(
 }
 
 /**
+ * Register a callback for sending ICE candidates via data channel
+ * This allows exchanging ICE candidates in real-time after connection
+ */
+export function registerIceCandidateSendCallback(
+  peerConnectionId: string,
+  callback: (candidate: RTCIceCandidateInit) => void
+): void {
+  iceCandidateSendCallbacks.set(peerConnectionId, callback);
+}
+
+/**
+ * Unregister the ICE candidate send callback
+ */
+export function unregisterIceCandidateSendCallback(peerConnectionId: string): void {
+  iceCandidateSendCallbacks.delete(peerConnectionId);
+}
+
+/**
+ * Handle an incoming ICE candidate received via data channel
+ * This should be called when a 'webrtc-ice-candidate' message is received
+ */
+export async function handleIncomingIceCandidate(
+  peerConnection: RTCPeerConnection,
+  candidate: RTCIceCandidateInit
+): Promise<void> {
+  try {
+    await peerConnection.addIceCandidate(candidate);
+    console.log('Added ICE candidate received via data channel');
+  } catch (error) {
+    console.error('Failed to add ICE candidate:', error);
+  }
+}
+
+/**
  * Host: Create an offer with ICE candidates
  * Returns a base64-encoded string containing the offer and ICE candidates
  */
@@ -81,13 +132,15 @@ export async function createOffer(
   onIceCandidate: (candidate: RTCIceCandidateInit) => void
 ): Promise<{ peerConnection: RTCPeerConnection; encodedOffer: string }> {
   const iceCandidates: RTCIceCandidateInit[] = [];
+  const pcId = `offer-${peerId}`;
   
   const pc = createPeerConnection(
     (candidate) => {
       iceCandidates.push(candidate);
       onIceCandidate(candidate);
     },
-    (state) => console.log('Host connection state:', state)
+    (state) => console.log('Host connection state:', state),
+    pcId
   );
 
   // Create data channel
@@ -100,7 +153,7 @@ export async function createOffer(
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
 
-  // Wait for ICE candidates to be gathered
+  // Wait for initial ICE candidates to be gathered
   await waitForIceGathering(pc);
 
   const pkg: SignallingPackage = {
@@ -125,13 +178,15 @@ export async function createAnswer(
   onIceCandidate: (candidate: RTCIceCandidateInit) => void
 ): Promise<{ peerConnection: RTCPeerConnection; encodedAnswer: string }> {
   const iceCandidates: RTCIceCandidateInit[] = [];
+  const pcId = `answer-${peerId}`;
   
   const pc = createPeerConnection(
     (candidate) => {
       iceCandidates.push(candidate);
       onIceCandidate(candidate);
     },
-    (state) => console.log('Guest connection state:', state)
+    (state) => console.log('Guest connection state:', state),
+    pcId
   );
 
   const pkg = decodeSignallingData(encodedOffer);
@@ -150,7 +205,7 @@ export async function createAnswer(
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
 
-  // Wait for ICE candidates to be gathered
+  // Wait for initial ICE candidates to be gathered
   await waitForIceGathering(pc);
 
   const answerPkg: SignallingPackage = {
@@ -187,6 +242,7 @@ export async function applyAnswer(
 
 /**
  * Wait for ICE gathering to complete (with timeout)
+ * This only waits for the INITIAL batch of candidates
  */
 function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 5000): Promise<void> {
   return new Promise((resolve) => {
@@ -256,4 +312,20 @@ export function sendDataChannelMessage(channel: RTCDataChannel, data: any): bool
     }
   }
   return false;
+}
+
+/**
+ * Handle an incoming ICE candidate received via data channel
+ * This should be called when a 'webrtc-ice-candidate' message is received
+ */
+export async function handleIncomingIceCandidate(
+  peerConnection: RTCPeerConnection,
+  candidate: RTCIceCandidateInit
+): Promise<void> {
+  try {
+    await peerConnection.addIceCandidate(candidate);
+    console.log('Added ICE candidate received via data channel');
+  } catch (error) {
+    console.error('Failed to add ICE candidate:', error);
+  }
 }

@@ -9,6 +9,7 @@ import type {
 } from "../types/multiplayer-types";
 import {
   createOffer, createAnswer, applyAnswer, setupDataChannel, sendDataChannelMessage,
+  registerIceCandidateSendCallback, unregisterIceCandidateSendCallback, handleIncomingIceCandidate,
   type SignallingPackage
 } from "../lib/webrtc-signalling";
 import type { StoryLogEntry, GameState } from "../types/game-types";
@@ -284,14 +285,40 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   const setupDataChannelForPeer = useCallback((channel: RTCDataChannel) => {
     setupDataChannel(
       channel,
-      (data: MultiplayerMessage) => handleMessage(data, channel.label),
+      (data: any) => handleMessage(data, channel.label),
       () => {
         console.log(`Channel ${channel.label} opened`);
         dataChannelsRef.current[channel.label] = channel;
+        
+        // Register callback to send ICE candidates via this data channel
+        const pcId = peerConnectionRef.current ? 
+          (multiplayerState.isHost ? `offer-${multiplayerState.peerId}` : `answer-${multiplayerState.peerId}`) : '';
+        if (pcId && peerConnectionRef.current) {
+          registerIceCandidateSendCallback(pcId, (candidate: RTCIceCandidateInit) => {
+            if (channel.readyState === 'open') {
+              try {
+                channel.send(JSON.stringify({
+                  type: 'webrtc-ice-candidate',
+                  candidate
+                }));
+              } catch (error) {
+                console.error('Failed to send ICE candidate via data channel:', error);
+              }
+            }
+          });
+        }
       },
       () => {
         console.log(`Channel ${channel.label} closed`);
         delete dataChannelsRef.current[channel.label];
+        
+        // Unregister the ICE candidate callback
+        const pcId = peerConnectionRef.current ? 
+          (multiplayerState.isHost ? `offer-${multiplayerState.peerId}` : `answer-${multiplayerState.peerId}`) : '';
+        if (pcId) {
+          unregisterIceCandidateSendCallback(pcId);
+        }
+        
         // Attempt reconnection if not intentional disconnect
         if (!intentionalDisconnect.current && lastInitParams.current) {
           console.log('Data channel closed unexpectedly, attempting reconnect...');
@@ -299,13 +326,24 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         }
       }
     );
-  }, [reconnect, lastInitParams, multiplayerState.connectionStatus]);
+  }, [reconnect, lastInitParams, multiplayerState.connectionStatus, multiplayerState.peerId, multiplayerState.isHost, handleMessage]);
 
   // Handle incoming messages
-  const handleMessage = useCallback((data: MultiplayerMessage, channelLabel: string) => {
+  const handleMessage = useCallback((data: any, channelLabel: string) => {
     console.log(`Received message on ${channelLabel}:`, data);
 
-    switch (data.type) {
+    // Handle ICE candidate messages (these are not MultiplayerMessage types)
+    if (data.type === 'webrtc-ice-candidate' && data.candidate) {
+      if (peerConnectionRef.current) {
+        handleIncomingIceCandidate(peerConnectionRef.current, data.candidate);
+      }
+      return;  // Don't process further as a MultiplayerMessage
+    }
+
+    // Now handle normal MultiplayerMessage types
+    const message = data as MultiplayerMessage;
+    
+    switch (message.type) {
       case 'game-actions':
         // Host receives player actions
         if (multiplayerState.isHost && gameActionReceivedRef.current) {
