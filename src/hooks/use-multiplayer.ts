@@ -503,6 +503,9 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     }
   }, [onStoryUpdate, onPartyStateUpdate, onChatMessage, onControlMessage, onInteractionRequest, onInteractionResponse, disconnect, sendMessage]);
 
+  // Reconnect timeout ref is already declared above (line 66)
+  const intentionalDisconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Disconnect
   const disconnect = useCallback(() => {
     intentionalDisconnect.current = true;
@@ -513,14 +516,31 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       reconnectTimeoutRef.current = null;
     }
     
-    // Close all data channels
+    // Clear the intentional disconnect timeout if it exists
+    if (intentionalDisconnectTimeoutRef.current) {
+      clearTimeout(intentionalDisconnectTimeoutRef.current);
+      intentionalDisconnectTimeoutRef.current = null;
+    }
+    
+    // Close all data channels with proper cleanup
     Object.values(dataChannelsRef.current).forEach(channel => {
-      try { channel.close(); } catch (e) {}
+      try {
+        // Remove all event listeners before closing
+        channel.onmessage = null;
+        channel.onopen = null;
+        channel.onclose = null;
+        channel.onerror = null;
+        channel.close();
+      } catch (e) {}
     });
     dataChannelsRef.current = {};
 
     // Close peer connection
     if (peerConnectionRef.current) {
+      // Remove peer connection event listeners
+      peerConnectionRef.current.ondatachannel = null;
+      peerConnectionRef.current.onicecandidate = null;
+      peerConnectionRef.current.oniceconnectionstatechange = null;
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
@@ -542,14 +562,22 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     isReconnectingRef.current = false;
     
     // Reset intentional disconnect flag after a short delay
-    setTimeout(() => {
+    intentionalDisconnectTimeoutRef.current = setTimeout(() => {
       intentionalDisconnect.current = false;
+      intentionalDisconnectTimeoutRef.current = null;
     }, 2000);
   }, []);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      // Clear all timeouts
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (intentionalDisconnectTimeoutRef.current) {
+        clearTimeout(intentionalDisconnectTimeoutRef.current);
+      }
       disconnect();
     };
   }, [disconnect]);
