@@ -1,4 +1,5 @@
 # Logs
+!night_progress.log
 logs
 *.log
 npm-debug.log*
