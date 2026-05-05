@@ -52,7 +52,7 @@ export function decodeSignallingData(encoded: string): SignallingPackage {
  * Returns the peer connection and functions to manage ICE candidates
  */
 export function createPeerConnection(
-  onIceCandidate: (candidate: RTCIceCandidate) => void,
+  onIceCandidate: (candidate: RTCIceCandidateInit) => void,
   onConnectionStateChange?: (state: RTCPeerConnectionState) => void
 ): { 
   pc: RTCPeerConnection; 
@@ -72,22 +72,31 @@ export function createPeerConnection(
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
-      if (isBuffering) {
-        bufferedCandidates.push(event.candidate.toJSON());
-      }
+      const candidateJson = event.candidate.toJSON();
+      
       // If we have an established data channel, send candidate immediately
       if (dataChannelForIce && dataChannelForIce.readyState === 'open') {
         const message: IceCandidateMessage = {
           type: 'ice-candidate',
-          candidate: event.candidate.toJSON(),
+          candidate: candidateJson,
         };
         try {
           dataChannelForIce.send(JSON.stringify(message));
+          // Don't buffer candidates that were sent immediately
+          onIceCandidate(candidateJson);
+          return;
         } catch (error) {
           console.error('Failed to send ICE candidate via data channel:', error);
+          // Fall through to buffering if send fails
         }
       }
-      onIceCandidate(event.candidate);
+      
+      // Buffer the candidate if we're still in buffering mode
+      if (isBuffering) {
+        bufferedCandidates.push(candidateJson);
+      }
+      
+      onIceCandidate(candidateJson);
     }
   };
 
@@ -108,6 +117,44 @@ export function createPeerConnection(
     },
     setDataChannel: (dc: RTCDataChannel) => {
       dataChannelForIce = dc;
+      // If data channel is already open, send buffered candidates immediately
+      if (dc.readyState === 'open') {
+        const buffered = bufferedCandidates.splice(0);
+        for (const candidate of buffered) {
+          const message: IceCandidateMessage = {
+            type: 'ice-candidate',
+            candidate,
+          };
+          try {
+            dc.send(JSON.stringify(message));
+          } catch (error) {
+            console.error('Failed to send buffered ICE candidate:', error);
+          }
+        }
+      } else {
+        // When data channel opens, send any buffered candidates
+        const originalOnOpen = dc.onopen;
+        dc.onopen = (event) => {
+          const buffered = bufferedCandidates.splice(0);
+          for (const candidate of buffered) {
+            const message: IceCandidateMessage = {
+              type: 'ice-candidate',
+              candidate,
+            };
+            try {
+              dc.send(JSON.stringify(message));
+            } catch (error) {
+              console.error('Failed to send buffered ICE candidate:', error);
+            }
+          }
+          // Call original onopen if it exists
+          if (originalOnOpen) {
+            if (typeof originalOnOpen === 'function') {
+              originalOnOpen.call(dc, event);
+            }
+          }
+        };
+      }
     }
   };
 }
@@ -125,8 +172,8 @@ export async function createOffer(
   
   const { pc, getBufferedCandidates, setDataChannel } = createPeerConnection(
     (candidate) => {
-      iceCandidates.push(candidate.toJSON());
-      onIceCandidate(candidate.toJSON());
+      iceCandidates.push(candidate);
+      onIceCandidate(candidate);
     },
     (state) => console.log('Host connection state:', state)
   );
@@ -176,8 +223,8 @@ export async function createAnswer(
   
   const { pc, getBufferedCandidates, setDataChannel } = createPeerConnection(
     (candidate) => {
-      iceCandidates.push(candidate.toJSON());
-      onIceCandidate(candidate.toJSON());
+      iceCandidates.push(candidate);
+      onIceCandidate(candidate);
     },
     (state) => console.log('Guest connection state:', state)
   );
@@ -263,7 +310,11 @@ export function sendBufferedIceCandidates(
         candidate,
       };
       if (dataChannel.readyState === 'open') {
-        dataChannel.send(JSON.stringify(message));
+        try {
+          dataChannel.send(JSON.stringify(message));
+        } catch (error) {
+          console.error('Failed to send buffered ICE candidate:', error);
+        }
       }
     }
   }
