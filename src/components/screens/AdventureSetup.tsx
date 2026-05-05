@@ -239,9 +239,6 @@ export function AdventureSetup() {
         } finally {
             setIsLoadingImmersedCharacter(false);
         }
-    } else if (adventureTypeFromContext === "Randomized") {
-        dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
-        toast({ title: "Adventure Setup Complete!", description: "Now, create your adventurer." });
     } else {
         console.error("AdventureSetup: Unhandled proceed logic.");
         toast({ title: "Navigation Error", description: "Could not determine the next step.", variant: "destructive" });
