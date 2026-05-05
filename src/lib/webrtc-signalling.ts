@@ -49,14 +49,19 @@ export function decodeSignallingData(encoded: string): SignallingPackage {
 
 /**
  * Create an RTCPeerConnection with ICE candidate collection
- * Returns the peer connection and a function to send buffered ICE candidates
+ * Returns the peer connection and functions to manage ICE candidates
  */
 export function createPeerConnection(
   onIceCandidate: (candidate: RTCIceCandidate) => void,
   onConnectionStateChange?: (state: RTCPeerConnectionState) => void
-): { pc: RTCPeerConnection; getBufferedCandidates: () => RTCIceCandidateInit[] } {
+): { 
+  pc: RTCPeerConnection; 
+  getBufferedCandidates: () => RTCIceCandidateInit[];
+  setDataChannel: (dc: RTCDataChannel) => void;
+} {
   const bufferedCandidates: RTCIceCandidateInit[] = [];
   let isBuffering = true;
+  let dataChannelForIce: RTCDataChannel | null = null;
 
   const pc = new RTCPeerConnection({
     iceServers: [
@@ -69,6 +74,18 @@ export function createPeerConnection(
     if (event.candidate) {
       if (isBuffering) {
         bufferedCandidates.push(event.candidate.toJSON());
+      }
+      // If we have an established data channel, send candidate immediately
+      if (dataChannelForIce && dataChannelForIce.readyState === 'open') {
+        const message: IceCandidateMessage = {
+          type: 'ice-candidate',
+          candidate: event.candidate.toJSON(),
+        };
+        try {
+          dataChannelForIce.send(JSON.stringify(message));
+        } catch (error) {
+          console.error('Failed to send ICE candidate via data channel:', error);
+        }
       }
       onIceCandidate(event.candidate);
     }
@@ -88,6 +105,9 @@ export function createPeerConnection(
     getBufferedCandidates: () => {
       isBuffering = false;
       return bufferedCandidates.splice(0);
+    },
+    setDataChannel: (dc: RTCDataChannel) => {
+      dataChannelForIce = dc;
     }
   };
 }
@@ -103,7 +123,7 @@ export async function createOffer(
 ): Promise<{ peerConnection: RTCPeerConnection; encodedOffer: string }> {
   const iceCandidates: RTCIceCandidateInit[] = [];
   
-  const { pc, getBufferedCandidates } = createPeerConnection(
+  const { pc, getBufferedCandidates, setDataChannel } = createPeerConnection(
     (candidate) => {
       iceCandidates.push(candidate.toJSON());
       onIceCandidate(candidate.toJSON());
@@ -111,12 +131,15 @@ export async function createOffer(
     (state) => console.log('Host connection state:', state)
   );
 
-  // Create data channel
+  // Create data channels
+  const controlChannel = pc.createDataChannel('control', { ordered: true });
   pc.createDataChannel('game-actions', { ordered: true });
   pc.createDataChannel('story-update', { ordered: true });
   pc.createDataChannel('party-state', { ordered: true });
   pc.createDataChannel('chat', { ordered: true });
-  pc.createDataChannel('control', { ordered: true });
+  
+  // Set up the control channel to send ICE candidates in real-time
+  setDataChannel(controlChannel);
 
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
@@ -151,7 +174,7 @@ export async function createAnswer(
 ): Promise<{ peerConnection: RTCPeerConnection; encodedAnswer: string }> {
   const iceCandidates: RTCIceCandidateInit[] = [];
   
-  const { pc, getBufferedCandidates } = createPeerConnection(
+  const { pc, getBufferedCandidates, setDataChannel } = createPeerConnection(
     (candidate) => {
       iceCandidates.push(candidate.toJSON());
       onIceCandidate(candidate.toJSON());
@@ -186,6 +209,16 @@ export async function createAnswer(
   };
 
   const encodedAnswer = encodeSignallingData(answerPkg);
+  
+  // Set up handler for the incoming data channels (including control)
+  pc.ondatachannel = (event) => {
+    const channel = event.channel;
+    if (channel.label === 'control') {
+      // Set this channel for sending ICE candidates in real-time
+      setDataChannel(channel);
+    }
+    // The channel setup is handled elsewhere
+  };
   
   // Store the function to get buffered candidates later (after connection)
   (pc as any).__getBufferedCandidates = getBufferedCandidates;
@@ -254,8 +287,9 @@ export async function handleIceCandidateMessage(
 
 /**
  * Wait for ICE gathering to complete (with timeout)
+ * Collects candidates incrementally and provides a way to retrieve them
  */
-function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 5000): Promise<void> {
+function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 30000): Promise<void> {
   return new Promise((resolve) => {
     if (pc.iceGatheringState === 'complete') {
       resolve();
