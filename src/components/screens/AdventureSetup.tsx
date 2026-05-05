@@ -9,7 +9,7 @@ import { Input } from "../../components/ui/input";
 import { Switch } from "../../components/ui/switch";
 import { RadioGroup, RadioGroupItem } from "../../components/ui/radio-group";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "../../components/game/CardboardCard";
-import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings, Globe, ScrollText, ShieldAlert, Sparkles, AlertTriangle, BookOpen, Atom, Drama, Puzzle, Users as UsersIcon, Mic2, UserPlus, UserCheck, Loader2, Lightbulb as LightbulbIcon } from "lucide-react";
+import { Swords, Dices, Skull, Heart, Play, ArrowLeft, Settings, Globe, ScrollText, ShieldAlert, Sparkles, AlertTriangle, BookOpen, Atom, Drama, Puzzle, Users, Mic2, UserPlus, UserCheck, Loader2, Lightbulb } from "lucide-react";
 import { useToast } from "../../hooks/use-toast";
 import { Alert, AlertDescription } from "../../components/ui/alert";
 import {
@@ -380,7 +380,7 @@ export function AdventureSetup() {
                             </Select>
                        </div>
                        <div className="space-y-2">
-                            <Label htmlFor="socialFocus" className="flex items-center gap-1"><UsersIcon className="w-4 h-4"/> Social Interaction Focus</Label>
+                            <Label htmlFor="socialFocus" className="flex items-center gap-1"><Users className="w-4 h-4"/> Social Interaction Focus</Label>
                             <Select value={socialFocus} onValueChange={(v) => setSocialFocus(v as SocialFocus)}>
                                 <SelectTrigger id="socialFocus"><SelectValue placeholder="Select social focus..." /></SelectTrigger>
                                 <SelectContent>
@@ -434,7 +434,7 @@ export function AdventureSetup() {
                           disabled={isSuggestingNameLoading || !universeName.trim()}
                           aria-label="Suggest Character Name/Concept"
                         >
-                          {isSuggestingNameLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LightbulbIcon className="h-4 w-4" />}
+                          {isSuggestingNameLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lightbulb className="h-4 w-4" />}
                         </Button>
                     </div>
                 </div>
