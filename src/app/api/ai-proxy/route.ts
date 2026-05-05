@@ -229,7 +229,7 @@ async function handleOpenAICompatible(
                   const parsed = JSON.parse(data);
                   const content = parsed.choices?.[0]?.delta?.content;
                   if (content) {
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: content }] } }]})}\n\n`));
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: content }] } }] }])}\n\n`));
                   }
                 } catch (e) {
                   // ignore malformed JSON
@@ -370,7 +370,7 @@ async function handleClaude(
                   if (parsed.type === 'content_block_delta') {
                     const text = parsed.delta?.text;
                     if (text) {
-                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }]})}\n\n`));
+                      controller.enqueue(encoder.encode(`data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text }] } }] }])}\n\n`));
                     }
                   }
                 } catch (e) {
