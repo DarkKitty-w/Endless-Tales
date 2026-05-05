@@ -256,9 +256,16 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     }
   }, [multiplayerState.isHost]);
 
-  // Reconnect to last session
+  // BUG-9 Fix: Reconnect with exponential backoff
   const reconnect = useCallback(async () => {
     if (!lastInitParams.current || isReconnectingRef.current) return;
+    
+    // Check if we've exceeded max reconnect attempts
+    if (reconnectAttempts.current >= maxReconnectAttempts) {
+      console.log(`Max reconnect attempts (${maxReconnectAttempts}) reached. Giving up.`);
+      setIsReconnectingState(false);
+      return;
+    }
     
     isReconnectingRef.current = true;
     setIsReconnectingState(true);
@@ -272,13 +279,29 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         await joinSession(lastInitParams.current.offer);
       }
       reconnectAttempts.current = 0; // reset on success
+      console.log('Reconnect successful!');
     } catch (error) {
       console.error('Reconnect failed:', error);
+      
+      // Exponential backoff: 1s, 2s, 4s (capped at 4s)
+      const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts.current - 1), 4000);
+      console.log(`Reconnect failed. Retrying in ${backoffDelay}ms...`);
+      
+      // Schedule retry with backoff
+      if (reconnectAttempts.current < maxReconnectAttempts) {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          isReconnectingRef.current = false; // Reset so reconnect can be called again
+          reconnect();
+        }, backoffDelay);
+      }
     } finally {
-      isReconnectingRef.current = false;
-      setIsReconnectingState(false);
+      // Only set to false if we're not scheduling a retry
+      if (reconnectAttempts.current >= maxReconnectAttempts || reconnectAttempts.current === 0) {
+        isReconnectingRef.current = false;
+        setIsReconnectingState(false);
+      }
     }
-  }, [createSession, joinSession, setIsReconnectingState]);
+  }, [createSession, joinSession, setIsReconnectingState, maxReconnectAttempts]);
 
   // Setup data channel event handlers
   const setupDataChannelForPeer = useCallback((channel: RTCDataChannel) => {
@@ -292,10 +315,11 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       () => {
         console.log(`Channel ${channel.label} closed`);
         delete dataChannelsRef.current[channel.label];
-        // Attempt reconnection if not intentional disconnect
+        // BUG-9 Fix: Attempt reconnection if not intentional disconnect
+        // The reconnect function now handles exponential backoff internally
         if (!intentionalDisconnect.current && lastInitParams.current) {
           console.log('Data channel closed unexpectedly, attempting reconnect...');
-          setTimeout(() => reconnect(), 1000);
+          reconnect();
         }
       }
     );
