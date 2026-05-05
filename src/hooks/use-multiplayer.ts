@@ -92,22 +92,22 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     const message: MultiplayerMessage = {
       type,
       payload,
-      senderId: multiplayerState.peerId,
+      senderId: multiplayerStateRef.current.peerId,
       timestamp: Date.now(),
     };
 
     return sendDataChannelMessage(channel, message);
-  }, [multiplayerState.peerId]);
+  }, []);
 
   // Send game action (guest sends to host)
   const sendGameAction = useCallback((action: string, turnNumber: number, isInitial = false) => {
     return sendMessage('game-actions', {
-      playerId: multiplayerState.peerId,
+      playerId: multiplayerStateRef.current.peerId,
       action,
       turnNumber,
       isInitial,
     });
-  }, [sendMessage, multiplayerState.peerId]);
+  }, [sendMessage]);
 
   // Broadcast story update (host sends to all)
   const broadcastStoryUpdate = useCallback((entry: StoryLogEntry, newTurn: number, updatedGameState: string) => {
@@ -130,21 +130,21 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   // Send chat message
   const sendChatMessage = useCallback((text: string) => {
     return sendMessage('chat', {
-      playerId: multiplayerState.peerId,
+      playerId: multiplayerStateRef.current.peerId,
       playerName,
       text: text.substring(0, 300),
       timestamp: Date.now(),
     });
-  }, [sendMessage, multiplayerState.peerId, playerName]);
+  }, [sendMessage, playerName]);
 
   // Send control message (host only)
   const sendControlMessage = useCallback((action: ControlMessage['payload']['action'], targetPeerId?: string, data?: any) => {
-    if (!multiplayerState.isHost) {
+    if (!multiplayerStateRef.current.isHost) {
       console.error('Only host can send control messages');
       return false;
     }
     return sendMessage('control', { action, targetPeerId, data });
-  }, [sendMessage, multiplayerState.isHost]);
+  }, [sendMessage]);
 
   // Send interaction request to another peer
   const sendInteractionRequest = useCallback((targetPeerId: string, type: 'gift' | 'trade' | 'duel' | 'custom', details: string) => {
@@ -169,8 +169,9 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     setMultiplayerState(prev => ({ ...prev, connectionStatus: 'connecting', isHost: true }));
 
     try {
+      const currentPeerId = multiplayerStateRef.current.peerId;
       const { peerConnection, encodedOffer } = await createOffer(
-        multiplayerState.peerId,
+        currentPeerId,
         playerName,
         (candidate) => {
           iceCandidatesRef.current.push(candidate);
@@ -187,13 +188,13 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
       setMultiplayerState(prev => ({
         ...prev,
-        sessionId: multiplayerState.peerId,
+        sessionId: currentPeerId,
         connectionStatus: 'connected',
       }));
 
       // Store init params for reconnection
       lastInitParams.current = { type: 'host' };
-      setLastSessionId(multiplayerState.peerId);
+      setLastSessionId(currentPeerId);
       setLastIsHost(true);
 
       return encodedOffer;
@@ -202,16 +203,17 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       setMultiplayerState(prev => ({ ...prev, connectionStatus: 'failed' }));
       throw error;
     }
-  }, [multiplayerState.peerId, playerName]);
+  }, [playerName]);
 
   // Initialize as guest
   const joinSession = useCallback(async (encodedOffer: string): Promise<string> => {
     setMultiplayerState(prev => ({ ...prev, connectionStatus: 'connecting', isHost: false }));
 
     try {
+      const currentPeerId = multiplayerStateRef.current.peerId;
       const { peerConnection, encodedAnswer } = await createAnswer(
         encodedOffer,
-        multiplayerState.peerId,
+        currentPeerId,
         playerName,
         (candidate) => {
           iceCandidatesRef.current.push(candidate);
@@ -232,7 +234,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
       // Store init params for reconnection
       lastInitParams.current = { type: 'guest', offer: encodedOffer };
-      setLastSessionId(multiplayerState.peerId);
+      setLastSessionId(currentPeerId);
       setLastIsHost(false);
 
       return encodedAnswer;
@@ -241,11 +243,11 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       setMultiplayerState(prev => ({ ...prev, connectionStatus: 'failed' }));
       throw error;
     }
-  }, [multiplayerState.peerId, playerName]);
+  }, [playerName]);
 
   // Host applies guest's answer
   const applyGuestAnswer = useCallback(async (encodedAnswer: string) => {
-    if (!peerConnectionRef.current || !multiplayerState.isHost) {
+    if (!peerConnectionRef.current || !multiplayerStateRef.current.isHost) {
       throw new Error('Not in host mode or connection not initialized');
     }
 
@@ -255,7 +257,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       console.error('Failed to apply answer:', error);
       throw error;
     }
-  }, [multiplayerState.isHost]);
+  }, []);
 
   // BUG-9 Fix: Reconnect with exponential backoff
   const reconnect = useCallback(async () => {
@@ -337,7 +339,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         }
       }
     );
-  }, [reconnect, lastInitParams, multiplayerState.connectionStatus]);
+  }, [reconnect, lastInitParams]);
 
   // Handle incoming messages
   const handleMessage = useCallback((data: MultiplayerMessage, channelLabel: string) => {
