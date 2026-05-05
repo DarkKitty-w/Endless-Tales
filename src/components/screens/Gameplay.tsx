@@ -130,11 +130,17 @@ export function Gameplay() {
     
     // Refs for multiplayer state to avoid circular dependencies
     const multiplayerStateRef = useRef<any>(null);
+    const gameStateRef = useRef(state);
     const isMultiplayerHostRef = useRef(false);
     const sendGameActionRef = useRef<((action: string, turnNumber: number, isInitial: boolean) => boolean) | null>(null);
     const broadcastStoryUpdateRef = useRef<((entry: any, newTurn: number, updatedGameState: string) => boolean) | null>(null);
     const broadcastPartyStateRef = useRef<((partyState: any, turnOrder: string[], currentTurnIndex: number) => boolean) | null>(null);
     const handlePlayerActionRef = useRef<((action: string, isInitialAction?: boolean) => void) | null>(null);
+    
+    // Keep gameStateRef updated
+    useEffect(() => {
+      gameStateRef.current = state;
+    }, [state]);
 
     // Define handleGuestActionReceived using refs to avoid circular deps
     const handleGuestActionReceived = useCallback(async (playerId: string, action: string, turnNumber: number, isInitial: boolean) => {
@@ -149,30 +155,31 @@ export function Gameplay() {
         
         // After processing, broadcast the updated story and party state
         setTimeout(() => {
+          const currentState = gameStateRef.current;
           // Broadcast story update if available
-          if (state.storyLog.length > 0) {
-            const latestEntry = state.storyLog[state.storyLog.length - 1];
+          if (currentState.storyLog.length > 0) {
+            const latestEntry = currentState.storyLog[currentState.storyLog.length - 1];
             if (broadcastStoryUpdateRef.current) {
-              broadcastStoryUpdateRef.current(latestEntry, state.turnCount, '');
+              broadcastStoryUpdateRef.current(latestEntry, currentState.turnCount, '');
             }
           }
           
           // Broadcast party state
           const partyState: Record<string, any> = {};
           // Add host
-          if (state.character) {
-            partyState[state.peerId || 'host'] = {
-              peerId: state.peerId || 'host',
-              name: state.character.name,
-              class: state.character.class,
-              level: state.character.level,
-              currentHealth: state.character.currentHealth,
-              maxHealth: state.character.maxHealth,
-              currentStamina: state.character.currentStamina,
-              maxStamina: state.character.maxStamina,
-              currentMana: state.character.currentMana,
-              maxMana: state.character.maxMana,
-              inventorySummary: state.inventory?.map(i => i.name) || [],
+          if (currentState.character) {
+            partyState[currentState.peerId || 'host'] = {
+              peerId: currentState.peerId || 'host',
+              name: currentState.character.name,
+              class: currentState.character.class,
+              level: currentState.character.level,
+              currentHealth: currentState.character.currentHealth,
+              maxHealth: currentState.character.maxHealth,
+              currentStamina: currentState.character.currentStamina,
+              maxStamina: currentState.character.maxStamina,
+              currentMana: currentState.character.currentMana,
+              maxMana: currentState.character.maxMana,
+              inventorySummary: currentState.inventory?.map(i => i.name) || [],
             };
           }
           // Add peers from multiplayerState ref
@@ -192,7 +199,7 @@ export function Gameplay() {
         console.error('Error processing guest action:', error);
         toast({ title: "Error", description: "Failed to process guest action.", variant: "destructive" });
       }
-    }, [state, toast]);
+    }, [toast]);
 
     // Multiplayer hook
     const { multiplayerState, sendGameAction, broadcastStoryUpdate, broadcastPartyState, sendChatMessage, sendControlMessage, sendInteractionRequest, sendInteractionResponse, disconnect, reconnect, setGameActionReceivedHandler, isConnected, isMyTurn, isHost: isMultiplayerHost, isReconnecting } = useMultiplayer({
@@ -736,24 +743,26 @@ export function Gameplay() {
     useEffect(() => {
         if (!isMultiplayerHostRef.current || !isConnected || !broadcastPartyStateRef.current) return;
         
+        const currentState = gameStateRef.current;
+        
         // Only broadcast if we have a character
-        if (!state.character) return;
+        if (!currentState.character) return;
         
         const partyState: Record<string, any> = {};
         
         // Add host
-        partyState[state.peerId || 'host'] = {
-          peerId: state.peerId || 'host',
-          name: state.character.name,
-          class: state.character.class,
-          level: state.character.level,
-          currentHealth: state.character.currentHealth,
-          maxHealth: state.character.maxHealth,
-          currentStamina: state.character.currentStamina,
-          maxStamina: state.character.maxStamina,
-          currentMana: state.character.currentMana,
-          maxMana: state.character.maxMana,
-          inventorySummary: state.inventory?.map(i => i.name) || [],
+        partyState[currentState.peerId || 'host'] = {
+          peerId: currentState.peerId || 'host',
+          name: currentState.character.name,
+          class: currentState.character.class,
+          level: currentState.character.level,
+          currentHealth: currentState.character.currentHealth,
+          maxHealth: currentState.character.maxHealth,
+          currentStamina: currentState.character.currentStamina,
+          maxStamina: currentState.character.maxStamina,
+          currentMana: currentState.character.currentMana,
+          maxMana: currentState.character.maxMana,
+          inventorySummary: currentState.inventory?.map(i => i.name) || [],
         };
         
         // Add peers from multiplayerState ref
@@ -769,7 +778,7 @@ export function Gameplay() {
         const currentTurnIndex = mpState?.currentTurnIndex || 0;
         
         broadcastPartyStateRef.current(partyState, turnOrder, currentTurnIndex);
-    }, [state.storyLog.length, isConnected, state.character, state.inventory]);
+    }, [state.storyLog.length, isConnected]);
 
     // Clear pending guest action when story log updates (guest receives host response)
     useEffect(() => {
