@@ -101,7 +101,8 @@ export function createPeerConnection(
   };
 
   pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'connected') {
+    // Stop buffering once we have a final connection state
+    if (pc.connectionState === 'connected' || pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
       isBuffering = false;
     }
     if (onConnectionStateChange) {
@@ -112,7 +113,8 @@ export function createPeerConnection(
   return {
     pc,
     getBufferedCandidates: () => {
-      isBuffering = false;
+      // Return current buffered candidates but continue buffering until connected
+      // This ensures candidates gathered after this call are still buffered
       return bufferedCandidates.splice(0);
     },
     setDataChannel: (dc: RTCDataChannel) => {
@@ -194,16 +196,20 @@ export async function createOffer(
   // Wait for ICE candidates to be gathered
   await waitForIceGathering(pc);
 
+  // Also get any candidates that were buffered (gathered after waitForIceGathering)
+  const bufferedCandidates = getBufferedCandidates();
+  const allCandidates = [...iceCandidates, ...bufferedCandidates];
+
   const pkg: SignallingPackage = {
     sdp: pc.localDescription!.sdp,
-    iceCandidates,
+    iceCandidates: allCandidates,
     peerInfo: { peerId, name },
     type: 'offer',
   };
 
   const encodedOffer = encodeSignallingData(pkg);
   
-  // Store the function to get buffered candidates later (after connection)
+  // Store the function to get any future buffered candidates (rare, but possible)
   (pc as any).__getBufferedCandidates = getBufferedCandidates;
   
   return { peerConnection: pc, encodedOffer };
@@ -248,9 +254,13 @@ export async function createAnswer(
   // Wait for ICE candidates to be gathered
   await waitForIceGathering(pc);
 
+  // Also get any candidates that were buffered (gathered after waitForIceGathering)
+  const bufferedCandidates = getBufferedCandidates();
+  const allCandidates = [...iceCandidates, ...bufferedCandidates];
+
   const answerPkg: SignallingPackage = {
     sdp: pc.localDescription!.sdp,
-    iceCandidates,
+    iceCandidates: allCandidates,
     peerInfo: { peerId, name },
     type: 'answer',
   };
@@ -267,7 +277,7 @@ export async function createAnswer(
     // The channel setup is handled elsewhere
   };
   
-  // Store the function to get buffered candidates later (after connection)
+  // Store the function to get any future buffered candidates (rare, but possible)
   (pc as any).__getBufferedCandidates = getBufferedCandidates;
   
   return { peerConnection: pc, encodedAnswer };
