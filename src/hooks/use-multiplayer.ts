@@ -305,10 +305,13 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   const handleMessage = useCallback((data: MultiplayerMessage, channelLabel: string) => {
     console.log(`Received message on ${channelLabel}:`, data);
 
+    // Use ref to get current state (avoids stale closures)
+    const currentState = multiplayerStateRef.current;
+
     switch (data.type) {
       case 'game-actions':
         // Host receives player actions
-        if (multiplayerState.isHost && gameActionReceivedRef.current) {
+        if (currentState.isHost && gameActionReceivedRef.current) {
           const msg = data as unknown as GameActionMessage;
           gameActionReceivedRef.current(
             msg.payload.playerId,
@@ -320,7 +323,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         break;
 
       case 'story-update':
-        if (!multiplayerState.isHost && onStoryUpdate) {
+        if (!currentState.isHost && onStoryUpdate) {
           const msg = data as unknown as StoryUpdateMessage;
           onStoryUpdate(msg.payload.entry, msg.payload.newTurn);
         }
@@ -334,7 +337,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
             ...prev,
             turnOrder: msg.payload.turnOrder,
             currentTurnIndex: msg.payload.currentTurnIndex,
-            isMyTurn: msg.payload.turnOrder[msg.payload.currentTurnIndex] === multiplayerState.peerId,
+            isMyTurn: msg.payload.turnOrder[msg.payload.currentTurnIndex] === currentState.peerId,
           }));
         }
         break;
@@ -358,7 +361,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         // Handle specific control actions
         const controlMsg = msg;
         if (controlMsg.payload.action === 'kick') {
-          if (controlMsg.payload.targetPeerId === multiplayerState.peerId) {
+          if (controlMsg.payload.targetPeerId === currentState.peerId) {
             // We are kicked
             console.log('Kicked from game');
             disconnect();
@@ -392,7 +395,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
             controlMsg.payload.data?.interactionId,
             controlMsg.payload.data?.accepted
           );
-        } else if (controlMsg.payload.action === 'request-sync' && multiplayerState.isHost) {
+        } else if (controlMsg.payload.action === 'request-sync' && currentState.isHost) {
           // Host received a sync request from a reconnecting peer
           console.log('Host: Sync request received, sending full state...');
           // Send full state sync
@@ -405,7 +408,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
               currentTurnIndex: multiplayerStateRef.current?.currentTurnIndex,
             }
           });
-        } else if (controlMsg.payload.action === 'sync-response' && !multiplayerState.isHost) {
+        } else if (controlMsg.payload.action === 'sync-response' && !currentState.isHost) {
           // Guest received state sync from host
           console.log('Guest: Received state sync from host');
           const { gameState, partyState, turnOrder, currentTurnIndex } = controlMsg.payload.data || {};
@@ -421,7 +424,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         break;
       }
     }
-  }, [multiplayerState.isHost, multiplayerState.peerId, onStoryUpdate, onPartyStateUpdate, onChatMessage, onControlMessage, onInteractionRequest, onInteractionResponse]);
+  }, [onStoryUpdate, onPartyStateUpdate, onChatMessage, onControlMessage, onInteractionRequest, onInteractionResponse]);
 
   // Disconnect
   const disconnect = useCallback(() => {
