@@ -145,7 +145,7 @@ export function CoopLobby() {
         <CardboardCard className="w-full max-w-md text-center">
           <CardHeader>
             <CardTitle className="flex items-center justify-center gap-2">
-              <CheckCircle className="w-7 h-7 text-green-500 dark:text-green-400" /> Connected!
+              <CheckCircle className="w-7 h-7 text-primary" /> Connected!
             </CardTitle>
           </CardHeader>
           <CardContent>
