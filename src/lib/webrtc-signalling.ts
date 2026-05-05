@@ -60,7 +60,6 @@ export function createPeerConnection(
   setDataChannel: (dc: RTCDataChannel) => void;
 } {
   const bufferedCandidates: RTCIceCandidateInit[] = [];
-  let isBuffering = true;
   let dataChannelForIce: RTCDataChannel | null = null;
 
   const pc = new RTCPeerConnection({
@@ -91,30 +90,22 @@ export function createPeerConnection(
         }
       }
       
-      // Buffer the candidate if we're still in buffering mode
-      if (isBuffering) {
-        bufferedCandidates.push(candidateJson);
-      }
-      
+      // Always buffer candidates so they can be sent later via data channel
+      bufferedCandidates.push(candidateJson);
       onIceCandidate(candidateJson);
     }
   };
 
-  pc.onconnectionstatechange = () => {
-    // Stop buffering once we have a final connection state
-    if (pc.connectionState === 'connected' || pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-      isBuffering = false;
-    }
-    if (onConnectionStateChange) {
+  if (onConnectionStateChange) {
+    pc.onconnectionstatechange = () => {
       onConnectionStateChange(pc.connectionState);
-    }
-  };
+    };
+  }
 
   return {
     pc,
     getBufferedCandidates: () => {
-      // Return current buffered candidates but continue buffering until connected
-      // This ensures candidates gathered after this call are still buffered
+      // Return current buffered candidates
       return bufferedCandidates.splice(0);
     },
     setDataChannel: (dc: RTCDataChannel) => {
