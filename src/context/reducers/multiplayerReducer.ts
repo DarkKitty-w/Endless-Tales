@@ -68,6 +68,10 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
 
     case "ADVANCE_TURN": {
       const newIndex = action.payload;
+      if (newIndex < 0 || newIndex >= state.turnOrder.length) {
+        console.error('ADVANCE_TURN: Invalid turn index', newIndex);
+        return state;
+      }
       return {
         ...state,
         currentTurnIndex: newIndex,
