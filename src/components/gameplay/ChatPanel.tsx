@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
 import { ScrollArea } from "../ui/scroll-area";
 import { Input } from "../ui/input";
 import { Button } from "../ui/button";
-import { Send } from "lucide-react";
+import { Send, X } from "lucide-react";
 import type { ChatMessage } from "../../types/multiplayer-types";
 
 interface ChatPanelProps {
@@ -57,7 +57,9 @@ export function ChatPanel({ isOpen, onClose, messages, onSendMessage, currentPla
     >
       <CardHeader className="flex flex-row items-center justify-between p-4 pb-2">
         <CardTitle className="text-lg">Party Chat</CardTitle>
-        <Button variant="ghost" size="sm" onClick={onClose}>✕</Button>
+        <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close chat">
+          <X className="h-4 w-4" />
+        </Button>
       </CardHeader>
       
       <CardContent className="flex-1 overflow-hidden p-0">
