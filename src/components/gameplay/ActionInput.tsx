@@ -5,7 +5,7 @@ import React, { useState, forwardRef, useImperativeHandle, useRef } from "react"
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
-import { Send, Sparkles, Hammer } from "lucide-react";
+import { Send, Sparkles, Hammer, Loader2 } from "lucide-react";
 import { sanitizePlayerAction } from "../../lib/utils";
 
 export interface ActionInputRef {
@@ -17,10 +17,11 @@ interface ActionInputProps {
   onSuggest: () => void;
   onCraft: () => void;
   disabled: boolean;
+  isWaitingForHost?: boolean;
 }
 
 export const ActionInput = forwardRef<ActionInputRef, ActionInputProps>(
-  ({ onSubmit, onSuggest, onCraft, disabled }, ref) => {
+  ({ onSubmit, onSuggest, onCraft, disabled, isWaitingForHost = false }, ref) => {
     const [playerInput, setPlayerInput] = useState("");
     const submittingRef = useRef(false);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -90,6 +91,7 @@ export const ActionInput = forwardRef<ActionInputRef, ActionInputProps>(
                 aria-label="Send action to narrator"
                 disabled={isSubmitDisabled}
               >
+                {isWaitingForHost && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 <Send className="w-4 h-4" />
               </Button>
             </TooltipTrigger>

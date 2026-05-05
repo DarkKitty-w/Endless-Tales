@@ -1143,6 +1143,7 @@ export function Gameplay() {
                         onSuggest={handleSuggestAction}
                         onCraft={() => setIsCraftingDialogOpen(true)}
                         disabled={anyLoading || character.class === 'admin000'}
+                        isWaitingForHost={!!pendingGuestAction}
                     />
                     <AIStatusPanel />
                     <GameplayActions
