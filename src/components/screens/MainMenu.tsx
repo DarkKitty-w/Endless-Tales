@@ -66,7 +66,7 @@ export function MainMenu() {
 
       <CardboardCard className="w-full max-w-md text-center shadow-xl border-2 border-foreground/20">
         <CardHeader className="border-b border-foreground/10 pb-4">
-          <CardTitle className="text-4xl font-bold text-foreground mb-4 font-['Comic_Sans_MS',_'Chalkboard_SE',_'Marker_Felt',_sans-serif]">
+          <CardTitle className="text-4xl font-bold text-foreground mb-4">
             Endless Tales
           </CardTitle>
         </CardHeader>
