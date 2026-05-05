@@ -9,6 +9,7 @@ import type {
 } from "../types/multiplayer-types";
 import {
   createOffer, createAnswer, applyAnswer, setupDataChannel, sendDataChannelMessage,
+  sendBufferedIceCandidates, handleIceCandidateMessage,
   type SignallingPackage
 } from "../lib/webrtc-signalling";
 import type { StoryLogEntry, GameState } from "../types/game-types";
@@ -307,10 +308,23 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   const setupDataChannelForPeer = useCallback((channel: RTCDataChannel) => {
     setupDataChannel(
       channel,
-      (data: MultiplayerMessage) => handleMessage(data, channel.label),
+      (data: any) => {
+        // Handle ICE candidate messages separately
+        if (data.type === 'ice-candidate') {
+          if (peerConnectionRef.current) {
+            handleIceCandidateMessage(peerConnectionRef.current, data);
+          }
+          return;
+        }
+        handleMessage(data as MultiplayerMessage, channel.label);
+      },
       () => {
         console.log(`Channel ${channel.label} opened`);
         dataChannelsRef.current[channel.label] = channel;
+        // Send any buffered ICE candidates after connection is established
+        if (peerConnectionRef.current) {
+          sendBufferedIceCandidates(peerConnectionRef.current, channel);
+        }
       },
       () => {
         console.log(`Channel ${channel.label} closed`);

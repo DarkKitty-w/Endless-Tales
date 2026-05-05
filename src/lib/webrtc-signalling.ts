@@ -11,6 +11,11 @@ export interface SignallingPackage {
   type: 'offer' | 'answer';
 }
 
+export interface IceCandidateMessage {
+  type: 'ice-candidate';
+  candidate: RTCIceCandidateInit;
+}
+
 /**
  * Encode a signalling package to a base64 string for QR code or copy-paste
  */
@@ -44,11 +49,15 @@ export function decodeSignallingData(encoded: string): SignallingPackage {
 
 /**
  * Create an RTCPeerConnection with ICE candidate collection
+ * Returns the peer connection and a function to send buffered ICE candidates
  */
 export function createPeerConnection(
   onIceCandidate: (candidate: RTCIceCandidate) => void,
   onConnectionStateChange?: (state: RTCPeerConnectionState) => void
-): RTCPeerConnection {
+): { pc: RTCPeerConnection; getBufferedCandidates: () => RTCIceCandidateInit[] } {
+  const bufferedCandidates: RTCIceCandidateInit[] = [];
+  let isBuffering = true;
+
   const pc = new RTCPeerConnection({
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
@@ -58,17 +67,29 @@ export function createPeerConnection(
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
+      if (isBuffering) {
+        bufferedCandidates.push(event.candidate.toJSON());
+      }
       onIceCandidate(event.candidate);
     }
   };
 
   pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'connected') {
+      isBuffering = false;
+    }
     if (onConnectionStateChange) {
       onConnectionStateChange(pc.connectionState);
     }
   };
 
-  return pc;
+  return {
+    pc,
+    getBufferedCandidates: () => {
+      isBuffering = false;
+      return bufferedCandidates.splice(0);
+    }
+  };
 }
 
 /**
@@ -82,10 +103,10 @@ export async function createOffer(
 ): Promise<{ peerConnection: RTCPeerConnection; encodedOffer: string }> {
   const iceCandidates: RTCIceCandidateInit[] = [];
   
-  const pc = createPeerConnection(
+  const { pc, getBufferedCandidates } = createPeerConnection(
     (candidate) => {
-      iceCandidates.push(candidate);
-      onIceCandidate(candidate);
+      iceCandidates.push(candidate.toJSON());
+      onIceCandidate(candidate.toJSON());
     },
     (state) => console.log('Host connection state:', state)
   );
@@ -111,6 +132,10 @@ export async function createOffer(
   };
 
   const encodedOffer = encodeSignallingData(pkg);
+  
+  // Store the function to get buffered candidates later (after connection)
+  (pc as any).__getBufferedCandidates = getBufferedCandidates;
+  
   return { peerConnection: pc, encodedOffer };
 }
 
@@ -126,10 +151,10 @@ export async function createAnswer(
 ): Promise<{ peerConnection: RTCPeerConnection; encodedAnswer: string }> {
   const iceCandidates: RTCIceCandidateInit[] = [];
   
-  const pc = createPeerConnection(
+  const { pc, getBufferedCandidates } = createPeerConnection(
     (candidate) => {
-      iceCandidates.push(candidate);
-      onIceCandidate(candidate);
+      iceCandidates.push(candidate.toJSON());
+      onIceCandidate(candidate.toJSON());
     },
     (state) => console.log('Guest connection state:', state)
   );
@@ -161,6 +186,10 @@ export async function createAnswer(
   };
 
   const encodedAnswer = encodeSignallingData(answerPkg);
+  
+  // Store the function to get buffered candidates later (after connection)
+  (pc as any).__getBufferedCandidates = getBufferedCandidates;
+  
   return { peerConnection: pc, encodedAnswer };
 }
 
@@ -182,6 +211,44 @@ export async function applyAnswer(
   // Add guest's ICE candidates
   for (const candidate of pkg.iceCandidates) {
     await peerConnection.addIceCandidate(candidate);
+  }
+}
+
+/**
+ * Send buffered ICE candidates via an established data channel
+ */
+export function sendBufferedIceCandidates(
+  pc: RTCPeerConnection,
+  dataChannel: RTCDataChannel
+): void {
+  const getBufferedCandidates = (pc as any).__getBufferedCandidates;
+  if (typeof getBufferedCandidates === 'function') {
+    const candidates = getBufferedCandidates();
+    for (const candidate of candidates) {
+      const message: IceCandidateMessage = {
+        type: 'ice-candidate',
+        candidate,
+      };
+      if (dataChannel.readyState === 'open') {
+        dataChannel.send(JSON.stringify(message));
+      }
+    }
+  }
+}
+
+/**
+ * Handle incoming ICE candidate message from data channel
+ */
+export async function handleIceCandidateMessage(
+  pc: RTCPeerConnection,
+  message: IceCandidateMessage
+): Promise<void> {
+  if (message.type === 'ice-candidate' && message.candidate) {
+    try {
+      await pc.addIceCandidate(message.candidate);
+    } catch (error) {
+      console.error('Failed to add ICE candidate:', error);
+    }
   }
 }
 
