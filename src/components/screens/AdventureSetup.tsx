@@ -304,16 +304,49 @@ export function AdventureSetup() {
                    <div className="space-y-4">
                        <div className="space-y-2">
                            <Label htmlFor="worldType" className="flex items-center gap-1"><Globe className="w-4 h-4"/> World Type</Label>
-                           <Input id="worldType" value={worldType} onChange={(e) => setWorldType(e.target.value)} placeholder="e.g., Forgotten Kingdom" className={customError && !worldType.trim() ? 'border-destructive' : ''} />
+                           <Input 
+                             id="worldType" 
+                             value={worldType} 
+                             onChange={(e) => setWorldType(e.target.value)} 
+                             placeholder="e.g., Forgotten Kingdom" 
+                             className={customError && !worldType.trim() ? 'border-destructive' : ''}
+                             aria-invalid={customError && !worldType.trim() ? true : undefined}
+                             aria-describedby={customError && !worldType.trim() ? "worldType-error" : undefined}
+                           />
+                           {customError && !worldType.trim() && (
+                             <p id="worldType-error" className="text-sm text-destructive">
+                               World Type is required.
+                             </p>
+                           )}
                        </div>
                        <div className="space-y-2">
                            <Label htmlFor="mainQuestline" className="flex items-center gap-1"><ScrollText className="w-4 h-4"/> Main Questline (Goal)</Label>
-                           <Input id="mainQuestline" value={mainQuestline} onChange={(e) => setMainQuestline(e.target.value)} placeholder="e.g., Find the Lost Artifact" className={customError && !mainQuestline.trim() ? 'border-destructive' : ''}/>
+                           <Input 
+                             id="mainQuestline" 
+                             value={mainQuestline} 
+                             onChange={(e) => setMainQuestline(e.target.value)} 
+                             placeholder="e.g., Find the Lost Artifact" 
+                             className={customError && !mainQuestline.trim() ? 'border-destructive' : ''}
+                             aria-invalid={customError && !mainQuestline.trim() ? true : undefined}
+                             aria-describedby={customError && !mainQuestline.trim() ? "mainQuestline-error" : undefined}
+                           />
+                           {customError && !mainQuestline.trim() && (
+                             <p id="mainQuestline-error" className="text-sm text-destructive">
+                               Main Questline is required.
+                             </p>
+                           )}
                        </div>
                         <div className="space-y-2">
                             <Label htmlFor="genreTheme" className="flex items-center gap-1"><BookOpen className="w-4 h-4"/> Genre/Theme</Label>
                             <Select value={genreTheme} onValueChange={(v) => setGenreTheme(v as GenreTheme)}>
-                                <SelectTrigger id="genreTheme" className={customError && !genreTheme ? 'border-destructive' : ''}><SelectValue placeholder="Select genre..." /></SelectTrigger>
+                                <SelectTrigger 
+                                  id="genreTheme" 
+                                  className={customError && !genreTheme ? 'border-destructive' : ''}
+                                  aria-invalid={customError && !genreTheme ? true : undefined}
+                                  aria-describedby={customError && !genreTheme ? "genreTheme-error" : undefined}
+                                >
+                                  <SelectValue placeholder="Select genre..." />
+                                </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="High Fantasy">High Fantasy</SelectItem><SelectItem value="Dark Fantasy">Dark Fantasy</SelectItem>
                                     <SelectItem value="Sci-Fi (Cyberpunk)">Sci-Fi (Cyberpunk)</SelectItem><SelectItem value="Sci-Fi (Space Opera)">Sci-Fi (Space Opera)</SelectItem>
@@ -321,72 +354,159 @@ export function AdventureSetup() {
                                     <SelectItem value="Mystery">Mystery</SelectItem><SelectItem value="Urban Fantasy">Urban Fantasy</SelectItem>
                                 </SelectContent>
                             </Select>
+                            {customError && !genreTheme && (
+                              <p id="genreTheme-error" className="text-sm text-destructive">
+                                Genre/Theme is required.
+                              </p>
+                            )}
                        </div>
                        <div className="space-y-2">
                             <Label htmlFor="magicSystem" className="flex items-center gap-1"><Sparkles className="w-4 h-4"/> Magic System</Label>
                             <Select value={magicSystem} onValueChange={(v) => setMagicSystem(v as MagicSystem)}>
-                                <SelectTrigger id="magicSystem" className={customError && !magicSystem ? 'border-destructive' : ''}><SelectValue placeholder="Select magic system..." /></SelectTrigger>
+                                <SelectTrigger 
+                                  id="magicSystem" 
+                                  className={customError && !magicSystem ? 'border-destructive' : ''}
+                                  aria-invalid={customError && !magicSystem ? true : undefined}
+                                  aria-describedby={customError && !magicSystem ? "magicSystem-error" : undefined}
+                                >
+                                  <SelectValue placeholder="Select magic system..." />
+                                </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="High Magic (Common & Powerful)">High Magic</SelectItem><SelectItem value="Low Magic (Rare & Subtle)">Low Magic</SelectItem>
                                     <SelectItem value="Elemental Magic">Elemental Magic</SelectItem><SelectItem value="Psionics">Psionics</SelectItem><SelectItem value="No Magic">No Magic</SelectItem>
                                 </SelectContent>
                             </Select>
+                            {customError && !magicSystem && (
+                              <p id="magicSystem-error" className="text-sm text-destructive">
+                                Magic System is required.
+                              </p>
+                            )}
                        </div>
                        <div className="space-y-2">
                             <Label htmlFor="startingSituation" className="flex items-center gap-1"><Play className="w-4 h-4"/> Starting Situation</Label>
-                            <Input id="startingSituation" value={startingSituation} onChange={(e) => setStartingSituation(e.target.value)} placeholder="e.g., Waking up with amnesia" className={customError && !startingSituation.trim() ? 'border-destructive' : ''}/>
+                            <Input 
+                              id="startingSituation" 
+                              value={startingSituation} 
+                              onChange={(e) => setStartingSituation(e.target.value)} 
+                              placeholder="e.g., Waking up with amnesia" 
+                              className={customError && !startingSituation.trim() ? 'border-destructive' : ''}
+                              aria-invalid={customError && !startingSituation.trim() ? true : undefined}
+                              aria-describedby={customError && !startingSituation.trim() ? "startingSituation-error" : undefined}
+                            />
+                            {customError && !startingSituation.trim() && (
+                              <p id="startingSituation-error" className="text-sm text-destructive">
+                                Starting Situation is required.
+                              </p>
+                            )}
                        </div>
                    </div>
                    <div className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="techLevel" className="flex items-center gap-1"><Atom className="w-4 h-4"/> Technological Level</Label>
                             <Select value={techLevel} onValueChange={(v) => setTechLevel(v as TechLevel)}>
-                                <SelectTrigger id="techLevel" className={customError && !techLevel ? 'border-destructive' : ''}><SelectValue placeholder="Select tech level..." /></SelectTrigger>
+                                <SelectTrigger 
+                                  id="techLevel" 
+                                  className={customError && !techLevel ? 'border-destructive' : ''}
+                                  aria-invalid={customError && !techLevel ? true : undefined}
+                                  aria-describedby={customError && !techLevel ? "techLevel-error" : undefined}
+                                >
+                                  <SelectValue placeholder="Select tech level..." />
+                                </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="Primitive">Primitive</SelectItem><SelectItem value="Medieval">Medieval</SelectItem>
                                     <SelectItem value="Renaissance">Renaissance</SelectItem><SelectItem value="Industrial">Industrial</SelectItem>
                                     <SelectItem value="Modern">Modern</SelectItem><SelectItem value="Futuristic">Futuristic</SelectItem>
                                 </SelectContent>
                             </Select>
+                            {customError && !techLevel && (
+                              <p id="techLevel-error" className="text-sm text-destructive">
+                                Technological Level is required.
+                              </p>
+                            )}
                        </div>
                        <div className="space-y-2">
                             <Label htmlFor="dominantTone" className="flex items-center gap-1"><Drama className="w-4 h-4"/> Dominant Tone</Label>
                             <Select value={dominantTone} onValueChange={(v) => setDominantTone(v as DominantTone)}>
-                                <SelectTrigger id="dominantTone" className={customError && !dominantTone ? 'border-destructive' : ''}><SelectValue placeholder="Select tone..." /></SelectTrigger>
+                                <SelectTrigger 
+                                  id="dominantTone" 
+                                  className={customError && !dominantTone ? 'border-destructive' : ''}
+                                  aria-invalid={customError && !dominantTone ? true : undefined}
+                                  aria-describedby={customError && !dominantTone ? "dominantTone-error" : undefined}
+                                >
+                                  <SelectValue placeholder="Select tone..." />
+                                </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="Heroic & Optimistic">Heroic & Optimistic</SelectItem><SelectItem value="Grim & Perilous">Grim & Perilous</SelectItem>
                                     <SelectItem value="Mysterious & Eerie">Mysterious & Eerie</SelectItem><SelectItem value="Comedic & Lighthearted">Comedic & Lighthearted</SelectItem>
                                     <SelectItem value="Serious & Political">Serious & Political</SelectItem>
                                 </SelectContent>
                             </Select>
+                            {customError && !dominantTone && (
+                              <p id="dominantTone-error" className="text-sm text-destructive">
+                                Dominant Tone is required.
+                              </p>
+                            )}
                        </div>
                         <div className="space-y-2">
                             <Label htmlFor="combatFrequency" className="flex items-center gap-1"><Swords className="w-4 h-4"/> Combat Frequency</Label>
                             <Select value={combatFrequency} onValueChange={(v) => setCombatFrequency(v as CombatFrequency)}>
-                                <SelectTrigger id="combatFrequency"><SelectValue placeholder="Select combat frequency..." /></SelectTrigger>
+                                <SelectTrigger 
+                                  id="combatFrequency" 
+                                  aria-invalid={customError && !combatFrequency ? true : undefined}
+                                  aria-describedby={customError && !combatFrequency ? "combatFrequency-error" : undefined}
+                                >
+                                  <SelectValue placeholder="Select combat frequency..." />
+                                </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="High">High</SelectItem><SelectItem value="Medium">Medium</SelectItem><SelectItem value="Low">Low</SelectItem>
                                     <SelectItem value="None (Focus on Puzzles/Social)">None (Focus on Puzzles/Social)</SelectItem>
                                 </SelectContent>
                             </Select>
+                            {customError && !combatFrequency && (
+                              <p id="combatFrequency-error" className="text-sm text-destructive">
+                                Combat Frequency is required.
+                              </p>
+                            )}
                        </div>
                        <div className="space-y-2">
                             <Label htmlFor="puzzleFrequency" className="flex items-center gap-1"><Puzzle className="w-4 h-4"/> Puzzle/Riddle Frequency</Label>
                             <Select value={puzzleFrequency} onValueChange={(v) => setPuzzleFrequency(v as PuzzleFrequency)}>
-                                <SelectTrigger id="puzzleFrequency"><SelectValue placeholder="Select puzzle frequency..." /></SelectTrigger>
+                                <SelectTrigger 
+                                  id="puzzleFrequency" 
+                                  aria-invalid={customError && !puzzleFrequency ? true : undefined}
+                                  aria-describedby={customError && !puzzleFrequency ? "puzzleFrequency-error" : undefined}
+                                >
+                                  <SelectValue placeholder="Select puzzle frequency..." />
+                                </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="High">High</SelectItem><SelectItem value="Medium">Medium</SelectItem><SelectItem value="Low">Low</SelectItem>
                                 </SelectContent>
                             </Select>
+                            {customError && !puzzleFrequency && (
+                              <p id="puzzleFrequency-error" className="text-sm text-destructive">
+                                Puzzle/Riddle Frequency is required.
+                              </p>
+                            )}
                        </div>
                        <div className="space-y-2">
                             <Label htmlFor="socialFocus" className="flex items-center gap-1"><Users className="w-4 h-4"/> Social Interaction Focus</Label>
                             <Select value={socialFocus} onValueChange={(v) => setSocialFocus(v as SocialFocus)}>
-                                <SelectTrigger id="socialFocus"><SelectValue placeholder="Select social focus..." /></SelectTrigger>
+                                <SelectTrigger 
+                                  id="socialFocus" 
+                                  aria-invalid={customError && !socialFocus ? true : undefined}
+                                  aria-describedby={customError && !socialFocus ? "socialFocus-error" : undefined}
+                                >
+                                  <SelectValue placeholder="Select social focus..." />
+                                </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="High (Many NPCs, Dialogue Choices)">High</SelectItem><SelectItem value="Medium">Medium</SelectItem><SelectItem value="Low (More Exploration/Combat)">Low</SelectItem>
                                 </SelectContent>
                             </Select>
+                            {customError && !socialFocus && (
+                              <p id="socialFocus-error" className="text-sm text-destructive">
+                                Social Interaction Focus is required.
+                              </p>
+                            )}
                        </div>
                    </div>
                </div>
@@ -397,7 +517,20 @@ export function AdventureSetup() {
                <h3 className="text-xl font-semibold mb-4 border-b pb-2">Immersed Adventure Details</h3>
                <div className="space-y-2">
                    <Label htmlFor="universeName" className="flex items-center gap-1"><Sparkles className="w-4 h-4"/> Universe Name</Label>
-                   <Input id="universeName" value={universeName} onChange={(e) => setUniverseName(e.target.value)} placeholder="e.g., Star Wars, Lord of the Rings, Hogwarts" className={customError && !universeName.trim() ? 'border-destructive' : ''}/>
+                   <Input 
+                     id="universeName" 
+                     value={universeName} 
+                     onChange={(e) => setUniverseName(e.target.value)} 
+                     placeholder="e.g., Star Wars, Lord of the Rings, Hogwarts" 
+                     className={customError && !universeName.trim() ? 'border-destructive' : ''}
+                     aria-invalid={customError && !universeName.trim() ? true : undefined}
+                     aria-describedby={customError && !universeName.trim() ? "universeName-error" : undefined}
+                   />
+                   {customError && !universeName.trim() && (
+                     <p id="universeName-error" className="text-sm text-destructive">
+                       Universe Name is required.
+                     </p>
+                   )}
                 </div>
                 
                 <RadioGroup value={characterOriginType} onValueChange={(value) => {
