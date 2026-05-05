@@ -19,8 +19,8 @@ export type GenerateSkillTreeOutput = SkillTree;
 const SkillSchema = z.object({
     name: z.string(),
     description: z.string(),
-    manaCost: z.number().optional().nullable(),
-    staminaCost: z.number().optional().nullable(),
+    manaCost: z.number().optional(),
+    staminaCost: z.number().optional(),
 });
 
 const SkillTreeStageSchema = z.object({
@@ -37,8 +37,8 @@ const GenerateSkillTreeOutputSchema = z.object({
 const cleanSkill = (skill: any) => ({
     name: skill.name || 'Unknown Skill',
     description: skill.description || '',
-    manaCost: skill.manaCost ?? undefined,
-    staminaCost: skill.staminaCost ?? undefined,
+    manaCost: (skill.manaCost ?? undefined) || undefined,
+    staminaCost: (skill.staminaCost ?? undefined) || undefined,
 });
 
 const createFallbackSkillTree = (className: string): SkillTree => ({

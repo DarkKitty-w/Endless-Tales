@@ -35,9 +35,9 @@ export function CoopLobby() {
     isHost,
   } = useMultiplayer({
     playerName,
-    onGameStateUpdate: (stateUpdate) => {
+    onGameActionReceived: (playerId, action, turnNumber, isInitial) => {
       // Host receives game actions from guests
-      console.log("Host received game state update:", stateUpdate);
+      console.log("Host received game action:", { playerId, action, turnNumber, isInitial });
     },
     onStoryUpdate: (entry, newTurn) => {
       dispatch({ type: "APPLY_REMOTE_NARRATION", payload: { entry, newTurn } });

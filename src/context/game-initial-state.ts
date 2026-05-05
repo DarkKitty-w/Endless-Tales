@@ -1,6 +1,7 @@
 // src/context/game-initial-state.ts
 
 import type { GameState, WorldMap, Location } from "../types/game-types";
+import type { ConnectionStatus } from "../types/multiplayer-types";
 import type { Character, CharacterStats } from "../types/character-types";
 import type { InventoryItem, ItemQuality } from "../types/inventory-types";
 import type { AdventureSettings, DifficultyLevel } from "../types/adventure-types";
@@ -141,6 +142,17 @@ export const initialState: GameState = {
   players: [],
   currentPlayerUid: null,
   isHost: false,
+
+  // Multiplayer state
+  peerId: '',
+  connectionStatus: 'disconnected' as ConnectionStatus,
+  turnOrder: [],
+  currentTurnIndex: 0,
+  isMyTurn: false,
+  pendingInteraction: null,
+  partyState: {},
+  chatMessages: [],
+  isPaused: false,
 
   adventureSettings: { ...initialAdventureSettings },
   currentNarration: null,

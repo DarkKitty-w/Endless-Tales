@@ -82,11 +82,13 @@ class GeminiProvider implements AIProvider {
   async generateContent({
     model,
     contents,
+    systemMessage,
     config,
     signal,
   }: {
     model?: string;
     contents: string;
+    systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
@@ -98,6 +100,7 @@ class GeminiProvider implements AIProvider {
         provider: 'gemini',
         model: effectiveModel,
         contents,
+        systemMessage,
         config,
         // Send user's API key if available (hybrid approach)
         ...(this.apiKey && { apiKey: this.apiKey }),
@@ -119,11 +122,13 @@ class GeminiProvider implements AIProvider {
   async *generateContentStream({
     model,
     contents,
+    systemMessage,
     config,
     signal,
   }: {
     model?: string;
     contents: string;
+    systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
   }): AsyncIterable<string> {
@@ -135,6 +140,7 @@ class GeminiProvider implements AIProvider {
         provider: 'gemini',
         model: effectiveModel,
         contents,
+        systemMessage,
         config,
         stream: true,
         // Send user's API key if available (hybrid approach)
@@ -1016,6 +1022,7 @@ export class GenAIClient {
     generateContent: async (params: {
       model?: string;
       contents: string;
+      systemMessage?: string;
       config?: GenerateContentConfig;
       signal?: AbortSignal;
     }): Promise<GenerateContentResponse> => {
@@ -1025,6 +1032,7 @@ export class GenAIClient {
     generateContentStream: (params: {
       model?: string;
       contents: string;
+      systemMessage?: string;
       config?: GenerateContentConfig;
       signal?: AbortSignal;
     }): AsyncIterable<string> => {

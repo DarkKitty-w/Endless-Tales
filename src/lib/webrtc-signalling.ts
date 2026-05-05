@@ -58,7 +58,7 @@ export function createPeerConnection(
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
-      onIceCandidate(event.candidate.toJSON());
+      onIceCandidate(event.candidate);
     }
   };
 
