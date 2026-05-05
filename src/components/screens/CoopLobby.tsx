@@ -22,7 +22,7 @@ export function CoopLobby() {
   const [inputOffer, setInputOffer] = useState("");
   const [inputAnswer, setInputAnswer] = useState("");
   const [isInitializing, setIsInitializing] = useState(false);
-  const [connectionStep, setConnectionStep] = useState<'idle' | 'host-waiting' | 'guest-input' | 'guest-waiting' | 'connected'>('idle');
+  const [connectionStep, setConnectionStep] = useState<'idle' | 'host-waiting' | 'guest-waiting' | 'connected'>('idle');
   const [error, setError] = useState<string | null>(null);
 
   const {
@@ -145,7 +145,7 @@ export function CoopLobby() {
         <CardboardCard className="w-full max-w-md text-center">
           <CardHeader>
             <CardTitle className="flex items-center justify-center gap-2">
-              <CheckCircle className="w-7 h-7 text-green-500" /> Connected!
+              <CheckCircle className="w-7 h-7 text-green-500 dark:text-green-400" /> Connected!
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -154,7 +154,7 @@ export function CoopLobby() {
               {isHost ? " You are the host." : " Waiting for host to start the game."}
             </p>
             {isHost && (
-              <Button onClick={handleStartGame} className="w-full bg-green-600 hover:bg-green-700">
+              <Button onClick={handleStartGame} className="w-full bg-primary hover:bg-primary/90">
                 <Play className="mr-2 h-4 w-4" /> Start Game
               </Button>
             )}
@@ -292,25 +292,6 @@ export function CoopLobby() {
                   </div>
                 </AlertDescription>
               </Alert>
-            </div>
-          )}
-
-          {connectionStep === 'guest-input' && (
-            <div className="space-y-2">
-              <Label htmlFor="join-offer-2">Enter Invitation Code:</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="join-offer-2"
-                  placeholder="Paste invitation code here..."
-                  value={inputOffer}
-                  onChange={(e) => setInputOffer(e.target.value)}
-                  disabled={isInitializing}
-                  className="font-mono text-xs"
-                />
-                <Button onClick={handleJoinSession} disabled={isInitializing || !inputOffer.trim()} variant="secondary">
-                  {isInitializing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Join
-                </Button>
-              </div>
             </div>
           )}
         </CardContent>
