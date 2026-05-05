@@ -206,6 +206,12 @@ export function PartySidebar({
                   <span className="text-xs text-muted-foreground">
                     (Lvl {playerSummary.level} {playerSummary.class})
                   </span>
+                  {/* Player stats display */}
+                  <div className="ml-2 flex gap-3 text-xs">
+                    <span className="text-red-500">{playerSummary.currentHealth}/{playerSummary.maxHealth}</span>
+                    <span className="text-blue-500">{playerSummary.currentStamina}/{playerSummary.maxStamina}</span>
+                    <span className="text-purple-500">{playerSummary.currentMana}/{playerSummary.maxMana}</span>
+                  </div>
                 </div>
                 <div className="flex gap-1">
                   {isHost && onKickPeer && (
