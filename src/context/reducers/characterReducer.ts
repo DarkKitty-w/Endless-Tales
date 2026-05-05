@@ -298,9 +298,11 @@ export function characterReducer(state: Character | null, action: Action): Chara
                 }
             }
 
-            const newMaxHealth = calculateMaxHealth(effectiveStats);
-            const newMaxStamina = calculateMaxActionStamina(effectiveStats);
-            const newMaxMana = calculateMaxMana(effectiveStats, state.knowledge);
+            // BUG-8 Fix: Calculate max stats using baseStats, not effectiveStats
+            // The debuff is tracked separately in statusEffects and applied when needed
+            const newMaxHealth = calculateMaxHealth(baseStats);
+            const newMaxStamina = calculateMaxActionStamina(baseStats);
+            const newMaxMana = calculateMaxMana(baseStats, state.knowledge);
 
             return {
                 ...state,
