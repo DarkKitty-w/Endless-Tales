@@ -300,6 +300,7 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
               ?? data.outcome?.description 
               ?? data.description 
               ?? data.action?.outcome 
+              ?? data.text  // Some AIs return 'text' instead of 'narration'
               ?? fallback.narration;
 
           // --- updatedGameState: force string ---
@@ -316,13 +317,19 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
               updatedGameState = typeof data.update_game_state === 'string'
                   ? data.update_game_state
                   : JSON.stringify(data.update_game_state);
+          } else if (typeof data.gameState === 'string') {
+              updatedGameState = data.gameState;
           }
 
           // --- updatedStats with null check ---
           let updatedStats = data.updatedStats;
           if (updatedStats && typeof updatedStats === 'object') {
-            // Ensure it has the required structure
-            if (!updatedStats.health && !updatedStats.stamina && !updatedStats.mana) {
+            // Ensure it has at least one valid stat property
+            const hasValidStat = updatedStats.strength !== undefined || 
+                               updatedStats.stamina !== undefined || 
+                               updatedStats.mana !== undefined ||
+                               updatedStats.wisdom !== undefined;
+            if (!hasValidStat) {
               updatedStats = undefined;
             }
           } else {
@@ -330,17 +337,19 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           }
 
           // --- updatedTraits with null check ---
-          const updatedTraits = Array.isArray(data.updatedTraits) ? data.updatedTraits : undefined;
+          const updatedTraits = Array.isArray(data.updatedTraits) ? data.updatedTraits : 
+                              Array.isArray(data.traits) ? data.traits : undefined;
           
           // --- updatedKnowledge with null check ---
-          const updatedKnowledge = Array.isArray(data.updatedKnowledge) ? data.updatedKnowledge : undefined;
+          const updatedKnowledge = Array.isArray(data.updatedKnowledge) ? data.updatedKnowledge : 
+                                  Array.isArray(data.knowledge) ? data.knowledge : undefined;
 
           // --- branchingChoices ---
           let branchingChoices = data.branchingChoices;
           if (!branchingChoices && Array.isArray(data.choices)) {
               branchingChoices = data.choices.slice(0, 4).map((c: any) => ({
-                  text: c?.text || c?.name || c?.prompt || c?.description || 'Continue',
-                  consequenceHint: c?.consequenceHint || c?.gameEffect || c?.hint,
+                  text: c?.text || c?.name || c?.prompt || c?.description || c?.choice || 'Continue',
+                  consequenceHint: c?.consequenceHint || c?.gameEffect || c?.hint || c?.effect,
               }));
           }
           if (!Array.isArray(branchingChoices) || branchingChoices.length === 0) {
@@ -348,17 +357,19 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           }
 
           // --- difficulty / dice ---
-          const assessedDifficulty = data.assessedDifficulty ?? data.difficulty ?? fallback.assessedDifficulty;
-          const diceType = data.diceType ?? data.suggestedDice ?? fallback.diceType;
-          const diceRoll = data.diceRoll ?? fallback.diceRoll;
+          const assessedDifficulty = data.assessedDifficulty ?? data.difficulty ?? data.assessed_difficulty ?? fallback.assessedDifficulty;
+          const diceType = data.diceType ?? data.suggestedDice ?? data.dice_type ?? fallback.diceType;
+          const diceRoll = typeof data.diceRoll === 'number' ? data.diceRoll : 
+                          typeof data.dice_roll === 'number' ? data.dice_roll :
+                          fallback.diceRoll;
 
           // --- resource changes with null checks ---
           const healthChange = typeof data.healthChange === 'number' ? data.healthChange 
-              : (data.outcome?.health_change ?? data.action?.health_change);
+              : (data.outcome?.health_change ?? data.action?.health_change ?? data.health_change ?? data.healthChange);
           const staminaChange = typeof data.staminaChange === 'number' ? data.staminaChange 
-              : (data.outcome?.stamina_change ?? data.action?.stamina_change);
+              : (data.outcome?.stamina_change ?? data.action?.stamina_change ?? data.stamina_change ?? data.staminaChange);
           const manaChange = typeof data.manaChange === 'number' ? data.manaChange 
-              : (data.outcome?.mana_change ?? data.action?.mana_change);
+              : (data.outcome?.mana_change ?? data.action?.mana_change ?? data.mana_change ?? data.manaChange);
 
           // --- worldMapChanges: normalize coordinates, connections, and type defaults ---
           let worldMapChanges = data.worldMapChanges;
@@ -395,11 +406,16 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
             worldMapChanges = undefined;
           }
 
-          // Handle character_defeated typo (some AIs might return character_defeated instead of isCharacterDefeated)
-          const isCharacterDefeated = data.isCharacterDefeated ?? data.character_defeated ?? false;
+          // Handle isCharacterDefeated - check for various property name variations
+          const isCharacterDefeated = data.isCharacterDefeated ?? 
+              data.character_defeated ??  // Common typo: snake_case
+              data.characterDefeated ??   // Another variation
+              false;
 
-          // Handle progressedToStage - check for common typos
-          const progressedToStage = data.progressedToStage ?? data.progressedToStage ?? data.progressedToStage ?? null;
+          // Handle progressedToStage - schema uses "progressedToStage" (double 's')
+          const progressedToStage = data.progressedToStage ?? 
+              (data as any)['progressedToStage' as any] ?? // Typo: single 's'
+              null;
 
           return {
               narration: narrationText,
@@ -411,13 +427,16 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
               healthChange,
               staminaChange,
               manaChange,
-              xpGained: typeof data.xpGained === 'number' ? data.xpGained : undefined,
-              reputationChange: typeof data.reputationChange === 'number' ? data.reputationChange : undefined,
-              npcRelationshipChange: typeof data.npcRelationshipChange === 'number' ? data.npcRelationshipChange : undefined,
-              suggestedClassChange: data.suggestedClassChange || undefined,
-              gainedSkill: data.gainedSkill || undefined,
+              xpGained: typeof data.xpGained === 'number' ? data.xpGained : 
+                        typeof data.xp_gained === 'number' ? data.xp_gained : undefined,
+              reputationChange: (data.reputationChange && typeof data.reputationChange === 'object') ? data.reputationChange : 
+                               (data.reputation_change && typeof data.reputation_change === 'object') ? data.reputation_change : undefined,
+              npcRelationshipChange: (data.npcRelationshipChange && typeof data.npcRelationshipChange === 'object') ? data.npcRelationshipChange :
+                                    (data.npc_relationship_change && typeof data.npc_relationship_change === 'object') ? data.npc_relationship_change : undefined,
+              suggestedClassChange: data.suggestedClassChange || data.suggested_class_change || undefined,
+              gainedSkill: data.gainedSkill || data.gained_skill || undefined,
               branchingChoices,
-              dynamicEventTriggered: data.dynamicEventTriggered || undefined,
+              dynamicEventTriggered: data.dynamicEventTriggered || data.dynamic_event_triggered || undefined,
               isCharacterDefeated,
               assessedDifficulty,
               diceRoll,
