@@ -687,16 +687,22 @@ export function isWebLLMAvailable(): boolean {
 // This avoids the private property access issue
 let webllmProgressCallback: ((progress: number, text: string) => void) | null = null;
 
+// BUG-7 Fix: Module-level variables to track the current engine instance
+// This allows the static clearCache() method to work while avoiding race conditions
+let currentWebLLMEngine: any = null;
+let currentWebLLMModel: string = '';
+
 class WebLLMProvider implements AIProvider {
-  private static engine: any = null;
-  private static currentModel: string = '';
-  private static loadingPromise: Promise<any> | null = null;
-  private static persistence: 'temporary' | 'persistent' = 'temporary';
+  // BUG-7 Fix: Changed from static to instance properties to avoid race conditions
+  private engine: any = null;
+  private currentModel: string = '';
+  private loadingPromise: Promise<any> | null = null;
+  private persistence: 'temporary' | 'persistent' = 'temporary';
 
   constructor(private options?: { model?: string; persistence?: 'temporary' | 'persistent'; onProgress?: (progress: number, text: string) => void }) {
     console.log('[WebLLM Provider] Constructor called with options:', options);
     if (options?.persistence) {
-      WebLLMProvider.persistence = options.persistence;
+      this.persistence = options.persistence;
     }
     if (options?.onProgress) {
       webllmProgressCallback = options.onProgress;
@@ -710,14 +716,14 @@ class WebLLMProvider implements AIProvider {
   private async getEngine(modelId?: string): Promise<any> {
     console.log('[WebLLM] getEngine called with modelId:', modelId);
     console.log('[WebLLM] Current engine state:', {
-      hasEngine: !!WebLLMProvider.engine,
-      currentModel: WebLLMProvider.currentModel,
-      isLoading: !!WebLLMProvider.loadingPromise,
+      hasEngine: !!this.engine,
+      currentModel: this.currentModel,
+      isLoading: !!this.loadingPromise,
     });
 
-    if (WebLLMProvider.engine) {
-      console.log('[WebLLM] Reusing existing engine for model:', WebLLMProvider.currentModel);
-      return WebLLMProvider.engine;
+    if (this.engine) {
+      console.log('[WebLLM] Reusing existing engine for model:', this.currentModel);
+      return this.engine;
     }
 
     if (typeof window === 'undefined') {
@@ -771,13 +777,13 @@ class WebLLMProvider implements AIProvider {
       console.log(`[WebLLM] Using fallback model: ${effectiveModel}`);
     }
 
-    if (WebLLMProvider.loadingPromise) {
+    if (this.loadingPromise) {
       console.log('[WebLLM] Engine load already in progress, waiting...');
-      return WebLLMProvider.loadingPromise;
+      return this.loadingPromise;
     }
 
     console.log('[WebLLM] Starting engine creation for model:', effectiveModel);
-    WebLLMProvider.loadingPromise = (async () => {
+    this.loadingPromise = (async () => {
       try {
         const engineConfig: any = {
           initProgressCallback: (report: { progress: number; text: string }) => {
@@ -788,7 +794,7 @@ class WebLLMProvider implements AIProvider {
           },
           appConfig: {
             ...webllm.prebuiltAppConfig,
-            useIndexedDBCache: WebLLMProvider.persistence === 'persistent',
+            useIndexedDBCache: this.persistence === 'persistent',
           },
         };
 
@@ -800,12 +806,15 @@ class WebLLMProvider implements AIProvider {
         const engine = await CreateMLCEngine(effectiveModel, engineConfig);
         console.log('[WebLLM] CreateMLCEngine returned successfully, engine:', !!engine);
 
-        WebLLMProvider.engine = engine;
-        WebLLMProvider.currentModel = effectiveModel;
+        this.engine = engine;
+        this.currentModel = effectiveModel;
+        // BUG-7 Fix: Also update module-level variables for static clearCache method
+        currentWebLLMEngine = engine;
+        currentWebLLMModel = effectiveModel;
         console.log('[WebLLM] Engine stored successfully');
         return engine;
       } catch (error) {
-        WebLLMProvider.loadingPromise = null;
+        this.loadingPromise = null;
         console.error('[WebLLM] Engine creation failed:', error);
         console.error('[WebLLM] Error details:', {
           message: error instanceof Error ? error.message : String(error),
@@ -814,11 +823,11 @@ class WebLLMProvider implements AIProvider {
         });
         throw error;
       } finally {
-        WebLLMProvider.loadingPromise = null;
+        this.loadingPromise = null;
       }
     })();
 
-    return WebLLMProvider.loadingPromise;
+    return this.loadingPromise;
   }
 
   async generateContent({
@@ -926,8 +935,9 @@ class WebLLMProvider implements AIProvider {
           }
         }
       }
-      WebLLMProvider.engine = null;
-      WebLLMProvider.currentModel = '';
+      // BUG-7 Fix: Use module-level variables instead of static properties
+      currentWebLLMEngine = null;
+      currentWebLLMModel = '';
       console.log('[WebLLM] Cache cleared');
     } catch (error) {
       console.error('[WebLLM] Failed to clear cache:', error);
