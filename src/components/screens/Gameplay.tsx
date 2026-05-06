@@ -36,6 +36,7 @@ import { PartySidebar } from "../../components/gameplay/PartySidebar";
 import { ChatPanel } from "../../components/gameplay/ChatPanel";
 import { InteractionDialog } from "../../components/gameplay/InteractionDialog";
 import type { InteractionRequest } from "../../types/multiplayer-types";
+import { logger } from "@/lib/logger";
 
 // --- Dice Roller Service (Embedded) ---
 const localRollDie = (sides: number): number => {
@@ -143,7 +144,7 @@ export function Gameplay() {
     // Define handleGuestActionReceived using refs to avoid circular deps
     const handleGuestActionReceived = useCallback(async (playerId: string, action: string, turnNumber: number, isInitial: boolean) => {
       if (!isMultiplayerHostRef.current) return;
-      console.log(`Host processing action from ${playerId}: ${action}`);
+      logger.log(`Host processing action from ${playerId}: ${action}`);
       
       try {
         // Process the action using the host's handlePlayerAction
@@ -205,22 +206,22 @@ export function Gameplay() {
       onGameActionReceived: handleGuestActionReceived,
       onStoryUpdate: (entry, newTurn) => {
         // Guest receives story update from host
-        console.log('Guest received story update', entry);
+        logger.log('Guest received story update', entry);
         dispatch({ type: "UPDATE_NARRATION", payload: entry });
       },
       onPartyStateUpdate: (partyState) => {
-        console.log('Party state update', partyState);
+        logger.log('Party state update', partyState);
         dispatch({ type: "UPDATE_PARTY_STATE", payload: partyState });
       },
       onChatMessage: (msg) => {
-        console.log('Chat message', msg);
+        logger.log('Chat message', msg);
         dispatch({ type: "ADD_CHAT_MESSAGE", payload: msg });
       },
       onControlMessage: (msg) => {
-        console.log('Control message', msg);
+        logger.log('Control message', msg);
       },
       onInteractionRequest: (interaction) => {
-        console.log('Interaction request received', interaction);
+        logger.log('Interaction request received', interaction);
         setCurrentInteraction(interaction);
         setIsInteractionDialogOpen(true);
         if (interaction.targetPeerId === multiplayerState.peerId) {
@@ -230,7 +231,7 @@ export function Gameplay() {
         }
       },
       onInteractionResponse: (interactionId, accepted) => {
-        console.log('Interaction response', interactionId, accepted);
+        logger.log('Interaction response', interactionId, accepted);
         if (currentInteraction && currentInteraction.id === interactionId) {
           dispatch({ type: "RESOLVE_PENDING_INTERACTION", payload: { accepted } });
           setIsInteractionDialogOpen(false);
@@ -242,11 +243,11 @@ export function Gameplay() {
         }
       },
       onPeerConnected: (peer) => {
-        console.log('Peer connected', peer);
+        logger.log('Peer connected', peer);
         dispatch({ type: "PEER_CONNECTED", payload: { peerId: peer.peerId, name: peer.name, isHost: false } });
       },
       onPeerDisconnected: (peerId) => {
-        console.log('Peer disconnected', peerId);
+        logger.log('Peer disconnected', peerId);
         dispatch({ type: "PEER_DISCONNECTED", payload: peerId });
       },
     });
@@ -384,7 +385,7 @@ export function Gameplay() {
     }, [contextIsGeneratingSkillTree, localIsGeneratingSkillTree]);
 
     useEffect(() => {
-        console.log("Gameplay: currentAdventureId changed or component mounted. Resetting relevant states. New ID:", currentAdventureId);
+        logger.log("Gameplay: currentAdventureId changed or component mounted. Resetting relevant states. New ID:", currentAdventureId);
         setIsInitialLoading(true);
         setError(null);
         setLastPlayerAction(null);
@@ -416,7 +417,7 @@ export function Gameplay() {
 
     const handleEndAdventure = useCallback(async (finalNarrationEntry?: StoryLogEntry, characterIsDefeated = false) => {
         if (loadingPhase.type !== 'idle' && loadingPhase.type !== 'initial-loading') return;
-        console.log("Gameplay: Initiating end adventure. Defeated:", characterIsDefeated);
+        logger.log("Gameplay: Initiating end adventure. Defeated:", characterIsDefeated);
         setIsEnding(true);
         setError(null);
         toast({ title: characterIsDefeated ? "Character Defeated" : "Ending Adventure", description: "Summarizing your tale..." });
@@ -438,7 +439,7 @@ export function Gameplay() {
                     toast({ title: "Summary Generated", description: "View your adventure outcome." });
                 } catch (summaryError: any) {
                     if (summaryError.name === 'AbortError') {
-                        console.log("Summarize adventure aborted");
+                        logger.log("Summarize adventure aborted");
                         return;
                     }
                     console.error("Gameplay: Summarize adventure error:", summaryError);
@@ -452,7 +453,7 @@ export function Gameplay() {
     }, [loadingPhase, storyLog, character, dispatch, toast, createAbortSignal, activeApiKey]);
 
     const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
-        console.log(`Gameplay: handlePlayerAction called. Action: "${action.substring(0,50)}...", isInitialAction: ${isInitialAction}`);
+        logger.log(`Gameplay: handlePlayerAction called. Action: "${action.substring(0,50)}...", isInitialAction: ${isInitialAction}`);
         if (!character) {
             toast({ title: "Error", description: "Character data is missing.", variant: "destructive" });
             if (isInitialAction) setIsInitialLoading(false);
@@ -714,7 +715,7 @@ export function Gameplay() {
             }
         } catch (err: any) {
             if (err.name === 'AbortError') {
-                console.log("Player action aborted, newer request superseded it.");
+                logger.log("Player action aborted, newer request superseded it.");
                 // Don't show error toast for expected cancellations
             } else {
                 console.error("Gameplay: Error in handlePlayerAction:", err);
@@ -875,7 +876,7 @@ export function Gameplay() {
             }
         } catch (err: any) {
             if (err.name === 'AbortError') {
-                console.log("Skill tree generation aborted");
+                logger.log("Skill tree generation aborted");
                 return null;
             }
             setError(`Skill Tree Error: ${err.message}. Using default progression.`);
@@ -894,22 +895,22 @@ export function Gameplay() {
                 return;
             }
             initialSetupAttemptedRef.current[currentAdventureId] = true;
-            console.log(`Gameplay Initial Setup: Starting for adventure ${currentAdventureId}.`);
+            logger.log(`Gameplay Initial Setup: Starting for adventure ${currentAdventureId}.`);
 
             let skillTreeReady = adventureSettings.adventureType === "Immersed" || !!character.skillTree;
             if (!skillTreeReady) {
-                console.log("Gameplay Initial Setup: Skill tree needed for class:", character.class);
+                logger.log("Gameplay Initial Setup: Skill tree needed for class:", character.class);
                 await triggerSkillTreeGeneration(character.class);
                 const updatedCharacter = state.character;
                 skillTreeReady = adventureSettings.adventureType === "Immersed" || !!updatedCharacter?.skillTree;
-                console.log("Gameplay Initial Setup: Skill tree generation attempt finished. Ready:", skillTreeReady);
+                logger.log("Gameplay Initial Setup: Skill tree generation attempt finished. Ready:", skillTreeReady);
             }
 
             if (skillTreeReady && storyLog.length === 0) {
-                console.log("Gameplay Initial Setup: Conditions met for initial narration. Calling handlePlayerAction.");
+                logger.log("Gameplay Initial Setup: Conditions met for initial narration. Calling handlePlayerAction.");
                 await handlePlayerAction(INITIAL_ACTION_STRING, true);
             } else {
-                console.log("Gameplay Initial Setup: Story log has entries or skill tree failed. Skipping initial narration.");
+                logger.log("Gameplay Initial Setup: Story log has entries or skill tree failed. Skipping initial narration.");
                 setIsInitialLoading(false);
             }
         };
@@ -958,7 +959,7 @@ export function Gameplay() {
             setIsCraftingDialogOpen(false);
         } catch (err: any) {
             if (err.name === 'AbortError') {
-                console.log("Crafting aborted");
+                logger.log("Crafting aborted");
                 return;
             }
             let userFriendlyError = `Crafting attempt failed. Please try again later.`;
@@ -990,7 +991,7 @@ export function Gameplay() {
             }
         } catch (err: any) {
             if (err.name === 'AbortError') {
-                console.log("Class change aborted");
+                logger.log("Class change aborted");
                 return;
             }
             toast({ title: "Class Change Error", description: `Could not generate skill tree for ${newClass}. Class change aborted.`, variant: "destructive" });

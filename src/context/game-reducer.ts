@@ -9,6 +9,7 @@ import { inventoryReducer } from "./reducers/inventoryReducer";
 import { settingsReducer } from "./reducers/settingsReducer";
 import { adventureReducer } from "./reducers/adventureReducer";
 import { multiplayerReducer } from "./reducers/multiplayerReducer";
+import { logger } from "@/lib/logger";
 
 // Action type sets for routing to specific reducers
 const CHARACTER_ACTIONS = new Set<Action['type']>([
@@ -91,7 +92,7 @@ const MULTIPLAYER_ACTIONS = new Set<Action['type']>([
 
 export function gameReducer(state: GameState, action: Action): GameState {
     if (process.env.NODE_ENV === 'development') {
-        console.log(`GameReducer: Action received - ${action.type}`, 
+        logger.log(`GameReducer: Action received - ${action.type}`, 
             (action as any).payload !== undefined ? JSON.stringify((action as any).payload).substring(0,300) : '(no payload)');
     }
 
@@ -185,7 +186,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
     switch (action.type) {
         case "RESET_GAME": {
             const { savedAdventures, selectedThemeId, isDarkMode, userGoogleAiApiKey, aiProvider, providerApiKeys } = state;
-            console.log("GameReducer: Resetting game to initial state, preserving session settings.");
+            logger.log("GameReducer: Resetting game to initial state, preserving session settings.");
             return {
                 ...initialState,
                 savedAdventures,

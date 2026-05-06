@@ -16,6 +16,7 @@ import {
 } from "../lib/constants";
 import type { SavedAdventure } from "../types/adventure-types";
 import { configureAIRouter, type ProviderType } from "../ai/ai-router";
+import { logger } from "@/lib/logger";
 
 // Storage keys
 const AI_PROVIDER_KEY = "endlessTales_aiProvider";
@@ -79,7 +80,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
 
   // Load initial data from storage (runs once on mount)
   useEffect(() => {
-    console.log("GameProvider initializing...");
+    logger.log("GameProvider initializing...");
 
     // Load saved adventures from localStorage
     try {
@@ -214,7 +215,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
       const reputationString = state.character ? Object.entries(state.character.reputation).map(([f, s]) => `${f}: ${s}`).join(', ') || 'None' : 'N/A';
       const relationshipString = state.character ? Object.entries(state.character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'None' : 'N/A';
       const inventoryString = state.inventory.map(i => `${i.name}${i.quality ? ` (${i.quality})` : ''}`).join(', ') || 'Empty';
-      console.log("Game State Updated:", {
+      logger.log("Game State Updated:", {
         version: state.version,
         status: state.status,
         turn: state.turnCount,

@@ -11,6 +11,7 @@ import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Loader2, Users, Copy, Play, ArrowLeft, QrCode, CheckCircle, XCircle } from "lucide-react";
 import { useToast } from "../../hooks/use-toast";
 import { QRCodeSVG } from "qrcode.react";
+import { logger } from "@/lib/logger";
 
 export function CoopLobby() {
   const { state, dispatch } = useGame();
@@ -37,7 +38,7 @@ export function CoopLobby() {
     playerName,
     onGameActionReceived: (playerId, action, turnNumber, isInitial) => {
       // Host receives game actions from guests
-      console.log("Host received game action:", { playerId, action, turnNumber, isInitial });
+      logger.log("Host received game action:", { playerId, action, turnNumber, isInitial });
     },
     onStoryUpdate: (entry, newTurn) => {
       dispatch({ type: "APPLY_REMOTE_NARRATION", payload: { entry, newTurn } });
@@ -49,7 +50,7 @@ export function CoopLobby() {
       dispatch({ type: "ADD_CHAT_MESSAGE", payload: msg });
     },
     onControlMessage: (msg) => {
-      console.log("Control message received:", msg);
+      logger.log("Control message received:", msg);
     },
   });
 

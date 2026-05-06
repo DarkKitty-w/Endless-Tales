@@ -11,13 +11,14 @@ import { SavedAdventuresList } from "../components/screens/SavedAdventuresList";
 import { CoopLobby } from "../components/screens/CoopLobby";
 import { Loader2 } from "lucide-react";
 import { ErrorBoundary } from "../components/ErrorBoundary";
+import { logger } from "@/lib/logger";
 
 export default function Home() {
   const { state } = useGame();
 
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.log("Current Game Status in page.tsx:", state.status);
+      logger.log("Current Game Status in page.tsx:", state.status);
     }
   }, [state.status]);
 
@@ -60,7 +61,7 @@ export default function Home() {
       case "ViewSavedAdventures":
         return <ErrorBoundary><SavedAdventuresList /></ErrorBoundary>;
       default:
-        console.warn("Unknown game status in page.tsx:", state.status, "Defaulting to MainMenu.");
+        logger.warn("Unknown game status in page.tsx:", state.status, "Defaulting to MainMenu.");
         return <ErrorBoundary><MainMenu /></ErrorBoundary>;
     }
   };

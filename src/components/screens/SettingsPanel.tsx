@@ -29,6 +29,7 @@ import { THEMES } from "../../lib/themes";
 import { useToast } from "../../hooks/use-toast";
 import type { ProviderType } from "../../ai/ai-router";
 import { WebLLMProvider, isWebLLMAvailable } from "../../ai/ai-router";
+import { logger } from "@/lib/logger";
 
 interface SettingsPanelProps {
   isOpen: boolean;
@@ -132,14 +133,14 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
 
     const checkAvailability = () => {
       const available = isWebLLMAvailable();
-      console.log('[SettingsPanel] WebLLM available check:', available);
+      logger.log('[SettingsPanel] WebLLM available check:', available);
       
       if (mounted) {
         setWebllmSupported(available);
         if (available) {
           setWebllmChecking(false);
           WebLLMProvider.checkHardware().then(info => {
-            console.log('[SettingsPanel] Hardware info:', info);
+            logger.log('[SettingsPanel] Hardware info:', info);
             setHardwareInfo(info);
           });
           clearInterval(interval);
