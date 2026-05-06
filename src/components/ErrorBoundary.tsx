@@ -42,6 +42,12 @@ export class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
+      // ERR-10 Fix: Don't show raw error messages to users
+      // Log full error to console for developers
+      if (this.state.error) {
+        console.error("ErrorBoundary caught error:", this.state.error);
+      }
+
       return (
         <div className="flex items-center justify-center min-h-screen p-4 bg-background">
           <Card className="w-full max-w-md border-destructive/50">
@@ -53,12 +59,17 @@ export class ErrorBoundary extends Component<Props, State> {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-2">
-                An unexpected error occurred in this screen.
+                An unexpected error occurred in this screen. The error has been logged to the console.
               </p>
-              {this.state.error && (
-                <pre className="text-xs bg-muted p-2 rounded-md overflow-auto max-h-40">
-                  {this.state.error.message}
-                </pre>
+              {/* ERR-10 Fix: Expandable technical details for developers only */}
+              {this.state.error && process.env.NODE_ENV === 'development' && (
+                <details className="text-xs bg-muted p-2 rounded-md overflow-auto max-h-40">
+                  <summary className="cursor-pointer font-medium mb-1">Technical Details (Dev Only)</summary>
+                  <pre className="whitespace-pre-wrap">{this.state.error.message}</pre>
+                  {this.state.error.stack && (
+                    <pre className="whitespace-pre-wrap mt-2 text-muted-foreground">{this.state.error.stack}</pre>
+                  )}
+                </details>
               )}
             </CardContent>
             <CardFooter className="flex justify-end gap-2">
