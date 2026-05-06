@@ -267,8 +267,21 @@ async function handleGemini(
       },
     });
   } else {
-    const data = await response.json();
-    return NextResponse.json(data);
+    // ERR-2 Fix: Preserve raw response text when parsing
+    const responseText = await response.text();
+    try {
+      const data = JSON.parse(responseText);
+      return NextResponse.json(data);
+    } catch (parseError) {
+      logger.error('Failed to parse Gemini response as JSON. Raw response:', responseText);
+      return NextResponse.json(
+        { 
+          error: 'Invalid response from Gemini API (not valid JSON)', 
+          rawResponse: responseText.substring(0, 1000) // Include first 1000 chars for debugging
+        },
+        { status: 500 }
+      );
+    }
   }
 }
 
@@ -365,8 +378,21 @@ async function handleOpenAICompatible(
       },
     });
   } else {
-    const data = await response.json();
-    return NextResponse.json(data);
+    // ERR-2 Fix: Preserve raw response text when parsing
+    const responseText = await response.text();
+    try {
+      const data = JSON.parse(responseText);
+      return NextResponse.json(data);
+    } catch (parseError) {
+      logger.error(`Failed to parse ${providerName} response as JSON. Raw response:`, responseText);
+      return NextResponse.json(
+        { 
+          error: `Invalid response from ${providerName} API (not valid JSON)`, 
+          rawResponse: responseText.substring(0, 1000) // Include first 1000 chars for debugging
+        },
+        { status: 500 }
+      );
+    }
   }
 }
 
@@ -498,17 +524,30 @@ async function handleClaude(
       },
     });
   } else {
-    const data = await response.json();
-    // Transform Claude response to match our expected format
-    const transformed = {
-      candidates: [{
-        content: {
-          parts: [{
-            text: data.content?.[0]?.text || ''
-          }]
-        }
-      }]
-    };
-    return NextResponse.json(transformed);
+    // ERR-2 Fix: Preserve raw response text when parsing
+    const responseText = await response.text();
+    try {
+      const data = JSON.parse(responseText);
+      // Transform Claude response to match our expected format
+      const transformed = {
+        candidates: [{
+          content: {
+            parts: [{
+              text: data.content?.[0]?.text || ''
+            }]
+          }
+        }]
+      };
+      return NextResponse.json(transformed);
+    } catch (parseError) {
+      logger.error('Failed to parse Claude response as JSON. Raw response:', responseText);
+      return NextResponse.json(
+        { 
+          error: 'Invalid response from Claude API (not valid JSON)', 
+          rawResponse: responseText.substring(0, 1000) // Include first 1000 chars for debugging
+        },
+        { status: 500 }
+      );
+    }
   }
 }
