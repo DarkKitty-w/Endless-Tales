@@ -17,6 +17,7 @@ import {
 import type { SavedAdventure } from "../types/adventure-types";
 import { configureAIRouter, type ProviderType } from "../ai/ai-router";
 import { logger } from "@/lib/logger";
+import { toast } from "../hooks/use-toast";
 
 // Storage keys
 const AI_PROVIDER_KEY = "endlessTales_aiProvider";
@@ -98,6 +99,11 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
       }
     } catch (error) {
       console.error("Failed to load saved adventures:", error);
+      toast({
+        title: "Error Loading Saved Adventures",
+        description: "There was a problem loading your saved adventures. They may be corrupted.",
+        variant: "destructive",
+      });
       localStorage.removeItem(SAVED_ADVENTURES_KEY);
     }
 
@@ -136,6 +142,11 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
       }
     } catch (e) {
       console.error("Failed to load provider API keys:", e);
+      toast({
+        title: "Error Loading API Keys",
+        description: "There was a problem loading your saved API keys. They may be corrupted.",
+        variant: "destructive",
+      });
     }
 
     dispatch({ type: 'SET_THEME_ID', payload: savedThemeId });
