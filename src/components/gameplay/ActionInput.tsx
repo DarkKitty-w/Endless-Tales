@@ -20,7 +20,7 @@ interface ActionInputProps {
   isWaitingForHost?: boolean;
 }
 
-export const ActionInput = forwardRef<ActionInputRef, ActionInputProps>(
+const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
   ({ onSubmit, onSuggest, onCraft, disabled, isWaitingForHost = false }, ref) => {
     const [playerInput, setPlayerInput] = useState("");
     const submittingRef = useRef(false);
@@ -135,4 +135,6 @@ export const ActionInput = forwardRef<ActionInputRef, ActionInputProps>(
   }
 );
 
-ActionInput.displayName = "ActionInput";
+ActionInputInternal.displayName = "ActionInput";
+
+export const ActionInput = React.memo(ActionInputInternal);

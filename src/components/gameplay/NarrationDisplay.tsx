@@ -39,7 +39,7 @@ interface NarrationDisplayProps {
     isMultiplayerHost?: boolean;
 }
 
-export function NarrationDisplay({
+function NarrationDisplayInternal({
     storyLog,
     loadingPhase,
     diceResult,
@@ -293,3 +293,5 @@ export function NarrationDisplay({
         </CardboardCard>
     );
 }
+
+export const NarrationDisplay = React.memo(NarrationDisplayInternal);

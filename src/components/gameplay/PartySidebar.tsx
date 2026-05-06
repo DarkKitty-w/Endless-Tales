@@ -20,7 +20,7 @@ interface PartySidebarProps {
   onSendTradeRequest?: (targetPeerId: string) => void;
 }
 
-export function PartySidebar({ 
+function PartySidebarInternal({ 
   multiplayerState, 
   isHost, 
   onKickPeer, 
@@ -261,3 +261,5 @@ export function PartySidebar({
     </div>
   );
 }
+
+export const PartySidebar = React.memo(PartySidebarInternal);
