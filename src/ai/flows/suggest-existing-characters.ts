@@ -15,6 +15,9 @@ export interface SuggestExistingCharactersInput {
 
 export interface SuggestExistingCharactersOutput {
   suggestedNames: string[];
+  // ERR-8/ERR-11: Add fields to track fallback and preserve raw response
+  usedFallback?: boolean;
+  rawResponse?: string;
 }
 
 const SuggestExistingCharactersOutputSchema = z.object({
@@ -52,7 +55,13 @@ export async function suggestExistingCharacters(input: SuggestExistingCharacters
       const validation = SuggestExistingCharactersOutputSchema.safeParse(parsed);
       
       if (validation.success) {
-          return validation.data;
+          // ERR-8/ERR-11: Include raw response for debugging (only in dev mode)
+          const result = validation.data;
+          if (process.env.NODE_ENV === 'development') {
+            (result as any).rawResponse = text;
+          }
+          (result as any).usedFallback = false;
+          return result;
       } else {
           logger.error("Zod validation failed for suggestExistingCharacters. Raw response:", cleanedText.substring(0, 500));
           logger.error("Validation error:", validation.error);
@@ -63,6 +72,11 @@ export async function suggestExistingCharacters(input: SuggestExistingCharacters
           throw error;
       }
       logger.error("AI Suggestion Error:", error);
-      return { suggestedNames: ["Hero", "Villain", "Sidekick"] };
+      return { 
+        suggestedNames: ["Hero", "Villain", "Sidekick"],
+        // ERR-8/ERR-11: Indicate fallback is being used
+        usedFallback: true,
+        rawResponse: error.message?.includes('Raw response:') ? error.message.split('Raw response: ')[1] : undefined,
+      };
   }
 }
