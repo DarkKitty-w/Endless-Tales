@@ -95,6 +95,7 @@ function PartySidebarInternal({
             const isCurrent = index === currentTurnIndex;
             const displayName = getPeerDisplayName(peerId);
             const characterName = getPeerCharacterName(peerId);
+            const playerSummary = partyState[peerId];
             
             return (
               <div 
@@ -113,6 +114,14 @@ function PartySidebarInternal({
                     <span className="text-xs text-muted-foreground">
                       ({characterName})
                     </span>
+                  )}
+                  {/* Player stats display */}
+                  {playerSummary && (
+                    <div className="ml-2 flex gap-2 text-xs">
+                      <span className="text-red-500">{playerSummary.currentHealth}/{playerSummary.maxHealth}</span>
+                      <span className="text-blue-500">{playerSummary.currentStamina}/{playerSummary.maxStamina}</span>
+                      <span className="text-purple-500">{playerSummary.currentMana}/{playerSummary.maxMana}</span>
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-1">
@@ -187,13 +196,31 @@ function PartySidebarInternal({
         <ScrollArea className="h-[200px]">
           <div className="space-y-2">
             {/* Self */}
-            <div className="flex items-center justify-between p-2 rounded bg-muted/50">
-              <div className="flex items-center gap-2">
-                <div className="h-2 w-2 rounded-full bg-green-500" />
-                <span className="text-sm">You</span>
-              </div>
-              <Badge variant="outline" className="text-xs">Host</Badge>
-            </div>
+            {(() => {
+              const selfSummary = partyState[multiplayerState.peerId];
+              return (
+                <div className="flex items-center justify-between p-2 rounded bg-muted/50">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 rounded-full bg-green-500" />
+                    <span className="text-sm">You</span>
+                    {selfSummary && (
+                      <span className="text-xs text-muted-foreground">
+                        (Lvl {selfSummary.level} {selfSummary.class})
+                      </span>
+                    )}
+                    {/* Self stats display */}
+                    {selfSummary && (
+                      <div className="ml-2 flex gap-3 text-xs">
+                        <span className="text-red-500">{selfSummary.currentHealth}/{selfSummary.maxHealth}</span>
+                        <span className="text-blue-500">{selfSummary.currentStamina}/{selfSummary.maxStamina}</span>
+                        <span className="text-purple-500">{selfSummary.currentMana}/{selfSummary.maxMana}</span>
+                      </div>
+                    )}
+                  </div>
+                  <Badge variant="outline" className="text-xs">Host</Badge>
+                </div>
+              );
+            })()}
             
             {/* Other peers from partyState */}
             {Object.entries(partyState)
