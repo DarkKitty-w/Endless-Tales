@@ -20,7 +20,7 @@ import { logger } from "@/lib/logger";
 import { toast } from "../hooks/use-toast";
 import { validateSavedAdventure, SavedAdventureSchema } from "./schemas/save-schema";
 import { runMigrations, getPendingMigrations } from "./schemas/migration-system";
-import { atomicLocalStorageWrite, safeLocalStorageRead, isLocalStorageQuotaLow, checkSaveSize, sanitizeStateForPersistence } from "@/lib/storage-utils";
+import { atomicLocalStorageWrite, safeLocalStorageRead, isLocalStorageQuotaLow, checkSaveSize, sanitizeStateForPersistence, repairSaveData } from "@/lib/storage-utils";
 
 // Storage keys
 const AI_PROVIDER_KEY = "endlessTales_aiProvider";
@@ -85,6 +85,7 @@ const GameContext = createContext<{ state: GameState; dispatch: Dispatch<Action>
  * Validates required fields using Zod schema validation.
  * Runs all necessary migrations to bring the save to the current version.
  * SAVE-13 Fix: Sanitizes loaded adventure to remove any multiplayer fields.
+ * SAVE-15 Fix: Attempts to repair partially corrupted save data.
  */
 function migrateSavedAdventure(adventure: any, onError?: (title: string, description: string) => void): SavedAdventure | null {
   // Validate using Zod schema
@@ -96,6 +97,41 @@ function migrateSavedAdventure(adventure: any, onError?: (title: string, descrip
       error: validationResult.error 
     });
     
+    // SAVE-15 Fix: Attempt to repair the corrupted save data
+    logger.log('Attempting to repair corrupted save data...');
+    const repaired = repairSaveData(adventure, {
+      characterName: 'Unknown Hero',
+      character: { name: 'Unknown Hero', class: 'Adventurer', level: 1 },
+      adventureSettings: { adventureType: null, permanentDeath: false, difficulty: 'normal' },
+      storyLog: [],
+      currentGameStateString: JSON.stringify({}),
+      inventory: [],
+      worldMap: { locations: [], currentLocationId: null },
+    });
+    
+    if (repaired) {
+      logger.log('Successfully repaired corrupted save data for adventure:', repaired.id);
+      if (onError) {
+        onError(
+          "Save Data Repaired", 
+          `Save data was corrupted but has been repaired. Some data may have been restored from defaults.`
+        );
+      }
+      // Continue with the repaired data
+      try {
+        const migrated = runMigrations(repaired);
+        const pendingMigs = getPendingMigrations(repaired);
+        if (pendingMigs.length > 0) {
+          logger.log(`Applied migrations to repaired save: ${pendingMigs.map(v => `v${v}->v${v+1}`).join(', ')}`);
+        }
+        const sanitized = sanitizeStateForPersistence(migrated);
+        return sanitized as SavedAdventure;
+      } catch (error: any) {
+        logger.error('Migration failed for repaired adventure:', error);
+      }
+    }
+    
+    // If repair failed or wasn't possible, show error
     if (onError) {
       onError(
         "Invalid Save Data", 

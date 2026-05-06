@@ -3,6 +3,9 @@
  * Utility functions for safe localStorage operations with atomicity and error handling
  */
 
+import type { SavedAdventure } from "../types/adventure-types";
+import { CURRENT_STATE_VERSION } from "../context/game-initial-state";
+
 const TEMP_PREFIX = '_temp_';
 const BACKUP_PREFIX = '_backup_';
 
@@ -328,4 +331,110 @@ export function sanitizeStateForPersistence(state: Record<string, unknown>): Rec
   });
   
   return sanitized;
+}
+
+/**
+ * SAVE-15 Fix: Attempt to repair partially corrupted save data.
+ * Identifies valid fields and reconstructs the save with defaults for missing data.
+ * 
+ * @param corruptedData - The corrupted save data to repair
+ * @param initialState - The initial state to use for defaults
+ * @returns Repaired SavedAdventure or null if repair is not possible
+ */
+export function repairSaveData(
+  corruptedData: Record<string, unknown>,
+  initialState: {
+    characterName: string;
+    character: any;
+    adventureSettings: any;
+    storyLog: any[];
+    currentGameStateString: string;
+    inventory: any[];
+    worldMap: any;
+  }
+): SavedAdventure | null {
+  try {
+    // Start with defaults
+    const repaired: Partial<SavedAdventure> = {
+      id: typeof corruptedData.id === 'string' ? corruptedData.id : `repaired_${Date.now()}`,
+      version: typeof corruptedData.version === 'number' ? corruptedData.version : CURRENT_STATE_VERSION,
+      saveTimestamp: typeof corruptedData.saveTimestamp === 'number' ? corruptedData.saveTimestamp : Date.now(),
+    };
+    
+    // Repair characterName
+    if (typeof corruptedData.characterName === 'string' && corruptedData.characterName.trim()) {
+      repaired.characterName = corruptedData.characterName;
+    } else if (corruptedData.character && typeof corruptedData.character === 'object' && corruptedData.character !== null && 'name' in (corruptedData.character as any)) {
+      repaired.characterName = (corruptedData.character as any).name;
+    } else {
+      repaired.characterName = initialState.characterName;
+    }
+    
+    // Repair character
+    if (corruptedData.character && typeof corruptedData.character === 'object' && corruptedData.character !== null) {
+      repaired.character = corruptedData.character;
+    } else {
+      repaired.character = initialState.character;
+    }
+    
+    // Repair adventureSettings
+    if (corruptedData.adventureSettings && typeof corruptedData.adventureSettings === 'object' && corruptedData.adventureSettings !== null) {
+      repaired.adventureSettings = corruptedData.adventureSettings;
+    } else {
+      repaired.adventureSettings = initialState.adventureSettings;
+    }
+    
+    // Repair storyLog
+    if (Array.isArray(corruptedData.storyLog)) {
+      repaired.storyLog = corruptedData.storyLog;
+    } else {
+      repaired.storyLog = initialState.storyLog;
+    }
+    
+    // Repair currentGameStateString
+    if (typeof corruptedData.currentGameStateString === 'string') {
+      repaired.currentGameStateString = corruptedData.currentGameStateString;
+    } else {
+      repaired.currentGameStateString = initialState.currentGameStateString;
+    }
+    
+    // Repair inventory
+    if (Array.isArray(corruptedData.inventory)) {
+      repaired.inventory = corruptedData.inventory;
+    } else {
+      repaired.inventory = initialState.inventory;
+    }
+    
+    // Repair worldMap
+    if (corruptedData.worldMap && typeof corruptedData.worldMap === 'object' && corruptedData.worldMap !== null) {
+      repaired.worldMap = corruptedData.worldMap as any;
+    } else {
+      repaired.worldMap = initialState.worldMap;
+    }
+    
+    // Copy optional fields if valid
+    if (typeof corruptedData.statusBeforeSave === 'string' || corruptedData.statusBeforeSave === null) {
+      repaired.statusBeforeSave = corruptedData.statusBeforeSave as string | null | undefined;
+    }
+    
+    if (typeof corruptedData.adventureSummary === 'string' || corruptedData.adventureSummary === null) {
+      repaired.adventureSummary = corruptedData.adventureSummary as string | null | undefined;
+    }
+    
+    if (typeof corruptedData.turnCount === 'number') {
+      repaired.turnCount = corruptedData.turnCount;
+    }
+    
+    // Validate the repaired save has all required fields
+    if (!repaired.id || !repaired.characterName || !repaired.character || !repaired.adventureSettings || 
+        !repaired.storyLog || !repaired.currentGameStateString || !repaired.inventory) {
+      console.error('Repair failed: missing required fields after repair');
+      return null;
+    }
+    
+    return repaired as SavedAdventure;
+  } catch (error) {
+    console.error('Failed to repair save data:', error);
+    return null;
+  }
 }
