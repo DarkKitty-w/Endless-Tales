@@ -3,7 +3,7 @@
 
 import type { ReactNode } from "react";
 import React, { createContext, useContext, useReducer, Dispatch, useEffect, useCallback, useMemo, useRef } from "react";
-import type { GameState } from "../types/game-types";
+import type { GameState, GameStatus } from "../types/game-types";
 import type { Action } from "./game-actions";
 import { initialState, CURRENT_STATE_VERSION } from "./game-initial-state";
 import { gameReducer } from "./game-reducer";
@@ -23,6 +23,58 @@ import { toast } from "../hooks/use-toast";
 const AI_PROVIDER_KEY = "endlessTales_aiProvider";
 const PROVIDER_API_KEYS_KEY = "endlessTales_providerApiKeys";
 
+// Split contexts by domain to prevent unnecessary re-renders
+const AdventureContext = createContext<{
+  status: GameStatus;
+  adventureSettings: any;
+  currentNarration: any;
+  storyLog: any[];
+  adventureSummary: string | null;
+  currentGameStateString: string;
+  currentAdventureId: string | null;
+  savedAdventures: SavedAdventure[];
+  isGeneratingSkillTree: boolean;
+  turnCount: number;
+  worldMap: any;
+  dispatch: Dispatch<Action>;
+} | undefined>(undefined);
+
+const CharacterContext = createContext<{
+  character: any;
+  dispatch: Dispatch<Action>;
+} | undefined>(undefined);
+
+const InventoryContext = createContext<{
+  inventory: any[];
+  dispatch: Dispatch<Action>;
+} | undefined>(undefined);
+
+const SettingsContext = createContext<{
+  selectedThemeId: string;
+  isDarkMode: boolean;
+  userGoogleAiApiKey: string | null;
+  aiProvider: ProviderType;
+  providerApiKeys: Partial<Record<ProviderType, string>>;
+  dispatch: Dispatch<Action>;
+} | undefined>(undefined);
+
+const MultiplayerContext = createContext<{
+  sessionId: string | null;
+  players: string[];
+  isHost: boolean;
+  peerId: string;
+  connectionStatus: any;
+  turnOrder: string[];
+  currentTurnIndex: number;
+  isMyTurn: boolean;
+  pendingInteraction: any;
+  partyState: Record<string, any>;
+  chatMessages: any[];
+  isPaused: boolean;
+  dispatch: Dispatch<Action>;
+} | undefined>(undefined);
+
+// Main context for backward compatibility - DEPRECATED, use domain contexts instead
 const GameContext = createContext<{ state: GameState; dispatch: Dispatch<Action> } | undefined>(undefined);
 
 /**
@@ -257,7 +309,93 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     }
   }, [state.version, state.status, state.turnCount, state.character, state.inventory, state.selectedThemeId, state.isDarkMode, state.userGoogleAiApiKey, state.storyLog.length, state.isGeneratingSkillTree, state.aiProvider, state.providerApiKeys]);
 
-  const contextValue = useMemo(() => ({ state, dispatch }), [state, dispatch]);
+  // Memoize each domain context value separately
+  const adventureContextValue = useMemo(() => ({
+    status: state.status,
+    adventureSettings: state.adventureSettings,
+    currentNarration: state.currentNarration,
+    storyLog: state.storyLog,
+    adventureSummary: state.adventureSummary,
+    currentGameStateString: state.currentGameStateString,
+    currentAdventureId: state.currentAdventureId,
+    savedAdventures: state.savedAdventures,
+    isGeneratingSkillTree: state.isGeneratingSkillTree,
+    turnCount: state.turnCount,
+    worldMap: state.worldMap,
+    dispatch,
+  }), [
+    state.status,
+    state.adventureSettings,
+    state.currentNarration,
+    state.storyLog,
+    state.adventureSummary,
+    state.currentGameStateString,
+    state.currentAdventureId,
+    state.savedAdventures,
+    state.isGeneratingSkillTree,
+    state.turnCount,
+    state.worldMap,
+    dispatch
+  ]);
+
+  const characterContextValue = useMemo(() => ({
+    character: state.character,
+    dispatch,
+  }), [state.character, dispatch]);
+
+  const inventoryContextValue = useMemo(() => ({
+    inventory: state.inventory,
+    dispatch,
+  }), [state.inventory, dispatch]);
+
+  const settingsContextValue = useMemo(() => ({
+    selectedThemeId: state.selectedThemeId,
+    isDarkMode: state.isDarkMode,
+    userGoogleAiApiKey: state.userGoogleAiApiKey,
+    aiProvider: state.aiProvider,
+    providerApiKeys: state.providerApiKeys,
+    dispatch,
+  }), [
+    state.selectedThemeId,
+    state.isDarkMode,
+    state.userGoogleAiApiKey,
+    state.aiProvider,
+    state.providerApiKeys,
+    dispatch
+  ]);
+
+  const multiplayerContextValue = useMemo(() => ({
+    sessionId: state.sessionId,
+    players: state.players,
+    isHost: state.isHost,
+    peerId: state.peerId,
+    connectionStatus: state.connectionStatus,
+    turnOrder: state.turnOrder,
+    currentTurnIndex: state.currentTurnIndex,
+    isMyTurn: state.isMyTurn,
+    pendingInteraction: state.pendingInteraction,
+    partyState: state.partyState,
+    chatMessages: state.chatMessages,
+    isPaused: state.isPaused,
+    dispatch,
+  }), [
+    state.sessionId,
+    state.players,
+    state.isHost,
+    state.peerId,
+    state.connectionStatus,
+    state.turnOrder,
+    state.currentTurnIndex,
+    state.isMyTurn,
+    state.pendingInteraction,
+    state.partyState,
+    state.chatMessages,
+    state.isPaused,
+    dispatch
+  ]);
+
+  // Backward compatibility context value
+  const gameContextValue = useMemo(() => ({ state, dispatch }), [state, dispatch]);
 
   // Show loading spinner while initializing
   if (isInitializing) {
@@ -269,12 +407,64 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
   }
 
   return (
-    <GameContext.Provider value={contextValue}>
-      {children}
-    </GameContext.Provider>
+    <AdventureContext.Provider value={adventureContextValue}>
+      <CharacterContext.Provider value={characterContextValue}>
+        <InventoryContext.Provider value={inventoryContextValue}>
+          <SettingsContext.Provider value={settingsContextValue}>
+            <MultiplayerContext.Provider value={multiplayerContextValue}>
+              <GameContext.Provider value={gameContextValue}>
+                {children}
+              </GameContext.Provider>
+            </MultiplayerContext.Provider>
+          </SettingsContext.Provider>
+        </InventoryContext.Provider>
+      </CharacterContext.Provider>
+    </AdventureContext.Provider>
   );
 };
 
+// Domain-specific hooks for optimized rendering
+export const useAdventure = () => {
+  const context = useContext(AdventureContext);
+  if (context === undefined) {
+    throw new Error("useAdventure must be used within a GameProvider");
+  }
+  return context;
+};
+
+export const useCharacter = () => {
+  const context = useContext(CharacterContext);
+  if (context === undefined) {
+    throw new Error("useCharacter must be used within a GameProvider");
+  }
+  return context;
+};
+
+export const useInventory = () => {
+  const context = useContext(InventoryContext);
+  if (context === undefined) {
+    throw new Error("useInventory must be used within a GameProvider");
+  }
+  return context;
+};
+
+export const useSettings = () => {
+  const context = useContext(SettingsContext);
+  if (context === undefined) {
+    throw new Error("useSettings must be used within a GameProvider");
+  }
+  return context;
+};
+
+export const useMultiplayer = () => {
+  const context = useContext(MultiplayerContext);
+  if (context === undefined) {
+    throw new Error("useMultiplayer must be used within a GameProvider");
+  }
+  return context;
+};
+
+// Backward compatibility hook - DEPRECATED, use domain hooks instead
 export const useGame = () => {
   const context = useContext(GameContext);
   if (context === undefined) {
