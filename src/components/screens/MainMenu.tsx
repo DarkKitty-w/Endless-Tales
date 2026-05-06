@@ -54,6 +54,14 @@ export function MainMenu() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background relative">
+      {/* Skip Navigation Link */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-background focus:p-2 focus:rounded focus:shadow-md"
+      >
+        Skip to main content
+      </a>
+
       <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
         <SheetTrigger asChild>
           <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-10">
@@ -64,7 +72,7 @@ export function MainMenu() {
         <SettingsPanel isOpen={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
       </Sheet>
 
-      <CardboardCard className="w-full max-w-md text-center shadow-xl border-2 border-foreground/20">
+      <CardboardCard id="main-content" className="w-full max-w-md text-center shadow-xl border-2 border-foreground/20">
         <CardHeader className="border-b border-foreground/10 pb-4">
           <CardTitle className="text-4xl font-bold text-foreground mb-4">
             Endless Tales
