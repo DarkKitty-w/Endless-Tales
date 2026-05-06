@@ -320,3 +320,11 @@
 - [ ] E-005: Add achievement badges for milestones$
 - [ ] E-006: Expose hardcore mode toggle$
 - [ ] E-007: Add random narrative events system$
+
+### API Key Management$
+- [ ] KEY-1: Create API Key management UI for users to input their own keys$
+- [ ] KEY-2: Add provider-specific key switcher in Settings panel$
+- [ ] KEY-3: Validate API keys on input (format check before saving)$
+- [ ] KEY-4: Add "Bring Your Own Key" tutorial/help text for new users$
+- [ ] KEY-5: Encrypt API keys in sessionStorage$
+- [ ] KEY-6: Add clear/remove API key option in UI$

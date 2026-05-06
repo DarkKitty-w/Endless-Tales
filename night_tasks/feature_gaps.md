@@ -370,3 +370,53 @@
 **Current Behaviour:** Basic exploration and limited hardcoded narrative triggers exist; no random narrative events.
 **Expected:** Random events (weather changes, random encounters, discoverable locations) trigger during gameplay.
 **Suggestion:** Define `NarrativeEvent` type, add event generation to AI flows, integrate event triggers into game loop.
+
+## API Key Management
+
+### KEY-1: API Key Management UI for Users to Input Their Own Keys
+**Severity:** High
+**Description:** Users need a UI to input and manage their own API keys for each AI provider (Gemini, OpenAI, Claude, DeepSeek, OpenRouter). Currently keys are stored in sessionStorage but there's no proper UI for users to input them.
+**Location:** `src/components/screens/SettingsPanel.tsx`, `src/context/settingsReducer.ts`, `src/lib/constants.ts`
+**Current Behaviour:** Users must manually set environment variables or use sessionStorage directly; no in-app UI exists.
+**Expected:** A dedicated settings section where users can input, validate, and save their API keys per provider.
+**Suggestion:** Create `ApiKeyManager` component with input fields for each provider, show validation status (valid/invalid), save to sessionStorage with proper encryption.
+
+### KEY-2: Provider-Specific Key Switcher in Settings Panel
+**Severity:** High
+**Description:** When a user selects an AI provider in settings, they should be able to input/switch the API key for that specific provider. The UI should show which providers have keys configured.
+**Location:** `src/components/screens/SettingsPanel.tsx`, `src/context/GameContext.tsx`
+**Current Behaviour:** Provider selection exists but no key input UI is shown when switching providers.
+**Expected:** When user selects "Gemini" provider, show Gemini API key input field; same for OpenAI, Claude, etc.
+**Suggestion:** Add dynamic key input fields in SettingsPanel that change based on selected provider, with visual indicators for configured vs unconfigured providers.
+
+### KEY-3: API Key Validation on Input
+**Severity:** Medium
+**Description:** When users input API keys, there should be format validation before saving (e.g., Gemini keys start with "AIza", OpenAI keys start with "sk-").
+**Location:** `src/components/screens/SettingsPanel.tsx`, new `src/lib/key-validation.ts`
+**Current Behaviour:** Keys are saved without validation, leading to confusing errors later when the API call fails.
+**Expected:** Show "Invalid API key format" message immediately when user inputs a malformed key.
+**Suggestion:** Create validation functions for each provider's key format, show inline validation messages with green checkmark or red X.
+
+### KEY-4: "Bring Your Own Key" Tutorial/Help Text
+**Severity:** Medium
+**Description:** New users may not understand that they need to provide their own API keys for cloud AI providers. WebLLM works without keys, but others require setup.
+**Location:** `src/components/screens/SettingsPanel.tsx`, `src/components/screens/MainMenu.tsx`
+**Current Behaviour:** No help text or tutorial explaining the "bring your own key" concept.
+**Expected:** Clear instructions on how to get API keys, links to provider websites, explanation that WebLLM works without keys.
+**Suggestion:** Add dismissable help bubble in SettingsPanel, include links to: Google AI Studio, OpenAI Platform, Anthropic Console, etc.
+
+### KEY-5: Encrypt API Keys in sessionStorage
+**Severity:** High
+**Description:** API keys are currently stored in sessionStorage without encryption. If the sessionStorage is accessible via XSS, keys could be exposed.
+**Location:** `src/context/GameContext.tsx`, `src/lib/utils.ts`
+**Current Behaviour:** Keys stored as plain text in sessionStorage.
+**Expected:** Keys should be encrypted before storing, decrypted when retrieved.
+**Suggestion:** Use a simple encryption library or implement basic obfuscation (not true encryption but better than plaintext). Note: true encryption in browser requires server-side key exchange.
+
+### KEY-6: Clear/Remove API Key Option
+**Severity:** Low
+**Description:** Users need a way to clear/remove API keys from the UI (e.g., if they want to switch to WebLLM or entered wrong key).
+**Location:** `src/components/screens/SettingsPanel.tsx`
+**Current Behaviour:** No UI to remove a saved key; users must manually clear sessionStorage.
+**Expected:** A "Clear" or "Remove" button next to each key input field.
+**Suggestion:** Add trash icon button next to each key input, show confirmation dialog before clearing.
