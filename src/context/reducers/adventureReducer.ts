@@ -2,7 +2,7 @@
 import type { GameState } from "../../types/game-types";
 import type { StoryLogEntry, SavedAdventure } from "../../types/adventure-types";
 import type { Action } from "../game-actions";
-import { initialState, initialInventory, initialWorldMap } from "../game-initial-state";
+import { initialState, initialInventory, initialWorldMap, CURRENT_STATE_VERSION } from "../game-initial-state";
 import { generateAdventureId } from "../../lib/gameUtils";
 import { buildGameStateContext, formatGameStateContextForPrompt } from "../game-state-utils";
 import { logger } from "../../lib/logger";
@@ -148,6 +148,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                 const cappedStoryLog = finalLog.slice(-50);
                 const endedAdventure: SavedAdventure = {
                     id: state.currentAdventureId,
+                    version: CURRENT_STATE_VERSION,
                     saveTimestamp: Date.now(),
                     characterName: finalCharacterState.name,
                     character: finalCharacterState,
@@ -186,6 +187,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             const cappedStoryLog = state.storyLog.slice(-50);
             const currentSave: SavedAdventure = {
                 id: state.currentAdventureId,
+                version: CURRENT_STATE_VERSION,
                 saveTimestamp: Date.now(),
                 characterName: state.character.name,
                 character: state.character,

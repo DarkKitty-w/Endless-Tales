@@ -66,6 +66,7 @@ export interface StoryLogEntry {
 /** Represents a saved adventure state. */
 export interface SavedAdventure {
     id: string;
+    version: number; // Schema version for migration support
     saveTimestamp: number;
     characterName: string;
     character: Character;
