@@ -107,8 +107,10 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
     }
 
     case "SEND_PLAYER_ACTION": {
-      // This action is handled by the hook, not the reducer
-      // It exists as a placeholder for type consistency
+      // NO-OP: This action is intentionally handled by the useMultiplayer hook via
+      // the sendGameAction callback, not by this reducer. The action is dispatched
+      // to notify the system that a player action was sent, but state changes
+      // occur through other actions (RECEIVE_NARRATION, etc.)
       return state;
     }
 
