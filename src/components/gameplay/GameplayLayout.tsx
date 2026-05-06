@@ -17,6 +17,15 @@ import { InteractionDialog } from "./InteractionDialog";
 import { ErrorBoundary } from "../ErrorBoundary";
 import type { Character, InventoryItem, StoryLogEntry, NarrateAdventureOutput, LoadingPhase, MultiplayerState } from "../types/game-types";
 import type { InteractionRequest } from "../types/multiplayer-types";
+import type { Skill } from "../types/character-types";
+import { Button } from "../ui/button";
+import { Users } from "lucide-react";
+
+// Type for branching choice
+type BranchingChoice = {
+  text: string;
+  consequenceHint?: string;
+};
 
 interface GameplayLayoutProps {
   character: Character;
@@ -42,8 +51,8 @@ interface GameplayLayoutProps {
   isDesktopSettingsOpen: boolean;
   isCraftingDialogOpen: boolean;
   pendingClassChange: string | null;
-  onUseSkill: (skill: any) => void;
-  onChoiceClick: (choice: any) => void;
+  onUseSkill: (skill: Skill) => void;
+  onChoiceClick: (choice: BranchingChoice) => void;
   onRetryNarration: () => void;
   onSubmitAction: (action: string) => void;
   onSuggestAction: () => void;
@@ -64,12 +73,13 @@ interface GameplayLayoutProps {
   isReconnecting: boolean;
   actionInputRef: React.RefObject<ActionInputRef>;
   onClosePartySidebar: () => void;
+  onOpenPartySidebar: () => void;
   onCloseChatPanel: () => void;
   onCloseSettings: () => void;
   onCloseCrafting: () => void;
   onCloseClassChange: () => void;
   isMobile: boolean;
-  currentInteraction: any;
+  currentInteraction: PendingInteraction | null;
   isInteractionDialogOpen: boolean;
   isInteractionTarget: boolean;
   onSetIsInteractionDialogOpen: (open: boolean) => void;
@@ -121,6 +131,7 @@ export function GameplayLayout({
   isReconnecting,
   actionInputRef,
   onClosePartySidebar,
+  onOpenPartySidebar,
   onCloseChatPanel,
   onCloseSettings,
   onCloseCrafting,
@@ -208,6 +219,20 @@ export function GameplayLayout({
       {/* Multiplayer Sidebar */}
       {!!multiplayerState.sessionId && (
         <>
+          {/* PartySidebar Toggle Button */}
+          {!isPartySidebarOpen && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="fixed left-4 top-4 z-50"
+              onClick={onOpenPartySidebar}
+              aria-label={isPartySidebarOpen ? "Close party sidebar" : "Open party sidebar"}
+              aria-expanded={isPartySidebarOpen}
+            >
+              <Users className="h-4 w-4" />
+            </Button>
+          )}
+
           <div className={`fixed left-4 top-4 bottom-4 w-64 z-50 transition-transform duration-300 ${isPartySidebarOpen ? 'translate-x-0' : '-translate-x-[120%]'}`}>
             <ErrorBoundary>
               <PartySidebar

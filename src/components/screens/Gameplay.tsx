@@ -25,22 +25,7 @@ import { Button } from '../../components/ui/button';
 import { TooltipProvider } from "../../components/ui/tooltip";
 import type { InteractionRequest } from "../../types/multiplayer-types";
 import { logger } from "@/lib/logger";
-
-// --- Dice Roller Service (Embedded) ---
-const localRollDie = (sides: number): number => {
-    if (sides < 1) throw new Error("Sides must be at least 1.");
-    return Math.floor(Math.random() * sides) + 1;
-};
-const localGetDiceRollFunction = (diceType: string): (() => number) | null => {
-    switch (diceType?.toLowerCase()) {
-        case 'd6': return () => localRollDie(6);
-        case 'd10': return () => localRollDie(10);
-        case 'd20': return () => localRollDie(20);
-        case 'd100': return () => localRollDie(100);
-        case 'none': default: return null;
-    }
-};
-// --- End Dice Roller Service ---
+import { rollDie, getDiceRollFunction, DICE_TYPES, DiceType } from "../../lib/game-utils/dice";
 
 const GENERIC_BRANCHING_CHOICES: NarrateAdventureOutput['branchingChoices'] = [
     { text: "Look around more closely.", consequenceHint: "May reveal new details." },
@@ -1154,6 +1139,7 @@ export function Gameplay() {
                 isReconnecting={isReconnecting}
                 actionInputRef={actionInputRef}
                 onClosePartySidebar={() => setIsPartySidebarOpen(false)}
+                onOpenPartySidebar={() => setIsPartySidebarOpen(true)}
                 onCloseChatPanel={() => setIsChatPanelOpen(false)}
                 onCloseSettings={() => setIsDesktopSettingsOpen(false)}
                 onCloseCrafting={() => setIsCraftingDialogOpen(false)}
