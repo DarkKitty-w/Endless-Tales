@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useGame } from "../../context/GameContext";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
@@ -45,10 +45,10 @@ export const AIStatusPanel = React.memo(function AIStatusPanel() {
   const { toast } = useToast();
   const { aiProvider, providerApiKeys } = state;
 
-  const [webllmAvailable, setWebllmAvailable] = React.useState(false);
-  const [hardwareInfo, setHardwareInfo] = React.useState<{ webgpu: boolean; memory: number } | null>(null);
-  const [isClearing, setIsClearing] = React.useState(false);
-  const [webllmProgress, setWebllmProgress] = React.useState<{ progress: number; text: string } | null>(null);
+  const [webllmAvailable, setWebllmAvailable] = useState(false);
+  const [hardwareInfo, setHardwareInfo] = useState<{ webgpu: boolean; memory: number } | null>(null);
+  const [isClearing, setIsClearing] = useState(false);
+  const [webllmProgress, setWebllmProgress] = useState<{ progress: number; text: string } | null>(null);
 
   useEffect(() => {
     const check = async () => {
@@ -168,4 +168,4 @@ export const AIStatusPanel = React.memo(function AIStatusPanel() {
       </div>
     </TooltipProvider>
   );
-}
+});

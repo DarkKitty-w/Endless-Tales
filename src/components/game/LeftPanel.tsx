@@ -158,4 +158,4 @@ export const LeftPanel = React.memo(function LeftPanel({
             </Tabs>
         </div>
     );
-}
+});

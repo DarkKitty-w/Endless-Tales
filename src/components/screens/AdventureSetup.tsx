@@ -634,4 +634,4 @@ export const AdventureSetup = React.memo(function AdventureSetup(props: Adventur
       </CardboardCard>
     </div>
   );
-}
+});

@@ -131,4 +131,4 @@ export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
       </footer>
     </div>
   );
-}
+});
