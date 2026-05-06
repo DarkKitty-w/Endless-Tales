@@ -7,7 +7,7 @@ import type { InventoryItem } from '../../types/inventory-types';
 import type { Skill, CharacterStats } from '../../types/character-types';
 import { useGame } from "../../context/GameContext";
 import { useMultiplayer } from "../../hooks/use-multiplayer";
-import { AIStatusPanel } from '../../components/gameplay/AIStatusPanel';
+import { GameplayLayout } from "../../components/gameplay/GameplayLayout";
 import { useToast } from "../../hooks/use-toast";
 import type { GameState, Character, SkillTree, Reputation, NpcRelationships, Location } from '../../types/game-types';
 import { updateGameStateString, buildGameStateContext } from "../../context/game-state-utils";
@@ -21,20 +21,10 @@ import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput 
 import { cn } from "../../lib/utils";
 import { Loader2, Save, Users } from "lucide-react";
 import { SettingsPanel } from "../../components/screens/SettingsPanel";
-import { LeftPanel } from "../../components/game/LeftPanel";
-import { NarrationDisplay } from '../../components/gameplay/NarrationDisplay';
-import { ActionInput, type ActionInputRef } from '../../components/gameplay/ActionInput';
-import { GameplayActions } from '../../components/gameplay/GameplayActions';
-import { CraftingDialog } from '../../components/gameplay/CraftingDialog';
-import { ClassChangeDialog } from '../../components/gameplay/ClassChangeDialog';
-import { MobileSheet } from '../../components/gameplay/MobileSheet';
 import { useIsMobile } from "../../hooks/use-mobile";
 import { Button } from '../../components/ui/button';
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle } from "../../components/ui/sheet";
 import { TooltipProvider } from "../../components/ui/tooltip";
-import { PartySidebar } from "../../components/gameplay/PartySidebar";
-import { ChatPanel } from "../../components/gameplay/ChatPanel";
-import { InteractionDialog } from "../../components/gameplay/InteractionDialog";
 import type { InteractionRequest } from "../../types/multiplayer-types";
 import { logger } from "@/lib/logger";
 
@@ -1114,173 +1104,120 @@ export function Gameplay() {
 
     return (
         <TooltipProvider>
-            <div className="flex flex-col md:flex-row min-h-screen overflow-hidden bg-gradient-to-br from-background to-muted/30">
-                <LeftPanel
-                    character={character}
-                    inventory={inventory}
-                    isGeneratingSkillTree={isGeneratingSkillTree}
-                    turnCount={turnCount}
-                    onUseSkill={handleUseSkill}
-                />
-                <div className="flex-1 flex flex-col p-4 overflow-hidden">
-                    <MobileSheet
-                        character={character}
-                        inventory={inventory}
-                        isGeneratingSkillTree={isGeneratingSkillTree}
-                        turnCount={turnCount}
-                        onSettingsOpen={() => setIsDesktopSettingsOpen(true)}
-                        onUseSkill={handleUseSkill}
-                    />
-                    <NarrationDisplay
-                        storyLog={storyLog}
-                        loadingPhase={loadingPhase}
-                        diceResult={diceResult}
-                        diceType={diceType}
-                        error={error}
-                        branchingChoices={branchingChoices}
-                        onChoiceClick={handleBranchingChoiceClick}
-                        isInitialLoading={isInitialLoading}
-                        onRetryNarration={handleRetryNarration}
-                        pendingGuestAction={pendingGuestAction}
-                        isConnected={isConnected}
-                        isMultiplayerHost={isMultiplayerHost}
-                    />
-                    <ActionInput
-                        ref={actionInputRef}
-                        onSubmit={handlePlayerAction}
-                        onSuggest={handleSuggestAction}
-                        onCraft={() => setIsCraftingDialogOpen(true)}
-                        disabled={anyLoading || character.class === 'admin000'}
-                        isWaitingForHost={!!pendingGuestAction}
-                    />
-                    <AIStatusPanel />
-                    <GameplayActions
-                        onSave={handleSaveGame}
-                        onAbandon={handleGoBack}
-                        onEnd={() => handleEndAdventure(undefined, character.currentHealth <= 0)}
-                        onSettings={() => setIsDesktopSettingsOpen(true)}
-                        onChangeClass={handleManualClassChange}
-                        disabled={anyLoading}
-                        isMobile={isMobile}
-                        currentAdventureId={currentAdventureId}
-                        aiProvider={state.aiProvider}
-                    />
-                    <ClassChangeDialog
-                        isOpen={!!pendingClassChange}
-                        onOpenChange={(open) => !open && setPendingClassChange(null)}
-                        character={character}
-                        pendingClassChange={pendingClassChange}
-                        onConfirm={handleConfirmClassChange}
-                    />
-                    <CraftingDialog
-                        isOpen={isCraftingDialogOpen}
-                        onOpenChange={setIsCraftingDialogOpen}
-                        inventory={inventory}
-                        onCraft={handleCrafting}
-                    />
-                    <Sheet open={isDesktopSettingsOpen} onOpenChange={setIsDesktopSettingsOpen}>
-                        <SettingsPanel isOpen={isDesktopSettingsOpen} onOpenChange={setIsDesktopSettingsOpen} />
-                    </Sheet>
-                </div>
+            <GameplayLayout
+                character={character}
+                inventory={inventory}
+                isGeneratingSkillTree={isGeneratingSkillTree}
+                turnCount={turnCount}
+                storyLog={storyLog}
+                loadingPhase={loadingPhase}
+                diceResult={diceResult}
+                diceType={diceType}
+                error={error}
+                branchingChoices={branchingChoices}
+                isInitialLoading={isInitialLoading}
+                anyLoading={anyLoading}
+                isConnected={isConnected}
+                isMultiplayerHost={isMultiplayerHost}
+                pendingGuestAction={pendingGuestAction}
+                currentAdventureId={currentAdventureId}
+                aiProvider={state.aiProvider}
+                multiplayerState={multiplayerState}
+                isPartySidebarOpen={isPartySidebarOpen}
+                isChatPanelOpen={isChatPanelOpen}
+                isDesktopSettingsOpen={isDesktopSettingsOpen}
+                isCraftingDialogOpen={isCraftingDialogOpen}
+                pendingClassChange={pendingClassChange}
+                onUseSkill={handleUseSkill}
+                onChoiceClick={handleBranchingChoiceClick}
+                onRetryNarration={handleRetryNarration}
+                onSubmitAction={handlePlayerAction}
+                onSuggestAction={handleSuggestAction}
+                onCraft={() => setIsCraftingDialogOpen(true)}
+                onSave={handleSaveGame}
+                onAbandon={handleGoBack}
+                onEnd={() => handleEndAdventure(undefined, character.currentHealth <= 0)}
+                onSettings={() => setIsDesktopSettingsOpen(true)}
+                onChangeClass={handleManualClassChange}
+                onConfirmClassChange={handleConfirmClassChange}
+                onKickPeer={handleKickPeer}
+                onTogglePause={handleTogglePause}
+                onOpenChat={() => setIsChatPanelOpen(true)}
+                onSetTurnOrder={handleSetTurnOrder}
+                onReconnect={reconnect}
+                onSendTradeRequest={handleSendTradeRequest}
+                onSendInteractionResponse={(accepted) => {
+                    if (accepted) {
+                        handleInteractionAccept();
+                    } else {
+                        handleInteractionDecline();
+                    }
+                }}
+                isReconnecting={isReconnecting}
+                actionInputRef={actionInputRef}
+                onClosePartySidebar={() => setIsPartySidebarOpen(false)}
+                onCloseChatPanel={() => setIsChatPanelOpen(false)}
+                onCloseSettings={() => setIsDesktopSettingsOpen(false)}
+                onCloseCrafting={() => setIsCraftingDialogOpen(false)}
+                onCloseClassChange={() => setPendingClassChange(null)}
+                isMobile={isMobile}
+                currentInteraction={currentInteraction}
+                isInteractionDialogOpen={isInteractionDialogOpen}
+                isInteractionTarget={isInteractionTarget}
+                onSetIsInteractionDialogOpen={setIsInteractionDialogOpen}
+            />
 
-                {/* Multiplayer Sidebar */}
-                {!!multiplayerState.sessionId && (
-                    <>
-                        <div className={`fixed left-4 top-4 bottom-4 w-64 z-50 transition-transform duration-300 ${isPartySidebarOpen ? 'translate-x-0' : '-translate-x-[120%]'}`}>
-                            <PartySidebar 
-                                multiplayerState={multiplayerState}
-                                isHost={isMultiplayerHost}
-                                onKickPeer={handleKickPeer}
-                                onTogglePause={handleTogglePause}
-                                onOpenChat={() => setIsChatPanelOpen(true)}
-                                onSetTurnOrder={handleSetTurnOrder}
-                                onReconnect={reconnect}
-                                isReconnecting={isReconnecting}
-                                onSendTradeRequest={handleSendTradeRequest}
+            {/* Outgoing Interaction Dialog - not included in GameplayLayout */}
+            {isOutgoingInteractionOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-card border rounded-lg w-full max-w-md p-6 space-y-4">
+                        <h3 className="text-lg font-semibold">Send Interaction Request</h3>
+                        <p className="text-sm text-muted-foreground">
+                            Sending to: {multiplayerState.partyState[outgoingTargetPeerId || '']?.name || outgoingTargetPeerId}
+                        </p>
+                        
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Interaction Type</label>
+                            <div className="flex gap-2">
+                                {(['trade', 'gift', 'duel'] as const).map(type => (
+                                    <Button
+                                        key={type}
+                                        variant={outgoingInteractionType === type ? 'default' : 'outline'}
+                                        size="sm"
+                                        onClick={() => setOutgoingInteractionType(type)}
+                                        className="capitalize"
+                                    >
+                                        {type}
+                                    </Button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-medium">Details</label>
+                            <textarea
+                                className="w-full p-2 border rounded-md bg-background text-sm min-h-[80px]"
+                                value={outgoingInteractionDetails}
+                                onChange={(e) => setOutgoingInteractionDetails(e.target.value)}
+                                placeholder={
+                                    outgoingInteractionType === 'trade' ? 'What do you want to trade?' :
+                                    outgoingInteractionType === 'gift' ? 'What are you giving?' :
+                                    'Challenge details...'
+                                }
                             />
                         </div>
-                        <Button 
-                            variant="outline" 
-                            size="sm"
-                            className="fixed left-4 top-20 z-50"
-                            onClick={() => setIsPartySidebarOpen(!isPartySidebarOpen)}
-                        >
-                            <Users className="h-4 w-4" />
-                        </Button>
-                    </>
-                )}
 
-                {/* Chat Panel */}
-                <ChatPanel 
-                    isOpen={isChatPanelOpen}
-                    onClose={() => setIsChatPanelOpen(false)}
-                    messages={multiplayerState.chatMessages}
-                    onSendMessage={handleSendChatMessage}
-                    currentPlayerName={state.character?.name || 'Player'}
-                />
-
-                {/* Interaction Dialog */}
-                <InteractionDialog
-                    isOpen={isInteractionDialogOpen}
-                    interaction={currentInteraction}
-                    isTarget={isInteractionTarget}
-                    onAccept={handleInteractionAccept}
-                    onDecline={handleInteractionDecline}
-                    onClose={() => setIsInteractionDialogOpen(false)}
-                />
-
-                {/* Outgoing Interaction Dialog */}
-                {isOutgoingInteractionOpen && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                        <div className="bg-card border rounded-lg w-full max-w-md p-6 space-y-4">
-                            <h3 className="text-lg font-semibold">Send Interaction Request</h3>
-                            <p className="text-sm text-muted-foreground">
-                                Sending to: {multiplayerState.partyState[outgoingTargetPeerId || '']?.name || outgoingTargetPeerId}
-                            </p>
-                            
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Interaction Type</label>
-                                <div className="flex gap-2">
-                                    {(['trade', 'gift', 'duel'] as const).map(type => (
-                                        <Button
-                                            key={type}
-                                            variant={outgoingInteractionType === type ? 'default' : 'outline'}
-                                            size="sm"
-                                            onClick={() => setOutgoingInteractionType(type)}
-                                            className="capitalize"
-                                        >
-                                            {type}
-                                        </Button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Details</label>
-                                <textarea
-                                    className="w-full p-2 border rounded-md bg-background text-sm min-h-[80px]"
-                                    value={outgoingInteractionDetails}
-                                    onChange={(e) => setOutgoingInteractionDetails(e.target.value)}
-                                    placeholder={
-                                        outgoingInteractionType === 'trade' ? 'What do you want to trade?' :
-                                        outgoingInteractionType === 'gift' ? 'What are you giving?' :
-                                        'Challenge details...'
-                                    }
-                                />
-                            </div>
-
-                            <div className="flex justify-end gap-2">
-                                <Button variant="outline" onClick={handleOutgoingInteractionCancel}>
-                                    Cancel
-                                </Button>
-                                <Button onClick={handleOutgoingInteractionSubmit}>
-                                    Send Request
-                                </Button>
-                            </div>
+                        <div className="flex justify-end gap-2">
+                            <Button variant="outline" onClick={handleOutgoingInteractionCancel}>
+                                Cancel
+                            </Button>
+                            <Button onClick={handleOutgoingInteractionSubmit}>
+                                Send Request
+                            </Button>
                         </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
         </TooltipProvider>
     );
 }
