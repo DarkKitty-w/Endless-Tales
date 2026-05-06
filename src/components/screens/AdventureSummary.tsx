@@ -10,6 +10,7 @@ import { ScrollArea } from "../../components/ui/scroll-area";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "../../components/game/CardboardCard";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "../../components/ui/accordion";
 import { BookOpen, FileText, Home } from "lucide-react";
+import { sanitizeAIContent } from "../../lib/utils";
 
 export function AdventureSummary() {
   const { state, dispatch } = useGame();
@@ -37,7 +38,7 @@ export function AdventureSummary() {
           <div className="space-y-2">
             <h3 className="text-xl font-semibold flex items-center gap-2"><FileText className="w-5 h-5"/> Summary of Your Journey</h3>
             <ScrollArea className="h-40 rounded-md border p-3 bg-muted/30 border-foreground/10">
-                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{adventureSummary || "No summary was generated for this adventure."}</p>
+                 <p className="text-sm whitespace-pre-wrap leading-relaxed">{sanitizeAIContent(adventureSummary) || "No summary was generated for this adventure."}</p>
              </ScrollArea>
           </div>
 
@@ -55,7 +56,7 @@ export function AdventureSummary() {
                     storyLog.map((log, index) => (
                       <div key={log.timestamp ? `log-${log.timestamp}-${index}` : `log-fallback-${index}`} className="mb-3 pb-3 border-b border-border/50 last:border-b-0">
                         <p className="text-sm font-semibold text-muted-foreground">Turn {index + 1} <span className="text-xs">({new Date(log.timestamp || Date.now()).toLocaleTimeString()})</span></p>
-                        <p className="text-sm whitespace-pre-wrap mt-1 leading-relaxed">{log.narration}</p>
+                        <p className="text-sm whitespace-pre-wrap mt-1 leading-relaxed">{sanitizeAIContent(log.narration)}</p>
                          {/* Optional: Show game state changes for debugging */}
                          {/* <pre className="text-xs text-muted-foreground/70 mt-2 italic overflow-auto bg-black/10 p-1 rounded">State:\n{log.updatedGameState}</pre> */}
                       </div>

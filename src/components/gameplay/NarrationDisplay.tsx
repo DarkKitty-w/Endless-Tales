@@ -10,6 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Skeleton } from "../../components/ui/skeleton";
 import { Button } from "../../components/ui/button";
 import { BookCopy, CalendarClock, Loader2, Dices, Info, GitBranch, Hammer, Save, ShieldAlert, RefreshCw } from "lucide-react";
+import { sanitizeAIContent } from "../../lib/utils";
 
 type LoadingPhase =
   | { type: 'idle' }
@@ -300,11 +301,11 @@ function NarrationDisplayInternal({
                                     <Alert variant="default" className="mt-1.5 border-orange-500/50 bg-orange-50 dark:bg-orange-900/20 text-sm">
                                         <ShieldAlert className="h-4 w-4 text-orange-600 dark:text-orange-400" />
                                         <AlertDescription className="text-orange-700 dark:text-orange-300 whitespace-pre-wrap leading-relaxed">
-                                            {log.narration}
+                                            {sanitizeAIContent(log.narration)}
                                         </AlertDescription>
                                     </Alert>
                                 ) : (
-                                    <p className="text-sm whitespace-pre-wrap mt-1 leading-relaxed">{log.narration}</p>
+                                    <p className="text-sm whitespace-pre-wrap mt-1 leading-relaxed">{sanitizeAIContent(log.narration)}</p>
                                 )}
                             </div>
                         ))

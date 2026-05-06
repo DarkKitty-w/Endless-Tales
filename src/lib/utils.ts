@@ -77,6 +77,43 @@ export function sanitizePlayerAction(input: string): string {
   return sanitized;
 }
 
+/**
+ * Sanitize AI-generated content before rendering
+ * SEC-9 Fix: Add defense-in-depth sanitization for AI content
+ * Note: React's JSX escaping is the primary XSS protection.
+ * This function provides additional safety by removing potentially dangerous content.
+ */
+export function sanitizeAIContent(content: unknown): string {
+  if (typeof content !== 'string') {
+    // If it's not a string, convert it safely
+    if (content === null || content === undefined) return '';
+    try {
+      content = String(content);
+    } catch {
+      return '';
+    }
+  }
+  
+  let sanitized = content;
+  
+  // Remove any script tags or javascript: URLs
+  sanitized = sanitized.replace(/<script[\s\S]*?<\/script>/gi, '');
+  sanitized = sanitized.replace(/javascript:/gi, '');
+  
+  // Remove event handler attributes (onclick, onerror, etc.)
+  sanitized = sanitized.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
+  sanitized = sanitized.replace(/\s+on\w+\s*=\s*[^\s>]+/gi, '');
+  
+  // Remove dangerous HTML tags
+  const dangerousTags = ['iframe', 'object', 'embed', 'form', 'input', 'button'];
+  for (const tag of dangerousTags) {
+    sanitized = sanitized.replace(new RegExp(`<${tag}[\\s\\S]*?</${tag}>`, 'gi'), '');
+    sanitized = sanitized.replace(new RegExp(`<${tag}[\\s/>]+`, 'gi'), '');
+  }
+  
+  return sanitized;
+}
+
 /* -------------------------------------------------------
    JSON EXTRACTION + REPAIR LAYER
 ------------------------------------------------------- */
