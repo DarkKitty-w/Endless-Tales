@@ -298,8 +298,17 @@ export function Gameplay() {
     }, []);
 
     const handleSendChatMessage = useCallback((text: string) => {
-        sendChatMessage(text);
-    }, [sendChatMessage]);
+        try {
+            sendChatMessage(text);
+        } catch (error) {
+            logger.error("Failed to send chat message:", error);
+            toast({ 
+                title: "Chat Error", 
+                description: "Failed to send message. Please try again.", 
+                variant: "destructive" 
+            });
+        }
+    }, [sendChatMessage, toast]);
 
     // Interaction handlers
     const handleInteractionAccept = useCallback(() => {
