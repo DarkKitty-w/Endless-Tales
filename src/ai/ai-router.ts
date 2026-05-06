@@ -836,16 +836,13 @@ async function loadWebLLM(): Promise<WebLLMModule> {
   webllmLoadAttempted = true;
   logger.log('[WebLLM] Attempting to load @mlc-ai/web-llm...');
 
-  webllmLoadPromise = (async () => {
-    try {
-      const module = await retryLoadModule(1);
-      return module;
-    } finally {
-      if (!webllmModule) {
-        webllmLoadPromise = null;
-      }
-    }
-  })();
+  // Start loading with retry logic
+  webllmLoadPromise = retryLoadModule(1);
+
+  // Clear promise on failure
+  webllmLoadPromise.catch(() => {
+    webllmLoadPromise = null;
+  });
 
   return webllmLoadPromise;
 }
