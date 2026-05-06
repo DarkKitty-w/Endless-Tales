@@ -106,6 +106,7 @@ export function Gameplay() {
     const [lastPlayerAction, setLastPlayerAction] = useState<string | null>(null);
 
     const [error, setError] = useState<string | null>(null);
+    const [errorRawResponse, setErrorRawResponse] = useState<string | null>(null); // ERR-11: Store raw AI response for debugging
     const [diceResult, setDiceResult] = useState<number | null>(null);
     const [diceType, setDiceType] = useState<string>("None");
     const [pendingClassChange, setPendingClassChange] = useState<string | null>(null);
@@ -735,7 +736,10 @@ export function Gameplay() {
                         }
                     }
                 } else {
+                    // ERR-11: Capture raw AI response for debugging when available
+                    const rawResp = (narrationResult as any)?.rawResponse || null;
                     setError("Narration failed: AI did not return a valid response. Try a different action or retry.");
+                    setErrorRawResponse(rawResp);
                     setBranchingChoices(GENERIC_BRANCHING_CHOICES);
                     toast({title: "Narration Error", description: "AI failed to respond. Please try again.", variant: "destructive"});
                 }
@@ -758,6 +762,13 @@ export function Gameplay() {
                 
                 let errorTitle = "Unexpected Error";
                 let errorDescription = "Something went wrong processing your action.";
+                
+                // ERR-11: Capture raw AI response from error if available
+                let rawResp = null;
+                if (err.message?.includes('Raw response:')) {
+                    rawResp = err.message.split('Raw response: ')[1] || null;
+                }
+                setErrorRawResponse(rawResp);
                 
                 if (isNetworkError) {
                     errorTitle = "Network Error";
@@ -1175,6 +1186,7 @@ export function Gameplay() {
                 diceResult={diceResult}
                 diceType={diceType}
                 error={error}
+                errorRawResponse={errorRawResponse} // ERR-11: Pass raw AI response
                 branchingChoices={branchingChoices}
                 isInitialLoading={isInitialLoading}
                 anyLoading={anyLoading}

@@ -37,6 +37,7 @@ interface GameplayLayoutProps {
   diceResult: number | null;
   diceType: string;
   error: string | null;
+  errorRawResponse?: string | null; // ERR-11: Raw AI response for debugging
   branchingChoices: NarrateAdventureOutput['branchingChoices'];
   isInitialLoading: boolean;
   anyLoading: boolean;
@@ -96,6 +97,7 @@ export function GameplayLayout({
   diceResult,
   diceType,
   error,
+  errorRawResponse, // ERR-11: Raw AI response for debugging
   branchingChoices,
   isInitialLoading,
   anyLoading,
@@ -171,6 +173,7 @@ export function GameplayLayout({
             diceResult={diceResult}
             diceType={diceType}
             error={error}
+            errorRawResponse={errorRawResponse} // ERR-11: Pass raw AI response
             branchingChoices={branchingChoices}
             onChoiceClick={onChoiceClick}
             isInitialLoading={isInitialLoading}

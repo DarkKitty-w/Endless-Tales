@@ -29,6 +29,7 @@ interface NarrationDisplayProps {
     diceResult: number | null;
     diceType: string;
     error: string | null;
+    errorRawResponse?: string | null; // ERR-11: Raw AI response for debugging
     branchingChoices: NarrateAdventureOutput['branchingChoices'];
     onChoiceClick: (action: string) => void;
     isInitialLoading: boolean;
@@ -75,6 +76,7 @@ function NarrationDisplayInternal({
     diceResult,
     diceType,
     error,
+    errorRawResponse, // ERR-11: Raw AI response for debugging
     branchingChoices,
     onChoiceClick,
     isInitialLoading,
@@ -148,6 +150,13 @@ function NarrationDisplayInternal({
                         >
                             <RefreshCw className="mr-2 h-4 w-4" /> Retry AI
                         </Button>
+                        {/* ERR-11: Show raw AI response in development mode */}
+                        {errorRawResponse && process.env.NODE_ENV === 'development' && (
+                            <details className="mt-3 text-xs bg-muted/50 p-2 rounded-md overflow-auto max-h-40">
+                                <summary className="cursor-pointer font-medium mb-1">Raw AI Response (Dev Only)</summary>
+                                <pre className="whitespace-pre-wrap text-destructive/80">{errorRawResponse}</pre>
+                            </details>
+                        )}
                     </AlertDescription>
                 </Alert>
             );
