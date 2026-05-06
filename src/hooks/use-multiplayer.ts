@@ -466,18 +466,33 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     }
   }, [onStoryUpdate, onPartyStateUpdate, onChatMessage, onControlMessage, onInteractionRequest, onInteractionResponse]);
 
-  // Disconnect
+  // PERF-3 Fix: Improved cleanup function with proper event listener removal
   const disconnect = useCallback(() => {
     intentionalDisconnect.current = true;
     
-    // Close all data channels
+    // Clear any pending reconnect timeout
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+    
+    // Close all data channels with proper cleanup
     Object.values(dataChannelsRef.current).forEach(channel => {
-      try { channel.close(); } catch (e) {}
+      try {
+        // Remove all event listeners before closing
+        channel.onmessage = null;
+        channel.onopen = null;
+        channel.onclose = null;
+        channel.onerror = null;
+        channel.close();
+      } catch (e) {}
     });
     dataChannelsRef.current = {};
 
     // Close peer connection
     if (peerConnectionRef.current) {
+      peerConnectionRef.current.onicecandidate = null;
+      peerConnectionRef.current.ondatachannel = null;
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
