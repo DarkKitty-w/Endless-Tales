@@ -1074,52 +1074,57 @@ class WebLLMProvider implements AIProvider {
 
     // Start loading process
     logger.log('[WebLLM] Starting engine creation...');
-    this.loadingPromise = (async () => {
-      try {
-        // Load WebLLM module
-        const webllm = await loadWebLLMModule();
-
-        // Small delay to ensure module is fully initialized
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        // Find available model
-        const effectiveModel = findAvailableModel(
-          webllm,
-          modelId || this.options?.model
-        );
-        logger.log('[WebLLM] Using model:', effectiveModel);
-
-        // Create engine config
-        const engineConfig = createEngineConfig(this.persistence, webllm);
-
-        // Create engine
-        logger.log(`[WebLLM] Calling CreateMLCEngine with model: ${effectiveModel}`);
-        const engine = await webllm.CreateMLCEngine(effectiveModel, engineConfig);
-        logger.log('[WebLLM] CreateMLCEngine returned successfully, engine:', !!engine);
-
-        // Store engine
-        this.engine = engine;
-        this.currentModel = effectiveModel;
-        // BUG-7 Fix: Also update module-level variables for static clearCache method
-        currentWebLLMEngine = engine;
-        currentWebLLMModel = effectiveModel;
-        logger.log('[WebLLM] Engine stored successfully');
-        return engine;
-      } catch (error) {
-        this.loadingPromise = null;
-        console.error('[WebLLM] Engine creation failed:', error);
-        console.error('[WebLLM] Error details:', {
-          message: error instanceof Error ? error.message : String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-          name: error instanceof Error ? error.name : 'unknown',
-        });
-        throw error;
-      } finally {
-        this.loadingPromise = null;
-      }
-    })();
+    this.loadingPromise = this.createEngine(modelId);
 
     return this.loadingPromise;
+  }
+
+  /**
+   * Creates a new WebLLM engine instance
+   */
+  private async createEngine(modelId?: string): Promise<WebLLMEngine> {
+    try {
+      // Load WebLLM module
+      const webllm = await loadWebLLMModule();
+
+      // Small delay to ensure module is fully initialized
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Find available model
+      const effectiveModel = findAvailableModel(
+        webllm,
+        modelId || this.options?.model
+      );
+      logger.log('[WebLLM] Using model:', effectiveModel);
+
+      // Create engine config
+      const engineConfig = createEngineConfig(this.persistence, webllm);
+
+      // Create engine
+      logger.log(`[WebLLM] Calling CreateMLCEngine with model: ${effectiveModel}`);
+      const engine = await webllm.CreateMLCEngine(effectiveModel, engineConfig);
+      logger.log('[WebLLM] CreateMLCEngine returned successfully, engine:', !!engine);
+
+      // Store engine
+      this.engine = engine;
+      this.currentModel = effectiveModel;
+      // BUG-7 Fix: Also update module-level variables for static clearCache method
+      currentWebLLMEngine = engine;
+      currentWebLLMModel = effectiveModel;
+      logger.log('[WebLLM] Engine stored successfully');
+      return engine;
+    } catch (error) {
+      this.loadingPromise = null;
+      console.error('[WebLLM] Engine creation failed:', error);
+      console.error('[WebLLM] Error details:', {
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+        name: error instanceof Error ? error.name : 'unknown',
+      });
+      throw error;
+    } finally {
+      this.loadingPromise = null;
+    }
   }
 
   async generateContent({
