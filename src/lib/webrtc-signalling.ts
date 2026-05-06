@@ -82,7 +82,6 @@ export function createPeerConnection(
         };
         try {
           dataChannelForIce.send(JSON.stringify(message));
-          // Don't buffer candidates that were sent immediately
           onIceCandidate(candidateJson);
           return;
         } catch (error) {
@@ -106,18 +105,20 @@ export function createPeerConnection(
   return {
     pc,
     getBufferedCandidates: () => {
-      // Return current buffered candidates
-      return bufferedCandidates.splice(0);
+      // Return current buffered candidates (for initial signalling package)
+      return [...bufferedCandidates]; // Don't clear here - will be cleared when sent
     },
     setDataChannel: (dc: RTCDataChannel) => {
       dataChannelForIce = dc;
       
       // Track ready state properly
-      const setReady = () => {
+      const sendBufferedCandidates = () => {
         isDataChannelReady = true;
         // Send any buffered candidates now
-        const buffered = bufferedCandidates.splice(0);
-        for (const candidate of buffered) {
+        const toSend = [...bufferedCandidates]; // Copy the array
+        bufferedCandidates.length = 0; // Clear the buffer
+        
+        for (const candidate of toSend) {
           const message: IceCandidateMessage = {
             type: 'ice-candidate',
             candidate,
@@ -133,12 +134,12 @@ export function createPeerConnection(
       };
       
       if (dc.readyState === 'open') {
-        setReady();
+        sendBufferedCandidates();
       } else {
         // When data channel opens, send any buffered candidates
         const originalOnOpen = dc.onopen;
         dc.onopen = (event) => {
-          setReady();
+          sendBufferedCandidates();
           // Call original onopen if it exists
           if (originalOnOpen) {
             if (typeof originalOnOpen === 'function') {
@@ -160,11 +161,8 @@ export async function createOffer(
   name: string,
   onIceCandidate: (candidate: RTCIceCandidateInit) => void
 ): Promise<{ peerConnection: RTCPeerConnection; encodedOffer: string }> {
-  const iceCandidates: RTCIceCandidateInit[] = [];
-  
   const { pc, getBufferedCandidates, setDataChannel } = createPeerConnection(
     (candidate) => {
-      iceCandidates.push(candidate);
       onIceCandidate(candidate);
     },
     (state) => console.log('Host connection state:', state)
@@ -189,7 +187,7 @@ export async function createOffer(
   // Build the signalling package with all gathered candidates
   const pkg: SignallingPackage = {
     sdp: pc.localDescription!.sdp,
-    iceCandidates: [...iceCandidates], // Use all collected candidates (no duplicates)
+    iceCandidates: getBufferedCandidates(), // Use buffered candidates for initial exchange
     peerInfo: { peerId, name },
     type: 'offer',
   };
@@ -212,11 +210,8 @@ export async function createAnswer(
   name: string,
   onIceCandidate: (candidate: RTCIceCandidateInit) => void
 ): Promise<{ peerConnection: RTCPeerConnection; encodedAnswer: string }> {
-  const iceCandidates: RTCIceCandidateInit[] = [];
-  
   const { pc, getBufferedCandidates, setDataChannel } = createPeerConnection(
     (candidate) => {
-      iceCandidates.push(candidate);
       onIceCandidate(candidate);
     },
     (state) => console.log('Guest connection state:', state)
@@ -244,7 +239,7 @@ export async function createAnswer(
   // Build the signalling package with all gathered candidates
   const answerPkg: SignallingPackage = {
     sdp: pc.localDescription!.sdp,
-    iceCandidates: [...iceCandidates], // Use all collected candidates (no duplicates)
+    iceCandidates: getBufferedCandidates(), // Use buffered candidates for initial exchange
     peerInfo: { peerId, name },
     type: 'answer',
   };
@@ -290,28 +285,16 @@ export async function applyAnswer(
 
 /**
  * Send buffered ICE candidates via an established data channel
+ * Note: With the new implementation, candidates are sent automatically via setDataChannel.
+ * This function is kept for backward compatibility but may not be needed.
  */
 export function sendBufferedIceCandidates(
   pc: RTCPeerConnection,
   dataChannel: RTCDataChannel
 ): void {
-  const getBufferedCandidates = (pc as any).__getBufferedCandidates;
-  if (typeof getBufferedCandidates === 'function') {
-    const candidates = getBufferedCandidates();
-    for (const candidate of candidates) {
-      const message: IceCandidateMessage = {
-        type: 'ice-candidate',
-        candidate,
-      };
-      if (dataChannel.readyState === 'open') {
-        try {
-          dataChannel.send(JSON.stringify(message));
-        } catch (error) {
-          console.error('Failed to send buffered ICE candidate:', error);
-        }
-      }
-    }
-  }
+  // The new implementation sends candidates automatically when data channel is ready
+  // This is a no-op now, but kept for API compatibility
+  console.log('sendBufferedIceCandidates: Candidates are now sent automatically via data channel');
 }
 
 /**
