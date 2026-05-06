@@ -842,6 +842,91 @@ let webllmProgressCallback: ((progress: number, text: string) => void) | null = 
 let currentWebLLMEngine: any = null;
 let currentWebLLMModel: string = '';
 
+// --- WebLLM Helper Functions ---
+
+/**
+ * Gets the cached engine if available
+ */
+function getCachedEngine(instance: WebLLMProvider): any {
+  return (instance as any).engine || currentWebLLMEngine;
+}
+
+/**
+ * Loads the WebLLM module, with retry logic
+ */
+async function loadWebLLMModule(): Promise<any> {
+  logger.log('[WebLLM] Loading WebLLM module...');
+  const webllm = await loadWebLLM();
+  logger.log('[WebLLM] webllm module obtained, keys:', Object.keys(webllm));
+
+  const CreateMLCEngine = webllm.CreateMLCEngine || webllm.CreateWebWorkerMLCEngine;
+  if (!CreateMLCEngine) {
+    console.error('[WebLLM] webllm module contents:', webllm);
+    throw new Error('[WebLLM] Engine creator not found in module. Check console for module keys.');
+  }
+
+  return { ...webllm, CreateMLCEngine };
+}
+
+/**
+ * Finds an available model from the registry, with fallback logic
+ */
+function findAvailableModel(
+  webllm: any,
+  requestedModel?: string,
+  fallbackModels: string[] = [
+    'TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC',
+    'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
+    'gemma-2b-it-q4f16_1-MLC',
+    'Llama-3.2-3B-Instruct-q4f16_1-MLC',
+  ]
+): string {
+  const { prebuiltAppConfig } = webllm;
+
+  if (!prebuiltAppConfig || !Array.isArray(prebuiltAppConfig.model_list)) {
+    console.error('[WebLLM] prebuiltAppConfig is not properly initialized:', prebuiltAppConfig);
+    throw new Error('[WebLLM] Model registry is not initialized. Please try again later.');
+  }
+
+  const availableModels: string[] = prebuiltAppConfig.model_list.map((m: any) => m.model_id);
+  logger.log('[WebLLM] Available models:', availableModels);
+
+  let effectiveModel = requestedModel || fallbackModels[0];
+  logger.log('[WebLLM] Effective model:', effectiveModel);
+
+  if (!availableModels.includes(effectiveModel)) {
+    logger.warn(`[WebLLM] Model "${effectiveModel}" not found in registry.`);
+    const fallback = fallbackModels.find(m => availableModels.includes(m)) || availableModels[0];
+    if (!fallback) {
+      throw new Error('[WebLLM] No usable model found in WebLLM registry.');
+    }
+    effectiveModel = fallback;
+    logger.log(`[WebLLM] Using fallback model: ${effectiveModel}`);
+  }
+
+  return effectiveModel;
+}
+
+/**
+ * Creates engine configuration for WebLLM
+ */
+function createEngineConfig(persistence: 'temporary' | 'persistent', webllm: any): any {
+  return {
+    initProgressCallback: (report: { progress: number; text: string }) => {
+      logger.log(`[WebLLM Progress] ${report.progress}: ${report.text}`);
+      if (webllmProgressCallback) {
+        webllmProgressCallback(report.progress, report.text);
+      }
+    },
+    appConfig: {
+      ...webllm.prebuiltAppConfig,
+      useIndexedDBCache: persistence === 'persistent',
+    },
+  };
+}
+
+// --- End WebLLM Helper Functions ---
+
 class WebLLMProvider implements AIProvider {
   // BUG-7 Fix: Changed from static to instance properties to avoid race conditions
   private engine: any = null;
@@ -871,91 +956,49 @@ class WebLLMProvider implements AIProvider {
       isLoading: !!this.loadingPromise,
     });
 
-    if (this.engine) {
+    // Check for cached engine
+    const cachedEngine = getCachedEngine(this);
+    if (cachedEngine) {
       logger.log('[WebLLM] Reusing existing engine for model:', this.currentModel);
-      return this.engine;
+      return cachedEngine;
     }
 
     if (typeof window === 'undefined') {
       throw new Error('[WebLLM] Engine cannot be created on the server');
     }
 
-    logger.log('[WebLLM] Loading WebLLM module...');
-    const webllm = await loadWebLLM();
-    logger.log('[WebLLM] webllm module obtained, keys:', Object.keys(webllm));
-
-    const CreateMLCEngine = webllm.CreateMLCEngine || webllm.CreateWebWorkerMLCEngine;
-    if (!CreateMLCEngine) {
-      console.error('[WebLLM] webllm module contents:', webllm);
-      throw new Error('[WebLLM] Engine creator not found in module. Check console for module keys.');
-    }
-
-    const { prebuiltAppConfig } = webllm;
-    logger.log('[WebLLM] prebuiltAppConfig:', prebuiltAppConfig);
-    logger.log('[WebLLM] prebuiltAppConfig.model_list:', prebuiltAppConfig?.model_list);
-
-    await new Promise(resolve => setTimeout(resolve, 200));
-
-    if (!prebuiltAppConfig || !Array.isArray(prebuiltAppConfig.model_list)) {
-      console.error('[WebLLM] prebuiltAppConfig is not properly initialized:', prebuiltAppConfig);
-      throw new Error('[WebLLM] Model registry is not initialized. Please try again later.');
-    }
-
-    const availableModels: string[] = prebuiltAppConfig.model_list.map((m: any) => m.model_id);
-    logger.log('[WebLLM] Available models:', availableModels);
-    logger.log('[WebLLM] Available models count:', availableModels.length);
-
-    const fallbackModels = [
-      'TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC',
-      'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
-      'gemma-2b-it-q4f16_1-MLC',
-      'Llama-3.2-3B-Instruct-q4f16_1-MLC',
-    ];
-    logger.log('[WebLLM] Fallback models:', fallbackModels);
-
-    let effectiveModel = this.options?.model || fallbackModels[0];
-    logger.log('[WebLLM] Effective model from options:', effectiveModel);
-    logger.log('[WebLLM] Is requested model in available list?', availableModels.includes(effectiveModel));
-
-    if (!availableModels.includes(effectiveModel)) {
-      logger.warn(`[WebLLM] Model "${effectiveModel}" not found in registry.`);
-      const fallback = fallbackModels.find(m => availableModels.includes(m)) || availableModels[0];
-      if (!fallback) {
-        throw new Error('[WebLLM] No usable model found in WebLLM registry.');
-      }
-      effectiveModel = fallback;
-      logger.log(`[WebLLM] Using fallback model: ${effectiveModel}`);
-    }
-
+    // If already loading, return the existing promise
     if (this.loadingPromise) {
       logger.log('[WebLLM] Engine load already in progress, waiting...');
       return this.loadingPromise;
     }
 
-    logger.log('[WebLLM] Starting engine creation for model:', effectiveModel);
+    // Start loading process
+    logger.log('[WebLLM] Starting engine creation...');
     this.loadingPromise = (async () => {
       try {
-        const engineConfig: any = {
-          initProgressCallback: (report: { progress: number; text: string }) => {
-            logger.log(`[WebLLM Progress] ${report.progress}: ${report.text}`);
-            if (webllmProgressCallback) {
-              webllmProgressCallback(report.progress, report.text);
-            }
-          },
-          appConfig: {
-            ...webllm.prebuiltAppConfig,
-            useIndexedDBCache: this.persistence === 'persistent',
-          },
-        };
+        // Load WebLLM module
+        const webllm = await loadWebLLMModule();
 
-        logger.log('[WebLLM] engineConfig.appConfig:', engineConfig.appConfig);
-        logger.log('[WebLLM] engineConfig.appConfig.model_list exists?', !!engineConfig.appConfig.model_list);
-        logger.log('[WebLLM] engineConfig.appConfig.model_list length:', engineConfig.appConfig.model_list?.length);
+        // Small delay to ensure module is fully initialized
+        await new Promise(resolve => setTimeout(resolve, 200));
 
+        // Find available model
+        const effectiveModel = findAvailableModel(
+          webllm,
+          modelId || this.options?.model
+        );
+        logger.log('[WebLLM] Using model:', effectiveModel);
+
+        // Create engine config
+        const engineConfig = createEngineConfig(this.persistence, webllm);
+
+        // Create engine
         logger.log(`[WebLLM] Calling CreateMLCEngine with model: ${effectiveModel}`);
-        const engine = await CreateMLCEngine(effectiveModel, engineConfig);
+        const engine = await webllm.CreateMLCEngine(effectiveModel, engineConfig);
         logger.log('[WebLLM] CreateMLCEngine returned successfully, engine:', !!engine);
 
+        // Store engine
         this.engine = engine;
         this.currentModel = effectiveModel;
         // BUG-7 Fix: Also update module-level variables for static clearCache method
