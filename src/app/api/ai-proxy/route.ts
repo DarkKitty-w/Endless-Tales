@@ -3,6 +3,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 
+// ERR-7 Fix: Timeout for AI requests (30 seconds)
+const AI_TIMEOUT = 30000;
+function getTimeoutSignal(): AbortSignal {
+  return AbortSignal.timeout(AI_TIMEOUT);
+}
+
 // Security: Allowed providers to prevent unauthorized access
 const ALLOWED_PROVIDERS = ['gemini', 'openai', 'claude', 'deepseek', 'openrouter', 'webllm'];
 
@@ -159,6 +165,15 @@ export async function POST(request: NextRequest) {
     }
   } catch (error: unknown) {
     logger.error('AI Proxy error:', error);
+    
+    // ERR-7 Fix: Handle timeout errors with specific message
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      return NextResponse.json(
+        { error: 'AI request timed out. Please try again later.' },
+        { status: 504 }
+      );
+    }
+    
     // SEC-3 Fix: Sanitize error messages sent to clients
     // Only return generic error messages, log detailed errors server-side only
     return NextResponse.json(
@@ -223,6 +238,8 @@ async function handleGemini(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+    // ERR-7 Fix: Add timeout signal
+    signal: getTimeoutSignal(),
   });
 
   if (!response.ok) {
@@ -330,6 +347,8 @@ async function handleOpenAICompatible(
       'Authorization': `Bearer ${apiKey}`,
     },
     body: JSON.stringify(body),
+    // ERR-7 Fix: Add timeout signal
+    signal: getTimeoutSignal(),
   });
 
   if (!response.ok) {
@@ -477,6 +496,8 @@ async function handleClaude(
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify(body),
+    // ERR-7 Fix: Add timeout signal
+    signal: getTimeoutSignal(),
   });
 
   if (!response.ok) {
