@@ -71,21 +71,29 @@ export default {
   		},
   		keyframes: {
   			'accordion-down': {
-  				from: {
-  					height: '0'
-  				},
-  				to: {
-  					height: 'var(--radix-accordion-content-height)'
-  				}
-  			},
+				from: {
+					opacity: '0',
+					transform: 'scaleY(0)',
+					transformOrigin: 'top'
+				},
+				to: {
+					opacity: '1',
+					transform: 'scaleY(1)',
+					transformOrigin: 'top'
+				}
+			},
   			'accordion-up': {
-  				from: {
-  					height: 'var(--radix-accordion-content-height)'
-  				},
-  				to: {
-  					height: '0'
-  				}
-  			},
+				from: {
+					opacity: '1',
+					transform: 'scaleY(1)',
+					transformOrigin: 'top'
+				},
+				to: {
+					opacity: '0',
+					transform: 'scaleY(0)',
+					transformOrigin: 'top'
+				}
+			},
             fadeInOut: { // Keyframes for dice roll display
                '0%, 100%': { opacity: '0' },
                '20%, 80%': { opacity: '1' }, // Stay visible longer
