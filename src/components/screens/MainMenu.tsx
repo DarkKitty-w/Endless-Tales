@@ -114,7 +114,7 @@ export function MainMenu() {
               alt='Buy Me a Coffee at ko-fi.com'
               width={150}
               height={36}
-              style={{ border: '0px', height: '36px', width: 'auto' }}
+              className="h-9 w-auto border-0"
             />
           </a>
         </CardFooter>
