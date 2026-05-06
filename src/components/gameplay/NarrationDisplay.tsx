@@ -69,9 +69,26 @@ export function NarrationDisplay({
         });
     }, []);
 
+    // PERF-2 Fix: Throttle scrollToBottom during streaming to prevent excessive scroll operations
+    const lastScrollTimeRef = useRef<number>(0);
+    const throttledScrollToBottom = useCallback(() => {
+        const now = Date.now();
+        if (now - lastScrollTimeRef.current > 100) {  // Throttle to max 10 scrolls per second
+            lastScrollTimeRef.current = now;
+            scrollToBottom();
+        }
+    }, [scrollToBottom]);
+
     useEffect(() => {
         scrollToBottom();
-    }, [storyLog, loadingPhase, diceResult, error, branchingChoices, isInitialLoading, isStreaming, streamingText, scrollToBottom]);
+    }, [storyLog, loadingPhase, diceResult, error, branchingChoices, isInitialLoading, isStreaming, scrollToBottom]);
+
+    // Separate effect for streaming text with throttling
+    useEffect(() => {
+        if (isStreaming && streamingText) {
+            throttledScrollToBottom();
+        }
+    }, [streamingText, isStreaming, throttledScrollToBottom]);
 
     const displayLog = storyLog.slice(-50);
     const busy = loadingPhase.type !== 'idle' || isStreaming;
