@@ -2,7 +2,7 @@
 // src/components/screens/SavedAdventuresList.tsx
 "use client";
 
-import React from "react";
+import React, { useMemo } from "react";
 import { useGame } from "../../context/GameContext"; // Import main context hook
 import type { SavedAdventure, Character, Reputation, NpcRelationships } from "../../types/game-types"; // Import types from central location
 import { Button } from "../../components/ui/button";
@@ -62,7 +62,9 @@ export function SavedAdventuresList() {
     dispatch({ type: "SET_GAME_STATUS", payload: "MainMenu" });
   };
 
-  const sortedAdventures = [...savedAdventures].sort((a, b) => b.saveTimestamp - a.saveTimestamp); // Show newest first
+  const sortedAdventures = useMemo(() => {
+    return [...savedAdventures].sort((a, b) => b.saveTimestamp - a.saveTimestamp);
+  }, [savedAdventures]); // Only recalculate when savedAdventures changes
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
