@@ -145,6 +145,43 @@ export function gameReducer(state: GameState, action: Action): GameState {
         nextState = multiplayerReducer(nextState, action);
     }
 
+    // PERF-1 Fix: Return old state reference if nothing changed to prevent unnecessary re-renders
+    if (
+        nextState === state ||
+        (nextState.character === state.character &&
+         nextState.inventory === state.inventory &&
+         nextState.adventureSettings === state.adventureSettings &&
+         nextState.storyLog === state.storyLog &&
+         nextState.turnCount === state.turnCount &&
+         nextState.status === state.status &&
+         nextState.currentNarration === state.currentNarration &&
+         nextState.adventureSummary === state.adventureSummary &&
+         nextState.currentGameStateString === state.currentGameStateString &&
+         nextState.savedAdventures === state.savedAdventures &&
+         nextState.currentAdventureId === state.currentAdventureId &&
+         nextState.isGeneratingSkillTree === state.isGeneratingSkillTree &&
+         nextState.selectedThemeId === state.selectedThemeId &&
+         nextState.isDarkMode === state.isDarkMode &&
+         nextState.userGoogleAiApiKey === state.userGoogleAiApiKey &&
+         nextState.aiProvider === state.aiProvider &&
+         nextState.providerApiKeys === state.providerApiKeys &&
+         nextState.sessionId === state.sessionId &&
+         nextState.players === state.players &&
+         nextState.isHost === state.isHost &&
+         nextState.peerId === state.peerId &&
+         nextState.connectionStatus === state.connectionStatus &&
+         nextState.turnOrder === state.turnOrder &&
+         nextState.currentTurnIndex === state.currentTurnIndex &&
+         nextState.isMyTurn === state.isMyTurn &&
+         nextState.pendingInteraction === state.pendingInteraction &&
+         nextState.partyState === state.partyState &&
+         nextState.chatMessages === state.chatMessages &&
+         nextState.isPaused === state.isPaused &&
+         nextState.worldMap === state.worldMap)
+    ) {
+        return state;  // Return OLD reference if nothing changed
+    }
+
     switch (action.type) {
         case "RESET_GAME": {
             const { savedAdventures, selectedThemeId, isDarkMode, userGoogleAiApiKey, aiProvider, providerApiKeys } = state;
