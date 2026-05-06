@@ -652,7 +652,6 @@ Under it (or appended to existing content), add a new section `### Feature Gaps 
 
 Keep any existing content in both files intact. Output the **complete, updated content** of both files so I can save them directly.
 
-Perfect—here are the **6 missing prompts**, written in the *exact same structure and style* as your original 7. You can drop them directly into your pipeline.
 
 ---
 
