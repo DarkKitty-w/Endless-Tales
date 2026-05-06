@@ -102,6 +102,7 @@ export function CharacterCreation() {
   const [isRandomizing, setIsRandomizing] = useState(false);
   const [randomizationComplete, setRandomizationComplete] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
    const { register, handleSubmit, formState, reset, watch, setValue, trigger, getValues } = useForm<FormData>({
@@ -338,10 +339,12 @@ export function CharacterCreation() {
 
   const onSubmit = (data: FormData) => {
      setError(null);
+     setIsSubmitting(true);
      
      if (remainingPoints !== 0) {
          const errorMsg = `Please allocate all ${TOTAL_STAT_POINTS} stat points. ${remainingPoints > 0 ? `${remainingPoints} point(s) remaining.` : `${Math.abs(remainingPoints)} point(s) over limit.`}`;
          setStatError(errorMsg);
+         setIsSubmitting(false);
          return;
      }
      setStatError(null);
@@ -351,6 +354,7 @@ export function CharacterCreation() {
 
     if (data.creationType === "basic" && advType !== "Immersed" && (!data.class || data.class.trim() === "")) {
         toast({ title: "Validation Error", description: "Class is required for Randomized/Custom adventures.", variant: "destructive" });
+        setIsSubmitting(false);
         return;
     }
 
@@ -365,6 +369,7 @@ export function CharacterCreation() {
                 msg = `Description (min ${minDescLength} chars) is required for AI profile generation in Randomized/Custom modes when using text-based creation.`;
             }
             toast({ title: "Validation Error", description: msg, variant: "destructive" });
+            setIsSubmitting(false);
             return;
         }
     }
@@ -379,6 +384,7 @@ export function CharacterCreation() {
             }).filter(Boolean);
             const flatErrors = Object.values(errors).map(e => (e as any)?.message).filter(Boolean).join('; ');
             toast({ title: "Validation Error", description: fieldErrorMessages.join('; ') || flatErrors || "Please correct the highlighted fields.", variant: "destructive"});
+            setIsSubmitting(false);
             return;
         }
 
@@ -407,6 +413,7 @@ export function CharacterCreation() {
         } else {
             dispatch({ type: "START_GAMEPLAY" });
         }
+        setIsSubmitting(false);
      });
    };
 
@@ -422,14 +429,14 @@ export function CharacterCreation() {
 
   const isProceedButtonDisabled = useMemo(() => {
     const nameValid = !!watch("name")?.trim();
-    const generalDisabled = isGenerating || isRandomizing || remainingPoints !== 0 || (statError !== null && remainingPoints !==0);
+    const generalDisabled = isGenerating || isRandomizing || isSubmitting || remainingPoints !== 0 || (statError !== null && remainingPoints !==0);
     
     let specificFormFieldsValid = true;
     if(showCharacterDefinitionForms) {
         specificFormFieldsValid = formIsValid; 
     }
     return generalDisabled || !nameValid || !specificFormFieldsValid;
-  }, [isGenerating, isRandomizing, remainingPoints, statError, formIsValid, errors, watch, showCharacterDefinitionForms]);
+  }, [isGenerating, isRandomizing, isSubmitting, remainingPoints, statError, formIsValid, errors, watch, showCharacterDefinitionForms]);
 
 
   if (state.adventureSettings.adventureType === "Immersed" && state.adventureSettings.characterOriginType === "existing" && !showCharacterDefinitionForms) {
@@ -580,8 +587,12 @@ export function CharacterCreation() {
                             disabled={isProceedButtonDisabled}
                             aria-label="Save character and proceed"
                         >
-                            {state.adventureSettings.adventureType === "Randomized" ? <ArrowRight className="mr-2 h-4 w-4"/> : <Save className="mr-2 h-4 w-4"/>}
-                            {proceedButtonText}
+                            {isSubmitting ? (
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                state.adventureSettings.adventureType === "Randomized" ? <ArrowRight className="mr-2 h-4 w-4"/> : <Save className="mr-2 h-4 w-4"/>
+                            )}
+                            {isSubmitting ? "Submitting..." : proceedButtonText}
                         </Button>
                     </div>
                 </CardFooter>
