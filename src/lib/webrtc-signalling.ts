@@ -19,12 +19,27 @@ export interface IceCandidateMessage {
 
 /**
  * Encode a signalling package to a base64 string for QR code or copy-paste
+ * SEC-10 Fix: Add size limits to prevent large payloads
  */
 export function encodeSignallingData(pkg: SignallingPackage): string {
   try {
     const json = JSON.stringify(pkg);
+    
+    // SEC-10 Fix: Limit the size of the encoded data (max 50KB for JSON)
+    const MAX_JSON_SIZE = 50 * 1024; // 50KB
+    if (json.length > MAX_JSON_SIZE) {
+      throw new Error('Signalling data too large');
+    }
+    
     // Use btoa for base64 encoding (browser-compatible)
-    return btoa(unescape(encodeURIComponent(json)));
+    const encoded = btoa(unescape(encodeURIComponent(json)));
+    
+    // Also check the final encoded size
+    if (encoded.length > MAX_JSON_SIZE * 2) { // base64 is ~4/3 the size of original
+      throw new Error('Encoded signalling data too large');
+    }
+    
+    return encoded;
   } catch (error) {
     logger.error('Failed to encode signalling data:', error);
     throw new Error('Failed to encode signalling data');
@@ -33,17 +48,83 @@ export function encodeSignallingData(pkg: SignallingPackage): string {
 
 /**
  * Decode a base64 string back to a signalling package
+ * SEC-7 Fix: Add comprehensive input validation
  */
 export function decodeSignallingData(encoded: string): SignallingPackage {
   try {
-    const json = decodeURIComponent(escape(atob(encoded)));
-    const pkg = JSON.parse(json);
-    if (!pkg.sdp || !pkg.type || !pkg.peerInfo) {
-      throw new Error('Invalid signalling data format');
+    // SEC-7 Fix: Limit input string size (max 100KB for base64-encoded data)
+    const MAX_INPUT_SIZE = 100 * 1024; // 100KB
+    if (typeof encoded !== 'string' || encoded.length > MAX_INPUT_SIZE) {
+      throw new Error('Input too large or invalid type');
     }
-    return pkg;
+    
+    const json = decodeURIComponent(escape(atob(encoded)));
+    
+    // SEC-10 Fix: Also limit decoded JSON size
+    if (json.length > MAX_INPUT_SIZE) {
+      throw new Error('Decoded data too large');
+    }
+    
+    const pkg = JSON.parse(json);
+    
+    // SEC-7 Fix: Comprehensive validation
+    if (!pkg || typeof pkg !== 'object') {
+      throw new Error('Invalid signalling data format: not an object');
+    }
+    
+    // Validate required fields exist
+    if (!pkg.sdp || !pkg.type || !pkg.peerInfo) {
+      throw new Error('Invalid signalling data format: missing required fields');
+    }
+    
+    // Validate type is valid enum value
+    if (pkg.type !== 'offer' && pkg.type !== 'answer') {
+      throw new Error('Invalid signalling data format: type must be "offer" or "answer"');
+    }
+    
+    // Validate SDP is a non-empty string
+    if (typeof pkg.sdp !== 'string' || pkg.sdp.trim().length === 0) {
+      throw new Error('Invalid signalling data format: sdp must be a non-empty string');
+    }
+    
+    // Basic SDP format validation (should start with v= or o=)
+    if (!pkg.sdp.includes('v=') && !pkg.sdp.includes('o=')) {
+      throw new Error('Invalid signalling data format: invalid SDP format');
+    }
+    
+    // Validate peerInfo structure
+    if (typeof pkg.peerInfo !== 'object' || pkg.peerInfo === null) {
+      throw new Error('Invalid signalling data format: peerInfo must be an object');
+    }
+    if (typeof pkg.peerInfo.peerId !== 'string' || pkg.peerInfo.peerId.trim().length === 0) {
+      throw new Error('Invalid signalling data format: peerInfo.peerId must be a non-empty string');
+    }
+    if (typeof pkg.peerInfo.name !== 'string') {
+      throw new Error('Invalid signalling data format: peerInfo.name must be a string');
+    }
+    
+    // Validate iceCandidates is an array
+    if (!Array.isArray(pkg.iceCandidates)) {
+      throw new Error('Invalid signalling data format: iceCandidates must be an array');
+    }
+    
+    // Validate each iceCandidate has required structure
+    for (const candidate of pkg.iceCandidates) {
+      if (typeof candidate !== 'object' || candidate === null) {
+        throw new Error('Invalid signalling data format: invalid ice candidate');
+      }
+      // RTCIceCandidateInit should have at least candidate or sdpMid or sdpMLineIndex
+      if (!candidate.candidate && candidate.sdpMid === undefined && candidate.sdpMLineIndex === undefined) {
+        throw new Error('Invalid signalling data format: invalid ice candidate structure');
+      }
+    }
+    
+    return pkg as SignallingPackage;
   } catch (error) {
     logger.error('Failed to decode signalling data:', error);
+    if (error instanceof Error && error.message.includes('Invalid signalling data format')) {
+      throw error; // Re-throw validation errors with specific message
+    }
     throw new Error('Invalid signalling data. Please check the code and try again.');
   }
 }
