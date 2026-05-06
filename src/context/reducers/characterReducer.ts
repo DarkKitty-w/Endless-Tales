@@ -6,7 +6,7 @@ import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, calcul
 import { RESPAWN_XP_LOSS_PERCENT, RESPAWN_DEBUFF_DURATION, MAX_SKILL_TREE_STAGES } from "../../lib/constants";
 
 // Helper to create a unique ID for status effects
-const generateStatusEffectId = () => `se_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+const generateStatusEffectId = () => `se_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
 
 // Helper to process XP gain and handle automatic level-ups (including multiple level-ups)
 const processXpGain = (state: Character, xpGained: number): Character => {
