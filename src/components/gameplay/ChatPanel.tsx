@@ -120,3 +120,4 @@ export function ChatPanel({ isOpen, onClose, messages, onSendMessage, currentPla
     </Card>
   );
 }
+export default React.memo(ChatPanel);

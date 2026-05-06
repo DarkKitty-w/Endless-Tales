@@ -253,3 +253,4 @@ export function SkillTreeDisplay({
     </ScrollArea>
   );
 }
+export default React.memo(SkillTreeDisplay);

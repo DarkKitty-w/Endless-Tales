@@ -2,6 +2,7 @@
 // src/components/game/InventoryDisplay.tsx
 "use client";
 
+import React from "react";
 import { useGame } from "../../context/GameContext";
 import type { ItemQuality } from "../../types/game-types"; // Import types from central location
 import { ScrollArea } from "../../components/ui/scroll-area";
@@ -91,3 +92,5 @@ export function InventoryDisplay() {
     </div>
   );
 }
+
+export default React.memo(InventoryDisplay);

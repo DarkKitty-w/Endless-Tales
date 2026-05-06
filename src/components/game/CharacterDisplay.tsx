@@ -1,6 +1,7 @@
 // src/components/game/CharacterDisplay.tsx
 "use client";
 
+import React from "react";
 import { useGame } from "../../context/GameContext";
 import { CardboardCard, CardContent, CardHeader, CardTitle } from "../../components/game/CardboardCard";
 // Using HandDrawnMagicIcon for Wisdom as an example, can be changed
@@ -174,3 +175,4 @@ export function CharacterDisplay() {
     </CardboardCard>
   );
 }
+export default React.memo(CharacterDisplay);

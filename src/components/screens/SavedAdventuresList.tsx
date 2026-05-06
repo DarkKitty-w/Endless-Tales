@@ -198,3 +198,5 @@ export function SavedAdventuresList() {
     </div>
   );
 }
+
+export default React.memo(SavedAdventuresList);
