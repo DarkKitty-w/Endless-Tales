@@ -63,7 +63,7 @@ export function ChatPanel({ isOpen, onClose, messages, onSendMessage, currentPla
       </CardHeader>
       
       <CardContent className="flex-1 overflow-hidden p-0">
-        <ScrollArea className="h-full p-4" ref={scrollAreaRef}>
+        <ScrollArea className="h-full p-4" ref={scrollAreaRef} aria-live="polite" aria-atomic="false" role="log">
           <div className="space-y-3">
             {messages.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-4">

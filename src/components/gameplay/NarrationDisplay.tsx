@@ -243,7 +243,12 @@ function NarrationDisplayInternal({
                     <BookCopy className="w-4 h-4" /> Story Log
                 </CardTitle>
             </CardHeader>
-            <ScrollArea ref={scrollAreaRef} className="flex-1 pb-2 scrollbar scrollbar-thumb-primary scrollbar-track-input">
+            <ScrollArea 
+              ref={scrollAreaRef} 
+              className="flex-1 pb-2 scrollbar scrollbar-thumb-primary scrollbar-track-input"
+              aria-live="polite"
+              aria-atomic="false"
+            >
                 <CardContent className="px-4 pt-4"> 
                     {isInitialLoading && storyLog.length === 0 && !error ? (
                         <div className="space-y-4 py-4">
