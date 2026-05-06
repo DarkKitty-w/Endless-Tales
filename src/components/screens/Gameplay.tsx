@@ -249,6 +249,16 @@ export function Gameplay() {
       onPeerDisconnected: (peerId) => {
         logger.log('Peer disconnected', peerId);
         dispatch({ type: "PEER_DISCONNECTED", payload: peerId });
+        toast({ title: "Player Disconnected", description: `A player has disconnected.`, variant: "destructive" });
+      },
+      // ERR-13: Handle multiplayer errors with user-friendly messages
+      onError: (title, description, recoverable) => {
+        toast({ 
+          title, 
+          description: recoverable ? `${description} You can try reconnecting.` : description,
+          variant: "destructive",
+          duration: recoverable ? 6000 : 4000,
+        });
       },
     });
 
@@ -719,9 +729,31 @@ export function Gameplay() {
                 // Don't show error toast for expected cancellations
             } else {
                 logger.error("Gameplay: Error in handlePlayerAction:", err);
-                setError(`An unexpected error occurred while processing your action: ${err.message}`);
+                
+                // ERR-13: Differentiate network errors from other errors
+                const isNetworkError = err instanceof TypeError && err.message.includes('fetch') ||
+                                       err.message?.includes('network') ||
+                                       err.message?.includes('ECONNREFUSED') ||
+                                       err.message?.includes('ETIMEDOUT') ||
+                                       err.code === 'NETWORK_ERROR';
+                
+                let errorTitle = "Unexpected Error";
+                let errorDescription = "Something went wrong processing your action.";
+                
+                if (isNetworkError) {
+                    errorTitle = "Network Error";
+                    errorDescription = "Please check your internet connection and try again.";
+                    setError("Network error: Please check your connection and retry.");
+                } else {
+                    setError(`An unexpected error occurred while processing your action: ${err.message}`);
+                }
+                
                 setBranchingChoices(GENERIC_BRANCHING_CHOICES);
-                toast({title: "Unexpected Error", description: "Something went wrong processing your action.", variant: "destructive"});
+                toast({
+                    title: errorTitle, 
+                    description: errorDescription,
+                    variant: "destructive"
+                });
             }
         } finally {
             if (isInitialAction) {

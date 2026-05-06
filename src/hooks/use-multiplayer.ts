@@ -26,6 +26,8 @@ interface UseMultiplayerOptions {
   onInteractionResponse?: (interactionId: string, accepted: boolean) => void;
   onPeerConnected?: (peer: PeerInfo) => void;
   onPeerDisconnected?: (peerId: string) => void;
+  // ERR-13: Add error callback for user-facing error messages
+  onError?: (title: string, description: string, recoverable?: boolean) => void;
 }
 
 export function useMultiplayer(options: UseMultiplayerOptions) {
@@ -40,6 +42,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     onInteractionResponse,
     onPeerConnected,
     onPeerDisconnected,
+    onError,
   } = options;
 
   const [multiplayerState, setMultiplayerState] = useState<MultiplayerState>({
@@ -195,12 +198,21 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       lastInitParams.current = { type: 'host' };
 
       return encodedOffer;
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Failed to create session:', error);
       setMultiplayerState(prev => ({ ...prev, connectionStatus: 'failed' }));
+      // ERR-13: Show user-friendly error with recovery option
+      if (onError) {
+        const errorMsg = error?.message || 'Unknown error';
+        onError(
+          "Connection Failed", 
+          `Failed to create multiplayer session: ${errorMsg}. Check your network connection and try again.`,
+          true // recoverable
+        );
+      }
       throw error;
     }
-  }, [playerName]);
+  }, [playerName, onError]);
 
   // Initialize as guest
   const joinSession = useCallback(async (encodedOffer: string): Promise<string> => {
@@ -233,26 +245,43 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       lastInitParams.current = { type: 'guest', offer: encodedOffer };
 
       return encodedAnswer;
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Failed to join session:', error);
       setMultiplayerState(prev => ({ ...prev, connectionStatus: 'failed' }));
+      // ERR-13: Show user-friendly error with recovery option
+      if (onError) {
+        const errorMsg = error?.message || 'Unknown error';
+        onError(
+          "Connection Failed", 
+          `Failed to join multiplayer session: ${errorMsg}. Check the offer code and your network connection.`,
+          true // recoverable
+        );
+      }
       throw error;
     }
-  }, [playerName]);
+  }, [playerName, onError]);
 
   // Host applies guest's answer
   const applyGuestAnswer = useCallback(async (encodedAnswer: string) => {
     if (!peerConnectionRef.current || !multiplayerStateRef.current.isHost) {
-      throw new Error('Not in host mode or connection not initialized');
+      const error = new Error('Not in host mode or connection not initialized');
+      if (onError) {
+        onError("Answer Failed", error.message, false);
+      }
+      throw error;
     }
 
     try {
       await applyAnswer(peerConnectionRef.current, encodedAnswer);
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Failed to apply answer:', error);
+      if (onError) {
+        const errorMsg = error?.message || 'Unknown error';
+        onError("Connection Failed", `Failed to apply answer: ${errorMsg}`, true);
+      }
       throw error;
     }
-  }, []);
+  }, [onError]);
 
   // BUG-9 Fix: Reconnect with exponential backoff
   const reconnect = useCallback(async () => {
@@ -262,6 +291,9 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     if (reconnectAttempts.current >= maxReconnectAttempts) {
       logger.log(`Max reconnect attempts (${maxReconnectAttempts}) reached. Giving up.`);
       setIsReconnectingState(false);
+      if (onError) {
+        onError("Reconnection Failed", `Failed to reconnect after ${maxReconnectAttempts} attempts. Please try manually.`, false);
+      }
       return;
     }
     
@@ -278,12 +310,17 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       }
       reconnectAttempts.current = 0; // reset on success
       logger.log('Reconnect successful!');
-    } catch (error) {
+    } catch (error: any) {
       logger.error('Reconnect failed:', error);
       
       // Exponential backoff: 1s, 2s, 4s (capped at 4s)
       const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts.current - 1), 4000);
       logger.log(`Reconnect failed. Retrying in ${backoffDelay}ms...`);
+      
+      // Show user-facing error on first attempt, then informational on subsequent
+      if (onError && reconnectAttempts.current === 1) {
+        onError("Reconnection Failed", `Connection lost. Retrying automatically (attempt ${reconnectAttempts.current}/${maxReconnectAttempts})...`, true);
+      }
       
       // Schedule retry with backoff
       if (reconnectAttempts.current < maxReconnectAttempts) {
@@ -299,7 +336,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         setIsReconnectingState(false);
       }
     }
-  }, [createSession, joinSession, setIsReconnectingState, maxReconnectAttempts]);
+  }, [createSession, joinSession, setIsReconnectingState, maxReconnectAttempts, onError]);
 
   // Setup data channel event handlers
   const setupDataChannelForPeer = useCallback((channel: RTCDataChannel) => {
