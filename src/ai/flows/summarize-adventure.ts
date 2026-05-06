@@ -39,14 +39,24 @@ export async function summarizeAdventure(input: SummarizeAdventureInput): Promis
       if (!text) throw new Error("No text");
       
       const cleanedText = extractJsonFromResponse(text);
-      const parsed = JSON.parse(cleanedText);
+      
+      // ERR-6 Fix: Wrap JSON.parse in try-catch to preserve raw response text
+      let parsed: any;
+      try {
+        parsed = JSON.parse(cleanedText);
+      } catch (parseError) {
+        logger.error("JSON parse failed for summarizeAdventure. Raw response:", cleanedText.substring(0, 500));
+        throw new Error(`JSON parse failed. Raw response: ${cleanedText.substring(0, 500)}`);
+      }
+      
       const validation = SummarizeAdventureOutputSchema.safeParse(parsed);
       
       if (validation.success) {
           return validation.data;
       } else {
-          console.warn("Zod validation failed for summarizeAdventure, using fallback.", validation.error);
-          throw new Error("Invalid response structure");
+          logger.error("Zod validation failed for summarizeAdventure. Raw response:", cleanedText.substring(0, 500));
+          logger.error("Validation error:", validation.error);
+          throw new Error(`Invalid response structure. Raw response: ${cleanedText.substring(0, 500)}`);
       }
   } catch (error: any) {
       if (error.name === 'AbortError') {
