@@ -217,6 +217,61 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
   useEffect(() => {
     logger.log("GameProvider initializing...");
 
+    // SAVE-9 Fix: Add storage event listener to detect changes from other tabs
+    const handleStorageChange = (event: StorageEvent) => {
+      // Only handle localStorage changes for our keys
+      if (event.key === null) {
+        // All storage was cleared
+        logger.log('Storage was cleared in another tab');
+        // Reload the page to reflect the cleared state
+        window.location.reload();
+        return;
+      }
+      
+      // Handle saved adventures changes
+      if (event.key === SAVED_ADVENTURES_KEY) {
+        logger.log('Saved adventures changed in another tab');
+        if (event.newValue === null) {
+          // All saves were deleted
+          dispatch({ type: "LOAD_SAVED_ADVENTURES", payload: [] });
+        } else {
+          try {
+            const loadedAdventures: any[] = JSON.parse(event.newValue);
+            if (Array.isArray(loadedAdventures)) {
+              const migratedAdventures = loadedAdventures
+                .map(adv => migrateSavedAdventure(adv))
+                .filter((adv): adv is SavedAdventure => adv !== null);
+              dispatch({ type: "LOAD_SAVED_ADVENTURES", payload: migratedAdventures });
+            }
+          } catch (error) {
+            logger.error('Failed to parse saved adventures from storage event:', error);
+          }
+        }
+      }
+      
+      // Handle theme changes
+      if (event.key === THEME_ID_KEY || event.key === THEME_MODE_KEY) {
+        logger.log('Theme changed in another tab');
+        const savedThemeId = localStorage.getItem(THEME_ID_KEY) || initialState.selectedThemeId;
+        const savedMode = localStorage.getItem(THEME_MODE_KEY);
+        const isDark = savedMode === 'dark';
+        dispatch({ type: 'SET_THEME_ID', payload: savedThemeId });
+        dispatch({ type: 'SET_DARK_MODE', payload: isDark });
+        applyTheme(savedThemeId, isDark);
+      }
+      
+      // Handle AI provider changes
+      if (event.key === AI_PROVIDER_KEY) {
+        logger.log('AI provider changed in another tab');
+        const savedProvider = localStorage.getItem(AI_PROVIDER_KEY) as ProviderType | null;
+        if (savedProvider && ['gemini', 'openai', 'claude', 'deepseek'].includes(savedProvider)) {
+          dispatch({ type: 'SET_AI_PROVIDER', payload: savedProvider });
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+
     // Load saved adventures from localStorage
     try {
       const savedData = localStorage.getItem(SAVED_ADVENTURES_KEY);
@@ -353,6 +408,11 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     
     // Mark initialization as complete
     setIsInitializing(false);
+    
+    // Cleanup storage event listener on unmount
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []); // Empty deps – runs once
 
   // Note: AI router no longer needs client-side configuration (server-side keys only)
