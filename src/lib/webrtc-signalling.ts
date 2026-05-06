@@ -427,6 +427,19 @@ function scheduleQueueProcessing() {
   }
 }
 
+/**
+ * Clean up the queue processor and clear any pending timeout
+ * Should be called when all WebRTC connections are closed
+ */
+export function cleanupQueueProcessor() {
+  if (queueProcessorTimeoutId) {
+    clearTimeout(queueProcessorTimeoutId);
+    queueProcessorTimeoutId = null;
+  }
+  queueProcessorInitialized = false;
+  messageQueue.length = 0; // Clear any remaining messages
+}
+
 export function sendDataChannelMessage(channel: RTCDataChannel, data: any): boolean {
   if (channel.readyState !== 'open') {
     return false;

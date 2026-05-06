@@ -100,9 +100,22 @@ function migrateSavedAdventure(adventure: any): SavedAdventure {
 }
 
 export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
-  const [state, dispatch] = useReducer(gameReducer, initialState);
+  const [state, rawDispatch] = useReducer(gameReducer, initialState);
   const [isInitializing, setIsInitializing] = React.useState(true);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // PERF-3 Fix: Wrap dispatch to clean up WebRTC queue processor on RESET_GAME
+  const dispatch: Dispatch<Action> = useCallback((action: Action) => {
+    if (action.type === 'RESET_GAME') {
+      // Dynamic import to avoid circular dependency
+      import('@/lib/webrtc-signalling').then(({ cleanupQueueProcessor }) => {
+        cleanupQueueProcessor();
+      }).catch(() => {
+        // Ignore errors - webrtc-signalling might not be available
+      });
+    }
+    rawDispatch(action);
+  }, [rawDispatch]);
 
   const applyTheme = useCallback((themeId: string, isDark: boolean) => {
     const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
