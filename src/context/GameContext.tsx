@@ -98,7 +98,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
         }
       }
     } catch (error) {
-      console.error("Failed to load saved adventures:", error);
+      logger.error("Failed to load saved adventures:", error);
       toast({
         title: "Error Loading Saved Adventures",
         description: "There was a problem loading your saved adventures. They may be corrupted.",
@@ -141,7 +141,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
         localStorage.removeItem(PROVIDER_API_KEYS_KEY);
       }
     } catch (e) {
-      console.error("Failed to load provider API keys:", e);
+      logger.error("Failed to load provider API keys:", e);
       toast({
         title: "Error Loading API Keys",
         description: "There was a problem loading your saved API keys. They may be corrupted.",
