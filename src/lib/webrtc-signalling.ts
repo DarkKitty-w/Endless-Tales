@@ -61,7 +61,6 @@ export function createPeerConnection(
 } {
   const bufferedCandidates: RTCIceCandidateInit[] = [];
   let dataChannelForIce: RTCDataChannel | null = null;
-  let isDataChannelReady = false;
 
   const pc = new RTCPeerConnection({
     iceServers: [
@@ -70,24 +69,45 @@ export function createPeerConnection(
     ],
   });
 
+  // Helper function to send a candidate via data channel
+  const sendCandidate = (candidate: RTCIceCandidateInit): boolean => {
+    if (dataChannelForIce && dataChannelForIce.readyState === 'open') {
+      const message: IceCandidateMessage = {
+        type: 'ice-candidate',
+        candidate,
+      };
+      try {
+        dataChannelForIce.send(JSON.stringify(message));
+        return true;
+      } catch (error) {
+        console.error('Failed to send ICE candidate via data channel:', error);
+        return false;
+      }
+    }
+    return false;
+  };
+
+  // Helper function to send all buffered candidates
+  const sendBufferedCandidates = () => {
+    const toSend = [...bufferedCandidates]; // Copy the array
+    bufferedCandidates.length = 0; // Clear the buffer
+    
+    for (const candidate of toSend) {
+      if (!sendCandidate(candidate)) {
+        // Put it back in buffer if send fails
+        bufferedCandidates.push(candidate);
+      }
+    }
+  };
+
   pc.onicecandidate = (event) => {
     if (event.candidate) {
       const candidateJson = event.candidate.toJSON();
       
-      // If we have an established data channel, send candidate immediately
-      if (dataChannelForIce && isDataChannelReady) {
-        const message: IceCandidateMessage = {
-          type: 'ice-candidate',
-          candidate: candidateJson,
-        };
-        try {
-          dataChannelForIce.send(JSON.stringify(message));
-          onIceCandidate(candidateJson);
-          return;
-        } catch (error) {
-          console.error('Failed to send ICE candidate via data channel:', error);
-          // Fall through to buffering if send fails
-        }
+      // Try to send immediately if data channel is open
+      if (sendCandidate(candidateJson)) {
+        onIceCandidate(candidateJson);
+        return;
       }
       
       // Buffer candidates so they can be sent later via data channel
@@ -106,48 +126,26 @@ export function createPeerConnection(
     pc,
     getBufferedCandidates: () => {
       // Return current buffered candidates (for initial signalling package)
-      return [...bufferedCandidates]; // Don't clear here - will be cleared when sent
+      return [...bufferedCandidates];
     },
     setDataChannel: (dc: RTCDataChannel) => {
       dataChannelForIce = dc;
       
-      // Track ready state properly
-      const sendBufferedCandidates = () => {
-        isDataChannelReady = true;
-        // Send any buffered candidates now
-        const toSend = [...bufferedCandidates]; // Copy the array
-        bufferedCandidates.length = 0; // Clear the buffer
-        
-        for (const candidate of toSend) {
-          const message: IceCandidateMessage = {
-            type: 'ice-candidate',
-            candidate,
-          };
-          try {
-            dc.send(JSON.stringify(message));
-          } catch (error) {
-            console.error('Failed to send buffered ICE candidate:', error);
-            // Put it back in buffer if send fails
-            bufferedCandidates.push(candidate);
-          }
-        }
+      // Send any buffered candidates when data channel opens
+      const onOpen = () => {
+        sendBufferedCandidates();
       };
       
       if (dc.readyState === 'open') {
         sendBufferedCandidates();
       } else {
-        // When data channel opens, send any buffered candidates
-        const originalOnOpen = dc.onopen;
-        dc.onopen = (event) => {
-          sendBufferedCandidates();
-          // Call original onopen if it exists
-          if (originalOnOpen) {
-            if (typeof originalOnOpen === 'function') {
-              originalOnOpen.call(dc, event);
-            }
-          }
-        };
+        dc.onopen = onOpen;
       }
+      
+      // Also handle channel state changes - if channel reopens, resend buffered
+      dc.onclose = () => {
+        // Channel closed, will need to wait for reopen
+      };
     }
   };
 }
