@@ -20,7 +20,7 @@ import { logger } from "@/lib/logger";
 import { toast } from "../hooks/use-toast";
 import { validateSavedAdventure, SavedAdventureSchema } from "./schemas/save-schema";
 import { runMigrations, getPendingMigrations } from "./schemas/migration-system";
-import { atomicLocalStorageWrite, safeLocalStorageRead, isLocalStorageQuotaLow, checkSaveSize } from "@/lib/storage-utils";
+import { atomicLocalStorageWrite, safeLocalStorageRead, isLocalStorageQuotaLow, checkSaveSize, sanitizeStateForPersistence } from "@/lib/storage-utils";
 
 // Storage keys
 const AI_PROVIDER_KEY = "endlessTales_aiProvider";
@@ -84,6 +84,7 @@ const GameContext = createContext<{ state: GameState; dispatch: Dispatch<Action>
  * Migrate a saved adventure to the current schema version.
  * Validates required fields using Zod schema validation.
  * Runs all necessary migrations to bring the save to the current version.
+ * SAVE-13 Fix: Sanitizes loaded adventure to remove any multiplayer fields.
  */
 function migrateSavedAdventure(adventure: any, onError?: (title: string, description: string) => void): SavedAdventure | null {
   // Validate using Zod schema
@@ -114,7 +115,11 @@ function migrateSavedAdventure(adventure: any, onError?: (title: string, descrip
       logger.log(`Applied migrations: ${pendingMigs.map(v => `v${v}->v${v+1}`).join(', ')}`);
     }
     
-    return migrated;
+    // SAVE-13 Fix: Sanitize migrated adventure to remove any multiplayer fields
+    // that might have been added to the save (from older versions or bugs)
+    const sanitized = sanitizeStateForPersistence(migrated);
+    
+    return sanitized as SavedAdventure;
   } catch (error: any) {
     // ERR-21 Fix: Surface migration errors to user
     logger.error('Migration failed for adventure:', { adventureId: adventure.id, error: error.message });
