@@ -1,16 +1,47 @@
 // src/app/api/ai-proxy/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { logger } from '@/lib/logger';
+import { checkRateLimit } from '@/lib/rate-limit';
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+// Security: Allowed providers to prevent unauthorized access
+const ALLOWED_PROVIDERS = ['gemini', 'openai', 'claude', 'deepseek', 'openrouter', 'webllm'];
 
 export async function POST(request: NextRequest) {
+  // SEC-4 Fix: Apply rate limiting
+  const clientIp = request.headers.get('x-forwarded-for') || 
+                   request.headers.get('x-real-ip') || 
+                   'unknown';
+  const rateLimitResult = checkRateLimit(clientIp);
+  
+  if (!rateLimitResult.success) {
+    return NextResponse.json(
+      { error: 'Rate limit exceeded. Please try again later.' },
+      { 
+        status: 429,
+        headers: {
+          'X-RateLimit-Limit': String(rateLimitResult.limit),
+          'X-RateLimit-Remaining': String(rateLimitResult.remaining),
+          'X-RateLimit-Reset': String(rateLimitResult.reset),
+          'Retry-After': String(Math.ceil((rateLimitResult.reset - Date.now()) / 1000)),
+        }
+      }
+    );
+  }
+
   try {
     const body = await request.json();
-    const { provider, model, contents, config, userApiKey, stream, systemMessage } = body;
+    const { provider, model, contents, config, stream, systemMessage } = body;
 
-    // Determine which API key to use
-    const apiKey = userApiKey || getServerApiKey(provider);
+    // SEC-5 Fix: Validate provider input
+    if (!provider || !ALLOWED_PROVIDERS.includes(provider)) {
+      return NextResponse.json(
+        { error: 'Invalid or missing provider parameter.' },
+        { status: 400 }
+      );
+    }
+
+    // Only use server-side API keys (security fix: no client-side API keys)
+    const apiKey = getServerApiKey(provider);
     
     if (!apiKey && provider !== 'webllm') {
       const providerLabels: Record<string, string> = {
@@ -22,7 +53,7 @@ export async function POST(request: NextRequest) {
       };
       const providerName = providerLabels[provider] || provider;
       return NextResponse.json(
-        { error: `${providerName} API key not configured. Please add your ${providerName} API key in Settings.` },
+        { error: `${providerName} API key not configured. Please contact the administrator.` },
         { status: 401 }
       );
     }
@@ -46,9 +77,10 @@ export async function POST(request: NextRequest) {
     }
   } catch (error: unknown) {
     logger.error('AI Proxy error:', error);
-    const message = error instanceof Error ? error.message : String(error);
+    // SEC-3 Fix: Sanitize error messages sent to clients
+    // Only return generic error messages, log detailed errors server-side only
     return NextResponse.json(
-      { error: message },
+      { error: 'AI request failed. Please try again later.' },
       { status: 500 }
     );
   }
@@ -103,9 +135,10 @@ async function handleGemini(
   if (!response.ok) {
     const errorText = await response.text();
     logger.error('Gemini API error:', response.status, errorText);
+    // SEC-3 Fix: Sanitize error messages sent to clients
     return NextResponse.json(
-      { error: `Gemini API error: ${response.status}` },
-      { status: response.status }
+      { error: 'AI request failed. Please try again later.' },
+      { status: 500 }
     );
   }
 
@@ -170,9 +203,10 @@ async function handleOpenAICompatible(
   if (!response.ok) {
     const error = await response.json();
     logger.error(`${providerName} API error:`, response.status, error);
+    // SEC-3 Fix: Sanitize error messages sent to clients
     return NextResponse.json(
-      { error: `${providerName} API error: ${error.error?.message || response.status}` },
-      { status: response.status }
+      { error: 'AI request failed. Please try again later.' },
+      { status: 500 }
     );
   }
 
@@ -270,9 +304,10 @@ async function handleClaude(
   if (!response.ok) {
     const error = await response.json();
     logger.error('Claude API error:', response.status, error);
+    // SEC-3 Fix: Sanitize error messages sent to clients
     return NextResponse.json(
-      { error: `Claude API error: ${error.error?.message || response.status}` },
-      { status: response.status }
+      { error: 'AI request failed. Please try again later.' },
+      { status: 500 }
     );
   }
 

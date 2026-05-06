@@ -139,8 +139,6 @@ class GeminiProvider implements AIProvider {
         contents,
         systemMessage,
         config,
-        // Send user's API key if available (hybrid approach)
-        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal: getSignalWithTimeout(signal),
     });
@@ -180,8 +178,6 @@ class GeminiProvider implements AIProvider {
         systemMessage,
         config,
         stream: true,
-        // Send user's API key if available (hybrid approach)
-        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal: getSignalWithTimeout(signal),
     });
@@ -279,8 +275,6 @@ class OpenAIProvider implements AIProvider {
         model: effectiveModel,
         contents,
         config,
-        // Send user's API key if available (hybrid approach)
-        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal: getSignalWithTimeout(signal),
     });
@@ -318,8 +312,6 @@ class OpenAIProvider implements AIProvider {
         contents,
         config,
         stream: true,
-        // Send user's API key if available (hybrid approach)
-        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal: getSignalWithTimeout(signal),
     });
@@ -418,8 +410,6 @@ class ClaudeProvider implements AIProvider {
         model: effectiveModel,
         contents,
         config,
-        // Send user's API key if available (hybrid approach)
-        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal: getSignalWithTimeout(signal),
     });
@@ -457,8 +447,6 @@ class ClaudeProvider implements AIProvider {
         contents,
         config,
         stream: true,
-        // Send user's API key if available (hybrid approach)
-        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal: getSignalWithTimeout(signal),
     });
@@ -559,8 +547,6 @@ class DeepSeekProvider implements AIProvider {
         model: effectiveModel,
         contents,
         config,
-        // Send user's API key if available (hybrid approach)
-        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal: getSignalWithTimeout(signal),
     });
@@ -598,8 +584,6 @@ class DeepSeekProvider implements AIProvider {
         contents,
         config,
         stream: true,
-        // Send user's API key if available (hybrid approach)
-        ...(this.apiKey && { apiKey: this.apiKey }),
       }),
       signal: getSignalWithTimeout(signal),
     });
@@ -689,7 +673,6 @@ class OpenRouterProvider implements AIProvider {
     signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'z-ai/glm-4.5-air:free';
-    const apiKey = this.getApiKey();
 
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -699,7 +682,6 @@ class OpenRouterProvider implements AIProvider {
         model: effectiveModel,
         contents,
         config,
-        ...(apiKey && { apiKey }),
       }),
       signal: getSignalWithTimeout(signal),
     });
@@ -727,7 +709,6 @@ class OpenRouterProvider implements AIProvider {
     signal?: AbortSignal;
   }): AsyncIterable<string> {
     const effectiveModel = model || 'z-ai/glm-4.5-air:free';
-    const apiKey = this.getApiKey();
 
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -738,7 +719,6 @@ class OpenRouterProvider implements AIProvider {
         contents,
         config,
         stream: true,
-        ...(apiKey && { apiKey }),
       }),
       signal: getSignalWithTimeout(signal),
     });

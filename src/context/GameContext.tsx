@@ -178,41 +178,13 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     const initialDarkMode = savedMode === 'dark' || (savedMode === null && prefersDark);
 
-    // Load API key from sessionStorage (more secure, cleared on session end)
-    const savedUserApiKey = sessionStorage.getItem(USER_API_KEY_KEY);
-    if (savedUserApiKey) {
-      dispatch({ type: 'SET_USER_API_KEY', payload: savedUserApiKey });
-    }
-
     // Load AI provider preference
     const savedProvider = localStorage.getItem(AI_PROVIDER_KEY) as ProviderType | null;
     if (savedProvider && ['gemini', 'openai', 'claude', 'deepseek'].includes(savedProvider)) {
       dispatch({ type: 'SET_AI_PROVIDER', payload: savedProvider });
     }
 
-    // Load provider API keys from sessionStorage (moved from localStorage for security)
-    try {
-      const savedKeys = sessionStorage.getItem(PROVIDER_API_KEYS_KEY);
-      if (savedKeys) {
-        const keys = JSON.parse(savedKeys);
-        Object.entries(keys).forEach(([provider, key]) => {
-          if (key && typeof key === 'string') {
-            dispatch({ type: 'SET_PROVIDER_API_KEY', payload: { provider: provider as ProviderType, apiKey: key } });
-          }
-        });
-      }
-      // Clean up any old keys from localStorage (migration)
-      if (localStorage.getItem(PROVIDER_API_KEYS_KEY)) {
-        localStorage.removeItem(PROVIDER_API_KEYS_KEY);
-      }
-    } catch (e) {
-      logger.error("Failed to load provider API keys:", e);
-      toast({
-        title: "Error Loading API Keys",
-        description: "There was a problem loading your saved API keys. They may be corrupted.",
-        variant: "destructive",
-      });
-    }
+    // Note: API keys are now server-side only for security (no client-side storage)
 
     dispatch({ type: 'SET_THEME_ID', payload: savedThemeId });
     dispatch({ type: 'SET_DARK_MODE', payload: initialDarkMode });
@@ -223,13 +195,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     setIsInitializing(false);
   }, []); // Empty deps – runs once
 
-  // NEW: Immediate AI router configuration (no debounce)
-  useEffect(() => {
-    configureAIRouter({
-      defaultProvider: state.aiProvider,
-      apiKeys: state.providerApiKeys,
-    });
-  }, [state.aiProvider, state.providerApiKeys]);
+  // Note: AI router no longer needs client-side configuration (server-side keys only)
 
   // Consolidated persistence hook with debouncing (storage writes only)
   useEffect(() => {
@@ -245,25 +211,13 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
       localStorage.setItem(THEME_ID_KEY, state.selectedThemeId);
       localStorage.setItem(THEME_MODE_KEY, state.isDarkMode ? 'dark' : 'light');
 
-      // Google AI key (sessionStorage)
-      if (state.userGoogleAiApiKey) {
-        sessionStorage.setItem(USER_API_KEY_KEY, state.userGoogleAiApiKey);
-      } else if (state.userGoogleAiApiKey === null) {
-        sessionStorage.removeItem(USER_API_KEY_KEY);
-      }
-
       // Saved adventures (localStorage)
       localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(state.savedAdventures));
 
       // AI provider preference (localStorage)
       localStorage.setItem(AI_PROVIDER_KEY, state.aiProvider);
 
-      // Provider API keys (sessionStorage)
-      if (Object.keys(state.providerApiKeys).length > 0) {
-        sessionStorage.setItem(PROVIDER_API_KEYS_KEY, JSON.stringify(state.providerApiKeys));
-      } else {
-        sessionStorage.removeItem(PROVIDER_API_KEYS_KEY);
-      }
+      // Note: API keys are now server-side only (no client-side storage)
 
       // REMOVED: configureAIRouter call – now handled by immediate effect above
 
