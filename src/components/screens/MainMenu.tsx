@@ -39,6 +39,9 @@ export function MainMenu() {
     if (adventureType === "Randomized") {
       // For Randomized, go to Character Creation first.
       dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
+    } else if (adventureType === "Coop") {
+      // For Co-op, go to CoopLobby for hosting/joining sessions.
+      dispatch({ type: "SET_GAME_STATUS", payload: "CoopLobby" });
     } else {
       // For Custom and Immersed, go to Adventure Setup first.
       dispatch({ type: "SET_GAME_STATUS", payload: "AdventureSetup" });
