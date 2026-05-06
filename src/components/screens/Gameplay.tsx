@@ -19,11 +19,9 @@ import { assessActionDifficulty, type AssessActionDifficultyInput } from "../../
 import { generateSkillTree } from "../../ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "../../ai/flows/attempt-crafting";
 import { cn } from "../../lib/utils";
-import { Loader2, Save, Users } from "lucide-react";
-import { SettingsPanel } from "../../components/screens/SettingsPanel";
+import { Loader2 } from "lucide-react";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { Button } from '../../components/ui/button';
-import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle } from "../../components/ui/sheet";
 import { TooltipProvider } from "../../components/ui/tooltip";
 import type { InteractionRequest } from "../../types/multiplayer-types";
 import { logger } from "@/lib/logger";
