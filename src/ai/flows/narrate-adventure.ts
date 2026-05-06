@@ -206,7 +206,9 @@ STORY CONTINUITY: Build upon previous events. Refer to the "Recent Story Summary
 
 FACT CHECKING: Before narrating, verify that your response doesn't contradict any facts in "Established Story Facts". If you're unsure about a fact, check the "Recent Story Summary" for context.
 
-GAME CONSTRAINTS: You MUST ONLY reference skills and items that are explicitly listed in the "Current Game State" section. Do NOT suggest actions requiring skills the character hasn't learned. Do NOT reference items not in the inventory. If you mention using an item or skill, verify it's listed in the game state first.`;
+GAME CONSTRAINTS: You MUST ONLY reference skills and items that are explicitly listed in the "Current Game State" section. Do NOT suggest actions requiring skills the character hasn't learned. Do NOT reference items not in the inventory. If you mention using an item or skill, verify it's listed in the game state first.
+
+STATUS EFFECTS: Always consider active status effects when narrating. If the character is poisoned, mention nausea or pain. If exhausted, describe fatigue. Status effects should influence the narration and available choices.`;
 
   const userPrompt = `
 **Character:**

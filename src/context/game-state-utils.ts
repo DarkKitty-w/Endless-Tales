@@ -277,6 +277,7 @@ export function formatGameStateContextForPrompt(ctx: GameStateContext): string {
         lines.push(`Character: ${c.name} (${c.class}), Level ${c.level} (XP: ${c.xp}/${c.xpToNextLevel})`);
         lines.push(`Stats: STR ${c.stats.strength}, STA ${c.stats.stamina}, WIS ${c.stats.wisdom}`);
         lines.push(`Health: ${c.health.current}/${c.health.max}, Action STA: ${c.stamina.current}/${c.stamina.max}, Mana: ${c.mana.current}/${c.mana.max}`);
+        lines.push(`Status Effects: ${c.statusEffects.length > 0 ? c.statusEffects.map(e => `${e.name} (${e.duration} turns remaining)`).join(', ') : 'None'}`);
         lines.push(`Traits: ${c.traits.join(', ') || 'None'}`);
         lines.push(`Knowledge: ${c.knowledge.join(', ') || 'None'}`);
         lines.push(`Background: ${c.background}`);
