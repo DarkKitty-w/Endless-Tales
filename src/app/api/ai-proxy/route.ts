@@ -174,6 +174,24 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // ERR-9 Fix: Differentiate network errors from API errors
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      // Network error (connection refused, DNS failure, etc.)
+      logger.error('Network error in AI Proxy:', error.message);
+      return NextResponse.json(
+        { error: 'Network connection failed. Please check your internet connection and try again.' },
+        { status: 503 }
+      );
+    }
+    
+    // ERR-9 Fix: Check for AbortError (request was aborted)
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return NextResponse.json(
+        { error: 'AI request was cancelled. Please try again.' },
+        { status: 499 }
+      );
+    }
+    
     // SEC-3 Fix: Sanitize error messages sent to clients
     // Only return generic error messages, log detailed errors server-side only
     return NextResponse.json(
