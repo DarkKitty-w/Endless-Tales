@@ -19,7 +19,7 @@ import { assessActionDifficulty, type AssessActionDifficultyInput } from "../../
 import { generateSkillTree } from "../../ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "../../ai/flows/attempt-crafting";
 import { cn } from "../../lib/utils";
-import { Loader2, Settings, ArrowLeft, Skull, Save, Info, Dices, Hammer, BookCopy, CalendarClock, GitBranch, RefreshCw, Users } from "lucide-react";
+import { Loader2, Save, Users } from "lucide-react";
 import { SettingsPanel } from "../../components/screens/SettingsPanel";
 import { LeftPanel } from "../../components/game/LeftPanel";
 import { NarrationDisplay } from '../../components/gameplay/NarrationDisplay';
@@ -32,8 +32,6 @@ import { useIsMobile } from "../../hooks/use-mobile";
 import { Button } from '../../components/ui/button';
 import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle } from "../../components/ui/sheet";
 import { TooltipProvider } from "../../components/ui/tooltip";
-import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
-import { Skeleton } from "../../components/ui/skeleton";
 import { PartySidebar } from "../../components/gameplay/PartySidebar";
 import { ChatPanel } from "../../components/gameplay/ChatPanel";
 import { InteractionDialog } from "../../components/gameplay/InteractionDialog";
