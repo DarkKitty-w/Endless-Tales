@@ -153,7 +153,8 @@ class GeminiProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`Gemini API error: ${error.error || 'Request failed'}`);
+      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      throw new Error(error.error || `Gemini API error: Request failed`);
     }
 
     const data = await response.json();
@@ -199,7 +200,8 @@ class GeminiProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`Gemini API streaming error: ${error.error || 'Streaming request failed'}`);
+      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      throw new Error(error.error || `Gemini API streaming error: Streaming request failed`);
     }
 
     const reader = response.body?.getReader();
@@ -300,7 +302,8 @@ class OpenAIProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`OpenAI API error: ${error.error || 'Request failed'}`);
+      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      throw new Error(error.error || `OpenAI API error: Request failed`);
     }
 
     const data = await response.json();
@@ -341,7 +344,8 @@ class OpenAIProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`OpenAI API streaming error: ${error.error || 'Streaming request failed'}`);
+      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      throw new Error(error.error || `OpenAI API streaming error: Streaming request failed`);
     }
 
     const reader = response.body?.getReader();
@@ -443,7 +447,8 @@ class ClaudeProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`Claude API error: ${error.error || 'Request failed'}`);
+      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      throw new Error(error.error || `Claude API error: Request failed`);
     }
 
     const data = await response.json();
@@ -484,7 +489,8 @@ class ClaudeProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`Claude API streaming error: ${error.error || 'Streaming request failed'}`);
+      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      throw new Error(error.error || `Claude API streaming error: Streaming request failed`);
     }
 
     const reader = response.body?.getReader();
@@ -588,7 +594,8 @@ class DeepSeekProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`DeepSeek API error: ${error.error || 'Request failed'}`);
+      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      throw new Error(error.error || `DeepSeek API error: Request failed`);
     }
 
     const data = await response.json();
@@ -629,7 +636,8 @@ class DeepSeekProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`DeepSeek API streaming error: ${error.error || 'Streaming request failed'}`);
+      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      throw new Error(error.error || `DeepSeek API streaming error: Streaming request failed`);
     }
 
     const reader = response.body?.getReader();
@@ -731,7 +739,8 @@ class OpenRouterProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`OpenRouter API error: ${error.error || 'Request failed'}`);
+      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      throw new Error(error.error || `OpenRouter API error: Request failed`);
     }
 
     const data = await response.json();
@@ -772,7 +781,8 @@ class OpenRouterProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`OpenRouter API streaming error: ${error.error || 'Streaming request failed'}`);
+      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      throw new Error(error.error || `OpenRouter API streaming error: Streaming request failed`);
     }
 
     const reader = response.body?.getReader();

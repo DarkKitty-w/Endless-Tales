@@ -227,10 +227,31 @@ async function handleGemini(
 
   if (!response.ok) {
     const errorText = await response.text();
+    let errorMessage = 'AI request failed. Please try again later.';
+    
+    try {
+      const errorJson = JSON.parse(errorText);
+      // Gemini error structure: { error: { message, status, code } }
+      if (errorJson.error?.message) {
+        const geminiError = errorJson.error.message.toLowerCase();
+        if (geminiError.includes('api key') || geminiError.includes('invalid')) {
+          errorMessage = 'Gemini API key invalid. Please contact the administrator.';
+        } else if (geminiError.includes('quota') || geminiError.includes('exceeded')) {
+          errorMessage = 'Gemini quota exceeded. Please try again later.';
+        } else if (geminiError.includes('rate limit')) {
+          errorMessage = 'Gemini rate limit exceeded. Please try again later.';
+        } else {
+          errorMessage = 'Gemini request failed. Please try again later.';
+        }
+      }
+    } catch {
+      // If we can't parse the error, use the generic message
+    }
+    
     logger.error('Gemini API error:', response.status, errorText);
     // SEC-3 Fix: Sanitize error messages sent to clients
     return NextResponse.json(
-      { error: 'AI request failed. Please try again later.' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -299,11 +320,36 @@ async function handleOpenAICompatible(
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    logger.error(`${providerName} API error:`, response.status, error);
+    const errorText = await response.text();
+    let errorMessage = 'AI request failed. Please try again later.';
+    
+    try {
+      const errorJson = JSON.parse(errorText);
+      // OpenAI-compatible error structure: { error: { message, type, code } }
+      if (errorJson.error?.message) {
+        const providerError = errorJson.error.message.toLowerCase();
+        const providerType = providerName.toLowerCase();
+        
+        if (providerError.includes('api key') || providerError.includes('invalid') || providerError.includes('incorrect')) {
+          errorMessage = `${providerName} API key invalid. Please contact the administrator.`;
+        } else if (providerError.includes('quota') || providerError.includes('exceeded')) {
+          errorMessage = `${providerName} quota exceeded. Please try again later.`;
+        } else if (providerError.includes('rate limit')) {
+          errorMessage = `${providerName} rate limit exceeded. Please try again later.`;
+        } else if (providerError.includes('model') && providerError.includes('not found')) {
+          errorMessage = `${providerName} model not found. Please contact the administrator.`;
+        } else {
+          errorMessage = `${providerName} request failed. Please try again later.`;
+        }
+      }
+    } catch {
+      // If we can't parse the error, use the generic message
+    }
+    
+    logger.error(`${providerName} API error:`, response.status, errorText);
     // SEC-3 Fix: Sanitize error messages sent to clients
     return NextResponse.json(
-      { error: 'AI request failed. Please try again later.' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
@@ -408,11 +454,35 @@ async function handleClaude(
   });
 
   if (!response.ok) {
-    const error = await response.json();
-    logger.error('Claude API error:', response.status, error);
+    const errorText = await response.text();
+    let errorMessage = 'AI request failed. Please try again later.';
+    
+    try {
+      const errorJson = JSON.parse(errorText);
+      // Claude error structure: { type: "error", error: { type, message } }
+      if (errorJson.error?.message) {
+        const claudeError = errorJson.error.message.toLowerCase();
+        
+        if (claudeError.includes('api key') || claudeError.includes('invalid') || claudeError.includes('unauthorized')) {
+          errorMessage = 'Claude API key invalid. Please contact the administrator.';
+        } else if (claudeError.includes('quota') || claudeError.includes('exceeded')) {
+          errorMessage = 'Claude quota exceeded. Please try again later.';
+        } else if (claudeError.includes('rate limit')) {
+          errorMessage = 'Claude rate limit exceeded. Please try again later.';
+        } else if (claudeError.includes('model') && claudeError.includes('not found')) {
+          errorMessage = 'Claude model not found. Please contact the administrator.';
+        } else {
+          errorMessage = 'Claude request failed. Please try again later.';
+        }
+      }
+    } catch {
+      // If we can't parse the error, use the generic message
+    }
+    
+    logger.error('Claude API error:', response.status, errorText);
     // SEC-3 Fix: Sanitize error messages sent to clients
     return NextResponse.json(
-      { error: 'AI request failed. Please try again later.' },
+      { error: errorMessage },
       { status: 500 }
     );
   }
