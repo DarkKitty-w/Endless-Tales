@@ -41,7 +41,6 @@ export interface GameState {
   character: Character | null;
   sessionId: string | null;
   players: string[];
-  currentPlayerUid: string | null;
   isHost: boolean;
 
   // Multiplayer state

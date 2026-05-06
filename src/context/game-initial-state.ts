@@ -140,7 +140,6 @@ export const initialState: GameState = {
   character: null,
   sessionId: null,
   players: [],
-  currentPlayerUid: null,
   isHost: false,
 
   // Multiplayer state
