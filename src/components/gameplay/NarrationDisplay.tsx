@@ -1,7 +1,7 @@
 // src/components/gameplay/NarrationDisplay.tsx
 "use client";
 
-import React, { useRef, useEffect, useCallback } from "react";
+import React, { useRef, useEffect, useCallback, useMemo } from "react";
 import type { StoryLogEntry } from "../../types/adventure-types";
 import type { NarrateAdventureOutput } from "../../ai/flows/narrate-adventure";
 import { ScrollArea } from "../../components/ui/scroll-area";
@@ -90,7 +90,8 @@ export function NarrationDisplay({
         }
     }, [streamingText, isStreaming, throttledScrollToBottom]);
 
-    const displayLog = storyLog.slice(-50);
+    // PERF-6 Fix: Memoize displayLog to prevent unnecessary array copies on every render
+    const displayLog = useMemo(() => storyLog.slice(-50), [storyLog]);
     const busy = loadingPhase.type !== 'idle' || isStreaming;
 
     const renderDynamicContent = () => {
