@@ -303,13 +303,14 @@ export function AdventureSetup() {
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                    <div className="space-y-4">
                        <div className="space-y-2">
-                           <Label htmlFor="worldType" className="flex items-center gap-1"><Globe className="w-4 h-4"/> World Type</Label>
+                           <Label htmlFor="worldType" className="flex items-center gap-1"><Globe className="w-4 h-4"/> World Type *</Label>
                            <Input 
                              id="worldType" 
                              value={worldType} 
                              onChange={(e) => setWorldType(e.target.value)} 
                              placeholder="e.g., Forgotten Kingdom" 
                              className={customError && !worldType.trim() ? 'border-destructive' : ''}
+                             aria-required="true"
                              aria-invalid={customError && !worldType.trim() ? true : undefined}
                              aria-describedby={customError && !worldType.trim() ? "worldType-error" : undefined}
                            />
@@ -320,13 +321,14 @@ export function AdventureSetup() {
                            )}
                        </div>
                        <div className="space-y-2">
-                           <Label htmlFor="mainQuestline" className="flex items-center gap-1"><ScrollText className="w-4 h-4"/> Main Questline (Goal)</Label>
+                           <Label htmlFor="mainQuestline" className="flex items-center gap-1"><ScrollText className="w-4 h-4"/> Main Questline (Goal) *</Label>
                            <Input 
                              id="mainQuestline" 
                              value={mainQuestline} 
                              onChange={(e) => setMainQuestline(e.target.value)} 
                              placeholder="e.g., Find the Lost Artifact" 
                              className={customError && !mainQuestline.trim() ? 'border-destructive' : ''}
+                             aria-required="true"
                              aria-invalid={customError && !mainQuestline.trim() ? true : undefined}
                              aria-describedby={customError && !mainQuestline.trim() ? "mainQuestline-error" : undefined}
                            />
@@ -337,11 +339,12 @@ export function AdventureSetup() {
                            )}
                        </div>
                         <div className="space-y-2">
-                            <Label htmlFor="genreTheme" className="flex items-center gap-1"><BookOpen className="w-4 h-4"/> Genre/Theme</Label>
+                            <Label htmlFor="genreTheme" className="flex items-center gap-1"><BookOpen className="w-4 h-4"/> Genre/Theme *</Label>
                             <Select value={genreTheme} onValueChange={(v) => setGenreTheme(v as GenreTheme)}>
                                 <SelectTrigger 
                                   id="genreTheme" 
                                   className={customError && !genreTheme ? 'border-destructive' : ''}
+                                  aria-required="true"
                                   aria-invalid={customError && !genreTheme ? true : undefined}
                                   aria-describedby={customError && !genreTheme ? "genreTheme-error" : undefined}
                                 >
@@ -361,11 +364,12 @@ export function AdventureSetup() {
                             )}
                        </div>
                        <div className="space-y-2">
-                            <Label htmlFor="magicSystem" className="flex items-center gap-1"><Sparkles className="w-4 h-4"/> Magic System</Label>
+                            <Label htmlFor="magicSystem" className="flex items-center gap-1"><Sparkles className="w-4 h-4"/> Magic System *</Label>
                             <Select value={magicSystem} onValueChange={(v) => setMagicSystem(v as MagicSystem)}>
                                 <SelectTrigger 
                                   id="magicSystem" 
                                   className={customError && !magicSystem ? 'border-destructive' : ''}
+                                  aria-required="true"
                                   aria-invalid={customError && !magicSystem ? true : undefined}
                                   aria-describedby={customError && !magicSystem ? "magicSystem-error" : undefined}
                                 >
@@ -383,13 +387,14 @@ export function AdventureSetup() {
                             )}
                        </div>
                        <div className="space-y-2">
-                            <Label htmlFor="startingSituation" className="flex items-center gap-1"><Play className="w-4 h-4"/> Starting Situation</Label>
+                            <Label htmlFor="startingSituation" className="flex items-center gap-1"><Play className="w-4 h-4"/> Starting Situation *</Label>
                             <Input 
                               id="startingSituation" 
                               value={startingSituation} 
                               onChange={(e) => setStartingSituation(e.target.value)} 
                               placeholder="e.g., Waking up with amnesia" 
                               className={customError && !startingSituation.trim() ? 'border-destructive' : ''}
+                              aria-required="true"
                               aria-invalid={customError && !startingSituation.trim() ? true : undefined}
                               aria-describedby={customError && !startingSituation.trim() ? "startingSituation-error" : undefined}
                             />
@@ -402,11 +407,12 @@ export function AdventureSetup() {
                    </div>
                    <div className="space-y-4">
                         <div className="space-y-2">
-                            <Label htmlFor="techLevel" className="flex items-center gap-1"><Atom className="w-4 h-4"/> Technological Level</Label>
+                            <Label htmlFor="techLevel" className="flex items-center gap-1"><Atom className="w-4 h-4"/> Technological Level *</Label>
                             <Select value={techLevel} onValueChange={(v) => setTechLevel(v as TechLevel)}>
                                 <SelectTrigger 
                                   id="techLevel" 
                                   className={customError && !techLevel ? 'border-destructive' : ''}
+                                  aria-required="true"
                                   aria-invalid={customError && !techLevel ? true : undefined}
                                   aria-describedby={customError && !techLevel ? "techLevel-error" : undefined}
                                 >
@@ -425,11 +431,12 @@ export function AdventureSetup() {
                             )}
                        </div>
                        <div className="space-y-2">
-                            <Label htmlFor="dominantTone" className="flex items-center gap-1"><Drama className="w-4 h-4"/> Dominant Tone</Label>
+                            <Label htmlFor="dominantTone" className="flex items-center gap-1"><Drama className="w-4 h-4"/> Dominant Tone *</Label>
                             <Select value={dominantTone} onValueChange={(v) => setDominantTone(v as DominantTone)}>
                                 <SelectTrigger 
                                   id="dominantTone" 
                                   className={customError && !dominantTone ? 'border-destructive' : ''}
+                                  aria-required="true"
                                   aria-invalid={customError && !dominantTone ? true : undefined}
                                   aria-describedby={customError && !dominantTone ? "dominantTone-error" : undefined}
                                 >
@@ -448,10 +455,11 @@ export function AdventureSetup() {
                             )}
                        </div>
                         <div className="space-y-2">
-                            <Label htmlFor="combatFrequency" className="flex items-center gap-1"><Swords className="w-4 h-4"/> Combat Frequency</Label>
+                            <Label htmlFor="combatFrequency" className="flex items-center gap-1"><Swords className="w-4 h-4"/> Combat Frequency *</Label>
                             <Select value={combatFrequency} onValueChange={(v) => setCombatFrequency(v as CombatFrequency)}>
                                 <SelectTrigger 
                                   id="combatFrequency" 
+                                  aria-required="true"
                                   aria-invalid={customError && !combatFrequency ? true : undefined}
                                   aria-describedby={customError && !combatFrequency ? "combatFrequency-error" : undefined}
                                 >
@@ -469,10 +477,11 @@ export function AdventureSetup() {
                             )}
                        </div>
                        <div className="space-y-2">
-                            <Label htmlFor="puzzleFrequency" className="flex items-center gap-1"><Puzzle className="w-4 h-4"/> Puzzle/Riddle Frequency</Label>
+                            <Label htmlFor="puzzleFrequency" className="flex items-center gap-1"><Puzzle className="w-4 h-4"/> Puzzle/Riddle Frequency *</Label>
                             <Select value={puzzleFrequency} onValueChange={(v) => setPuzzleFrequency(v as PuzzleFrequency)}>
                                 <SelectTrigger 
                                   id="puzzleFrequency" 
+                                  aria-required="true"
                                   aria-invalid={customError && !puzzleFrequency ? true : undefined}
                                   aria-describedby={customError && !puzzleFrequency ? "puzzleFrequency-error" : undefined}
                                 >
@@ -489,10 +498,11 @@ export function AdventureSetup() {
                             )}
                        </div>
                        <div className="space-y-2">
-                            <Label htmlFor="socialFocus" className="flex items-center gap-1"><Users className="w-4 h-4"/> Social Interaction Focus</Label>
+                            <Label htmlFor="socialFocus" className="flex items-center gap-1"><Users className="w-4 h-4"/> Social Interaction Focus *</Label>
                             <Select value={socialFocus} onValueChange={(v) => setSocialFocus(v as SocialFocus)}>
                                 <SelectTrigger 
                                   id="socialFocus" 
+                                  aria-required="true"
                                   aria-invalid={customError && !socialFocus ? true : undefined}
                                   aria-describedby={customError && !socialFocus ? "socialFocus-error" : undefined}
                                 >
@@ -516,13 +526,14 @@ export function AdventureSetup() {
             <div className="space-y-4 border-t border-foreground/10 pt-6 mt-0">
                <h3 className="text-xl font-semibold mb-4 border-b pb-2">Immersed Adventure Details</h3>
                <div className="space-y-2">
-                   <Label htmlFor="universeName" className="flex items-center gap-1"><Sparkles className="w-4 h-4"/> Universe Name</Label>
+                   <Label htmlFor="universeName" className="flex items-center gap-1"><Sparkles className="w-4 h-4"/> Universe Name *</Label>
                    <Input 
                      id="universeName" 
                      value={universeName} 
                      onChange={(e) => setUniverseName(e.target.value)} 
                      placeholder="e.g., Star Wars, Lord of the Rings, Hogwarts" 
                      className={customError && !universeName.trim() ? 'border-destructive' : ''}
+                     aria-required="true"
                      aria-invalid={customError && !universeName.trim() ? true : undefined}
                      aria-describedby={customError && !universeName.trim() ? "universeName-error" : undefined}
                    />
@@ -550,7 +561,7 @@ export function AdventureSetup() {
 
                <div className="space-y-1">
                     <Label htmlFor="playerCharacterConcept" className="flex items-center gap-1"><ScrollText className="w-4 h-4"/> 
-                        {characterOriginType === 'existing' ? "Existing Character's Name" : "Your Original Character Concept/Role"}
+                        {characterOriginType === 'existing' ? "Existing Character's Name *" : "Your Original Character Concept/Role *"}
                     </Label>
                     <div className="flex items-center gap-2">
                        <Input 
@@ -558,7 +569,11 @@ export function AdventureSetup() {
                         value={playerCharacterConcept} 
                         onChange={(e) => setPlayerCharacterConcept(e.target.value)} 
                         placeholder={characterOriginType === 'existing' ? "e.g., Harry Potter, Luke Skywalker" : "e.g., A rebel pilot, a new student at Hogwarts"} 
-                        className={`flex-grow ${customError && !playerCharacterConcept.trim() ? 'border-destructive' : ''}`}/>
+                        className={`flex-grow ${customError && !playerCharacterConcept.trim() ? 'border-destructive' : ''}`}
+                        aria-required="true"
+                        aria-invalid={customError && !playerCharacterConcept.trim() ? true : undefined}
+                        aria-describedby={customError && !playerCharacterConcept.trim() ? "playerCharacterConcept-error" : undefined}
+                       />
                         <Button
                           type="button"
                           variant="outline"
@@ -570,6 +585,11 @@ export function AdventureSetup() {
                           {isSuggestingNameLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lightbulb className="h-4 w-4" />}
                         </Button>
                     </div>
+                    {customError && !playerCharacterConcept.trim() && (
+                      <p id="playerCharacterConcept-error" className="text-sm text-destructive">
+                        {characterOriginType === 'existing' ? "Character name is required." : "Character concept is required."}
+                      </p>
+                    )}
                 </div>
             </div>
           )}
