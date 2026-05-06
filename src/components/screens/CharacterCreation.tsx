@@ -315,6 +315,15 @@ export function CharacterCreation() {
         };
         const result: GenerateCharacterDescriptionOutput = await generateCharacterDescription(aiInput);
         
+        // ERR-8 Fix: Check if fallback was used and notify user
+        if (result.usedFallback) {
+            toast({ 
+                title: "Using Default Values", 
+                description: "AI generation failed. Using default character profile. Click 'Retry AI' to try again.", 
+                variant: "destructive" 
+            });
+        }
+        
         setValue("description", result.detailedDescription || currentDescValue, {shouldDirty: true, shouldValidate: true});
         setValue("traits", (Array.isArray(result.inferredTraits) ? result.inferredTraits.join(', ') : result.inferredTraits) || currentFormValues.traits, {shouldDirty: true, shouldValidate: true});
         setValue("knowledge", (Array.isArray(result.inferredKnowledge) ? result.inferredKnowledge.join(', ') : result.inferredKnowledge) || currentFormValues.knowledge, {shouldDirty: true, shouldValidate: true});
@@ -327,7 +336,11 @@ export function CharacterCreation() {
         }
         
         dispatch({ type: "SET_AI_DESCRIPTION", payload: result.detailedDescription });
-        toast({ title: "AI Profile Generated!", description: "Character details updated."});
+        
+        // Only show success toast if not using fallback
+        if (!result.usedFallback) {
+            toast({ title: "AI Profile Generated!", description: "Character details updated."});
+        }
         await trigger(); 
      } catch (err: unknown) {
        logger.error("CharacterCreation: AI generation failed:", err);
