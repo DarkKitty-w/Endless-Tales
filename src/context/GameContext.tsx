@@ -48,6 +48,7 @@ function migrateSavedAdventure(adventure: any): SavedAdventure {
 
 export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const [state, dispatch] = useReducer(gameReducer, initialState);
+  const [isInitializing, setIsInitializing] = React.useState(true);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const applyTheme = useCallback((themeId: string, isDark: boolean) => {
@@ -141,6 +142,9 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     dispatch({ type: 'SET_DARK_MODE', payload: initialDarkMode });
 
     // Theme will be applied by the persistence effect after state update
+    
+    // Mark initialization as complete
+    setIsInitializing(false);
   }, []); // Empty deps – runs once
 
   // NEW: Immediate AI router configuration (no debounce)
@@ -243,6 +247,15 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
   }, [state.version, state.status, state.turnCount, state.character, state.inventory, state.selectedThemeId, state.isDarkMode, state.userGoogleAiApiKey, state.storyLog.length, state.isGeneratingSkillTree, state.aiProvider, state.providerApiKeys]);
 
   const contextValue = useMemo(() => ({ state, dispatch }), [state, dispatch]);
+
+  // Show loading spinner while initializing
+  if (isInitializing) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-background">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <GameContext.Provider value={contextValue}>
