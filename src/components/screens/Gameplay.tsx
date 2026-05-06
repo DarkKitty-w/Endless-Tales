@@ -604,6 +604,16 @@ export function Gameplay() {
                 }
 
                 if (narrationResult && narrationResult.narration && narrationResult.updatedGameState) {
+                    // ERR-14: Notify player when AI falls back to defaults
+                    if (narrationResult.usedFallback) {
+                        toast({ 
+                            title: "AI Fallback Used", 
+                            description: "AI generation failed. Using default narration. Use the retry button to try again.", 
+                            variant: "default",
+                            duration: 5000
+                        });
+                    }
+                    
                     const gainedSkillTyped = narrationResult.gainedSkill ? {
                         ...narrationResult.gainedSkill,
                         type: (narrationResult.gainedSkill.type === 'Starter' || narrationResult.gainedSkill.type === 'Learned') 
