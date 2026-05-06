@@ -49,39 +49,38 @@ export function StatAllocationInput({
     onChange(statKey, newValue[0]);
   };
 
+  // Helper to get text color based on stat key
+  const getStatColor = (statKey: keyof CharacterStats) => {
+    if (statKey === 'strength') return 'text-destructive';
+    if (statKey === 'stamina') return 'text-green-600';
+    if (statKey === 'wisdom') return 'text-purple-500';
+    return 'text-muted-foreground';
+  };
+
+  // Helper to get stat abbreviation
+  const getStatAbbr = (statKey: keyof CharacterStats) => {
+    if (statKey === 'strength') return 'STR';
+    if (statKey === 'stamina') return 'STA';
+    if (statKey === 'wisdom') return 'WIS';
+    return '';
+  };
+
+  const statColor = getStatColor(statKey);
+  const statAbbr = getStatAbbr(statKey);
+
   return (
     <div className={cn("space-y-3 border p-4 rounded-md bg-card/50 transition-opacity", disabled && "opacity-50 cursor-not-allowed")}>
       <div className="flex items-center justify-between">
          <Label htmlFor={statKey as string} className="text-base font-medium flex items-center gap-1.5">
-              {StatSpecificIcon && <StatSpecificIcon className={cn("w-4 h-4",
-                  statKey === 'strength' ? 'text-destructive' :
-                  statKey === 'stamina' ? 'text-green-600' :
-                  statKey === 'wisdom' ? 'text-purple-500' : // Color for Wisdom
-                  'text-muted-foreground'
-               )} />}
-             <span className={cn("font-semibold",
-                statKey === 'strength' ? 'text-destructive' :
-                statKey === 'stamina' ? 'text-green-600' :
-                statKey === 'wisdom' ? 'text-purple-500' :
-                ''
-             )}>{label}</span>
-             <span className={cn("ml-1 text-xs font-bold",
-                statKey === 'strength' ? 'text-destructive' :
-                statKey === 'stamina' ? 'text-green-600' :
-                statKey === 'wisdom' ? 'text-purple-500' :
-                'text-muted-foreground'
-             )>
-               {statKey === 'strength' ? 'STR' :
-                statKey === 'stamina' ? 'STA' :
-                statKey === 'wisdom' ? 'WIS' : ''}
+              {StatSpecificIcon && (
+                <StatSpecificIcon className={cn("w-4 h-4", statColor)} />
+              )}
+             <span className={cn("font-semibold", statColor)}>{label}</span>
+             <span className={cn("ml-1 text-xs font-bold", statColor)}>
+               {statAbbr}
              </span>
          </Label>
-         <span className={cn("text-lg font-bold font-mono",
-            statKey === 'strength' ? 'text-destructive' :
-            statKey === 'stamina' ? 'text-green-600' :
-            statKey === 'wisdom' ? 'text-purple-500' :
-            ''
-         )}>{value}</span>
+         <span className={cn("text-lg font-bold font-mono", statColor)}>{value}</span>
       </div>
       <Slider
         id={statKey as string}
