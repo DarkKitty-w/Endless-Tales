@@ -59,9 +59,29 @@ export function StatAllocationInput({
                   statKey === 'wisdom' ? 'text-purple-500' : // Color for Wisdom
                   'text-muted-foreground'
                )} />}
-             {label}
+             <span className={cn("font-semibold",
+                statKey === 'strength' ? 'text-destructive' :
+                statKey === 'stamina' ? 'text-green-600' :
+                statKey === 'wisdom' ? 'text-purple-500' :
+                ''
+             )}>{label}</span>
+             <span className={cn("ml-1 text-xs font-bold",
+                statKey === 'strength' ? 'text-destructive' :
+                statKey === 'stamina' ? 'text-green-600' :
+                statKey === 'wisdom' ? 'text-purple-500' :
+                'text-muted-foreground'
+             )>
+               {statKey === 'strength' ? 'STR' :
+                statKey === 'stamina' ? 'STA' :
+                statKey === 'wisdom' ? 'WIS' : ''}
+             </span>
          </Label>
-         <span className="text-lg font-bold font-mono">{value}</span>
+         <span className={cn("text-lg font-bold font-mono",
+            statKey === 'strength' ? 'text-destructive' :
+            statKey === 'stamina' ? 'text-green-600' :
+            statKey === 'wisdom' ? 'text-purple-500' :
+            ''
+         )}>{value}</span>
       </div>
       <Slider
         id={statKey as string}
