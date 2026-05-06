@@ -145,13 +145,13 @@ export function InteractionDialog({
                   <p className="text-sm text-muted-foreground">No items in inventory.</p>
                 ) : (
                   inventory.map((item, index) => (
-                    <div key={index} className="flex items-center space-x-2 py-2">
+                    <div key={item.name ? `item-${item.name}-${index}` : `item-fallback-${index}`} className="flex items-center space-x-2 py-2">
                       <Checkbox 
-                        id={`item-${index}`}
+                        id={`item-${item.name || index}`}
                         checked={selectedItems.includes(item.name)}
                         onCheckedChange={() => toggleItemSelection(item.name)}
                       />
-                      <Label htmlFor={`item-${index}`} className="text-sm cursor-pointer">
+                      <Label htmlFor={`item-${item.name || index}`} className="text-sm cursor-pointer">
                         {item.name} {item.quantity > 1 && `(${item.quantity})`}
                       </Label>
                     </div>

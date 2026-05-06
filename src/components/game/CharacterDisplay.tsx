@@ -61,13 +61,13 @@ export function CharacterDisplay() {
                  </Badge>
              )}
             {character.background && ( <Badge variant="secondary" className="text-xs">BG: {character.background}</Badge> )}
-            {character.traits.length > 0 && character.traits.map((trait, index) => (
-                <span key={`trait-${index}`}>
+            {character.traits.length > 0 && character.traits.map((trait) => (
+                <span key={`trait-${trait}`}>
                     <Badge variant="outline" className="text-xs">{trait}</Badge>
                 </span>
             ))}
-            {character.knowledge.length > 0 && character.knowledge.map((k, index) => (
-                <span key={`knowledge-${index}`}>
+            {character.knowledge.length > 0 && character.knowledge.map((k) => (
+                <span key={`knowledge-${k}`}>
                     <Badge variant="outline" className="text-xs bg-blue-100 dark:bg-blue-900/50 border-blue-300 dark:border-blue-700">{k}</Badge>
                 </span>
             ))}

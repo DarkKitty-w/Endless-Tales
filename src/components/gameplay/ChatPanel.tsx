@@ -70,11 +70,13 @@ export function ChatPanel({ isOpen, onClose, messages, onSendMessage, currentPla
                 No messages yet. Start the conversation!
               </p>
             )}
-            {messages.map((msg, index) => {
+            {messages.map((msg) => {
               const isMe = msg.playerName === currentPlayerName;
+              // Create a unique key using timestamp and playerId (or playerName if no id)
+              const uniqueKey = `${msg.timestamp}-${msg.playerId || msg.playerName}`;
               return (
                 <div 
-                  key={index} 
+                  key={uniqueKey} 
                   className={`flex flex-col ${
                     isMe ? 'items-end' : 'items-start'
                   }`}
