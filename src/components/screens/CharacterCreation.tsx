@@ -469,7 +469,10 @@ export function CharacterCreation() {
                         <User className="w-7 h-7" /> Create Your Adventurer
                     </CardTitle>
                      {state.adventureSettings.adventureType === "Immersed" && state.adventureSettings.characterOriginType === "original" && (
-                        <p className="text-sm text-center text-muted-foreground mt-1"> Mode: Immersed (Original Character) in <span className="font-semibold">{state.adventureSettings.universeName || "chosen universe"}</span> <br/>Your Initial Concept: <span className="italic">{state.adventureSettings.playerCharacterConcept || watch("description")}</span> </p>
+                        <div className="text-sm text-center text-muted-foreground mt-1 flex flex-col gap-1">
+                            <span> Mode: Immersed (Original Character) in <span className="font-semibold">{state.adventureSettings.universeName || "chosen universe"}</span></span>
+                            <span>Your Initial Concept: <span className="italic">{state.adventureSettings.playerCharacterConcept || watch("description")}</span></span>
+                        </div>
                     )}
                      {(state.adventureSettings.adventureType === "Randomized" || state.adventureSettings.adventureType === "Custom") && (
                          <p className="text-sm text-center text-muted-foreground mt-1"> Mode: {state.adventureSettings.adventureType} Adventure </p>
