@@ -148,13 +148,22 @@ class GeminiProvider implements AIProvider {
     if (!reader) throw new Error('No response body');
 
     const decoder = new TextDecoder();
+    const chunks: string[] = [];
     let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
+      // PERF-4 Fix: Collect chunks in array and join periodically
+      chunks.push(decoder.decode(value, { stream: true }));
+      
+      // Only update buffer periodically to reduce string allocations
+      if (chunks.length >= 10 || done) {
+        buffer += chunks.join('');
+        chunks.length = 0;  // Clear array
+      }
+      
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
 
@@ -168,6 +177,25 @@ class GeminiProvider implements AIProvider {
             if (text) yield text;
           } catch (e) {
             // ignore malformed JSON
+          }
+        }
+      }
+    }
+    
+    // Process any remaining chunks
+    if (chunks.length > 0) {
+      buffer += chunks.join('');
+      const lines = buffer.split('\n');
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') return;
+          try {
+            const parsed = JSON.parse(data);
+            const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (text) yield text;
+          } catch (e) {
+            // ignore
           }
         }
       }
@@ -257,14 +285,45 @@ class OpenAIProvider implements AIProvider {
     const reader = response.body?.getReader();
     if (!reader) throw new Error('No response body');
     const decoder = new TextDecoder();
+    const chunks: string[] = [];
     let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      
+      // PERF-4 Fix: Collect chunks in array and join periodically
+      chunks.push(decoder.decode(value, { stream: true }));
+      
+      // Only update buffer periodically to reduce string allocations
+      if (chunks.length >= 10 || done) {
+        buffer += chunks.join('');
+        chunks.length = 0;  // Clear array
+      }
+      
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('data: ')) {
+          const data = trimmed.slice(6);
+          if (data === '[DONE]') return;
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) yield content;
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+    }
+    
+    // Process any remaining chunks
+    if (chunks.length > 0) {
+      buffer += chunks.join('');
+      const lines = buffer.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed.startsWith('data: ')) {
@@ -365,14 +424,46 @@ class ClaudeProvider implements AIProvider {
     const reader = response.body?.getReader();
     if (!reader) throw new Error('No response body');
     const decoder = new TextDecoder();
+    const chunks: string[] = [];
     let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      
+      // PERF-4 Fix: Collect chunks in array and join periodically
+      chunks.push(decoder.decode(value, { stream: true }));
+      
+      // Only update buffer periodically to reduce string allocations
+      if (chunks.length >= 10 || done) {
+        buffer += chunks.join('');
+        chunks.length = 0;  // Clear array
+      }
+      
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('data: ')) {
+          const data = trimmed.slice(6);
+          try {
+            const parsed = JSON.parse(data);
+            if (parsed.type === 'content_block_delta') {
+              const text = parsed.delta?.text;
+              if (text) yield text;
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+    }
+    
+    // Process any remaining chunks
+    if (chunks.length > 0) {
+      buffer += chunks.join('');
+      const lines = buffer.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed.startsWith('data: ')) {
@@ -474,14 +565,45 @@ class DeepSeekProvider implements AIProvider {
     const reader = response.body?.getReader();
     if (!reader) throw new Error('No response body');
     const decoder = new TextDecoder();
+    const chunks: string[] = [];
     let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      
+      // PERF-4 Fix: Collect chunks in array and join periodically
+      chunks.push(decoder.decode(value, { stream: true }));
+      
+      // Only update buffer periodically to reduce string allocations
+      if (chunks.length >= 10 || done) {
+        buffer += chunks.join('');
+        chunks.length = 0;  // Clear array
+      }
+      
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('data: ')) {
+          const data = trimmed.slice(6);
+          if (data === '[DONE]') return;
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) yield content;
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+    }
+    
+    // Process any remaining chunks
+    if (chunks.length > 0) {
+      buffer += chunks.join('');
+      const lines = buffer.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed.startsWith('data: ')) {
@@ -582,14 +704,45 @@ class OpenRouterProvider implements AIProvider {
     const reader = response.body?.getReader();
     if (!reader) throw new Error('No response body');
     const decoder = new TextDecoder();
+    const chunks: string[] = [];
     let buffer = '';
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      
+      // PERF-4 Fix: Collect chunks in array and join periodically
+      chunks.push(decoder.decode(value, { stream: true }));
+      
+      // Only update buffer periodically to reduce string allocations
+      if (chunks.length >= 10 || done) {
+        buffer += chunks.join('');
+        chunks.length = 0;  // Clear array
+      }
+      
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('data: ')) {
+          const data = trimmed.slice(6);
+          if (data === '[DONE]') return;
+          try {
+            const parsed = JSON.parse(data);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) yield content;
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
+    }
+    
+    // Process any remaining chunks
+    if (chunks.length > 0) {
+      buffer += chunks.join('');
+      const lines = buffer.split('\n');
       for (const line of lines) {
         const trimmed = line.trim();
         if (trimmed.startsWith('data: ')) {
