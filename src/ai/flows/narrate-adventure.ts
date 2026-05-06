@@ -204,7 +204,9 @@ PERSONALITY CONSISTENCY: Maintain the character's personality traits, speech pat
 
 STORY CONTINUITY: Build upon previous events. Refer to the "Recent Story Summary" to maintain narrative continuity. Do NOT contradict established story facts in the "Established Story Facts" section.
 
-FACT CHECKING: Before narrating, verify that your response doesn't contradict any facts in "Established Story Facts". If you're unsure about a fact, check the "Recent Story Summary" for context.`;
+FACT CHECKING: Before narrating, verify that your response doesn't contradict any facts in "Established Story Facts". If you're unsure about a fact, check the "Recent Story Summary" for context.
+
+GAME CONSTRAINTS: You MUST ONLY reference skills and items that are explicitly listed in the "Current Game State" section. Do NOT suggest actions requiring skills the character hasn't learned. Do NOT reference items not in the inventory. If you mention using an item or skill, verify it's listed in the game state first.`;
 
   const userPrompt = `
 **Character:**
@@ -236,6 +238,7 @@ ${assessmentPromptSection}
 6. If character HP <= 0, set isCharacterDefeated: true.
 7. **PERMANENT DEATH ENFORCEMENT:** If "Permanent Death: ENABLED" and character HP drops to 0, the character MUST die permanently. No revivals, no exceptions. Do NOT provide choices that allow the player to continue.
 8. **World Map Updates:** If the narration involves traveling to a new area, discovering a location, or learning about a place, include worldMapChanges. Provide new locations with unique IDs, descriptive names, coordinates (x,y between 0-100), and connections to existing discovered locations. For already known locations that are revealed, use discoveredLocationIds. To modify existing ones, use updatedLocations.
+9. **CONSTRAINT ENFORCEMENT:** Only provide choices that use skills from "Learned Skills" and items from "Inventory". Do NOT suggest actions requiring skills/items not listed.
 
 Return ONLY a valid JSON object. No explanations, no markdown formatting.
 `;
