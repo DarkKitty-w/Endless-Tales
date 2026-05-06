@@ -1,35 +1,33 @@
 # Review Report - Accessibility Fixes (night-fixes)
 
 ## Summary
-Reviewed automatic accessibility (A11Y) corrections on `night-fixes` branch. **No regressions introduced**. One critical JSX syntax error in `StatAllocationInput.tsx` was found and fixed.
+Reviewed automatic accessibility (A11Y) corrections on `night-fixes` branch. **No regressions introduced**. Previous JSX syntax error in `StatAllocationInput.tsx` remains fixed.
 
-## Files Reviewed (10 components)
-| Component | Status | Fix Applied |
-|-----------|--------|-------------|
-| StatAllocationInput | ✅ Fixed | JSX syntax error corrected |
-| SkillTreeDisplay | ✅ OK | aria-label on buttons |
-| WorldMapDisplay | ✅ OK | Keyboard support (tabIndex, role, onKeyDown) |
-| AIStatusPanel | ✅ OK | aria-label on icon buttons |
-| ChatPanel | ✅ OK | aria-live="polite" region |
-| NarrationDisplay | ✅ OK | aria-live="polite" region |
-| AdventureSetup | ✅ OK | aria-required, aria-invalid on inputs |
-| MainMenu | ✅ OK | Skip navigation link added |
-| GameplayLayout | ⚠️ Pre-existing | Import path errors (unrelated) |
-| Gameplay | ⚠️ Pre-existing | Missing modules (unrelated) |
+## Files Reviewed (2 modified files)
+| Component | Status | Changes |
+|-----------|--------|---------|
+| StatAllocationInput | ✅ OK | Added stat abbreviations (STR, STA, WIS), refactored color logic |
+| AdventureSetup | ✅ OK | Added `aria-required="true"` and `*` markers to required fields |
 
-## Critical Fix Applied
-**StatAllocationInput.tsx**: Fixed JSX syntax error caused by malformed ternary operators in conditional styling. Refactored to use helper functions (`getStatColor`, `getStatAbbr`).
+## Changes Verified
+### StatAllocationInput.tsx
+- ✅ JSX syntax error remains fixed
+- ✅ Added text abbreviations (STR, STA, WIS) for screen readers
+- ✅ Color logic extracted to helper functions (no functional change)
+- ✅ No regression in slider functionality
 
-## Accessibility Improvements Verified
-- ✅ Aria labels for icon-only buttons (SkillTreeDisplay, AIStatusPanel)
-- ✅ Keyboard navigation for SVG elements (WorldMapDisplay)
-- ✅ Skip navigation link (MainMenu)
-- ✅ Form accessibility (AdventureSetup: aria-required, aria-invalid)
-- ✅ Live regions for dynamic content (ChatPanel, NarrationDisplay)
-- ✅ Text labels for color-coded stats (StatAllocationInput: STR, STA, WIS)
+### AdventureSetup.tsx  
+- ✅ Added `aria-required="true"` to all required fields (10 fields)
+- ✅ Added `*` visual indicator in labels for required fields
+- ✅ Added `aria-invalid` and `aria-describedby` for error handling
+- ✅ Validation logic unchanged and consistent with UI changes
+
+## Potential Improvements (non-blocking)
+- `aria-required` on `SelectTrigger` (Radix Select) may be redundant as Radix handles ARIA internally
+- Helpers `getStatColor`/`getStatAbbr` could be moved outside component to avoid recreation
 
 ## Recommendation
-✅ **Ready to merge**. Accessibility fixes are correct and improve compliance. Pre-existing TypeScript errors in GameplayLayout.tsx and Gameplay.tsx should be addressed separately.
+✅ **Ready to merge**. Changes are limited to accessibility improvements and visual labels. No functional regressions detected. Pre-existing TypeScript errors in other files unrelated to these changes.
 
 ---
-**Branch**: night-fixes | **Reviewed**: 2026-05-06
+**Branch**: night-fixes | **Reviewed**: 2026-05-06 | **No critical issues found**
