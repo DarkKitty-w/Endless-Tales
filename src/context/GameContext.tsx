@@ -20,6 +20,7 @@ import { logger } from "@/lib/logger";
 import { toast } from "../hooks/use-toast";
 import { validateSavedAdventure, SavedAdventureSchema } from "./schemas/save-schema";
 import { runMigrations, getPendingMigrations } from "./schemas/migration-system";
+import { atomicLocalStorageWrite, safeLocalStorageRead, isLocalStorageQuotaLow } from "@/lib/storage-utils";
 
 // Storage keys
 const AI_PROVIDER_KEY = "endlessTales_aiProvider";
@@ -307,8 +308,18 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
         localStorage.setItem(THEME_ID_KEY, state.selectedThemeId);
         localStorage.setItem(THEME_MODE_KEY, state.isDarkMode ? 'dark' : 'light');
 
+        // SAVE-8 Fix: Check if storage is getting full
+        if (isLocalStorageQuotaLow()) {
+          toast({
+            title: "Storage Nearly Full",
+            description: "Your browser storage is almost full. Consider deleting old saves.",
+            variant: "destructive",
+          });
+        }
+
         // Saved adventures (localStorage)
         // SAVE-16 Fix: Validate saves before writing
+        // SAVE-6 Fix: Use atomic writes
         const invalidSaves: string[] = [];
         const validSaves = state.savedAdventures.filter((adventure: SavedAdventure) => {
           const validation = validateSavedAdventure(adventure);
@@ -331,7 +342,11 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
           });
         }
 
-        localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(validSaves));
+        // SAVE-6: Atomic write for saves
+        const saveSuccess = atomicLocalStorageWrite(SAVED_ADVENTURES_KEY, validSaves);
+        if (!saveSuccess) {
+          throw new Error('Atomic write failed for saved adventures');
+        }
 
         // AI provider preference (localStorage)
         localStorage.setItem(AI_PROVIDER_KEY, state.aiProvider);
