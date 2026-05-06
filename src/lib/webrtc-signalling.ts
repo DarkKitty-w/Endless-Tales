@@ -379,16 +379,27 @@ export function sendBufferedIceCandidates(
 
 /**
  * Handle incoming ICE candidate message from data channel
+ * ERR-27 Fix: Surface ICE errors with context
  */
 export async function handleIceCandidateMessage(
   pc: RTCPeerConnection,
-  message: IceCandidateMessage
+  message: IceCandidateMessage,
+  peerId?: string
 ): Promise<void> {
   if (message.type === 'ice-candidate' && message.candidate) {
     try {
       await pc.addIceCandidate(message.candidate);
     } catch (error) {
-      logger.error('Failed to add ICE candidate:', error);
+      // ERR-27 Fix: Log with context
+      const context = peerId ? `peer ${peerId}` : 'unknown peer';
+      logger.error(`Failed to add ICE candidate from ${context}:`, error);
+      logger.error('Candidate that failed:', JSON.stringify(message.candidate).substring(0, 200));
+      logger.error('Connection state:', pc.connectionState, 'ICE state:', pc.iceConnectionState);
+      
+      // If the connection is already closed or failed, this is expected
+      if (pc.connectionState === 'closed' || pc.iceConnectionState === 'failed') {
+        logger.warn('Connection already closed/failed, ignoring ICE candidate error');
+      }
     }
   }
 }
@@ -420,12 +431,14 @@ function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 60000): Promise<
 
 /**
  * Setup data channel event handlers
+ * ERR-25 Fix: Add onError callback to surface errors to users
  */
 export function setupDataChannel(
   channel: RTCDataChannel,
   onMessage: (data: any) => void,
   onOpen?: () => void,
-  onClose?: () => void
+  onClose?: () => void,
+  onError?: (error: Event) => void
 ): void {
   channel.onmessage = (event) => {
     try {
@@ -448,6 +461,8 @@ export function setupDataChannel(
 
   channel.onerror = (error) => {
     logger.error(`Data channel "${channel.label}" error:`, error);
+    // ERR-25 Fix: Call the onError callback if provided
+    if (onError) onError(error);
   };
 }
 
