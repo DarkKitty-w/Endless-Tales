@@ -1,7 +1,7 @@
 // src/components/game/LeftPanel.tsx
 "use client";
 
-import React from "react";
+import React, { useCallback } from "react";
 import type { Character } from '../../types/game-types';
 import type { InventoryItem } from '../../types/inventory-types';
 import { useGame } from "../../context/GameContext";
@@ -30,7 +30,7 @@ interface LeftPanelProps {
     onUseSkill?: (skillName: string) => void;
 }
 
-export function LeftPanel({
+export const LeftPanel = React.memo(function LeftPanel({
     character,
     inventory,
     isGeneratingSkillTree,

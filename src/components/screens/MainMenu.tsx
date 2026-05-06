@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useGame } from "../../context/GameContext";
 import { Button } from "../../components/ui/button";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "../../components/game/CardboardCard";
@@ -19,7 +19,11 @@ import {
 } from "../../components/ui/dropdown-menu";
 import type { AdventureType } from "../../types/adventure-types";
 
-export function MainMenu() {
+interface MainMenuProps {
+  // Props can be added here if needed in the future
+}
+
+export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
   const { dispatch } = useGame();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 

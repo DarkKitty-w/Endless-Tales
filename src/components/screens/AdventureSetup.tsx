@@ -1,7 +1,7 @@
 // src/components/screens/AdventureSetup.tsx
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useGame } from "../../context/GameContext";
 import { Button } from "../../components/ui/button";
 import { Label } from "../../components/ui/label";
@@ -29,7 +29,11 @@ import { initialCharacterState, initialAdventureSettings as defaultInitialAdvent
 import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, getStarterSkillsForClass, calculateXpToNextLevel } from "../../lib/gameUtils";
 import { logger } from "../../lib/logger";
 
-export function AdventureSetup() {
+interface AdventureSetupProps {
+  // Props can be added here if needed in the future
+}
+
+export const AdventureSetup = React.memo(function AdventureSetup(props: AdventureSetupProps) {
   const { state, dispatch } = useGame();
   const { toast } = useToast();
   
