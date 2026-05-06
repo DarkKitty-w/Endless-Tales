@@ -380,31 +380,51 @@ const MAX_QUEUE_SIZE = 100;
 const BUFFER_LIMIT = 1024 * 1024; // 1MB
 const QUEUE_PROCESS_INTERVAL = 50; // ms
 let queueProcessorInitialized = false;
+let queueProcessorTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+function processMessageQueue() {
+  const now = Date.now();
+  // Remove messages older than 30 seconds
+  const validMessages = messageQueue.filter(msg => now - msg.timestamp < 30000);
+  messageQueue.length = 0;
+  messageQueue.push(...validMessages);
+  
+  // Try to send queued messages
+  for (let i = messageQueue.length - 1; i >= 0; i--) {
+    const msg = messageQueue[i];
+    if (msg.channel.readyState === 'open' && msg.channel.bufferedAmount < BUFFER_LIMIT / 2) {
+      try {
+        msg.channel.send(JSON.stringify(msg.data));
+        messageQueue.splice(i, 1); // Remove from queue on successful send
+      } catch (error) {
+        // Keep in queue, will retry next time
+      }
+    }
+  }
+  
+  // Reschedule if there are still messages in the queue
+  if (messageQueue.length > 0) {
+    queueProcessorTimeoutId = setTimeout(processMessageQueue, QUEUE_PROCESS_INTERVAL);
+  } else {
+    queueProcessorTimeoutId = null;
+  }
+}
 
 function initializeQueueProcessor() {
   if (queueProcessorInitialized) return;
   queueProcessorInitialized = true;
   
-  setInterval(() => {
-    const now = Date.now();
-    // Remove messages older than 30 seconds
-    const validMessages = messageQueue.filter(msg => now - msg.timestamp < 30000);
-    messageQueue.length = 0;
-    messageQueue.push(...validMessages);
-    
-    // Try to send queued messages
-    for (let i = messageQueue.length - 1; i >= 0; i--) {
-      const msg = messageQueue[i];
-      if (msg.channel.readyState === 'open' && msg.channel.bufferedAmount < BUFFER_LIMIT / 2) {
-        try {
-          msg.channel.send(JSON.stringify(msg.data));
-          messageQueue.splice(i, 1); // Remove from queue on successful send
-        } catch (error) {
-          // Keep in queue, will retry next time
-        }
-      }
-    }
-  }, QUEUE_PROCESS_INTERVAL);
+  // Start processing if there are messages
+  if (messageQueue.length > 0 && !queueProcessorTimeoutId) {
+    queueProcessorTimeoutId = setTimeout(processMessageQueue, QUEUE_PROCESS_INTERVAL);
+  }
+}
+
+// Helper function to schedule queue processing when a new message is queued
+function scheduleQueueProcessing() {
+  if (!queueProcessorTimeoutId && messageQueue.length > 0) {
+    queueProcessorTimeoutId = setTimeout(processMessageQueue, QUEUE_PROCESS_INTERVAL);
+  }
 }
 
 export function sendDataChannelMessage(channel: RTCDataChannel, data: any): boolean {
@@ -416,12 +436,11 @@ export function sendDataChannelMessage(channel: RTCDataChannel, data: any): bool
   if (channel.bufferedAmount > BUFFER_LIMIT) {
     logger.warn('Data channel buffer full, message queued');
     
-    // Initialize queue processor if not already done
-    initializeQueueProcessor();
-    
     // Queue the message if not too many already
     if (messageQueue.length < MAX_QUEUE_SIZE) {
       messageQueue.push({ channel, data, timestamp: Date.now() });
+      // Schedule processing for queued messages
+      scheduleQueueProcessing();
       return true; // Message is queued (will be sent later)
     } else {
       logger.error('Message queue full, dropping message');
