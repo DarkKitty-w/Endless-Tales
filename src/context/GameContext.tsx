@@ -232,10 +232,26 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       const isCorrupted = errorMessage.includes('JSON') || errorMessage.includes('parse');
       
+      // SAVE-7 Fix: Backup corrupted data before removing
+      let backupKey: string | null = null;
+      if (isCorrupted) {
+        try {
+          const rawData = localStorage.getItem(SAVED_ADVENTURES_KEY);
+          if (rawData) {
+            // Create backup key with timestamp
+            backupKey = `endlessTalesCorruptedBackup_${Date.now()}`;
+            localStorage.setItem(backupKey, rawData);
+            logger.log(`Backed up corrupted save data to ${backupKey}`);
+          }
+        } catch (backupError) {
+          logger.error("Failed to backup corrupted data:", backupError);
+        }
+      }
+      
       toast({
         title: isCorrupted ? "Corrupted Save Data" : "Error Loading Saved Adventures",
         description: isCorrupted 
-          ? "Your saved adventures data appears to be corrupted. The data will be shown in console for debugging."
+          ? "Your saved adventures data appears to be corrupted. A backup has been created for recovery."
           : "There was a problem loading your saved adventures.",
         variant: "destructive",
       });
@@ -250,15 +266,22 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
         }
       }
       
-      // ERR-20 Fix: Offer recovery option
+      // SAVE-7 Fix: Offer recovery option with backup
       toast({
         title: "Data Recovery",
-        description: "Would you like to delete the corrupted save data?",
+        description: backupKey 
+          ? "A backup of your corrupted save data has been created. Would you like to delete the corrupted data?"
+          : "Would you like to delete the corrupted save data?",
         action: (
           <button
             onClick={() => {
               localStorage.removeItem(SAVED_ADVENTURES_KEY);
-              toast({ title: "Save Data Deleted", description: "Corrupted save data has been removed. You can start a new adventure." });
+              toast({ 
+                title: "Save Data Deleted", 
+                description: backupKey 
+                  ? `Corrupted data has been removed. Backup available at: ${backupKey}`
+                  : "Corrupted save data has been removed. You can start a new adventure." 
+              });
             }}
             className="bg-red-500 text-white px-3 py-1 rounded"
           >
