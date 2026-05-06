@@ -210,55 +210,68 @@ class GeminiProvider implements AIProvider {
     const decoder = new TextDecoder();
     const chunks: string[] = [];
     let buffer = '';
+    let accumulatedText = ''; // ERR-4 Fix: Track accumulated text for error reporting
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      // PERF-4 Fix: Collect chunks in array and join periodically
-      chunks.push(decoder.decode(value, { stream: true }));
+        // PERF-4 Fix: Collect chunks in array and join periodically
+        chunks.push(decoder.decode(value, { stream: true }));
+        
+        // Only update buffer periodically to reduce string allocations
+        if (chunks.length >= 10 || done) {
+          buffer += chunks.join('');
+          chunks.length = 0;  // Clear array
+        }
+        
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') return;
+            try {
+              const parsed = JSON.parse(data);
+              const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (text) {
+                accumulatedText += text; // ERR-4 Fix: Accumulate text
+                yield text;
+              }
+            } catch (e) {
+              // ignore malformed JSON
+            }
+          }
+        }
+      }
       
-      // Only update buffer periodically to reduce string allocations
-      if (chunks.length >= 10 || done) {
+      // Process any remaining chunks
+      if (chunks.length > 0) {
         buffer += chunks.join('');
-        chunks.length = 0;  // Clear array
-      }
-      
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') return;
-          try {
-            const parsed = JSON.parse(data);
-            const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) yield text;
-          } catch (e) {
-            // ignore malformed JSON
+        const lines = buffer.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') return;
+            try {
+              const parsed = JSON.parse(data);
+              const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
+              if (text) {
+                accumulatedText += text; // ERR-4 Fix: Accumulate text
+                yield text;
+              }
+            } catch (e) {
+              // ignore
+            }
           }
         }
       }
-    }
-    
-    // Process any remaining chunks
-    if (chunks.length > 0) {
-      buffer += chunks.join('');
-      const lines = buffer.split('\n');
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6);
-          if (data === '[DONE]') return;
-          try {
-            const parsed = JSON.parse(data);
-            const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-            if (text) yield text;
-          } catch (e) {
-            // ignore
-          }
-        }
-      }
+    } catch (error) {
+      // ERR-4 Fix: Include accumulated text in error
+      const errorMessage = error instanceof Error ? error.message : 'Stream processing error';
+      throw new Error(`${errorMessage}\n\nPartial response received: ${accumulatedText.substring(0, 500)}`);
     }
   }
 }
@@ -353,57 +366,70 @@ class OpenAIProvider implements AIProvider {
     const decoder = new TextDecoder();
     const chunks: string[] = [];
     let buffer = '';
+    let accumulatedText = ''; // ERR-4 Fix: Track accumulated text for error reporting
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        // PERF-4 Fix: Collect chunks in array and join periodically
+        chunks.push(decoder.decode(value, { stream: true }));
+        
+        // Only update buffer periodically to reduce string allocations
+        if (chunks.length >= 10 || done) {
+          buffer += chunks.join('');
+          chunks.length = 0;  // Clear array
+        }
+        
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            const data = trimmed.slice(6);
+            if (data === '[DONE]') return;
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                accumulatedText += content; // ERR-4 Fix: Accumulate text
+                yield content;
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+      }
       
-      // PERF-4 Fix: Collect chunks in array and join periodically
-      chunks.push(decoder.decode(value, { stream: true }));
-      
-      // Only update buffer periodically to reduce string allocations
-      if (chunks.length >= 10 || done) {
+      // Process any remaining chunks
+      if (chunks.length > 0) {
         buffer += chunks.join('');
-        chunks.length = 0;  // Clear array
-      }
-      
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('data: ')) {
-          const data = trimmed.slice(6);
-          if (data === '[DONE]') return;
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) yield content;
-          } catch (e) {
-            // ignore
+        const lines = buffer.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            const data = trimmed.slice(6);
+            if (data === '[DONE]') return;
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                accumulatedText += content; // ERR-4 Fix: Accumulate text
+                yield content;
+              }
+            } catch (e) {
+              // ignore
+            }
           }
         }
       }
-    }
-    
-    // Process any remaining chunks
-    if (chunks.length > 0) {
-      buffer += chunks.join('');
-      const lines = buffer.split('\n');
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('data: ')) {
-          const data = trimmed.slice(6);
-          if (data === '[DONE]') return;
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) yield content;
-          } catch (e) {
-            // ignore
-          }
-        }
-      }
+    } catch (error) {
+      // ERR-4 Fix: Include accumulated text in error
+      const errorMessage = error instanceof Error ? error.message : 'Stream processing error';
+      throw new Error(`${errorMessage}\n\nPartial response received: ${accumulatedText.substring(0, 500)}`);
     }
   }
 }
@@ -498,59 +524,72 @@ class ClaudeProvider implements AIProvider {
     const decoder = new TextDecoder();
     const chunks: string[] = [];
     let buffer = '';
+    let accumulatedText = ''; // ERR-4 Fix: Track accumulated text for error reporting
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        // PERF-4 Fix: Collect chunks in array and join periodically
+        chunks.push(decoder.decode(value, { stream: true }));
+        
+        // Only update buffer periodically to reduce string allocations
+        if (chunks.length >= 10 || done) {
+          buffer += chunks.join('');
+          chunks.length = 0;  // Clear array
+        }
+        
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            const data = trimmed.slice(6);
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === 'content_block_delta') {
+                const text = parsed.delta?.text;
+                if (text) {
+                  accumulatedText += text; // ERR-4 Fix: Accumulate text
+                  yield text;
+                }
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+      }
       
-      // PERF-4 Fix: Collect chunks in array and join periodically
-      chunks.push(decoder.decode(value, { stream: true }));
-      
-      // Only update buffer periodically to reduce string allocations
-      if (chunks.length >= 10 || done) {
+      // Process any remaining chunks
+      if (chunks.length > 0) {
         buffer += chunks.join('');
-        chunks.length = 0;  // Clear array
-      }
-      
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('data: ')) {
-          const data = trimmed.slice(6);
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.type === 'content_block_delta') {
-              const text = parsed.delta?.text;
-              if (text) yield text;
+        const lines = buffer.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            const data = trimmed.slice(6);
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === 'content_block_delta') {
+                const text = parsed.delta?.text;
+                if (text) {
+                  accumulatedText += text; // ERR-4 Fix: Accumulate text
+                  yield text;
+                }
+              }
+            } catch (e) {
+              // ignore
             }
-          } catch (e) {
-            // ignore
           }
         }
       }
-    }
-    
-    // Process any remaining chunks
-    if (chunks.length > 0) {
-      buffer += chunks.join('');
-      const lines = buffer.split('\n');
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('data: ')) {
-          const data = trimmed.slice(6);
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.type === 'content_block_delta') {
-              const text = parsed.delta?.text;
-              if (text) yield text;
-            }
-          } catch (e) {
-            // ignore
-          }
-        }
-      }
+    } catch (error) {
+      // ERR-4 Fix: Include accumulated text in error
+      const errorMessage = error instanceof Error ? error.message : 'Stream processing error';
+      throw new Error(`${errorMessage}\n\nPartial response received: ${accumulatedText.substring(0, 500)}`);
     }
   }
 }
@@ -645,57 +684,70 @@ class DeepSeekProvider implements AIProvider {
     const decoder = new TextDecoder();
     const chunks: string[] = [];
     let buffer = '';
+    let accumulatedText = ''; // ERR-4 Fix: Track accumulated text for error reporting
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        // PERF-4 Fix: Collect chunks in array and join periodically
+        chunks.push(decoder.decode(value, { stream: true }));
+        
+        // Only update buffer periodically to reduce string allocations
+        if (chunks.length >= 10 || done) {
+          buffer += chunks.join('');
+          chunks.length = 0;  // Clear array
+        }
+        
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            const data = trimmed.slice(6);
+            if (data === '[DONE]') return;
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                accumulatedText += content; // ERR-4 Fix: Accumulate text
+                yield content;
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+      }
       
-      // PERF-4 Fix: Collect chunks in array and join periodically
-      chunks.push(decoder.decode(value, { stream: true }));
-      
-      // Only update buffer periodically to reduce string allocations
-      if (chunks.length >= 10 || done) {
+      // Process any remaining chunks
+      if (chunks.length > 0) {
         buffer += chunks.join('');
-        chunks.length = 0;  // Clear array
-      }
-      
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('data: ')) {
-          const data = trimmed.slice(6);
-          if (data === '[DONE]') return;
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) yield content;
-          } catch (e) {
-            // ignore
+        const lines = buffer.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            const data = trimmed.slice(6);
+            if (data === '[DONE]') return;
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                accumulatedText += content; // ERR-4 Fix: Accumulate text
+                yield content;
+              }
+            } catch (e) {
+              // ignore
+            }
           }
         }
       }
-    }
-    
-    // Process any remaining chunks
-    if (chunks.length > 0) {
-      buffer += chunks.join('');
-      const lines = buffer.split('\n');
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('data: ')) {
-          const data = trimmed.slice(6);
-          if (data === '[DONE]') return;
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) yield content;
-          } catch (e) {
-            // ignore
-          }
-        }
-      }
+    } catch (error) {
+      // ERR-4 Fix: Include accumulated text in error
+      const errorMessage = error instanceof Error ? error.message : 'Stream processing error';
+      throw new Error(`${errorMessage}\n\nPartial response received: ${accumulatedText.substring(0, 500)}`);
     }
   }
 }
@@ -790,57 +842,70 @@ class OpenRouterProvider implements AIProvider {
     const decoder = new TextDecoder();
     const chunks: string[] = [];
     let buffer = '';
+    let accumulatedText = ''; // ERR-4 Fix: Track accumulated text for error reporting
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        // PERF-4 Fix: Collect chunks in array and join periodically
+        chunks.push(decoder.decode(value, { stream: true }));
+        
+        // Only update buffer periodically to reduce string allocations
+        if (chunks.length >= 10 || done) {
+          buffer += chunks.join('');
+          chunks.length = 0;  // Clear array
+        }
+        
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            const data = trimmed.slice(6);
+            if (data === '[DONE]') return;
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                accumulatedText += content; // ERR-4 Fix: Accumulate text
+                yield content;
+              }
+            } catch (e) {
+              // ignore
+            }
+          }
+        }
+      }
       
-      // PERF-4 Fix: Collect chunks in array and join periodically
-      chunks.push(decoder.decode(value, { stream: true }));
-      
-      // Only update buffer periodically to reduce string allocations
-      if (chunks.length >= 10 || done) {
+      // Process any remaining chunks
+      if (chunks.length > 0) {
         buffer += chunks.join('');
-        chunks.length = 0;  // Clear array
-      }
-      
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-      
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('data: ')) {
-          const data = trimmed.slice(6);
-          if (data === '[DONE]') return;
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) yield content;
-          } catch (e) {
-            // ignore
+        const lines = buffer.split('\n');
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('data: ')) {
+            const data = trimmed.slice(6);
+            if (data === '[DONE]') return;
+            try {
+              const parsed = JSON.parse(data);
+              const content = parsed.choices?.[0]?.delta?.content;
+              if (content) {
+                accumulatedText += content; // ERR-4 Fix: Accumulate text
+                yield content;
+              }
+            } catch (e) {
+              // ignore
+            }
           }
         }
       }
-    }
-    
-    // Process any remaining chunks
-    if (chunks.length > 0) {
-      buffer += chunks.join('');
-      const lines = buffer.split('\n');
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('data: ')) {
-          const data = trimmed.slice(6);
-          if (data === '[DONE]') return;
-          try {
-            const parsed = JSON.parse(data);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) yield content;
-          } catch (e) {
-            // ignore
-          }
-        }
-      }
+    } catch (error) {
+      // ERR-4 Fix: Include accumulated text in error
+      const errorMessage = error instanceof Error ? error.message : 'Stream processing error';
+      throw new Error(`${errorMessage}\n\nPartial response received: ${accumulatedText.substring(0, 500)}`);
     }
   }
 }
@@ -1222,15 +1287,28 @@ class WebLLMProvider implements AIProvider {
       stream: true,
     }) as AsyncIterable<WebLLMStreamChunk>;
     logger.log('[WebLLM] Stream created');
-    for await (const chunk of stream) {
-      if (signal?.aborted) {
-        logger.log('[WebLLM] Stream aborted');
-        break;
+    
+    // ERR-4 Fix: Track accumulated text for error reporting
+    let accumulatedText = '';
+    
+    try {
+      for await (const chunk of stream) {
+        if (signal?.aborted) {
+          logger.log('[WebLLM] Stream aborted');
+          break;
+        }
+        const content = chunk.choices?.[0]?.delta?.content;
+        if (content) {
+          accumulatedText += content; // ERR-4 Fix: Accumulate text
+          yield content;
+        }
       }
-      const content = chunk.choices?.[0]?.delta?.content;
-      if (content) yield content;
+      logger.log('[WebLLM] Stream completed');
+    } catch (error) {
+      // ERR-4 Fix: Include accumulated text in error
+      const errorMessage = error instanceof Error ? error.message : 'Stream processing error';
+      throw new Error(`${errorMessage}\n\nPartial response received: ${accumulatedText.substring(0, 500)}`);
     }
-    logger.log('[WebLLM] Stream completed');
   }
 
   static async getAvailableModels(): Promise<{ id: string; name: string; size: string }[]> {
