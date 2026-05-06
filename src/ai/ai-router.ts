@@ -1,4 +1,5 @@
 import { logger } from '@/lib/logger';
+import { protectUserAction, PROMPT_INJECTION_DEFENSE } from '@/lib/prompt-injection-protection';
 // src/ai/ai-router.ts
 
 // --- Type Definitions ---
@@ -130,14 +131,21 @@ class GeminiProvider implements AIProvider {
     signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'gemini-2.5-flash';
+    
+    // SEC-6 Fix: Apply prompt injection protection
+    const protectedContents = protectUserAction(contents);
+    const enhancedSystemMessage = systemMessage 
+      ? `${systemMessage}\n${PROMPT_INJECTION_DEFENSE}` 
+      : PROMPT_INJECTION_DEFENSE;
+    
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         provider: 'gemini',
         model: effectiveModel,
-        contents,
-        systemMessage,
+        contents: protectedContents.sanitized,
+        systemMessage: enhancedSystemMessage,
         config,
       }),
       signal: getSignalWithTimeout(signal),
@@ -168,14 +176,21 @@ class GeminiProvider implements AIProvider {
     signal?: AbortSignal;
   }): AsyncIterable<string> {
     const effectiveModel = model || 'gemini-2.5-flash';
+    
+    // SEC-6 Fix: Apply prompt injection protection
+    const protectedContents = protectUserAction(contents);
+    const enhancedSystemMessage = systemMessage 
+      ? `${systemMessage}\n${PROMPT_INJECTION_DEFENSE}` 
+      : PROMPT_INJECTION_DEFENSE;
+    
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         provider: 'gemini',
         model: effectiveModel,
-        contents,
-        systemMessage,
+        contents: protectedContents.sanitized,
+        systemMessage: enhancedSystemMessage,
         config,
         stream: true,
       }),
@@ -266,14 +281,18 @@ class OpenAIProvider implements AIProvider {
     signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'gpt-4o';
-
+    
+    // SEC-6 Fix: Apply prompt injection protection
+    const protectedContents = protectUserAction(contents);
+    
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         provider: 'openai',
         model: effectiveModel,
-        contents,
+        contents: protectedContents.sanitized,
+        systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
       }),
       signal: getSignalWithTimeout(signal),
@@ -302,14 +321,18 @@ class OpenAIProvider implements AIProvider {
     signal?: AbortSignal;
   }): AsyncIterable<string> {
     const effectiveModel = model || 'gpt-4o';
-
+    
+    // SEC-6 Fix: Apply prompt injection protection
+    const protectedContents = protectUserAction(contents);
+    
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         provider: 'openai',
         model: effectiveModel,
-        contents,
+        contents: protectedContents.sanitized,
+        systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
         stream: true,
       }),
@@ -401,14 +424,18 @@ class ClaudeProvider implements AIProvider {
     signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'claude-3-5-sonnet-20241022';
-
+    
+    // SEC-6 Fix: Apply prompt injection protection
+    const protectedContents = protectUserAction(contents);
+    
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         provider: 'claude',
         model: effectiveModel,
-        contents,
+        contents: protectedContents.sanitized,
+        systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
       }),
       signal: getSignalWithTimeout(signal),
@@ -437,14 +464,18 @@ class ClaudeProvider implements AIProvider {
     signal?: AbortSignal;
   }): AsyncIterable<string> {
     const effectiveModel = model || 'claude-3-5-sonnet-20241022';
-
+    
+    // SEC-6 Fix: Apply prompt injection protection
+    const protectedContents = protectUserAction(contents);
+    
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         provider: 'claude',
         model: effectiveModel,
-        contents,
+        contents: protectedContents.sanitized,
+        systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
         stream: true,
       }),
@@ -538,14 +569,18 @@ class DeepSeekProvider implements AIProvider {
     signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'deepseek-chat';
-
+    
+    // SEC-6 Fix: Apply prompt injection protection
+    const protectedContents = protectUserAction(contents);
+    
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         provider: 'deepseek',
         model: effectiveModel,
-        contents,
+        contents: protectedContents.sanitized,
+        systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
       }),
       signal: getSignalWithTimeout(signal),
@@ -574,14 +609,18 @@ class DeepSeekProvider implements AIProvider {
     signal?: AbortSignal;
   }): AsyncIterable<string> {
     const effectiveModel = model || 'deepseek-chat';
-
+    
+    // SEC-6 Fix: Apply prompt injection protection
+    const protectedContents = protectUserAction(contents);
+    
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         provider: 'deepseek',
         model: effectiveModel,
-        contents,
+        contents: protectedContents.sanitized,
+        systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
         stream: true,
       }),
@@ -673,14 +712,18 @@ class OpenRouterProvider implements AIProvider {
     signal?: AbortSignal;
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'z-ai/glm-4.5-air:free';
-
+    
+    // SEC-6 Fix: Apply prompt injection protection
+    const protectedContents = protectUserAction(contents);
+    
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         provider: 'openrouter',
         model: effectiveModel,
-        contents,
+        contents: protectedContents.sanitized,
+        systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
       }),
       signal: getSignalWithTimeout(signal),
@@ -709,14 +752,18 @@ class OpenRouterProvider implements AIProvider {
     signal?: AbortSignal;
   }): AsyncIterable<string> {
     const effectiveModel = model || 'z-ai/glm-4.5-air:free';
-
+    
+    // SEC-6 Fix: Apply prompt injection protection
+    const protectedContents = protectUserAction(contents);
+    
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         provider: 'openrouter',
         model: effectiveModel,
-        contents,
+        contents: protectedContents.sanitized,
+        systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
         stream: true,
       }),
@@ -1117,7 +1164,11 @@ class WebLLMProvider implements AIProvider {
   }): Promise<GenerateContentResponse> {
     logger.log('[WebLLM] generateContent called');
     const engine = await this.getEngine(model);
-    const messages = [{ role: 'user', content: contents }];
+    
+    // SEC-6 Fix: Apply prompt injection protection
+    const protectedContents = protectUserAction(contents);
+    const messages = [{ role: 'user', content: protectedContents.sanitized + '\n\n' + PROMPT_INJECTION_DEFENSE }];
+    
     logger.log('[WebLLM] Sending chat completion request...');
     // Type assertion for the engine since we know it has chat.completions.create
     const engineWithChat = engine as WebLLMEngineWithChat;
@@ -1146,7 +1197,11 @@ class WebLLMProvider implements AIProvider {
   }): AsyncIterable<string> {
     logger.log('[WebLLM] generateContentStream called');
     const engine = await this.getEngine(model);
-    const messages = [{ role: 'user', content: contents }];
+    
+    // SEC-6 Fix: Apply prompt injection protection
+    const protectedContents = protectUserAction(contents);
+    const messages = [{ role: 'user', content: protectedContents.sanitized + '\n\n' + PROMPT_INJECTION_DEFENSE }];
+    
     logger.log('[WebLLM] Creating streaming chat completion...');
     // Type assertion for the engine
     const engineWithChat = engine as WebLLMEngineWithChat;
