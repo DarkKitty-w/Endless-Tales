@@ -26,16 +26,31 @@ export const getQualityColor = (quality: ItemQuality | undefined): string => {
 
 /* -------------------------------------------------------
    SECURITY / INPUT SANITIZATION
+   
+   Note: This function sanitizes user input before sending to AI.
+   It is NOT intended for XSS prevention in HTML rendering.
+   For React JSX rendering, rely on built-in escaping.
+   If HTML output is ever needed, use DOMPurify instead.
 ------------------------------------------------------- */
 export function sanitizePlayerAction(input: string): string {
-  if (!input) return "";
+  if (!input || typeof input !== 'string') return "";
 
   let sanitized = input;
 
+  // Remove code blocks and inline code
   sanitized = sanitized.replace(/```[\s\S]*?```/g, "");
   sanitized = sanitized.replace(/`[^`]*`/g, "");
-  sanitized = sanitized.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  
+  // SEC-8 Fix: Escape more dangerous characters for HTML context
+  // Note: This is secondary protection; React JSX escaping is primary
+  sanitized = sanitized
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/\//g, "&#x2F;");
 
+  // Check for prompt injection patterns (supplement to protectUserAction in ai-router.ts)
   const injectionPatterns = [
     /ignore (previous|all) instructions?/gi,
     /you are now/gi,
@@ -45,12 +60,17 @@ export function sanitizePlayerAction(input: string): string {
     /<\/?system>/gi,
     /override/gi,
     /bypass/gi,
+    /forget (all )?(previous|above|instructions?)/gi,
+    /you are an? (AI|assistant|language model)/gi,
+    /repeat (the )?above/gi,
+    /output (your|the) (system )?prompt/gi,
   ];
 
   for (const pattern of injectionPatterns) {
     sanitized = sanitized.replace(pattern, "[filtered]");
   }
 
+  // Limit length to prevent abuse
   sanitized = sanitized.trim();
   if (sanitized.length > 500) sanitized = sanitized.substring(0, 500);
 
