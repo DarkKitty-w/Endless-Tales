@@ -159,17 +159,66 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
           const migratedAdventures = loadedAdventures.map(migrateSavedAdventure);
           dispatch({ type: "LOAD_SAVED_ADVENTURES", payload: migratedAdventures });
         } else {
-          localStorage.removeItem(SAVED_ADVENTURES_KEY);
+          // ERR-18/ERR-20 Fix: Offer recovery options for invalid data format
+          toast({
+            title: "Invalid Save Data Format",
+            description: "Your saved adventures data is not in the expected format. Would you like to delete it?",
+            variant: "destructive",
+            action: (
+              <button
+                onClick={() => {
+                  localStorage.removeItem(SAVED_ADVENTURES_KEY);
+                  toast({ title: "Save Data Deleted", description: "Corrupted save data has been removed." });
+                }}
+                className="bg-red-500 text-white px-3 py-1 rounded"
+              >
+                Delete
+              </button>
+            ),
+          });
         }
       }
     } catch (error) {
       logger.error("Failed to load saved adventures:", error);
+      
+      // ERR-18/ERR-20/ERR-21 Fix: Provide detailed error and recovery options
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      const isCorrupted = errorMessage.includes('JSON') || errorMessage.includes('parse');
+      
       toast({
-        title: "Error Loading Saved Adventures",
-        description: "There was a problem loading your saved adventures. They may be corrupted.",
+        title: isCorrupted ? "Corrupted Save Data" : "Error Loading Saved Adventures",
+        description: isCorrupted 
+          ? "Your saved adventures data appears to be corrupted. The data will be shown in console for debugging."
+          : "There was a problem loading your saved adventures.",
         variant: "destructive",
       });
-      localStorage.removeItem(SAVED_ADVENTURES_KEY);
+      
+      // ERR-21 Fix: Log the problematic data for debugging (safely truncated)
+      if (isCorrupted) {
+        try {
+          const rawData = localStorage.getItem(SAVED_ADVENTURES_KEY);
+          logger.error("Corrupted save data (first 500 chars):", rawData?.substring(0, 500));
+        } catch (e) {
+          logger.error("Could not read corrupted data for debugging");
+        }
+      }
+      
+      // ERR-20 Fix: Offer recovery option
+      toast({
+        title: "Data Recovery",
+        description: "Would you like to delete the corrupted save data?",
+        action: (
+          <button
+            onClick={() => {
+              localStorage.removeItem(SAVED_ADVENTURES_KEY);
+              toast({ title: "Save Data Deleted", description: "Corrupted save data has been removed. You can start a new adventure." });
+            }}
+            className="bg-red-500 text-white px-3 py-1 rounded"
+          >
+            Delete Corrupted Data
+          </button>
+        ),
+      });
     }
 
     // Load theme from localStorage
@@ -206,18 +255,52 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
 
     // Debounce writes to avoid excessive I/O
     debounceTimeoutRef.current = setTimeout(() => {
-      // Theme
-      applyTheme(state.selectedThemeId, state.isDarkMode);
-      localStorage.setItem(THEME_ID_KEY, state.selectedThemeId);
-      localStorage.setItem(THEME_MODE_KEY, state.isDarkMode ? 'dark' : 'light');
+      try {
+        // Theme
+        applyTheme(state.selectedThemeId, state.isDarkMode);
+        localStorage.setItem(THEME_ID_KEY, state.selectedThemeId);
+        localStorage.setItem(THEME_MODE_KEY, state.isDarkMode ? 'dark' : 'light');
 
-      // Saved adventures (localStorage)
-      localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(state.savedAdventures));
+        // Saved adventures (localStorage)
+        localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(state.savedAdventures));
 
-      // AI provider preference (localStorage)
-      localStorage.setItem(AI_PROVIDER_KEY, state.aiProvider);
+        // AI provider preference (localStorage)
+        localStorage.setItem(AI_PROVIDER_KEY, state.aiProvider);
 
-      // Note: API keys are now server-side only (no client-side storage)
+        // Note: API keys are now server-side only (no client-side storage)
+      } catch (storageError) {
+        // ERR-22/ERR-24 Fix: Handle localStorage errors
+        logger.error("Failed to save to localStorage:", storageError);
+        
+        // Check if it's a quota exceeded error
+        const isQuotaExceeded = storageError instanceof DOMException && 
+          (storageError.code === 22 || storageError.name === 'QuotaExceededError');
+        
+        toast({
+          title: "Save Failed",
+          description: isQuotaExceeded 
+            ? "Storage full. Please delete some saved adventures to free up space." 
+            : "Failed to save your progress. Your changes may not persist.",
+          variant: "destructive",
+          action: isQuotaExceeded ? (
+            <button
+              onClick={() => {
+                if (confirm("This will delete all saved adventures except the current one. Continue?")) {
+                  try {
+                    localStorage.removeItem(SAVED_ADVENTURES_KEY);
+                    toast({ title: "Save Data Cleared", description: "You can now save new adventures." });
+                  } catch (e) {
+                    logger.error("Failed to clear save data:", e);
+                  }
+                }
+              }}
+              className="bg-red-500 text-white px-3 py-1 rounded"
+            >
+              Clear Saves
+            </button>
+          ) : undefined,
+        });
+      }
 
       // REMOVED: configureAIRouter call – now handled by immediate effect above
 
