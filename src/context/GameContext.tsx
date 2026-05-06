@@ -19,6 +19,7 @@ import { configureAIRouter, type ProviderType } from "../ai/ai-router";
 import { logger } from "@/lib/logger";
 import { toast } from "../hooks/use-toast";
 import { validateSavedAdventure, SavedAdventureSchema } from "./schemas/save-schema";
+import { runMigrations, getPendingMigrations } from "./schemas/migration-system";
 
 // Storage keys
 const AI_PROVIDER_KEY = "endlessTales_aiProvider";
@@ -81,6 +82,7 @@ const GameContext = createContext<{ state: GameState; dispatch: Dispatch<Action>
 /**
  * Migrate a saved adventure to the current schema version.
  * Validates required fields using Zod schema validation.
+ * Runs all necessary migrations to bring the save to the current version.
  */
 function migrateSavedAdventure(adventure: any, onError?: (title: string, description: string) => void): SavedAdventure | null {
   // Validate using Zod schema
@@ -101,31 +103,24 @@ function migrateSavedAdventure(adventure: any, onError?: (title: string, descrip
     return null; // Return null to indicate validation failure
   }
 
-  // If no version, treat as version 0 (pre-versioning)
-  const version = adventure.version ?? 0;
-
-  // Clone to avoid mutating original
-  const migrated = { ...adventure };
-
   try {
-    // Version 0 -> 1: ensure worldMap exists
-    if (version < 1) {
-      if (!migrated.worldMap) {
-        migrated.worldMap = initialState.worldMap;
-        logger.log('Migration: Added missing worldMap field');
-      }
-      // Other future migrations can be added here
+    // Run all necessary migrations
+    const migrated = runMigrations(validationResult.data);
+    
+    // Log pending migrations (for debugging)
+    const pendingMigs = getPendingMigrations(validationResult.data);
+    if (pendingMigs.length > 0) {
+      logger.log(`Applied migrations: ${pendingMigs.map(v => `v${v}->v${v+1}`).join(', ')}`);
     }
-
-    migrated.version = CURRENT_STATE_VERSION;
-    return migrated as SavedAdventure;
+    
+    return migrated;
   } catch (error: any) {
     // ERR-21 Fix: Surface migration errors to user
     logger.error('Migration failed for adventure:', { adventureId: adventure.id, error: error.message });
     if (onError) {
       onError("Save Data Migration Failed", `Failed to migrate save data${adventure.id ? ` for adventure ${adventure.id}` : ''}. ${error.message || 'Unknown error'}`);
     }
-    // Return null if migration fails (validation failure)
+    // Return null if migration fails
     return null;
   }
 }
