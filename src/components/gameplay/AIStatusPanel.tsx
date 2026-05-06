@@ -146,6 +146,7 @@ export function AIStatusPanel() {
                 className="h-6 w-6"
                 onClick={handleClearCache}
                 disabled={isClearing}
+                aria-label="Clear downloaded AI models"
               >
                 {isClearing ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />

@@ -91,6 +91,7 @@ export function SkillTreeDisplay({
                       className="h-5 w-5"
                       onClick={() => onUseSkill(skill.name)}
                       title={`Use ${skill.name}`}
+                      aria-label={`Use skill: ${skill.name}`}
                     >
                       <Wand2 className="h-3 w-3" />
                     </Button>
@@ -219,6 +220,7 @@ export function SkillTreeDisplay({
                                     className="h-5 w-5 ml-auto"
                                     onClick={() => onUseSkill(skill.name)}
                                     title={`Use ${skill.name}`}
+                                    aria-label={`Use skill: ${skill.name}`}
                                   >
                                     <Wand2 className="h-3 w-3" />
                                   </Button>
