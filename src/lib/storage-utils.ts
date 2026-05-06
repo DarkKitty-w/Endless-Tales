@@ -295,3 +295,37 @@ export function restoreFromBackup(backupKey: string): unknown {
     return null;
   }
 }
+
+/**
+ * SAVE-11 Fix: Sanitize state for persistence by removing multiplayer-specific fields
+ * that should not be persisted in saved adventures.
+ * 
+ * @param state - The game state to sanitize
+ * @returns A new state object with multiplayer fields removed
+ */
+export function sanitizeStateForPersistence(state: Record<string, unknown>): Record<string, unknown> {
+  // Create a copy to avoid mutating original
+  const sanitized = { ...state };
+  
+  // Remove multiplayer-specific fields that shouldn't be persisted
+  const fieldsToRemove = [
+    'sessionId',
+    'players', 
+    'isHost',
+    'peerId',
+    'connectionStatus',
+    'turnOrder',
+    'currentTurnIndex',
+    'isMyTurn',
+    'pendingInteraction',
+    'partyState',
+    'chatMessages',
+    'isPaused'
+  ];
+  
+  fieldsToRemove.forEach(field => {
+    delete sanitized[field];
+  });
+  
+  return sanitized;
+}

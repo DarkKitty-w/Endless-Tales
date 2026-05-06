@@ -5,6 +5,7 @@ import type { GameState } from "../../types/game-types";
 import type { Action } from "../game-actions";
 import type { PeerInfo, PlayerSummary, PendingInteraction, ConnectionStatus } from "../../types/multiplayer-types";
 import { logger } from "../../lib/logger";
+import { sanitizeStateForPersistence } from "../../lib/storage-utils";
 
 export function multiplayerReducer(state: GameState, action: Action): GameState {
   switch (action.type) {
@@ -82,10 +83,15 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
 
     case "APPLY_REMOTE_STATE": {
       const remoteState = action.payload;
+      // SAVE-11 Fix: Sanitize remote state to remove multiplayer-specific fields
+      // before merging into local state to prevent persisting them in saves
+      const sanitizedRemote = sanitizeStateForPersistence(remoteState);
+      
       // Apply remote state partially - only update what host sends
+      // Preserve local multiplayer state that shouldn't be overwritten
       return {
         ...state,
-        ...remoteState,
+        ...sanitizedRemote,
         // Preserve local multiplayer state that shouldn't be overwritten
         peerId: state.peerId,
         sessionId: state.sessionId,
