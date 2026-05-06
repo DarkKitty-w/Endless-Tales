@@ -87,6 +87,36 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
       // before merging into local state to prevent persisting them in saves
       const sanitizedRemote = sanitizeStateForPersistence(remoteState);
       
+      // SAVE-12 Fix: Create backup of current state before applying remote state
+      // This provides a safety net in case of conflicts
+      if (state.currentAdventureId) {
+        try {
+          const localBackup = {
+            id: `${state.currentAdventureId}_pre_multiplayer_${Date.now()}`,
+            version: state.version,
+            saveTimestamp: Date.now(),
+            characterName: state.character?.name || 'Unknown',
+            character: state.character,
+            adventureSettings: state.adventureSettings,
+            storyLog: state.storyLog,
+            currentGameStateString: state.currentGameStateString,
+            inventory: state.inventory,
+            statusBeforeSave: state.status,
+            adventureSummary: state.adventureSummary,
+            turnCount: state.turnCount,
+            worldMap: state.worldMap,
+          };
+          // Store in sessionStorage as a temporary backup (not persisted across sessions)
+          sessionStorage.setItem(
+            `endlessTales_temp_backup_${state.currentAdventureId}_${Date.now()}`,
+            JSON.stringify(localBackup)
+          );
+          logger.log('Created backup before applying remote state');
+        } catch (e) {
+          logger.error('Failed to create backup before applying remote state:', e);
+        }
+      }
+      
       // Apply remote state partially - only update what host sends
       // Preserve local multiplayer state that shouldn't be overwritten
       return {
