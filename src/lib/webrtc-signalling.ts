@@ -61,6 +61,7 @@ export function createPeerConnection(
 } {
   const bufferedCandidates: RTCIceCandidateInit[] = [];
   let dataChannelForIce: RTCDataChannel | null = null;
+  let isDataChannelReady = false;
 
   const pc = new RTCPeerConnection({
     iceServers: [
@@ -74,7 +75,7 @@ export function createPeerConnection(
       const candidateJson = event.candidate.toJSON();
       
       // If we have an established data channel, send candidate immediately
-      if (dataChannelForIce && dataChannelForIce.readyState === 'open') {
+      if (dataChannelForIce && isDataChannelReady) {
         const message: IceCandidateMessage = {
           type: 'ice-candidate',
           candidate: candidateJson,
@@ -90,7 +91,7 @@ export function createPeerConnection(
         }
       }
       
-      // Always buffer candidates so they can be sent later via data channel
+      // Buffer candidates so they can be sent later via data channel
       bufferedCandidates.push(candidateJson);
       onIceCandidate(candidateJson);
     }
@@ -110,8 +111,11 @@ export function createPeerConnection(
     },
     setDataChannel: (dc: RTCDataChannel) => {
       dataChannelForIce = dc;
-      // If data channel is already open, send buffered candidates immediately
-      if (dc.readyState === 'open') {
+      
+      // Track ready state properly
+      const setReady = () => {
+        isDataChannelReady = true;
+        // Send any buffered candidates now
         const buffered = bufferedCandidates.splice(0);
         for (const candidate of buffered) {
           const message: IceCandidateMessage = {
@@ -122,24 +126,19 @@ export function createPeerConnection(
             dc.send(JSON.stringify(message));
           } catch (error) {
             console.error('Failed to send buffered ICE candidate:', error);
+            // Put it back in buffer if send fails
+            bufferedCandidates.push(candidate);
           }
         }
+      };
+      
+      if (dc.readyState === 'open') {
+        setReady();
       } else {
         // When data channel opens, send any buffered candidates
         const originalOnOpen = dc.onopen;
         dc.onopen = (event) => {
-          const buffered = bufferedCandidates.splice(0);
-          for (const candidate of buffered) {
-            const message: IceCandidateMessage = {
-              type: 'ice-candidate',
-              candidate,
-            };
-            try {
-              dc.send(JSON.stringify(message));
-            } catch (error) {
-              console.error('Failed to send buffered ICE candidate:', error);
-            }
-          }
+          setReady();
           // Call original onopen if it exists
           if (originalOnOpen) {
             if (typeof originalOnOpen === 'function') {
@@ -187,13 +186,10 @@ export async function createOffer(
   // Wait for ICE candidates to be gathered
   await waitForIceGathering(pc);
 
-  // Also get any candidates that were buffered (gathered after waitForIceGathering)
-  const bufferedCandidates = getBufferedCandidates();
-  const allCandidates = [...iceCandidates, ...bufferedCandidates];
-
+  // Build the signalling package with all gathered candidates
   const pkg: SignallingPackage = {
     sdp: pc.localDescription!.sdp,
-    iceCandidates: allCandidates,
+    iceCandidates: [...iceCandidates], // Use all collected candidates (no duplicates)
     peerInfo: { peerId, name },
     type: 'offer',
   };
@@ -245,13 +241,10 @@ export async function createAnswer(
   // Wait for ICE candidates to be gathered
   await waitForIceGathering(pc);
 
-  // Also get any candidates that were buffered (gathered after waitForIceGathering)
-  const bufferedCandidates = getBufferedCandidates();
-  const allCandidates = [...iceCandidates, ...bufferedCandidates];
-
+  // Build the signalling package with all gathered candidates
   const answerPkg: SignallingPackage = {
     sdp: pc.localDescription!.sdp,
-    iceCandidates: allCandidates,
+    iceCandidates: [...iceCandidates], // Use all collected candidates (no duplicates)
     peerInfo: { peerId, name },
     type: 'answer',
   };
