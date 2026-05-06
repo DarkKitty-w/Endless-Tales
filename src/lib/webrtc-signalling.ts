@@ -334,7 +334,7 @@ export async function handleIceCandidateMessage(
  * Wait for ICE gathering to complete (with timeout)
  * Collects candidates incrementally and provides a way to retrieve them
  */
-function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 30000): Promise<void> {
+function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 60000): Promise<void> {
   return new Promise((resolve) => {
     if (pc.iceGatheringState === 'complete') {
       resolve();
