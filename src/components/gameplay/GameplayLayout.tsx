@@ -14,6 +14,7 @@ import { SettingsPanel } from "../screens/SettingsPanel";
 import { PartySidebar } from "./PartySidebar";
 import { ChatPanel } from "./ChatPanel";
 import { InteractionDialog } from "./InteractionDialog";
+import { ErrorBoundary } from "../ErrorBoundary";
 import type { Character, InventoryItem, StoryLogEntry, NarrateAdventureOutput, LoadingPhase, MultiplayerState } from "../types/game-types";
 import type { InteractionRequest } from "../types/multiplayer-types";
 
@@ -132,13 +133,15 @@ export function GameplayLayout({
 }: GameplayLayoutProps) {
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden bg-gradient-to-br from-background to-muted/30">
-      <LeftPanel
-        character={character}
-        inventory={inventory}
-        isGeneratingSkillTree={isGeneratingSkillTree}
-        turnCount={turnCount}
-        onUseSkill={onUseSkill}
-      />
+      <ErrorBoundary>
+        <LeftPanel
+          character={character}
+          inventory={inventory}
+          isGeneratingSkillTree={isGeneratingSkillTree}
+          turnCount={turnCount}
+          onUseSkill={onUseSkill}
+        />
+      </ErrorBoundary>
       <div className="flex-1 flex flex-col p-4 overflow-hidden">
         <MobileSheet
           character={character}
@@ -148,28 +151,32 @@ export function GameplayLayout({
           onSettingsOpen={onSettings}
           onUseSkill={onUseSkill}
         />
-        <NarrationDisplay
-          storyLog={storyLog}
-          loadingPhase={loadingPhase}
-          diceResult={diceResult}
-          diceType={diceType}
-          error={error}
-          branchingChoices={branchingChoices}
-          onChoiceClick={onChoiceClick}
-          isInitialLoading={isInitialLoading}
-          onRetryNarration={onRetryNarration}
-          pendingGuestAction={pendingGuestAction}
-          isConnected={isConnected}
-          isMultiplayerHost={isMultiplayerHost}
-        />
-        <ActionInput
-          ref={actionInputRef}
-          onSubmit={onSubmitAction}
-          onSuggest={onSuggestAction}
-          onCraft={onCraft}
-          disabled={anyLoading || character.class === 'admin000'}
-          isWaitingForHost={!!pendingGuestAction}
-        />
+        <ErrorBoundary>
+          <NarrationDisplay
+            storyLog={storyLog}
+            loadingPhase={loadingPhase}
+            diceResult={diceResult}
+            diceType={diceType}
+            error={error}
+            branchingChoices={branchingChoices}
+            onChoiceClick={onChoiceClick}
+            isInitialLoading={isInitialLoading}
+            onRetryNarration={onRetryNarration}
+            pendingGuestAction={pendingGuestAction}
+            isConnected={isConnected}
+            isMultiplayerHost={isMultiplayerHost}
+          />
+        </ErrorBoundary>
+        <ErrorBoundary>
+          <ActionInput
+            ref={actionInputRef}
+            onSubmit={onSubmitAction}
+            onSuggest={onSuggestAction}
+            onCraft={onCraft}
+            disabled={anyLoading || character.class === 'admin000'}
+            isWaitingForHost={!!pendingGuestAction}
+          />
+        </ErrorBoundary>
         <AIStatusPanel />
         <GameplayActions
           onSave={onSave}
@@ -202,37 +209,43 @@ export function GameplayLayout({
       {!!multiplayerState.sessionId && (
         <>
           <div className={`fixed left-4 top-4 bottom-4 w-64 z-50 transition-transform duration-300 ${isPartySidebarOpen ? 'translate-x-0' : '-translate-x-[120%]'}`}>
-            <PartySidebar
-              multiplayerState={multiplayerState}
-              isHost={isMultiplayerHost}
-              onKickPeer={onKickPeer}
-              onTogglePause={onTogglePause}
-              onOpenChat={onOpenChat}
-              onSetTurnOrder={onSetTurnOrder}
-              onReconnect={onReconnect}
-              isReconnecting={isReconnecting}
-              onSendTradeRequest={onSendTradeRequest}
-            />
+            <ErrorBoundary>
+              <PartySidebar
+                multiplayerState={multiplayerState}
+                isHost={isMultiplayerHost}
+                onKickPeer={onKickPeer}
+                onTogglePause={onTogglePause}
+                onOpenChat={onOpenChat}
+                onSetTurnOrder={onSetTurnOrder}
+                onReconnect={onReconnect}
+                isReconnecting={isReconnecting}
+                onSendTradeRequest={onSendTradeRequest}
+              />
+            </ErrorBoundary>
           </div>
-          <ChatPanel
-            isOpen={isChatPanelOpen}
-            onClose={onCloseChatPanel}
-            messages={multiplayerState.chatMessages}
-            onSendMessage={() => {}}
-            currentPlayerName={character?.name || 'Player'}
-          />
+          <ErrorBoundary>
+            <ChatPanel
+              isOpen={isChatPanelOpen}
+              onClose={onCloseChatPanel}
+              messages={multiplayerState.chatMessages}
+              onSendMessage={() => {}}
+              currentPlayerName={character?.name || 'Player'}
+            />
+          </ErrorBoundary>
         </>
       )}
 
       {/* Interaction Dialog */}
-      <InteractionDialog
-        isOpen={isInteractionDialogOpen}
-        interaction={currentInteraction}
-        isTarget={isInteractionTarget}
-        onAccept={() => onSendInteractionResponse(true)}
-        onDecline={() => onSendInteractionResponse(false)}
-        onClose={() => onSetIsInteractionDialogOpen(false)}
-      />
+      <ErrorBoundary>
+        <InteractionDialog
+          isOpen={isInteractionDialogOpen}
+          interaction={currentInteraction}
+          isTarget={isInteractionTarget}
+          onAccept={() => onSendInteractionResponse(true)}
+          onDecline={() => onSendInteractionResponse(false)}
+          onClose={() => onSetIsInteractionDialogOpen(false)}
+        />
+      </ErrorBoundary>
     </div>
   );
 }
