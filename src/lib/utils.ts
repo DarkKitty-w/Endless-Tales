@@ -177,8 +177,58 @@ export async function processAiResponse<T>(
     }
   };
 
-  // Single attempt: parse the raw text
-  let data = tryParse(rawText);
+  // RETRY LOGIC: Multiple extraction attempts with different strategies
+  const extractionStrategies = [
+    // Strategy 1: Full text parse (original)
+    () => tryParse(rawText),
+    // Strategy 2: Extract from markdown blocks specifically
+    () => {
+      const markdownMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      return markdownMatch ? tryParse(markdownMatch[1]) : null;
+    },
+    // Strategy 3: Try to find JSON object with regex (more permissive)
+    () => {
+      const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+      return jsonMatch ? tryParse(jsonMatch[0]) : null;
+    },
+    // Strategy 4: Try to find JSON array
+    () => {
+      const arrayMatch = rawText.match(/\[[\s\S]*\]/);
+      return arrayMatch ? tryParse(arrayMatch[0]) : null;
+    },
+    // Strategy 5: Aggressive cleanup - remove all non-JSON content
+    () => {
+      let cleaned = rawText;
+      // Remove any leading/trailing text before/after JSON
+      const firstBrace = cleaned.indexOf('{');
+      const firstBracket = cleaned.indexOf('[');
+      const lastBrace = cleaned.lastIndexOf('}');
+      const lastBracket = cleaned.lastIndexOf(']');
+      
+      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+        cleaned = cleaned.substring(firstBrace, lastBrace + 1);
+        return tryParse(cleaned);
+      }
+      if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+        cleaned = cleaned.substring(firstBracket, lastBracket + 1);
+        return tryParse(cleaned);
+      }
+      return null;
+    }
+  ];
+
+  let data: any = null;
+  for (let i = 0; i < extractionStrategies.length; i++) {
+    try {
+      data = extractionStrategies[i]();
+      if (data !== null) {
+        logger.log(`[processAiResponse] Extraction succeeded with strategy ${i + 1}`);
+        break;
+      }
+    } catch (e) {
+      logger.error(`[processAiResponse] Strategy ${i + 1} failed:`, e);
+    }
+  }
 
   if (!data) {
     logger.error("[processAiResponse] All parsing attempts failed. rawText (first 500 chars):", rawText.substring(0, 500));
