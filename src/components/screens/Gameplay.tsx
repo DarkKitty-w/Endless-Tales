@@ -1149,6 +1149,7 @@ export function Gameplay() {
                 isInteractionDialogOpen={isInteractionDialogOpen}
                 isInteractionTarget={isInteractionTarget}
                 onSetIsInteractionDialogOpen={setIsInteractionDialogOpen}
+                onSendChatMessage={handleSendChatMessage}
             />
 
             {/* Outgoing Interaction Dialog - not included in GameplayLayout */}

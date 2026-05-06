@@ -83,6 +83,7 @@ interface GameplayLayoutProps {
   isInteractionDialogOpen: boolean;
   isInteractionTarget: boolean;
   onSetIsInteractionDialogOpen: (open: boolean) => void;
+  onSendChatMessage: (text: string) => void;
 }
 
 export function GameplayLayout({
@@ -141,6 +142,7 @@ export function GameplayLayout({
   isInteractionDialogOpen,
   isInteractionTarget,
   onSetIsInteractionDialogOpen,
+  onSendChatMessage,
 }: GameplayLayoutProps) {
   return (
     <div className="flex flex-col md:flex-row min-h-screen overflow-hidden bg-gradient-to-br from-background to-muted/30">
@@ -253,7 +255,7 @@ export function GameplayLayout({
               isOpen={isChatPanelOpen}
               onClose={onCloseChatPanel}
               messages={multiplayerState.chatMessages}
-              onSendMessage={() => {}}
+              onSendMessage={onSendChatMessage}
               currentPlayerName={character?.name || 'Player'}
             />
           </ErrorBoundary>
