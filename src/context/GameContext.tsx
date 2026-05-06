@@ -313,7 +313,30 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
         localStorage.setItem(THEME_MODE_KEY, state.isDarkMode ? 'dark' : 'light');
 
         // Saved adventures (localStorage)
-        localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(state.savedAdventures));
+        // SAVE-16 Fix: Validate saves before writing
+        const invalidSaves: string[] = [];
+        const validSaves = state.savedAdventures.filter((adventure: SavedAdventure) => {
+          const validation = validateSavedAdventure(adventure);
+          if (!validation.success) {
+            invalidSaves.push(adventure.id || 'unknown');
+            logger.error('Skipping invalid save during persist:', { 
+              adventureId: adventure.id, 
+              error: validation.error 
+            });
+            return false;
+          }
+          return true;
+        });
+
+        if (invalidSaves.length > 0) {
+          toast({
+            title: "Invalid Saves Detected",
+            description: `${invalidSaves.length} save(s) failed validation and will not be persisted: ${invalidSaves.join(', ')}`,
+            variant: "destructive",
+          });
+        }
+
+        localStorage.setItem(SAVED_ADVENTURES_KEY, JSON.stringify(validSaves));
 
         // AI provider preference (localStorage)
         localStorage.setItem(AI_PROVIDER_KEY, state.aiProvider);
