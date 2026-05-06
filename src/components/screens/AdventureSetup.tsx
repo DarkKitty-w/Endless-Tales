@@ -130,12 +130,25 @@ export const AdventureSetup = React.memo(function AdventureSetup(props: Adventur
     setCustomError(null);
     try {
       let suggestions: string[] = [];
+      let usedFallback = false;
+      
       if (characterOriginType === 'existing') {
         const result = await suggestExistingCharacters({ universeName, userApiKey: activeApiKey });
         suggestions = result.suggestedNames || [];
+        usedFallback = result.usedFallback || false;
       } else { // 'original'
         const result = await suggestOriginalCharacterConcepts({ universeName, userApiKey: activeApiKey });
         suggestions = result.suggestedConcepts || [];
+        usedFallback = result.usedFallback || false;
+      }
+
+      // ERR-8 Fix: Show toast when fallback is used
+      if (usedFallback) {
+        toast({ 
+          title: "Using Default Suggestions", 
+          description: "AI suggestion failed. Using default suggestions. Try again later.", 
+          variant: "destructive" 
+        });
       }
 
       if (suggestions.length > 0) {

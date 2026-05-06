@@ -456,7 +456,13 @@ export function Gameplay() {
                     const signal = createAbortSignal();
                     const summaryResult = await summarizeAdventure({ story: fullStory, userApiKey: activeApiKey, signal });
                     summary = summaryResult.summary;
-                    toast({ title: "Summary Generated", description: "View your adventure outcome." });
+                    
+                    // ERR-8 Fix: Show toast when fallback is used
+                    if (summaryResult.usedFallback) {
+                        toast({ title: "Using Default Summary", description: "AI summary failed. Using basic summary.", variant: "destructive" });
+                    } else {
+                        toast({ title: "Summary Generated", description: "View your adventure outcome." });
+                    }
                 } catch (summaryError: any) {
                     if (summaryError.name === 'AbortError') {
                         logger.log("Summarize adventure aborted");
