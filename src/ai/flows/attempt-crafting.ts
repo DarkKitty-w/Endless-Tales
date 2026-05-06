@@ -30,6 +30,9 @@ export interface AttemptCraftingOutput {
       magicalEffect?: string;
   } | null;
   consumedItems: string[];
+  // ERR-8/ERR-11: Track if fallback was used and preserve raw AI response
+  usedFallback?: boolean;
+  rawResponse?: string;
 }
 
 // Zod schema for validation
@@ -85,11 +88,16 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
       const text = response.text;
       if (!text) throw new Error("No text returned from AI");
 
+      // ERR-8/ERR-11: Preserve raw AI response
+      const rawResponse = text;
+
       const fallback: AttemptCraftingOutput = {
           success: false,
           message: "The crafting attempt failed due to an external force (AI Error).",
           craftedItem: null,
           consumedItems: [],
+          usedFallback: true,
+          rawResponse: text,
       };
 
       const normalizer = (data: any): AttemptCraftingOutput => ({
@@ -97,6 +105,8 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           message: data.message ?? fallback.message,
           craftedItem: data.craftedItem ?? fallback.craftedItem,
           consumedItems: Array.isArray(data.consumedItems) ? data.consumedItems : fallback.consumedItems,
+          usedFallback: false,
+          rawResponse: rawResponse,
       });
 
       const result = await processAiResponse(
@@ -114,7 +124,9 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           success: false,
           message: "The crafting attempt failed due to an external force (AI Error).",
           craftedItem: null,
-          consumedItems: []
+          consumedItems: [],
+          usedFallback: true,
+          rawResponse: error.message || 'Unknown error',
       };
   }
 }

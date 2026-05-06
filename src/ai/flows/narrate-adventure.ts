@@ -60,6 +60,9 @@ export interface NarrateAdventureOutput {
     discoveredLocationIds?: string[];
     updatedLocations?: { id: string; updates: Partial<{ name: string; description: string; type: string; discovered: boolean; x: number; y: number; connectedLocationIds: string[] }> }[];
   } | null;
+  // ERR-8/ERR-11: Track if fallback was used and preserve raw AI response
+  usedFallback?: boolean;
+  rawResponse?: string;
 }
 
 const NarrateAdventureOutputSchema = z.object({
@@ -259,6 +262,8 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
       }
 
       if (!text) throw new Error("No text returned from AI");
+      // ERR-8/ERR-11: Preserve raw AI response
+      const rawResponse = text;
 
       const gameDiffKey = adventureSettings.difficulty?.toLowerCase() ?? 'normal';
       const fallbackAssess = FALLBACK_DIFFICULTY_MAP[gameDiffKey] ?? FALLBACK_DIFFICULTY_MAP['normal'];
@@ -287,13 +292,16 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           assessedDifficulty: assessDifficulty ? fallbackAssess.difficulty : undefined,
           diceRoll: fallbackDiceRoll,
           diceType: assessDifficulty ? fallbackDiceType : undefined,
+          // ERR-8/ERR-11: Track if fallback was used and preserve raw AI response
+          usedFallback: true,
+          rawResponse: rawResponse,
       };
 
       const normalizer = (data: any): NarrateAdventureOutput => {
           if (Array.isArray(data)) data = data[0] || {};
           if (!data || typeof data !== 'object') {
             console.warn('Normalizer received invalid data:', data);
-            return fallback;
+            return { ...fallback, rawResponse: JSON.stringify(data) };
           }
 
           // --- narration ---
@@ -446,6 +454,9 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
               diceRoll,
               diceType,
               worldMapChanges,
+              // ERR-8/ERR-11: Track that this is NOT a fallback and preserve raw response
+              usedFallback: false,
+              rawResponse,
           };
       };
 
@@ -493,6 +504,9 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           assessedDifficulty: assessDifficulty ? fallbackAssess.difficulty : undefined,
           diceRoll: fallbackDiceRoll,
           diceType: assessDifficulty ? fallbackDiceType : undefined,
+          // ERR-8/ERR-11: Track fallback and preserve error info
+          usedFallback: true,
+          rawResponse: error.message || 'Unknown error',
       };
   }
 }

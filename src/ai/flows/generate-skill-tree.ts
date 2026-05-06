@@ -77,7 +77,13 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
       const text = response.text;
       if (!text) throw new Error("No text returned from AI");
 
+      // ERR-8/ERR-11: Preserve raw AI response
+      const rawResponse = text;
+
       const fallback = createFallbackSkillTree(input.characterClass);
+      // Add tracking fields to fallback
+      fallback.usedFallback = true;
+      fallback.rawResponse = text;
       
       const normalizer = (data: any): GenerateSkillTreeOutput => {
           // If the AI returned an array of stages directly
@@ -90,7 +96,7 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
               while (stages.length < MAX_SKILL_TREE_STAGES) {
                   stages.push(fallback.stages[stages.length]);
               }
-              return { className: input.characterClass, stages };
+              return { className: input.characterClass, stages, usedFallback: false, rawResponse };
           }
 
           // If the AI returned an object with numeric keys (e.g., "0", "1")
@@ -110,7 +116,7 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
               while (stages.length < MAX_SKILL_TREE_STAGES) {
                   stages.push(fallback.stages[stages.length]);
               }
-              return { className: input.characterClass, stages };
+              return { className: input.characterClass, stages, usedFallback: false, rawResponse };
           }
 
           // If the AI returned a proper stages array
@@ -123,7 +129,7 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
               while (stages.length < MAX_SKILL_TREE_STAGES) {
                   stages.push(fallback.stages[stages.length]);
               }
-              return { className: data.className ?? input.characterClass, stages };
+              return { className: data.className ?? input.characterClass, stages, usedFallback: false, rawResponse };
           }
 
           return fallback;
@@ -140,6 +146,9 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
   } catch (error: any) {
       if (error.name === 'AbortError') throw error;
       logger.error("AI Skill Tree Error:", error);
-      return createFallbackSkillTree(input.characterClass);
+      const fallback = createFallbackSkillTree(input.characterClass);
+      fallback.usedFallback = true;
+      fallback.rawResponse = error.message || 'Unknown error';
+      return fallback;
   }
 }

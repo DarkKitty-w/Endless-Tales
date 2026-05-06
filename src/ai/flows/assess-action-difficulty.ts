@@ -28,6 +28,9 @@ export interface AssessActionDifficultyOutput {
     difficulty: DifficultyLevel;
     reasoning: string;
     suggestedDice: "d6" | "d10" | "d20" | "d100" | "None";
+    // ERR-8/ERR-11: Track if fallback was used and preserve raw AI response
+    usedFallback?: boolean;
+    rawResponse?: string;
 }
 
 // Zod schema for validation
@@ -90,6 +93,9 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
       const text = response.text;
       if (!text) throw new Error("No text returned from AI");
 
+      // ERR-8/ERR-11: Preserve raw AI response
+      const rawResponse = text;
+
       // Build fallback based on game difficulty
       const gameDiffKey = input.gameDifficulty?.toLowerCase() ?? 'normal';
       const fallbackMapping = FALLBACK_DIFFICULTY_MAP[gameDiffKey] ?? FALLBACK_DIFFICULTY_MAP['normal'];
@@ -97,12 +103,16 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           difficulty: fallbackMapping.difficulty,
           reasoning: "AI assessment failed; using a default assumption based on game settings.",
           suggestedDice: fallbackMapping.dice,
+          usedFallback: true,
+          rawResponse: text,
       };
 
       const normalizer = (data: any): AssessActionDifficultyOutput => ({
           difficulty: data.difficulty ?? fallback.difficulty,
           reasoning: data.reasoning ?? fallback.reasoning,
           suggestedDice: data.suggestedDice ?? fallback.suggestedDice,
+          usedFallback: false,
+          rawResponse: rawResponse,
       });
 
       const result = await processAiResponse(
@@ -123,6 +133,8 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           difficulty: fallbackMapping.difficulty,
           reasoning: "AI assessment failed; using a default assumption based on game settings.",
           suggestedDice: fallbackMapping.dice,
+          usedFallback: true,
+          rawResponse: error.message || 'Unknown error',
       };
   }
 }

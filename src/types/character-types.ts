@@ -27,6 +27,9 @@ export interface SkillTreeStage {
 export interface SkillTree {
     className: string;
     stages: SkillTreeStage[];
+    // ERR-8/ERR-11: Track if fallback was used and preserve raw AI response
+    usedFallback?: boolean;
+    rawResponse?: string;
 }
 
 /** Tracks reputation scores with various factions. */
