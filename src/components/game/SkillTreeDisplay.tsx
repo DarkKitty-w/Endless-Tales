@@ -37,6 +37,11 @@ export function SkillTreeDisplay({
 }: SkillTreeDisplayProps) {
   const maxStage = MAX_SKILL_TREE_STAGES - 1;
 
+  // Precompute a Set of learned skill names for O(1) lookup (PERF-10 fix)
+  const learnedSkillNames = React.useMemo(() => {
+    return new Set(learnedSkills.map(skill => skill.name));
+  }, [learnedSkills]);
+
   if (!skillTree || !skillTree.stages || skillTree.stages.length !== MAX_SKILL_TREE_STAGES) {
     return (
       <CardboardCard className="m-4">
@@ -179,7 +184,8 @@ export function SkillTreeDisplay({
                           Skills available at this stage:
                         </p>
                         {stageData.skills.map((skill) => {
-                          const isLearned = learnedSkills.some((ls) => ls.name === skill.name);
+                          // Use O(1) Set lookup instead of O(n) array.some (PERF-10 fix)
+                          const isLearned = learnedSkillNames.has(skill.name);
                           return (
                             <li key={skill.name} className="text-sm flex items-start gap-2">
                               {isLearned ? (
