@@ -18,6 +18,7 @@ import type { SavedAdventure } from "../types/adventure-types";
 import { configureAIRouter, type ProviderType } from "../ai/ai-router";
 import { logger } from "@/lib/logger";
 import { toast } from "../hooks/use-toast";
+import { validateSavedAdventure, SavedAdventureSchema } from "./schemas/save-schema";
 
 // Storage keys
 const AI_PROVIDER_KEY = "endlessTales_aiProvider";
@@ -79,63 +80,25 @@ const GameContext = createContext<{ state: GameState; dispatch: Dispatch<Action>
 
 /**
  * Migrate a saved adventure to the current schema version.
- * Validates required fields and provides defaults for missing optional fields.
+ * Validates required fields using Zod schema validation.
  */
 function migrateSavedAdventure(adventure: any, onError?: (title: string, description: string) => void): SavedAdventure | null {
-  // Validate required fields
-  const requiredFields = ['id', 'characterName', 'character', 'adventureSettings', 'storyLog', 'currentGameStateString', 'inventory'];
-  const missingFields = requiredFields.filter(field => adventure[field] === undefined || adventure[field] === null);
+  // Validate using Zod schema
+  const validationResult = validateSavedAdventure(adventure);
   
-  if (missingFields.length > 0) {
-    logger.error('Migration failed: Missing required fields', { adventureId: adventure.id, missingFields });
+  if (!validationResult.success) {
+    logger.error('Schema validation failed for adventure:', { 
+      adventureId: adventure.id, 
+      error: validationResult.error 
+    });
+    
     if (onError) {
       onError(
         "Invalid Save Data", 
-        `Save data is missing required fields: ${missingFields.join(', ')}. This save cannot be loaded.`
+        `Save data validation failed: ${validationResult.error}. This save cannot be loaded.`
       );
     }
     return null; // Return null to indicate validation failure
-  }
-
-  // Validate field types
-  if (typeof adventure.id !== 'string') {
-    logger.error('Migration failed: Invalid id field type', { adventureId: adventure.id });
-    if (onError) {
-      onError("Invalid Save Data", "Save data has invalid 'id' field. This save cannot be loaded.");
-    }
-    return null;
-  }
-
-  if (typeof adventure.characterName !== 'string') {
-    logger.error('Migration failed: Invalid characterName field type', { adventureId: adventure.id });
-    if (onError) {
-      onError("Invalid Save Data", "Save data has invalid 'characterName' field. This save cannot be loaded.");
-    }
-    return null;
-  }
-
-  if (!Array.isArray(adventure.storyLog)) {
-    logger.error('Migration failed: Invalid storyLog field type', { adventureId: adventure.id });
-    if (onError) {
-      onError("Invalid Save Data", "Save data has invalid 'storyLog' field. This save cannot be loaded.");
-    }
-    return null;
-  }
-
-  if (!Array.isArray(adventure.inventory)) {
-    logger.error('Migration failed: Invalid inventory field type', { adventureId: adventure.id });
-    if (onError) {
-      onError("Invalid Save Data", "Save data has invalid 'inventory' field. This save cannot be loaded.");
-    }
-    return null;
-  }
-
-  if (typeof adventure.currentGameStateString !== 'string') {
-    logger.error('Migration failed: Invalid currentGameStateString field type', { adventureId: adventure.id });
-    if (onError) {
-      onError("Invalid Save Data", "Save data has invalid 'currentGameStateString' field. This save cannot be loaded.");
-    }
-    return null;
   }
 
   // If no version, treat as version 0 (pre-versioning)
