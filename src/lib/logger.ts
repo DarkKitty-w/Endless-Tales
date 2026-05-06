@@ -53,10 +53,3 @@ const createLogger = (): Logger => {
 };
 
 export const logger = createLogger();
-
-// Helper function for one-off usage
-export const devLog = (...args: any[]) => {
-  if (isDev) {
-    console.log(...args);
-  }
-};
