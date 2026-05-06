@@ -88,6 +88,9 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     const channel = dataChannelsRef.current[type];
     if (!channel) {
       logger.error(`Data channel ${type} not available`);
+      if (onError) {
+        onError("Message Send Failed", `Data channel ${type} is not available. Message not sent.`, false);
+      }
       return false;
     }
 
@@ -98,8 +101,13 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       timestamp: Date.now(),
     };
 
-    return sendDataChannelMessage(channel, message);
-  }, []);
+    const sent = sendDataChannelMessage(channel, message);
+    if (!sent && onError) {
+      // ERR-32 Fix: Notify user when message is dropped due to queue full or channel issues
+      onError("Message Not Sent", `Failed to send ${type} message. The connection may be congested.`, false);
+    }
+    return sent;
+  }, [onError]);
 
   // Send game action (guest sends to host)
   const sendGameAction = useCallback((action: string, turnNumber: number, isInitial = false) => {

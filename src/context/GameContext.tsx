@@ -80,23 +80,34 @@ const GameContext = createContext<{ state: GameState; dispatch: Dispatch<Action>
 /**
  * Migrate a saved adventure to the current schema version.
  */
-function migrateSavedAdventure(adventure: any): SavedAdventure {
+function migrateSavedAdventure(adventure: any, onError?: (title: string, description: string) => void): SavedAdventure {
   // If no version, treat as version 0 (pre-versioning)
   const version = adventure.version ?? 0;
 
   // Clone to avoid mutating original
   const migrated = { ...adventure };
 
-  // Version 0 -> 1: ensure worldMap exists
-  if (version < 1) {
-    if (!migrated.worldMap) {
-      migrated.worldMap = initialState.worldMap;
+  try {
+    // Version 0 -> 1: ensure worldMap exists
+    if (version < 1) {
+      if (!migrated.worldMap) {
+        migrated.worldMap = initialState.worldMap;
+        logger.log('Migration: Added missing worldMap field');
+      }
+      // Other future migrations can be added here
     }
-    // Other future migrations can be added here
-  }
 
-  migrated.version = CURRENT_STATE_VERSION;
-  return migrated as SavedAdventure;
+    migrated.version = CURRENT_STATE_VERSION;
+    return migrated as SavedAdventure;
+  } catch (error: any) {
+    // ERR-21 Fix: Surface migration errors to user
+    logger.error('Migration failed for adventure:', { adventureId: adventure.id, error: error.message });
+    if (onError) {
+      onError("Save Data Migration Failed", `Failed to migrate save data${adventure.id ? ` for adventure ${adventure.id}` : ''}. ${error.message || 'Unknown error'}`);
+    }
+    // Return original data if migration fails (best effort)
+    return adventure as SavedAdventure;
+  }
 }
 
 export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
@@ -155,8 +166,17 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
       if (savedData) {
         const loadedAdventures: any[] = JSON.parse(savedData);
         if (Array.isArray(loadedAdventures)) {
+          // ERR-21 Fix: Pass toast callback to surface migration errors
+          const migrationErrorCallback = (title: string, description: string) => {
+            toast({
+              title,
+              description,
+              variant: "destructive",
+            });
+          };
+          
           // Migrate each adventure to current schema version
-          const migratedAdventures = loadedAdventures.map(migrateSavedAdventure);
+          const migratedAdventures = loadedAdventures.map(adv => migrateSavedAdventure(adv, migrationErrorCallback));
           dispatch({ type: "LOAD_SAVED_ADVENTURES", payload: migratedAdventures });
         } else {
           // ERR-18/ERR-20 Fix: Offer recovery options for invalid data format
