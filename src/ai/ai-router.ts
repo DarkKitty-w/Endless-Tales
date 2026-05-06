@@ -30,16 +30,6 @@ export interface AIProvider {
   }): AsyncIterable<string>;
 }
 
-// Helper to build messages array for providers that support system/user separation
-export function buildMessages(contents: string, systemMessage?: string): { role: string; content: string }[] {
-  const messages: { role: string; content: string }[] = [];
-  if (systemMessage) {
-    messages.push({ role: 'system', content: systemMessage });
-  }
-  messages.push({ role: 'user', content: contents });
-  return messages;
-}
-
 // Timeout for AI requests (30 seconds)
 const AI_TIMEOUT = 30000;
 function getSignalWithTimeout(signal?: AbortSignal): AbortSignal {
