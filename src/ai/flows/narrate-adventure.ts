@@ -406,15 +406,18 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
             worldMapChanges = undefined;
           }
 
-          // Handle isCharacterDefeated - check for various property name variations
-          const isCharacterDefeated = data.isCharacterDefeated ?? 
-              data.character_defeated ??  // Common typo: snake_case
-              data.characterDefeated ??   // Another variation
-              false;
+          // Handle isCharacterDefeated - check for various property name variations defensively
+          const isCharacterDefeated = Boolean(
+              data.isCharacterDefeated ?? 
+              data.character_defeated ??  // Handle non-standard snake_case
+              data.characterDefeated ??   // Handle camelCase variation
+              false
+          );
 
-          // Handle progressedToStage - schema uses "progressedToStage" (double 's')
+          // Handle progressedToStage - the schema uses "progressedToStage" (double 's')
+          // Some AI responses might use single 's' typo, so check both
           const progressedToStage = data.progressedToStage ?? 
-              (data as any)['progressedToStage' as any] ?? // Typo: single 's'
+              (data as any).progressedToStage ?? // Handle typo: single 's'
               null;
 
           return {
