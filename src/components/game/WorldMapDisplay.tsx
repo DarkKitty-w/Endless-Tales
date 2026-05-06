@@ -99,16 +99,25 @@ export function WorldMapDisplay() {
 
       return (
         <g key={loc.id}>
-          <circle
-            cx={`${loc.x}%`}
-            cy={`${loc.y}%`}
-            r={nodeSize}
-            fill={nodeColor}
-            stroke="hsl(var(--background))"
-            strokeWidth="2"
-            className="cursor-pointer transition-all hover:scale-125"
-            onClick={() => setSelectedLocationId(isSelected ? null : loc.id)}
-          />
+            <circle
+              cx={`${loc.x}%`}
+              cy={`${loc.y}%`}
+              r={nodeSize}
+              fill={nodeColor}
+              stroke="hsl(var(--background))"
+              strokeWidth="2"
+              className="cursor-pointer transition-all hover:scale-125"
+              role="button"
+              tabIndex={0}
+              aria-label={`Select location: ${loc.name}`}
+              onClick={() => setSelectedLocationId(isSelected ? null : loc.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setSelectedLocationId(isSelected ? null : loc.id);
+                }
+              }}
+            />
           {isCurrent && (
             <circle
               cx={`${loc.x}%`}
