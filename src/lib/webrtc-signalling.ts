@@ -1,5 +1,6 @@
 // src/lib/webrtc-signalling.ts
 // WebRTC signalling utilities for manual SDP offer/answer exchange (no signalling server)
+import { logger } from "@/lib/logger";
 
 export interface SignallingPackage {
   sdp: string;
@@ -25,7 +26,7 @@ export function encodeSignallingData(pkg: SignallingPackage): string {
     // Use btoa for base64 encoding (browser-compatible)
     return btoa(unescape(encodeURIComponent(json)));
   } catch (error) {
-    console.error('Failed to encode signalling data:', error);
+    logger.error('Failed to encode signalling data:', error);
     throw new Error('Failed to encode signalling data');
   }
 }
@@ -42,7 +43,7 @@ export function decodeSignallingData(encoded: string): SignallingPackage {
     }
     return pkg;
   } catch (error) {
-    console.error('Failed to decode signalling data:', error);
+    logger.error('Failed to decode signalling data:', error);
     throw new Error('Invalid signalling data. Please check the code and try again.');
   }
 }
@@ -80,7 +81,7 @@ export function createPeerConnection(
         dataChannelForIce.send(JSON.stringify(message));
         return true;
       } catch (error) {
-        console.error('Failed to send ICE candidate via data channel:', error);
+        logger.error('Failed to send ICE candidate via data channel:', error);
         return false;
       }
     }
@@ -163,7 +164,7 @@ export async function createOffer(
     (candidate) => {
       onIceCandidate(candidate);
     },
-    (state) => console.log('Host connection state:', state)
+    (state) => logger.log('Host connection state:', state)
   );
 
   // Create data channels
@@ -212,7 +213,7 @@ export async function createAnswer(
     (candidate) => {
       onIceCandidate(candidate);
     },
-    (state) => console.log('Guest connection state:', state)
+    (state) => logger.log('Guest connection state:', state)
   );
 
   const pkg = decodeSignallingData(encodedOffer);
@@ -292,7 +293,7 @@ export function sendBufferedIceCandidates(
 ): void {
   // The new implementation sends candidates automatically when data channel is ready
   // This is a no-op now, but kept for API compatibility
-  console.log('sendBufferedIceCandidates: Candidates are now sent automatically via data channel');
+  logger.log('sendBufferedIceCandidates: Candidates are now sent automatically via data channel');
 }
 
 /**
@@ -306,7 +307,7 @@ export async function handleIceCandidateMessage(
     try {
       await pc.addIceCandidate(message.candidate);
     } catch (error) {
-      console.error('Failed to add ICE candidate:', error);
+      logger.error('Failed to add ICE candidate:', error);
     }
   }
 }
@@ -323,7 +324,7 @@ function waitForIceGathering(pc: RTCPeerConnection, timeoutMs = 60000): Promise<
     }
 
     const timeout = setTimeout(() => {
-      console.log('ICE gathering timeout, proceeding with collected candidates');
+      logger.log('ICE gathering timeout, proceeding with collected candidates');
       resolve();
     }, timeoutMs);
 
@@ -350,37 +351,89 @@ export function setupDataChannel(
       const data = JSON.parse(event.data);
       onMessage(data);
     } catch (error) {
-      console.error('Failed to parse data channel message:', error);
+      logger.error('Failed to parse data channel message:', error);
     }
   };
 
   channel.onopen = () => {
-    console.log(`Data channel "${channel.label}" opened`);
+    logger.log(`Data channel "${channel.label}" opened`);
     if (onOpen) onOpen();
   };
 
   channel.onclose = () => {
-    console.log(`Data channel "${channel.label}" closed`);
+    logger.log(`Data channel "${channel.label}" closed`);
     if (onClose) onClose();
   };
 
   channel.onerror = (error) => {
-    console.error(`Data channel "${channel.label}" error:`, error);
+    logger.error(`Data channel "${channel.label}" error:`, error);
   };
 }
 
 /**
- * Send a message via data channel
+ * Send a message via data channel with backpressure handling
+ * Returns true if message was sent or queued, false if it was dropped
  */
+// Queue for storing messages when buffer is full
+const messageQueue: { channel: RTCDataChannel; data: any; timestamp: number }[] = [];
+const MAX_QUEUE_SIZE = 100;
+const BUFFER_LIMIT = 1024 * 1024; // 1MB
+const QUEUE_PROCESS_INTERVAL = 50; // ms
+let queueProcessorInitialized = false;
+
+function initializeQueueProcessor() {
+  if (queueProcessorInitialized) return;
+  queueProcessorInitialized = true;
+  
+  setInterval(() => {
+    const now = Date.now();
+    // Remove messages older than 30 seconds
+    const validMessages = messageQueue.filter(msg => now - msg.timestamp < 30000);
+    messageQueue.length = 0;
+    messageQueue.push(...validMessages);
+    
+    // Try to send queued messages
+    for (let i = messageQueue.length - 1; i >= 0; i--) {
+      const msg = messageQueue[i];
+      if (msg.channel.readyState === 'open' && msg.channel.bufferedAmount < BUFFER_LIMIT / 2) {
+        try {
+          msg.channel.send(JSON.stringify(msg.data));
+          messageQueue.splice(i, 1); // Remove from queue on successful send
+        } catch (error) {
+          // Keep in queue, will retry next time
+        }
+      }
+    }
+  }, QUEUE_PROCESS_INTERVAL);
+}
+
 export function sendDataChannelMessage(channel: RTCDataChannel, data: any): boolean {
-  if (channel.readyState === 'open') {
-    try {
-      channel.send(JSON.stringify(data));
-      return true;
-    } catch (error) {
-      console.error('Failed to send data channel message:', error);
-      return false;
+  if (channel.readyState !== 'open') {
+    return false;
+  }
+  
+  // Check buffer amount to implement backpressure
+  if (channel.bufferedAmount > BUFFER_LIMIT) {
+    logger.warn('Data channel buffer full, message queued');
+    
+    // Initialize queue processor if not already done
+    initializeQueueProcessor();
+    
+    // Queue the message if not too many already
+    if (messageQueue.length < MAX_QUEUE_SIZE) {
+      messageQueue.push({ channel, data, timestamp: Date.now() });
+      return true; // Message is queued (will be sent later)
+    } else {
+      logger.error('Message queue full, dropping message');
+      return false; // Queue is full, message dropped
     }
   }
-  return false;
+  
+  try {
+    channel.send(JSON.stringify(data));
+    return true;
+  } catch (error) {
+    logger.error('Failed to send data channel message:', error);
+    return false;
+  }
 }
