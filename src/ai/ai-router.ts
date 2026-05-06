@@ -768,17 +768,20 @@ let webllmModule: any = null;
 let webllmLoadAttempted = false;
 let webllmAvailable = false;
 let webllmLoadPromise: Promise<any> | null = null;
-let webllmLoadRetried = false;
 
 async function loadWebLLM(): Promise<any> {
   if (typeof window === 'undefined') {
     throw new Error('[WebLLM] Can only be loaded in the browser');
   }
 
-  if (webllmModule) {
+  // Check for cached module
+  const cached = getCachedModule();
+  if (cached) {
     logger.log('[WebLLM] Returning cached module');
-    return webllmModule;
+    return cached;
   }
+
+  // If already loading, return the existing promise
   if (webllmLoadPromise) {
     logger.log('[WebLLM] Load already in progress, waiting...');
     return webllmLoadPromise;
@@ -789,30 +792,8 @@ async function loadWebLLM(): Promise<any> {
 
   webllmLoadPromise = (async () => {
     try {
-      const module = await import('@mlc-ai/web-llm');
-      logger.log('[WebLLM] Module loaded, keys:', Object.keys(module));
-      
-      const creator = module.CreateMLCEngine || module.CreateWebWorkerMLCEngine;
-      if (!creator) {
-        console.error('[WebLLM] No engine creator found in module keys:', Object.keys(module));
-        throw new Error('[WebLLM] No engine creator found (expected CreateMLCEngine or CreateWebWorkerMLCEngine)');
-      }
-      
-      webllmModule = module;
-      webllmAvailable = true;
-      logger.log('[WebLLM] Engine creator found:', creator.name || 'anonymous');
+      const module = await retryLoadModule(1);
       return module;
-    } catch (e) {
-      console.error('[WebLLM] Failed to load package:', e);
-      webllmAvailable = false;
-      if (!webllmLoadRetried) {
-        webllmLoadRetried = true;
-        logger.log('[WebLLM] Retrying import once after 500ms...');
-        webllmLoadPromise = null;
-        await new Promise(resolve => setTimeout(resolve, 500));
-        return loadWebLLM();
-      }
-      throw e;
     } finally {
       if (!webllmModule) {
         webllmLoadPromise = null;
@@ -926,6 +907,52 @@ function createEngineConfig(persistence: 'temporary' | 'persistent', webllm: any
 }
 
 // --- End WebLLM Helper Functions ---
+
+// --- loadWebLLM Helper Functions ---
+
+/**
+ * Gets the cached WebLLM module if available
+ */
+function getCachedModule(): any {
+  return webllmModule;
+}
+
+/**
+ * Attempts to load the WebLLM module with retry logic
+ */
+async function retryLoadModule(maxRetries: number = 1): Promise<any> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      logger.log(`[WebLLM] Loading @mlc-ai/web-llm (attempt ${attempt + 1})...`);
+      const module = await import('@mlc-ai/web-llm');
+      logger.log('[WebLLM] Module loaded, keys:', Object.keys(module));
+
+      const creator = module.CreateMLCEngine || module.CreateWebWorkerMLCEngine;
+      if (!creator) {
+        console.error('[WebLLM] No engine creator found in module keys:', Object.keys(module));
+        throw new Error('[WebLLM] No engine creator found (expected CreateMLCEngine or CreateWebWorkerMLCEngine)');
+      }
+
+      webllmModule = module;
+      webllmAvailable = true;
+      logger.log('[WebLLM] Engine creator found:', creator.name || 'anonymous');
+      return module;
+    } catch (e) {
+      console.error(`[WebLLM] Failed to load package (attempt ${attempt + 1}):`, e);
+      webllmAvailable = false;
+
+      if (attempt < maxRetries) {
+        logger.log(`[WebLLM] Retrying in 500ms...`);
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } else {
+        throw e;
+      }
+    }
+  }
+  throw new Error('[WebLLM] Failed to load module after retries');
+}
+
+// --- End loadWebLLM Helper Functions ---
 
 class WebLLMProvider implements AIProvider {
   // BUG-7 Fix: Changed from static to instance properties to avoid race conditions
