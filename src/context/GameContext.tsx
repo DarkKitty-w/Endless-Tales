@@ -79,8 +79,65 @@ const GameContext = createContext<{ state: GameState; dispatch: Dispatch<Action>
 
 /**
  * Migrate a saved adventure to the current schema version.
+ * Validates required fields and provides defaults for missing optional fields.
  */
-function migrateSavedAdventure(adventure: any, onError?: (title: string, description: string) => void): SavedAdventure {
+function migrateSavedAdventure(adventure: any, onError?: (title: string, description: string) => void): SavedAdventure | null {
+  // Validate required fields
+  const requiredFields = ['id', 'characterName', 'character', 'adventureSettings', 'storyLog', 'currentGameStateString', 'inventory'];
+  const missingFields = requiredFields.filter(field => adventure[field] === undefined || adventure[field] === null);
+  
+  if (missingFields.length > 0) {
+    logger.error('Migration failed: Missing required fields', { adventureId: adventure.id, missingFields });
+    if (onError) {
+      onError(
+        "Invalid Save Data", 
+        `Save data is missing required fields: ${missingFields.join(', ')}. This save cannot be loaded.`
+      );
+    }
+    return null; // Return null to indicate validation failure
+  }
+
+  // Validate field types
+  if (typeof adventure.id !== 'string') {
+    logger.error('Migration failed: Invalid id field type', { adventureId: adventure.id });
+    if (onError) {
+      onError("Invalid Save Data", "Save data has invalid 'id' field. This save cannot be loaded.");
+    }
+    return null;
+  }
+
+  if (typeof adventure.characterName !== 'string') {
+    logger.error('Migration failed: Invalid characterName field type', { adventureId: adventure.id });
+    if (onError) {
+      onError("Invalid Save Data", "Save data has invalid 'characterName' field. This save cannot be loaded.");
+    }
+    return null;
+  }
+
+  if (!Array.isArray(adventure.storyLog)) {
+    logger.error('Migration failed: Invalid storyLog field type', { adventureId: adventure.id });
+    if (onError) {
+      onError("Invalid Save Data", "Save data has invalid 'storyLog' field. This save cannot be loaded.");
+    }
+    return null;
+  }
+
+  if (!Array.isArray(adventure.inventory)) {
+    logger.error('Migration failed: Invalid inventory field type', { adventureId: adventure.id });
+    if (onError) {
+      onError("Invalid Save Data", "Save data has invalid 'inventory' field. This save cannot be loaded.");
+    }
+    return null;
+  }
+
+  if (typeof adventure.currentGameStateString !== 'string') {
+    logger.error('Migration failed: Invalid currentGameStateString field type', { adventureId: adventure.id });
+    if (onError) {
+      onError("Invalid Save Data", "Save data has invalid 'currentGameStateString' field. This save cannot be loaded.");
+    }
+    return null;
+  }
+
   // If no version, treat as version 0 (pre-versioning)
   const version = adventure.version ?? 0;
 
@@ -105,8 +162,8 @@ function migrateSavedAdventure(adventure: any, onError?: (title: string, descrip
     if (onError) {
       onError("Save Data Migration Failed", `Failed to migrate save data${adventure.id ? ` for adventure ${adventure.id}` : ''}. ${error.message || 'Unknown error'}`);
     }
-    // Return original data if migration fails (best effort)
-    return adventure as SavedAdventure;
+    // Return null if migration fails (validation failure)
+    return null;
   }
 }
 
@@ -176,7 +233,18 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
           };
           
           // Migrate each adventure to current schema version
-          const migratedAdventures = loadedAdventures.map(adv => migrateSavedAdventure(adv, migrationErrorCallback));
+          const migratedAdventures = loadedAdventures
+            .map(adv => migrateSavedAdventure(adv, migrationErrorCallback))
+            .filter((adv): adv is SavedAdventure => adv !== null); // Filter out invalid adventures
+          
+          if (migratedAdventures.length < loadedAdventures.length) {
+            toast({
+              title: "Some Saves Invalid",
+              description: `${loadedAdventures.length - migratedAdventures.length} save(s) could not be loaded due to invalid data.`,
+              variant: "destructive",
+            });
+          }
+          
           dispatch({ type: "LOAD_SAVED_ADVENTURES", payload: migratedAdventures });
         } else {
           // ERR-18/ERR-20 Fix: Offer recovery options for invalid data format
