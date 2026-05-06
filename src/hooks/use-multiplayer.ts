@@ -56,8 +56,6 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     chatMessages: [],
     isPaused: false,
   });
-  const [lastSessionId, setLastSessionId] = useState<string | null>(null);
-  const [lastIsHost, setLastIsHost] = useState(false);
   const [isReconnectingState, setIsReconnectingState] = useState(false);
   const isReconnectingRef = useRef(false);
   const lastInitParams = useRef<{ type: 'host' } | { type: 'guest'; offer: string } | null>(null);
@@ -195,8 +193,6 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
       // Store init params for reconnection
       lastInitParams.current = { type: 'host' };
-      setLastSessionId(currentPeerId);
-      setLastIsHost(true);
 
       return encodedOffer;
     } catch (error) {
@@ -235,8 +231,6 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
       // Store init params for reconnection
       lastInitParams.current = { type: 'guest', offer: encodedOffer };
-      setLastSessionId(currentPeerId);
-      setLastIsHost(false);
 
       return encodedAnswer;
     } catch (error) {
@@ -545,7 +539,6 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     disconnect,
     reconnect,
     setGameActionReceivedHandler,
-    lastSessionId,
     isConnected: multiplayerState.connectionStatus === 'connected',
     isMyTurn: multiplayerState.isMyTurn,
     isHost: multiplayerState.isHost,
