@@ -235,6 +235,7 @@ export function createPeerConnection(
 /**
  * Host: Create an offer with ICE candidates
  * Returns a base64-encoded string containing the offer and ICE candidates
+ * ERR-28 Fix: Add SDP negotiation error handling with context
  */
 export async function createOffer(
   peerId: string,
@@ -248,41 +249,68 @@ export async function createOffer(
     (state) => logger.log('Host connection state:', state)
   );
 
-  // Create data channels
-  const controlChannel = pc.createDataChannel('control', { ordered: true });
-  pc.createDataChannel('game-actions', { ordered: true });
-  pc.createDataChannel('story-update', { ordered: true });
-  pc.createDataChannel('party-state', { ordered: true });
-  pc.createDataChannel('chat', { ordered: true });
-  
-  // Set up the control channel to send ICE candidates in real-time
-  setDataChannel(controlChannel);
+  try {
+    // Create data channels
+    const controlChannel = pc.createDataChannel('control', { ordered: true });
+    pc.createDataChannel('game-actions', { ordered: true });
+    pc.createDataChannel('story-update', { ordered: true });
+    pc.createDataChannel('party-state', { ordered: true });
+    pc.createDataChannel('chat', { ordered: true });
+    
+    // Set up the control channel to send ICE candidates in real-time
+    setDataChannel(controlChannel);
 
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
+    // ERR-28 Fix: Wrap SDP operations in try-catch with context
+    let offer;
+    try {
+      offer = await pc.createOffer();
+    } catch (error) {
+      logger.error('Host: Failed to create SDP offer', { peerId, error, connectionState: pc.connectionState });
+      throw new Error(`Failed to create SDP offer: ${error instanceof Error ? error.message : 'Unknown error'}. This may be due to firewall or network restrictions.`);
+    }
+    
+    try {
+      await pc.setLocalDescription(offer);
+    } catch (error) {
+      logger.error('Host: Failed to set local description (offer)', { peerId, error, connectionState: pc.connectionState });
+      throw new Error(`Failed to set local SDP description: ${error instanceof Error ? error.message : 'Unknown error'}. Check firewall/network settings.`);
+    }
 
-  // Wait for ICE candidates to be gathered
-  await waitForIceGathering(pc);
+    // Wait for ICE candidates to be gathered
+    await waitForIceGathering(pc);
 
-  // Build the signalling package with all gathered candidates
-  const pkg: SignallingPackage = {
-    sdp: pc.localDescription!.sdp,
-    iceCandidates: getBufferedCandidates(), // Use buffered candidates for initial exchange
-    peerInfo: { peerId, name },
-    type: 'offer',
-  };
+    // Build the signalling package with all gathered candidates
+    const pkg: SignallingPackage = {
+      sdp: pc.localDescription!.sdp,
+      iceCandidates: getBufferedCandidates(), // Use buffered candidates for initial exchange
+      peerInfo: { peerId, name },
+      type: 'offer',
+    };
 
-  const encodedOffer = encodeSignallingData(pkg);
-  
-  // Store the function to get any future buffered candidates (rare, but possible)
-  (pc as any).__getBufferedCandidates = getBufferedCandidates;
-  
-  return { peerConnection: pc, encodedOffer };
+    const encodedOffer = encodeSignallingData(pkg);
+    
+    // Store the function to get any future buffered candidates (rare, but possible)
+    (pc as any).__getBufferedCandidates = getBufferedCandidates;
+    
+    return { peerConnection: pc, encodedOffer };
+  } catch (error) {
+    // ERR-34 Fix: Log with full context
+    logger.error('Host: createOffer failed', { 
+      peerId, 
+      name,
+      error: error instanceof Error ? error.message : String(error),
+      connectionState: pc.connectionState,
+      iceConnectionState: pc.iceConnectionState,
+      signalingState: pc.signalingState
+    });
+    throw error;
+  }
 }
 
 /**
  * Guest: Create an answer from a host's offer string
  * Returns a base64-encoded string containing the answer and ICE candidates
+ * ERR-28 Fix: Add SDP negotiation error handling with context
  */
 export async function createAnswer(
   encodedOffer: string,
@@ -297,69 +325,136 @@ export async function createAnswer(
     (state) => logger.log('Guest connection state:', state)
   );
 
-  const pkg = decodeSignallingData(encodedOffer);
-  if (pkg.type !== 'offer') {
-    throw new Error('Invalid offer data');
-  }
-
-  const offerDesc = new RTCSessionDescription({ type: 'offer', sdp: pkg.sdp });
-  await pc.setRemoteDescription(offerDesc);
-
-  // Add host's ICE candidates
-  for (const candidate of pkg.iceCandidates) {
-    await pc.addIceCandidate(candidate);
-  }
-
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-
-  // Wait for ICE candidates to be gathered
-  await waitForIceGathering(pc);
-
-  // Build the signalling package with all gathered candidates
-  const answerPkg: SignallingPackage = {
-    sdp: pc.localDescription!.sdp,
-    iceCandidates: getBufferedCandidates(), // Use buffered candidates for initial exchange
-    peerInfo: { peerId, name },
-    type: 'answer',
-  };
-
-  const encodedAnswer = encodeSignallingData(answerPkg);
-  
-  // Set up handler for the incoming data channels (including control)
-  pc.ondatachannel = (event) => {
-    const channel = event.channel;
-    if (channel.label === 'control') {
-      // Set this channel for sending ICE candidates in real-time
-      setDataChannel(channel);
+  try {
+    const pkg = decodeSignallingData(encodedOffer);
+    if (pkg.type !== 'offer') {
+      throw new Error('Invalid offer data');
     }
-    // The channel setup is handled elsewhere
-  };
-  
-  // Store the function to get any future buffered candidates (rare, but possible)
-  (pc as any).__getBufferedCandidates = getBufferedCandidates;
-  
-  return { peerConnection: pc, encodedAnswer };
+
+    // ERR-28 Fix: Wrap SDP operations in try-catch with context
+    try {
+      const offerDesc = new RTCSessionDescription({ type: 'offer', sdp: pkg.sdp });
+      await pc.setRemoteDescription(offerDesc);
+    } catch (error) {
+      logger.error('Guest: Failed to set remote description (offer)', { peerId, name, error, connectionState: pc.connectionState });
+      throw new Error(`Failed to process SDP offer: ${error instanceof Error ? error.message : 'Unknown error'}. The offer may be invalid or corrupted.`);
+    }
+
+    // Add host's ICE candidates
+    for (const candidate of pkg.iceCandidates) {
+      try {
+        await pc.addIceCandidate(candidate);
+      } catch (error) {
+        logger.warn('Guest: Failed to add host ICE candidate during initial setup', { peerId, error });
+        // Continue - non-fatal
+      }
+    }
+
+    let answer;
+    try {
+      answer = await pc.createAnswer();
+    } catch (error) {
+      logger.error('Guest: Failed to create SDP answer', { peerId, name, error, connectionState: pc.connectionState });
+      throw new Error(`Failed to create SDP answer: ${error instanceof Error ? error.message : 'Unknown error'}. Check firewall/network settings.`);
+    }
+
+    try {
+      await pc.setLocalDescription(answer);
+    } catch (error) {
+      logger.error('Guest: Failed to set local description (answer)', { peerId, name, error, connectionState: pc.connectionState });
+      throw new Error(`Failed to set local SDP description: ${error instanceof Error ? error.message : 'Unknown error'}. Check firewall/network settings.`);
+    }
+
+    // Wait for ICE candidates to be gathered
+    await waitForIceGathering(pc);
+
+    // Build the signalling package with all gathered candidates
+    const answerPkg: SignallingPackage = {
+      sdp: pc.localDescription!.sdp,
+      iceCandidates: getBufferedCandidates(), // Use buffered candidates for initial exchange
+      peerInfo: { peerId, name },
+      type: 'answer',
+    };
+
+    const encodedAnswer = encodeSignallingData(answerPkg);
+    
+    // Set up handler for the incoming data channels (including control)
+    pc.ondatachannel = (event) => {
+      const channel = event.channel;
+      if (channel.label === 'control') {
+        // Set this channel for sending ICE candidates in real-time
+        setDataChannel(channel);
+      }
+      // The channel setup is handled elsewhere
+    };
+    
+    // Store the function to get any future buffered candidates (rare, but possible)
+    (pc as any).__getBufferedCandidates = getBufferedCandidates;
+    
+    return { peerConnection: pc, encodedAnswer };
+  } catch (error) {
+    // ERR-34 Fix: Log with full context
+    logger.error('Guest: createAnswer failed', { 
+      peerId, 
+      name,
+      error: error instanceof Error ? error.message : String(error),
+      connectionState: pc.connectionState,
+      iceConnectionState: pc.iceConnectionState,
+      signalingState: pc.signalingState
+    });
+    throw error;
+  }
 }
 
 /**
  * Host: Apply guest's answer to complete the connection
+ * ERR-28 Fix: Add SDP negotiation error handling with context
  */
 export async function applyAnswer(
   peerConnection: RTCPeerConnection,
-  encodedAnswer: string
+  encodedAnswer: string,
+  peerId?: string
 ): Promise<void> {
-  const pkg = decodeSignallingData(encodedAnswer);
-  if (pkg.type !== 'answer') {
-    throw new Error('Invalid answer data');
-  }
+  try {
+    const pkg = decodeSignallingData(encodedAnswer);
+    if (pkg.type !== 'answer') {
+      throw new Error('Invalid answer data');
+    }
 
-  const answerDesc = new RTCSessionDescription({ type: 'answer', sdp: pkg.sdp });
-  await peerConnection.setRemoteDescription(answerDesc);
+    // ERR-28 Fix: Wrap SDP operations in try-catch with context
+    try {
+      const answerDesc = new RTCSessionDescription({ type: 'answer', sdp: pkg.sdp });
+      await peerConnection.setRemoteDescription(answerDesc);
+    } catch (error) {
+      const context = peerId ? `from peer ${peerId}` : '';
+      logger.error(`Host: Failed to set remote description (answer) ${context}:`, { 
+        error, 
+        connectionState: peerConnection.connectionState,
+        signalingState: peerConnection.signalingState 
+      });
+      throw new Error(`Failed to process SDP answer ${context}: ${error instanceof Error ? error.message : 'Unknown error'}. The answer may be invalid.`);
+    }
 
-  // Add guest's ICE candidates
-  for (const candidate of pkg.iceCandidates) {
-    await peerConnection.addIceCandidate(candidate);
+    // Add guest's ICE candidates
+    for (const candidate of pkg.iceCandidates) {
+      try {
+        await peerConnection.addIceCandidate(candidate);
+      } catch (error) {
+        const context = peerId ? `from peer ${peerId}` : '';
+        logger.warn(`Host: Failed to add guest ICE candidate ${context}:`, error);
+        // Continue - non-fatal for initial setup
+      }
+    }
+  } catch (error) {
+    // ERR-34 Fix: Log with full context
+    logger.error('Host: applyAnswer failed', { 
+      peerId,
+      error: error instanceof Error ? error.message : String(error),
+      connectionState: peerConnection.connectionState,
+      iceConnectionState: peerConnection.iceConnectionState,
+      signalingState: peerConnection.signalingState
+    });
+    throw error;
   }
 }
 
