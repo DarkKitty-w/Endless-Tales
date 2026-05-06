@@ -138,7 +138,17 @@ function NarrationDisplayInternal({
                 <Alert variant="destructive" className="my-2">
                     <Info className="h-4 w-4" />
                     <AlertTitle>Error</AlertTitle>
-                    <AlertDescription>{error}</AlertDescription>
+                    <AlertDescription>
+                        {error}
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={onRetryNarration} 
+                            className="mt-3 w-full"
+                        >
+                            <RefreshCw className="mr-2 h-4 w-4" /> Retry AI
+                        </Button>
+                    </AlertDescription>
                 </Alert>
             );
         }

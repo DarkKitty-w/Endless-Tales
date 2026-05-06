@@ -10,7 +10,7 @@ import { useGame } from "../../context/GameContext";
 import { Button } from "../../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "../../components/game/CardboardCard";
-import { Wand2, RotateCcw, User, Save, AlertCircle, CheckCircle, LogOut, Loader2, TrendingUp, ArrowRight } from "lucide-react";
+import { Wand2, RotateCcw, User, Save, AlertCircle, CheckCircle, LogOut, Loader2, TrendingUp, ArrowRight, RefreshCw } from "lucide-react";
 import { generateCharacterDescription, type GenerateCharacterDescriptionOutput } from "../../ai/flows/generate-character-description";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../../components/ui/tooltip";
@@ -480,7 +480,29 @@ export function CharacterCreation() {
                      )}
                 </CardHeader>
                 <CardContent className="space-y-6 pt-6">
-                    {error && ( <Alert variant="destructive" className="mb-4"> <AlertCircle className="h-4 w-4" /> <AlertTitle>Error</AlertTitle> <AlertDescription>{error}</AlertDescription> </Alert> )}
+                    {error && ( 
+                        <Alert variant="destructive" className="mb-4"> 
+                            <AlertCircle className="h-4 w-4" /> 
+                            <AlertTitle>Error</AlertTitle> 
+                            <AlertDescription>
+                                {error}
+                                {error.includes("AI") && (
+                                    <Button 
+                                        variant="outline" 
+                                        size="sm" 
+                                        onClick={() => {
+                                            setError(null);
+                                            handleGenerateDescription();
+                                        }} 
+                                        className="mt-3 w-full"
+                                        disabled={isGenerating}
+                                    >
+                                        <RefreshCw className="mr-2 h-4 w-4" /> Retry AI Generation
+                                    </Button>
+                                )}
+                            </AlertDescription> 
+                        </Alert> 
+                    )}
 
                     {showCharacterDefinitionForms ? (
                         <Tabs value={creationType} onValueChange={(value) => {
