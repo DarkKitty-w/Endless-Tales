@@ -20,7 +20,7 @@ import { logger } from "@/lib/logger";
 import { toast } from "../hooks/use-toast";
 import { validateSavedAdventure, SavedAdventureSchema } from "./schemas/save-schema";
 import { runMigrations, getPendingMigrations } from "./schemas/migration-system";
-import { atomicLocalStorageWrite, safeLocalStorageRead, isLocalStorageQuotaLow } from "@/lib/storage-utils";
+import { atomicLocalStorageWrite, safeLocalStorageRead, isLocalStorageQuotaLow, checkSaveSize } from "@/lib/storage-utils";
 
 // Storage keys
 const AI_PROVIDER_KEY = "endlessTales_aiProvider";
@@ -366,9 +366,46 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
         }
 
         // SAVE-6: Atomic write for saves
-        const saveSuccess = atomicLocalStorageWrite(SAVED_ADVENTURES_KEY, validSaves);
-        if (!saveSuccess) {
-          throw new Error('Atomic write failed for saved adventures');
+        // SAVE-10 Fix: Check save sizes and warn if too large
+        const oversizedSaves: string[] = [];
+        const sizeWarnings: string[] = [];
+        
+        validSaves.forEach((adventure: SavedAdventure) => {
+          const sizeCheck = checkSaveSize(adventure);
+          if (sizeCheck.isTooLarge) {
+            oversizedSaves.push(`${adventure.characterName || adventure.id} (${sizeCheck.sizeFormatted})`);
+          } else if (sizeCheck.isApproachingLimit) {
+            sizeWarnings.push(`${adventure.characterName || adventure.id} (${sizeCheck.sizeFormatted})`);
+          }
+        });
+        
+        if (oversizedSaves.length > 0) {
+          toast({
+            title: "Saves Too Large",
+            description: `The following saves exceed size limits and won't be saved: ${oversizedSaves.join(', ')}. Consider deleting old story log entries.`,
+            variant: "destructive",
+          });
+          // Filter out oversized saves
+          const fitsSaves = validSaves.filter((adv: SavedAdventure) => {
+            const sizeCheck = checkSaveSize(adv);
+            return !sizeCheck.isTooLarge;
+          });
+          const saveSuccess = atomicLocalStorageWrite(SAVED_ADVENTURES_KEY, fitsSaves);
+          if (!saveSuccess) {
+            throw new Error('Atomic write failed for saved adventures');
+          }
+        } else {
+          if (sizeWarnings.length > 0) {
+            toast({
+              title: "Large Saves Warning",
+              description: `The following saves are approaching size limits: ${sizeWarnings.join(', ')}. Consider reducing story log size.`,
+            });
+          }
+          
+          const saveSuccess = atomicLocalStorageWrite(SAVED_ADVENTURES_KEY, validSaves);
+          if (!saveSuccess) {
+            throw new Error('Atomic write failed for saved adventures');
+          }
         }
 
         // AI provider preference (localStorage)

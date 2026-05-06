@@ -151,6 +151,47 @@ export function isLocalStorageQuotaLow(thresholdPercent: number = 10): boolean {
 
 const SAVE_BACKUP_PREFIX = '_savebackup_';
 const MAX_BACKUPS_PER_SAVE = 5;
+const WARN_SIZE_THRESHOLD = 4 * 1024 * 1024; // 4MB - warn when approaching 5MB limit
+const MAX_SAVE_SIZE = 5 * 1024 * 1024; // 5MB - hard limit for a single save
+
+/**
+ * Check if a save is too large and return size information
+ * 
+ * @param saveData - The save data to check
+ * @returns Object with size info and whether it exceeds thresholds
+ */
+export function checkSaveSize(saveData: unknown): { 
+  size: number; 
+  isTooLarge: boolean; 
+  isApproachingLimit: boolean;
+  sizeFormatted: string;
+} {
+  try {
+    const serialized = JSON.stringify(saveData);
+    const size = new Blob([serialized]).size;
+    
+    return {
+      size,
+      isTooLarge: size > MAX_SAVE_SIZE,
+      isApproachingLimit: size > WARN_SIZE_THRESHOLD,
+      sizeFormatted: formatBytes(size)
+    };
+  } catch (error) {
+    console.error('Failed to check save size:', error);
+    return { size: 0, isTooLarge: false, isApproachingLimit: false, sizeFormatted: '0 B' };
+  }
+}
+
+/**
+ * Format bytes to human-readable string
+ */
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
 
 /**
  * Create a backup of a save before overwriting (SAVE-14, SAVE-17)
