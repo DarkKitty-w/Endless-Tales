@@ -202,7 +202,9 @@ If the action is "Impossible", the narration should reflect that the action cann
 
 PERSONALITY CONSISTENCY: Maintain the character's personality traits, speech patterns, and background throughout the story. Refer to the "Character Memory" section in the prompt for key personality information. The character should act consistently with their traits (brave characters take risks, cowardly characters avoid danger, etc.).
 
-STORY CONTINUITY: Build upon previous events. Refer to the "Recent Story Summary" to maintain narrative continuity. Do NOT contradict established story facts.`;
+STORY CONTINUITY: Build upon previous events. Refer to the "Recent Story Summary" to maintain narrative continuity. Do NOT contradict established story facts in the "Established Story Facts" section.
+
+FACT CHECKING: Before narrating, verify that your response doesn't contradict any facts in "Established Story Facts". If you're unsure about a fact, check the "Recent Story Summary" for context.`;
 
   const userPrompt = `
 **Character:**

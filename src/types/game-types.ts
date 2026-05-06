@@ -143,6 +143,8 @@ export interface GameStateContext {
   storyLogSummary?: string;
   /** Character personality memory: key events that demonstrate personality traits */
   characterMemory?: string;
+  /** Structured story state facts: locations visited, NPCs met, objects state */
+  storyStateFacts?: string;
   worldMap?: WorldMap;
 }
 

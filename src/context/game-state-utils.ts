@@ -118,6 +118,9 @@ export function buildGameStateContext(state: GameState): GameStateContext {
     // Build character memory from traits, background, and key story events
     const characterMemory = character ? buildCharacterMemory(character, storyLog.slice(-10)) : undefined;
 
+    // Build structured story state facts (locations, NPCs, objects)
+    const storyStateFacts = buildStoryStateFacts(storyLog);
+
     return {
         turn: turnCount,
         character: characterContext,
@@ -127,6 +130,7 @@ export function buildGameStateContext(state: GameState): GameStateContext {
         storyLogLength: storyLog.length,
         storyLogSummary,
         characterMemory,
+        storyStateFacts,
         worldMap: state.worldMap,
     };
 }
@@ -189,6 +193,77 @@ function buildCharacterMemory(character: Character, recentEntries: StoryLogEntry
 }
 
 /**
+ * Builds structured story state facts from the entire story log.
+ * Extracts key facts: locations visited, NPCs met, objects state.
+ * This helps prevent narrative contradictions.
+ */
+function buildStoryStateFacts(storyLog: StoryLogEntry[]): string {
+    if (storyLog.length === 0) return 'No established facts yet.';
+    
+    const facts: string[] = [];
+    const locationsVisited = new Set<string>();
+    const npcsMet = new Set<string>();
+    const objectStates = new Map<string, string>(); // object -> state (locked, unlocked, etc.)
+    
+    // Extract state changes from story log entries
+    storyLog.forEach(entry => {
+        // Check for location changes in updatedGameState
+        if (entry.updatedGameState) {
+            // Extract location if present (format: "location: Forest of Shadows" or similar)
+            const locationMatch = entry.updatedGameState.match(/location:\s*([^,\n]+)/i);
+            if (locationMatch) {
+                locationsVisited.add(locationMatch[1].trim());
+            }
+            
+            // Track object states (doors, chests, etc.)
+            const stateMatch = entry.updatedGameState.match(/(\w+(?:\s+\w+)?):\s*(locked|unlocked|open|closed|broken|repaired)/gi);
+            if (stateMatch) {
+                stateMatch.forEach((match: string) => {
+                    const parts = match.match(/(\w+(?:\s+\w+)?):\s*(\w+)/i);
+                    if (parts) {
+                        objectStates.set(parts[1].trim(), parts[2].trim());
+                    }
+                });
+            }
+        }
+        
+        // Extract NPC mentions from narration (simple heuristic)
+        const narration = entry.narration.toLowerCase();
+        const npcMatches = narration.match(/(?:meet|met|talk to|spoke to|encountered)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/g);
+        if (npcMatches) {
+            npcMatches.forEach(match => {
+                const nameMatch = match.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)$/);
+                if (nameMatch) {
+                    npcsMet.add(nameMatch[1]);
+                }
+            });
+        }
+    });
+    
+    // Build facts string
+    if (locationsVisited.size > 0) {
+        facts.push(`Locations Visited: ${Array.from(locationsVisited).join(', ')}`);
+    }
+    
+    if (npcsMet.size > 0) {
+        facts.push(`NPCs Met: ${Array.from(npcsMet).join(', ')}`);
+    }
+    
+    if (objectStates.size > 0) {
+        const objectFacts = Array.from(objectStates.entries()).map(([obj, state]) => `${obj} (${state})`);
+        facts.push(`Object States: ${objectFacts.join(', ')}`);
+    }
+    
+    // Add recent narration as context
+    const recentEntries = storyLog.slice(-5);
+    if (recentEntries.length > 0) {
+        facts.push(`Recent Events: ${recentEntries.map(e => e.narration.substring(0, 80)).join(' | ')}`);
+    }
+    
+    return facts.length > 0 ? facts.join('\n') : 'No established facts yet.';
+}
+
+/**
  * Converts a GameStateContext into a human-readable string suitable for AI prompts.
  */
 export function formatGameStateContextForPrompt(ctx: GameStateContext): string {
@@ -240,6 +315,13 @@ export function formatGameStateContextForPrompt(ctx: GameStateContext): string {
         lines.push('');
         lines.push('**Character Memory (Maintain Personality Consistency):**');
         lines.push(ctx.characterMemory);
+    }
+
+    // Add Story State Facts to prevent narrative contradictions
+    if (ctx.storyStateFacts) {
+        lines.push('');
+        lines.push('**Established Story Facts (DO NOT Contradict):**');
+        lines.push(ctx.storyStateFacts);
     }
 
     // Add Story Log Summary for narrative continuity
