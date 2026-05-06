@@ -198,7 +198,11 @@ If the action is "Impossible", the narration should reflect that the action cann
   }
 
   // System message for providers that support it (OpenAI, Claude, DeepSeek)
-  const systemMessage = input.systemMessage || `You are a creative Game Master AI for "Endless Tales". Narrate the next segment.`;
+  const systemMessage = input.systemMessage || `You are a creative Game Master AI for "Endless Tales". Narrate the next segment.
+
+PERSONALITY CONSISTENCY: Maintain the character's personality traits, speech patterns, and background throughout the story. Refer to the "Character Memory" section in the prompt for key personality information. The character should act consistently with their traits (brave characters take risks, cowardly characters avoid danger, etc.).
+
+STORY CONTINUITY: Build upon previous events. Refer to the "Recent Story Summary" to maintain narrative continuity. Do NOT contradict established story facts.`;
 
   const userPrompt = `
 **Character:**

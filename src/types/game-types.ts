@@ -139,6 +139,10 @@ export interface GameStateContext {
   adventureSettings: GameStateAdventureSettingsContext;
   previousNarration?: string;
   storyLogLength: number;
+  /** Summary of key events from recent story history (for AI memory) */
+  storyLogSummary?: string;
+  /** Character personality memory: key events that demonstrate personality traits */
+  characterMemory?: string;
   worldMap?: WorldMap;
 }
 

@@ -3,6 +3,7 @@
 import type { Character } from "../types/character-types";
 import type { InventoryItem } from "../types/inventory-types";
 import type { GameState, GameStateContext } from "../types/game-types";
+import type { StoryLogEntry } from "../types/adventure-types";
 
 /**
  * Helper function to update the game state string with current character and inventory info.
@@ -111,6 +112,12 @@ export function buildGameStateContext(state: GameState): GameStateContext {
 
     const previousNarration = storyLog.length > 0 ? storyLog[storyLog.length - 1].narration : undefined;
 
+    // Build story log summary from recent entries (last 10 turns)
+    const storyLogSummary = buildStoryLogSummary(storyLog.slice(-10));
+
+    // Build character memory from traits, background, and key story events
+    const characterMemory = character ? buildCharacterMemory(character, storyLog.slice(-10)) : undefined;
+
     return {
         turn: turnCount,
         character: characterContext,
@@ -118,7 +125,67 @@ export function buildGameStateContext(state: GameState): GameStateContext {
         adventureSettings: adventureSettingsContext,
         previousNarration,
         storyLogLength: storyLog.length,
+        storyLogSummary,
+        characterMemory,
+        worldMap: state.worldMap,
     };
+}
+
+/**
+ * Builds a concise summary of recent story events for AI context.
+ * This helps maintain narrative continuity across turns.
+ */
+function buildStoryLogSummary(recentEntries: StoryLogEntry[]): string {
+    if (recentEntries.length === 0) return 'No previous events.';
+    
+    const summaryLines: string[] = [];
+    recentEntries.forEach((entry, index) => {
+        const turnNum = Math.max(1, recentEntries.length - 10 + index + 1);
+        // Extract first 100 chars of narration as summary
+        const shortNarration = entry.narration.length > 100 
+            ? entry.narration.substring(0, 100) + '...' 
+            : entry.narration;
+        summaryLines.push(`Turn ${turnNum}: ${shortNarration}`);
+    });
+    
+    return summaryLines.join('\n');
+}
+
+/**
+ * Builds a character memory section that includes personality traits,
+ * background, and key events that demonstrate character personality.
+ */
+function buildCharacterMemory(character: Character, recentEntries: StoryLogEntry[]): string {
+    const memoryLines: string[] = [];
+    
+    // Add personality traits
+    memoryLines.push(`Personality Traits: ${character.traits.join(', ') || 'None'}`);
+    memoryLines.push(`Background: ${character.background}`);
+    
+    // Add key knowledge
+    if (character.knowledge.length > 0) {
+        memoryLines.push(`Key Knowledge: ${character.knowledge.join(', ')}`);
+    }
+    
+    // Add NPC relationships
+    const relationships = Object.entries(character.npcRelationships);
+    if (relationships.length > 0) {
+        memoryLines.push(`NPC Relationships: ${relationships.map(([n, s]) => `${n} (${s})`).join(', ')}`);
+    }
+    
+    // Add notable events from recent story that demonstrate personality
+    const notableEvents = recentEntries
+        .filter(entry => entry.updatedTraits && entry.updatedTraits.length > 0)
+        .map(entry => {
+            const traits = entry.updatedTraits!.join(', ');
+            return `Demonstrated traits: ${traits}`;
+        });
+    
+    if (notableEvents.length > 0) {
+        memoryLines.push(`Recent Personality Demonstrations: ${notableEvents.join('; ')}`);
+    }
+    
+    return memoryLines.join('\n');
 }
 
 /**
@@ -166,6 +233,20 @@ export function formatGameStateContextForPrompt(ctx: GameStateContext): string {
     if (ctx.previousNarration) {
         lines.push('');
         lines.push(`Previous Narration: ${ctx.previousNarration}`);
+    }
+
+    // Add Character Memory section for personality consistency
+    if (ctx.characterMemory) {
+        lines.push('');
+        lines.push('**Character Memory (Maintain Personality Consistency):**');
+        lines.push(ctx.characterMemory);
+    }
+
+    // Add Story Log Summary for narrative continuity
+    if (ctx.storyLogSummary) {
+        lines.push('');
+        lines.push('**Recent Story Summary (Last 10 Turns):**');
+        lines.push(ctx.storyLogSummary);
     }
 
     return lines.join('\n');
