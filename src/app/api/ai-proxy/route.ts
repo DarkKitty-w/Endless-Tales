@@ -6,6 +6,85 @@ import { checkRateLimit } from '@/lib/rate-limit';
 // Security: Allowed providers to prevent unauthorized access
 const ALLOWED_PROVIDERS = ['gemini', 'openai', 'claude', 'deepseek', 'openrouter', 'webllm'];
 
+// SEC-11 Fix: Validate and sanitize model parameters
+interface ValidatedConfig {
+  temperature?: number;
+  topP?: number;
+  maxTokens?: number;
+  responseMimeType?: string;
+  candidateCount?: number;
+  stopSequences?: string[];
+}
+
+function validateModelConfig(config: any): ValidatedConfig | null {
+  if (!config || typeof config !== 'object') {
+    return {};
+  }
+
+  const validated: ValidatedConfig = {};
+
+  // Validate temperature (0 to 2, default providers' range)
+  if (config.temperature !== undefined) {
+    const temp = Number(config.temperature);
+    if (isNaN(temp) || temp < 0 || temp > 2) {
+      logger.warn('Invalid temperature value rejected:', config.temperature);
+    } else {
+      validated.temperature = temp;
+    }
+  }
+
+  // Validate topP (0 to 1)
+  if (config.topP !== undefined) {
+    const topP = Number(config.topP);
+    if (isNaN(topP) || topP < 0 || topP > 1) {
+      logger.warn('Invalid topP value rejected:', config.topP);
+    } else {
+      validated.topP = topP;
+    }
+  }
+
+  // Validate maxTokens (reasonable limits: 1 to 100000)
+  if (config.maxTokens !== undefined) {
+    const maxTokens = parseInt(String(config.maxTokens), 10);
+    if (isNaN(maxTokens) || maxTokens < 1 || maxTokens > 100000) {
+      logger.warn('Invalid maxTokens value rejected:', config.maxTokens);
+    } else {
+      validated.maxTokens = maxTokens;
+    }
+  }
+
+  // Validate candidateCount (1 to 8)
+  if (config.candidateCount !== undefined) {
+    const count = parseInt(String(config.candidateCount), 10);
+    if (isNaN(count) || count < 1 || count > 8) {
+      logger.warn('Invalid candidateCount value rejected:', config.candidateCount);
+    } else {
+      validated.candidateCount = count;
+    }
+  }
+
+  // Validate responseMimeType (only allow application/json)
+  if (config.responseMimeType !== undefined) {
+    if (config.responseMimeType === 'application/json') {
+      validated.responseMimeType = 'application/json';
+    } else {
+      logger.warn('Invalid responseMimeType rejected:', config.responseMimeType);
+    }
+  }
+
+  // Validate stopSequences (max 10 sequences, each max 100 chars)
+  if (Array.isArray(config.stopSequences)) {
+    const validSequences = config.stopSequences
+      .filter((s: unknown) => typeof s === 'string' && s.length <= 100)
+      .slice(0, 10);
+    if (validSequences.length > 0) {
+      validated.stopSequences = validSequences;
+    }
+  }
+
+  return validated;
+}
+
 export async function POST(request: NextRequest) {
   // SEC-4 Fix: Apply rate limiting
   const clientIp = request.headers.get('x-forwarded-for') || 
@@ -30,7 +109,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { provider, model, contents, config, stream, systemMessage } = body;
+    const { provider, model, contents, config: rawConfig, stream, systemMessage } = body;
 
     // SEC-5 Fix: Validate provider input
     if (!provider || !ALLOWED_PROVIDERS.includes(provider)) {
@@ -39,6 +118,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // SEC-11 Fix: Validate and sanitize model parameters
+    const config = validateModelConfig(rawConfig);
 
     // Only use server-side API keys (security fix: no client-side API keys)
     const apiKey = getServerApiKey(provider);
@@ -118,8 +200,19 @@ async function handleGemini(
     body.systemInstruction = { parts: [{ text: systemMessage }] };
   }
 
-  if (config) {
-    body.generationConfig = config;
+  // SEC-11 Fix: Use validated config parameters only
+  if (config && Object.keys(config).length > 0) {
+    const generationConfig: any = {};
+    
+    if (config.temperature !== undefined) generationConfig.temperature = config.temperature;
+    if (config.topP !== undefined) generationConfig.topP = config.topP;
+    if (config.maxTokens !== undefined) generationConfig.maxOutputTokens = config.maxTokens;
+    if (config.candidateCount !== undefined) generationConfig.candidateCount = config.candidateCount;
+    if (config.stopSequences !== undefined) generationConfig.stopSequences = config.stopSequences;
+    
+    if (Object.keys(generationConfig).length > 0) {
+      body.generationConfig = generationConfig;
+    }
   }
 
   if (stream) {
@@ -185,10 +278,15 @@ async function handleOpenAICompatible(
     stream: stream || false,
   };
 
-  if (config?.temperature) body.temperature = config.temperature;
-  if (config?.topP) body.top_p = config.topP;
-  if (config?.responseMimeType === 'application/json') {
-    body.response_format = { type: 'json_object' };
+  // SEC-11 Fix: Use validated config parameters only
+  if (config) {
+    if (config.temperature !== undefined) body.temperature = config.temperature;
+    if (config.topP !== undefined) body.top_p = config.topP;
+    if (config.maxTokens !== undefined) body.max_tokens = config.maxTokens;
+    if (config.responseMimeType === 'application/json') {
+      body.response_format = { type: 'json_object' };
+    }
+    if (config.stopSequences !== undefined) body.stop = config.stopSequences;
   }
 
   const response = await fetch(url, {
@@ -276,9 +374,20 @@ async function handleClaude(
 
   const body: any = {
     model: effectiveModel,
-    max_tokens: config?.maxTokens || 4096,
     stream: stream || false,
   };
+
+  // SEC-11 Fix: Use validated config parameters only
+  if (config) {
+    if (config.maxTokens !== undefined) body.max_tokens = config.maxTokens;
+    else body.max_tokens = 4096;  // Default
+    
+    if (config.temperature !== undefined) body.temperature = config.temperature;
+    if (config.topP !== undefined) body.top_p = config.topP;
+    if (config.stopSequences !== undefined) body.stop_sequences = config.stopSequences;
+  } else {
+    body.max_tokens = 4096;  // Default
+  }
 
   // Claude uses system prompt and messages array
   if (systemMessage) {
@@ -287,9 +396,6 @@ async function handleClaude(
 
   // Claude expects messages array
   body.messages = [{ role: 'user', content: typeof contents === 'string' ? contents : JSON.stringify(contents) }];
-
-  if (config?.temperature) body.temperature = config.temperature;
-  if (config?.topP) body.top_p = config.topP;
 
   const response = await fetch(url, {
     method: 'POST',
