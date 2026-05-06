@@ -27,6 +27,7 @@ import { suggestOriginalCharacterConcepts } from "../../ai/flows/suggest-origina
 import type { Character, CharacterStats } from "../../types/character-types";
 import { initialCharacterState, initialAdventureSettings as defaultInitialAdventureSettings } from "../../context/game-initial-state";
 import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, getStarterSkillsForClass, calculateXpToNextLevel } from "../../lib/gameUtils";
+import { logger } from "../../lib/logger";
 
 export function AdventureSetup() {
   const { state, dispatch } = useGame();
@@ -148,7 +149,7 @@ export function AdventureSetup() {
       }
 
     } catch (err) {
-      console.error("AdventureSetup: Failed to get name/concept suggestion:", err);
+      logger.error("AdventureSetup: Failed to get name/concept suggestion:", err);
       toast({ title: "Suggestion Error", description: "Could not fetch suggestions at this time.", variant: "destructive" });
     } finally {
       setIsSuggestingNameLoading(false);
@@ -234,13 +235,13 @@ export function AdventureSetup() {
             toast({ title: "Adventure Starting!", description: `Stepping into the shoes of ${playerCharacterConcept} in the universe of ${universeName}!` });
 
         } catch (err) {
-            console.error("AdventureSetup: Failed to generate immersed character profile:", err);
+            logger.error("AdventureSetup: Failed to generate immersed character profile:", err);
             toast({ title: "Character Profile Error", description: "Could not retrieve character details. Please try again.", variant: "destructive" });
         } finally {
             setIsLoadingImmersedCharacter(false);
         }
     } else {
-        console.error("AdventureSetup: Unhandled proceed logic.");
+        logger.error("AdventureSetup: Unhandled proceed logic.");
         toast({ title: "Navigation Error", description: "Could not determine the next step.", variant: "destructive" });
     }
   };

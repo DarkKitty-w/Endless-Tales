@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import type { InventoryItem, ItemQuality } from '../../types/game-types';
 import { processAiResponse } from '../../lib/utils';
+import { logger } from '../../lib/logger';
 
 export interface AttemptCraftingInput {
   characterKnowledge: string[];
@@ -108,7 +109,7 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
 
   } catch (error: any) {
       if (error.name === 'AbortError') throw error;
-      console.error("AI Crafting Error:", error);
+      logger.error("AI Crafting Error:", error);
       return {
           success: false,
           message: "The crafting attempt failed due to an external force (AI Error).",

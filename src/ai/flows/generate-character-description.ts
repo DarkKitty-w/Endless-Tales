@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import { extractJsonFromResponse } from '../../lib/utils';
+import { logger } from '../../lib/logger';
 
 export interface GenerateCharacterDescriptionInput {
   characterDescription: string;
@@ -110,7 +111,7 @@ Output JSON matching the schema.
       if (error.name === 'AbortError') {
           throw error;
       }
-      console.error("AI Character Generation Error:", error);
+      logger.error("AI Character Generation Error:", error);
       return {
           detailedDescription: `AI generation failed for: "${input.characterDescription}".`,
           inferredClass: input.isImmersedMode ? "Immersed Protagonist" : "Adventurer",

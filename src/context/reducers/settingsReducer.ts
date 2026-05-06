@@ -4,6 +4,7 @@ import type { GameState } from "../../types/game-types";
 import type { Action } from "../game-actions";
 import { initialAdventureSettings } from "../game-initial-state";
 import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "../../lib/constants";
+import { logger } from "../../lib/logger";
 
 type SettingsState = Pick<GameState, 'adventureSettings' | 'selectedThemeId' | 'isDarkMode' | 'userGoogleAiApiKey' | 'aiProvider' | 'providerApiKeys'>;
 
@@ -18,7 +19,7 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
             const finalAdventureType = incomingPayload.adventureType ?? currentAdventureTypeInState;
 
             if (!finalAdventureType) {
-                console.error("SettingsReducer: SET_ADVENTURE_SETTINGS - finalAdventureType is unexpectedly null/undefined. This could lead to issues.", "Incoming Payload:", incomingPayload, "Current state type:", currentAdventureTypeInState);
+                logger.error("SettingsReducer: SET_ADVENTURE_SETTINGS - finalAdventureType is unexpectedly null/undefined. This could lead to issues.", "Incoming Payload:", incomingPayload, "Current state type:", currentAdventureTypeInState);
             }
 
             const validatedDifficulty = VALID_ADVENTURE_DIFFICULTY_LEVELS.includes(incomingPayload.difficulty as DifficultyLevel)

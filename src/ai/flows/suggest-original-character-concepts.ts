@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import { extractJsonFromResponse } from '../../lib/utils';
+import { logger } from '../../lib/logger';
 
 export interface SuggestOriginalCharacterConceptsInput {
   universeName: string;
@@ -51,7 +52,7 @@ export async function suggestOriginalCharacterConcepts(input: SuggestOriginalCha
       if (error.name === 'AbortError') {
           throw error;
       }
-      console.error("AI Suggestion Error:", error);
+      logger.error("AI Suggestion Error:", error);
       return { suggestedConcepts: ["A wanderer", "A local merchant", "A lost soldier"] };
   }
 }

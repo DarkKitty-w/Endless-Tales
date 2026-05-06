@@ -4,6 +4,7 @@
 import type { GameState } from "../../types/game-types";
 import type { Action } from "../game-actions";
 import type { PeerInfo, PlayerSummary, PendingInteraction, ConnectionStatus } from "../../types/multiplayer-types";
+import { logger } from "../../lib/logger";
 
 export function multiplayerReducer(state: GameState, action: Action): GameState {
   switch (action.type) {
@@ -69,7 +70,7 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
     case "ADVANCE_TURN": {
       const newIndex = action.payload;
       if (newIndex < 0 || newIndex >= state.turnOrder.length) {
-        console.error('ADVANCE_TURN: Invalid turn index', newIndex);
+        logger.error('ADVANCE_TURN: Invalid turn index', newIndex);
         return state;
       }
       return {

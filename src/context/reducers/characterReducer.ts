@@ -4,6 +4,7 @@ import type { Action } from "../game-actions";
 import { initialCharacterState, initialCharacterStats } from "../game-initial-state";
 import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, calculateXpToNextLevel, getStarterSkillsForClass } from "../../lib/gameUtils";
 import { RESPAWN_XP_LOSS_PERCENT, RESPAWN_DEBUFF_DURATION, MAX_SKILL_TREE_STAGES } from "../../lib/constants";
+import { logger } from "../../lib/logger";
 
 // Helper to create a unique ID for status effects
 const generateStatusEffectId = () => `se_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
@@ -173,7 +174,7 @@ export function characterReducer(state: Character | null, action: Action): Chara
             if (!state || state.class !== action.payload.class) return state;
             const stages = action.payload.skillTree.stages || [];
             if (stages.length !== MAX_SKILL_TREE_STAGES) {
-                console.error(`Reducer: Received skill tree with ${stages.length} stages, expected ${MAX_SKILL_TREE_STAGES}. Discarding.`);
+                logger.error(`Reducer: Received skill tree with ${stages.length} stages, expected ${MAX_SKILL_TREE_STAGES}. Discarding.`);
                 return state;
             }
             const validatedStages: SkillTreeStage[] = Array.from({ length: MAX_SKILL_TREE_STAGES }, (_, i) => {
@@ -197,7 +198,7 @@ export function characterReducer(state: Character | null, action: Action): Chara
             if (!state) return null;
             const stages = action.payload.newSkillTree.stages || [];
             if (stages.length !== MAX_SKILL_TREE_STAGES) {
-                console.error(`Reducer: Received new skill tree with ${stages.length} stages, expected ${MAX_SKILL_TREE_STAGES}. Aborting class change.`);
+                logger.error(`Reducer: Received new skill tree with ${stages.length} stages, expected ${MAX_SKILL_TREE_STAGES}. Aborting class change.`);
                 return state;
             }
             const validatedStages: SkillTreeStage[] = Array.from({ length: MAX_SKILL_TREE_STAGES }, (_, i) => {

@@ -887,7 +887,7 @@ async function loadWebLLMModule(): Promise<WebLLMModule> {
 
   const CreateMLCEngine = webllmModule.CreateMLCEngine || webllmModule.CreateWebWorkerMLCEngine;
   if (!CreateMLCEngine) {
-    console.error('[WebLLM] webllm module contents:', webllmModule);
+    logger.error('[WebLLM] webllm module contents:', webllmModule);
     throw new Error('[WebLLM] Engine creator not found in module. Check console for module keys.');
   }
 
@@ -915,7 +915,7 @@ function findAvailableModel(
   const { prebuiltAppConfig } = webllm;
 
   if (!prebuiltAppConfig || !Array.isArray(prebuiltAppConfig.model_list)) {
-    console.error('[WebLLM] prebuiltAppConfig is not properly initialized:', prebuiltAppConfig);
+    logger.error('[WebLLM] prebuiltAppConfig is not properly initialized:', prebuiltAppConfig);
     throw new Error('[WebLLM] Model registry is not initialized. Please try again later.');
   }
 
@@ -991,7 +991,7 @@ async function retryLoadModule(maxRetries: number = 1): Promise<WebLLMModule> {
 
       const creator = module.CreateMLCEngine || module.CreateWebWorkerMLCEngine;
       if (!creator) {
-        console.error('[WebLLM] No engine creator found in module keys:', Object.keys(module));
+        logger.error('[WebLLM] No engine creator found in module keys:', Object.keys(module));
         throw new Error('[WebLLM] No engine creator found (expected CreateMLCEngine or CreateWebWorkerMLCEngine)');
       }
 
@@ -1007,7 +1007,7 @@ async function retryLoadModule(maxRetries: number = 1): Promise<WebLLMModule> {
       logger.log('[WebLLM] Engine creator found:', creator.name || 'anonymous');
       return typedModule;
     } catch (e) {
-      console.error(`[WebLLM] Failed to load package (attempt ${attempt + 1}):`, e);
+      logger.error(`[WebLLM] Failed to load package (attempt ${attempt + 1}):`, e);
       webllmAvailable = false;
 
       if (attempt < maxRetries) {
@@ -1112,8 +1112,8 @@ class WebLLMProvider implements AIProvider {
       return engine;
     } catch (error) {
       this.loadingPromise = null;
-      console.error('[WebLLM] Engine creation failed:', error);
-      console.error('[WebLLM] Error details:', {
+      logger.error('[WebLLM] Engine creation failed:', error);
+      logger.error('[WebLLM] Error details:', {
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         name: error instanceof Error ? error.name : 'unknown',
@@ -1239,7 +1239,7 @@ class WebLLMProvider implements AIProvider {
       currentWebLLMModel = '';
       logger.log('[WebLLM] Cache cleared');
     } catch (error) {
-      console.error('[WebLLM] Failed to clear cache:', error);
+      logger.error('[WebLLM] Failed to clear cache:', error);
       throw error instanceof Error ? error : new Error(String(error));
     }
   }

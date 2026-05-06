@@ -208,7 +208,7 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
       toast({ title: "Model Ready", description: `${webllmModel} loaded successfully.` });
       setWebllmProgress(null);
     } catch (error: any) {
-      console.error('[WebLLM] Download error:', error);
+      logger.error('[WebLLM] Download error:', error);
 
       // Provide a helpful error message
       let errorMessage = error.message || 'Unknown error';

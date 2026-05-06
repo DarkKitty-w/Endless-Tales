@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import { extractJsonFromResponse } from '../../lib/utils';
+import { logger } from '../../lib/logger';
 
 export interface SuggestExistingCharactersInput {
   universeName: string;
@@ -51,7 +52,7 @@ export async function suggestExistingCharacters(input: SuggestExistingCharacters
       if (error.name === 'AbortError') {
           throw error;
       }
-      console.error("AI Suggestion Error:", error);
+      logger.error("AI Suggestion Error:", error);
       return { suggestedNames: ["Hero", "Villain", "Sidekick"] };
   }
 }

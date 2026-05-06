@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import { extractJsonFromResponse } from '../../lib/utils';
+import { logger } from '../../lib/logger';
 
 export interface SummarizeAdventureInput {
   story: string;
@@ -51,7 +52,7 @@ export async function summarizeAdventure(input: SummarizeAdventureInput): Promis
       if (error.name === 'AbortError') {
           throw error;
       }
-      console.error("AI Summary Error:", error);
+      logger.error("AI Summary Error:", error);
       return { summary: "Summary generation failed." };
   }
 }

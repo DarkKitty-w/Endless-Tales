@@ -24,6 +24,7 @@ import { BasicCharacterForm } from "../../components/character/BasicCharacterFor
 import { TextCharacterForm } from "../../components/character/TextCharacterForm";
 import type { AdventureType } from "../../types/adventure-types";
 import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnMagicIcon as HandDrawnWisdomIcon } from "../../components/icons/HandDrawnIcons";
+import { logger } from "../../lib/logger";
 
 // --- Zod Schema for Validation (basic field validation only) ---
 const baseCharacterSchema = z.object({
@@ -329,7 +330,7 @@ export function CharacterCreation() {
         toast({ title: "AI Profile Generated!", description: "Character details updated."});
         await trigger(); 
      } catch (err: unknown) {
-       console.error("CharacterCreation: AI generation failed:", err);
+       logger.error("CharacterCreation: AI generation failed:", err);
        setError("Failed to generate profile. The AI might be busy or encountered an error.");
        const errorMessage = (err instanceof Error) ? err.message : String(err);
        toast({ title: "AI Generation Failed", description: errorMessage, variant: "destructive" });

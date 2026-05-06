@@ -9,6 +9,7 @@ import type { DifficultyLevel, GameStateContext } from '../../types/game-types';
 import { formatGameStateContextForPrompt } from '../../context/game-state-utils';
 import { processAiResponse } from '../../lib/utils';
 import { sanitizePlayerAction } from '../../lib/utils';
+import { logger } from '../../lib/logger';
 
 export interface NarrateAdventureInput {
   character: any;
@@ -464,7 +465,7 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
 
   } catch (error: any) {
       if (error.name === 'AbortError') throw error;
-      console.error("AI Narration Error:", error);
+      logger.error("AI Narration Error:", error);
       
       const gameDiffKey = adventureSettings.difficulty?.toLowerCase() ?? 'normal';
       const fallbackAssess = FALLBACK_DIFFICULTY_MAP[gameDiffKey] ?? FALLBACK_DIFFICULTY_MAP['normal'];

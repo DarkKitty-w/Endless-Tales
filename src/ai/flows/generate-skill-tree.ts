@@ -7,6 +7,7 @@ import { getClient } from '../ai-instance';
 import type { SkillTree } from '../../types/game-types';
 import { MAX_SKILL_TREE_STAGES } from '../../lib/constants';
 import { processAiResponse } from '../../lib/utils';
+import { logger } from '../../lib/logger';
 
 export interface GenerateSkillTreeInput {
   characterClass: string;
@@ -138,7 +139,7 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
 
   } catch (error: any) {
       if (error.name === 'AbortError') throw error;
-      console.error("AI Skill Tree Error:", error);
+      logger.error("AI Skill Tree Error:", error);
       return createFallbackSkillTree(input.characterClass);
   }
 }

@@ -195,7 +195,7 @@ export function Gameplay() {
         }, 100);
         
       } catch (error) {
-        console.error('Error processing guest action:', error);
+        logger.error('Error processing guest action:', error);
         toast({ title: "Error", description: "Failed to process guest action.", variant: "destructive" });
       }
     }, [toast]);
@@ -442,7 +442,7 @@ export function Gameplay() {
                         logger.log("Summarize adventure aborted");
                         return;
                     }
-                    console.error("Gameplay: Summarize adventure error:", summaryError);
+                    logger.error("Gameplay: Summarize adventure error:", summaryError);
                     summary = `Could not generate a summary due to an error: ${summaryError.message || 'Unknown error'}. ${summary}`;
                     toast({ title: "Summary Error", description: "Failed to generate summary.", variant: "destructive" });
                 }
@@ -457,7 +457,7 @@ export function Gameplay() {
         if (!character) {
             toast({ title: "Error", description: "Character data is missing.", variant: "destructive" });
             if (isInitialAction) setIsInitialLoading(false);
-            console.error("Gameplay: Character is null in handlePlayerAction.");
+            logger.error("Gameplay: Character is null in handlePlayerAction.");
             return;
         }
 
@@ -718,7 +718,7 @@ export function Gameplay() {
                 logger.log("Player action aborted, newer request superseded it.");
                 // Don't show error toast for expected cancellations
             } else {
-                console.error("Gameplay: Error in handlePlayerAction:", err);
+                logger.error("Gameplay: Error in handlePlayerAction:", err);
                 setError(`An unexpected error occurred while processing your action: ${err.message}`);
                 setBranchingChoices(GENERIC_BRANCHING_CHOICES);
                 toast({title: "Unexpected Error", description: "Something went wrong processing your action.", variant: "destructive"});
@@ -916,7 +916,7 @@ export function Gameplay() {
         };
 
         performInitialSetup().catch(err => {
-            console.error("Gameplay: Fatal error during initial setup:", err);
+            logger.error("Gameplay: Fatal error during initial setup:", err);
             setError("A critical error occurred while starting the adventure. Please try again.");
             setIsInitialLoading(false);
         });

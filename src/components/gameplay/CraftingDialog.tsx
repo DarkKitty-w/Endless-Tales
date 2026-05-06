@@ -19,6 +19,7 @@ import { Alert, AlertDescription } from '../../components/ui/alert';
 import { Loader2, Hammer, CheckCircle } from 'lucide-react';
 import type { InventoryItem } from '../../types/inventory-types';
 import { getQualityColor, cn } from "../../lib/utils";
+import { logger } from "../../lib/logger";
 
 interface CraftingDialogProps {
     isOpen: boolean;
@@ -51,7 +52,7 @@ export function CraftingDialog({ isOpen, onOpenChange, inventory, onCraft }: Cra
         try {
             await onCraft(craftingGoal, selectedIngredients);
         } catch (error) {
-            console.error("CraftingDialog: Error during craft attempt", error);
+            logger.error("CraftingDialog: Error during craft attempt", error);
             setCraftingError("An unexpected error occurred during crafting.");
         } finally {
             setIsCraftingLoading(false);

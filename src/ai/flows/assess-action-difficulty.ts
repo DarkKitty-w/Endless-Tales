@@ -7,6 +7,7 @@ import { getClient } from '../ai-instance';
 import type { DifficultyLevel, GameStateContext } from '../../types/game-types';
 import { formatGameStateContextForPrompt } from '../../context/game-state-utils';
 import { processAiResponse } from '../../lib/utils';
+import { logger } from '../../lib/logger';
 
 export type { DifficultyLevel };
 
@@ -114,7 +115,7 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
 
   } catch (error: any) {
       if (error.name === 'AbortError') throw error;
-      console.error("AI Error in assessActionDifficulty:", error);
+      logger.error("AI Error in assessActionDifficulty:", error);
       
       const gameDiffKey = input.gameDifficulty?.toLowerCase() ?? 'normal';
       const fallbackMapping = FALLBACK_DIFFICULTY_MAP[gameDiffKey] ?? FALLBACK_DIFFICULTY_MAP['normal'];

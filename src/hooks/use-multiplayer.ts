@@ -84,7 +84,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   const sendMessage = useCallback((type: MultiplayerMessage['type'], payload: any) => {
     const channel = dataChannelsRef.current[type];
     if (!channel) {
-      console.error(`Data channel ${type} not available`);
+      logger.error(`Data channel ${type} not available`);
       return false;
     }
 
@@ -139,7 +139,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   // Send control message (host only)
   const sendControlMessage = useCallback((action: ControlMessage['payload']['action'], targetPeerId?: string, data?: any) => {
     if (!multiplayerStateRef.current.isHost) {
-      console.error('Only host can send control messages');
+      logger.error('Only host can send control messages');
       return false;
     }
     return sendMessage('control', { action, targetPeerId, data });
@@ -196,7 +196,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
       return encodedOffer;
     } catch (error) {
-      console.error('Failed to create session:', error);
+      logger.error('Failed to create session:', error);
       setMultiplayerState(prev => ({ ...prev, connectionStatus: 'failed' }));
       throw error;
     }
@@ -234,7 +234,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
       return encodedAnswer;
     } catch (error) {
-      console.error('Failed to join session:', error);
+      logger.error('Failed to join session:', error);
       setMultiplayerState(prev => ({ ...prev, connectionStatus: 'failed' }));
       throw error;
     }
@@ -249,7 +249,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     try {
       await applyAnswer(peerConnectionRef.current, encodedAnswer);
     } catch (error) {
-      console.error('Failed to apply answer:', error);
+      logger.error('Failed to apply answer:', error);
       throw error;
     }
   }, []);
@@ -279,7 +279,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       reconnectAttempts.current = 0; // reset on success
       logger.log('Reconnect successful!');
     } catch (error) {
-      console.error('Reconnect failed:', error);
+      logger.error('Reconnect failed:', error);
       
       // Exponential backoff: 1s, 2s, 4s (capped at 4s)
       const backoffDelay = Math.min(1000 * Math.pow(2, reconnectAttempts.current - 1), 4000);

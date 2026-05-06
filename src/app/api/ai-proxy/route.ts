@@ -1,5 +1,6 @@
 // src/app/api/ai-proxy/route.ts
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/logger';
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
@@ -44,7 +45,7 @@ export async function POST(request: NextRequest) {
         );
     }
   } catch (error: unknown) {
-    console.error('AI Proxy error:', error);
+    logger.error('AI Proxy error:', error);
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
       { error: message },
@@ -101,7 +102,7 @@ async function handleGemini(
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('Gemini API error:', response.status, errorText);
+    logger.error('Gemini API error:', response.status, errorText);
     return NextResponse.json(
       { error: `Gemini API error: ${response.status}` },
       { status: response.status }
@@ -168,7 +169,7 @@ async function handleOpenAICompatible(
 
   if (!response.ok) {
     const error = await response.json();
-    console.error(`${providerName} API error:`, response.status, error);
+    logger.error(`${providerName} API error:`, response.status, error);
     return NextResponse.json(
       { error: `${providerName} API error: ${error.error?.message || response.status}` },
       { status: response.status }
@@ -268,7 +269,7 @@ async function handleClaude(
 
   if (!response.ok) {
     const error = await response.json();
-    console.error('Claude API error:', response.status, error);
+    logger.error('Claude API error:', response.status, error);
     return NextResponse.json(
       { error: `Claude API error: ${error.error?.message || response.status}` },
       { status: response.status }

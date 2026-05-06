@@ -3,6 +3,7 @@ import { twMerge } from "tailwind-merge";
 import type { ItemQuality } from "../types/inventory-types";
 import { jsonrepair } from "jsonrepair";
 import { z } from "zod";
+import { logger } from "./logger";
 
 /* -------------------------------------------------------
    UI UTIL
@@ -123,7 +124,7 @@ export async function processAiResponse<T>(
   let data = tryParse(rawText);
 
   if (!data) {
-    console.error("[processAiResponse] All parsing attempts failed. rawText (first 500 chars):", rawText.substring(0, 500));
+    logger.error("[processAiResponse] All parsing attempts failed. rawText (first 500 chars):", rawText.substring(0, 500));
     return fallback;
   }
 
@@ -179,11 +180,11 @@ export async function processAiResponse<T>(
     if (validation.success) {
       return validation.data;
     } else {
-      console.error("[processAiResponse] Zod validation failed:", validation.error.issues);
+      logger.error("[processAiResponse] Zod validation failed:", validation.error.issues);
       return fallback;
     }
   } catch (e) {
-    console.error("[processAiResponse] Processing error:", e);
+    logger.error("[processAiResponse] Processing error:", e);
     return fallback;
   }
 }

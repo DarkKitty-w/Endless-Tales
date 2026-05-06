@@ -5,6 +5,7 @@ import type { Action } from "../game-actions";
 import { initialState, initialInventory, initialWorldMap } from "../game-initial-state";
 import { generateAdventureId } from "../../lib/gameUtils";
 import { buildGameStateContext, formatGameStateContextForPrompt } from "../game-state-utils";
+import { logger } from "../../lib/logger";
 
 const MAX_LOG_SIZE = 200; // Prevent unbounded memory growth
 
@@ -15,7 +16,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
 
         case "START_GAMEPLAY": {
             if (!state.character) {
-                console.error("AdventureReducer: Cannot start gameplay: Character is null. Resetting to Main Menu.");
+                logger.error("AdventureReducer: Cannot start gameplay: Character is null. Resetting to Main Menu.");
                 return {
                     ...initialState,
                     savedAdventures: state.savedAdventures,
@@ -27,7 +28,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                 };
             }
             if (!state.adventureSettings.adventureType) {
-                console.error("AdventureReducer: Cannot start gameplay: Adventure type is not set. Resetting to Main Menu.");
+                logger.error("AdventureReducer: Cannot start gameplay: Adventure type is not set. Resetting to Main Menu.");
                 return {
                     ...initialState,
                     savedAdventures: state.savedAdventures,
