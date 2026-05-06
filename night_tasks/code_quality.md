@@ -1,319 +1,167 @@
-## Code Quality & Maintainability
+## Detailed Findings
 
-### Overall Maintainability Rating: **D+**
+CODE‑1: VALID_ASSESSMENT_DIFFICULTY_LEVELS unused constant
+Severity: Medium
+Description: Exported constant VALID_ASSESSMENT_DIFFICULTY_LEVELS is defined in constants.ts but never imported or used anywhere in the codebase.
+Location: src/lib/constants.ts (line 21)
+Refactoring Suggestion: Remove the export and constant if not needed, or implement its usage if it was intended for validation.
 
-**Rationale:**
-- 110 `any` type usages across the codebase (poor TypeScript usage)
-- 60+ unused imports (dead code)
-- Multiple files over 500 lines (Gameplay.tsx has 1276 lines)
-- Inconsistent patterns across codebase (mixing class-based and function-based providers)
-- Dead code not cleaned up (`firebase.ts`, `multiplayer-service.ts`)
-- Missing error boundaries for sub-components
-- Deprecated API usage (`substr`)
+CODE‑2: devLog function unused in logger.ts
+Severity: Low
+Description: The devLog function is exported from logger.ts but has zero usages across the codebase.
+Location: src/lib/logger.ts (line 58)
+Refactoring Suggestion: Remove the function or integrate it if debug logging is desired.
 
----
+CODE‑3: dice-roller.ts entire file unused
+Severity: Medium
+Description: The entire dice-roller.ts service file is unused. No imports found anywhere in the codebase.
+Location: src/services/dice-roller.ts (entire file)
+Refactoring Suggestion: Delete the file if not needed, or integrate it into gameplay if dice rolling functionality is planned.
 
-### CODE-1: Dead Code - `buildMessages` Function Unused
-**Severity:** Low  
-**Description:** The `buildMessages` function in `ai-router.ts` is exported but not used anywhere in the codebase. It appears to be a helper for providers that support system/user message separation, but none of the current providers use it.
-**Location:** `src/ai/ai-router.ts`, lines 34-41
-**Root Cause:** Leftover code from a previous design that was never fully implemented or was superseded.
-**Reproduction Steps:**
-1. Search for `buildMessages` usage across the codebase
-2. Find that it's only defined, never called
+CODE‑4: firebase.ts dead file in lib/
+Severity: Medium
+Description: The firebase.ts file exists in lib/ but is not imported or used anywhere. It appears to be a leftover from a previous implementation.
+Location: src/lib/firebase.ts (entire file)
+Refactoring Suggestion: Delete the file if Firebase is no longer used, or properly integrate it if needed.
 
-**Fix:** Remove the dead function to reduce clutter:
-```typescript
-// DELETE lines 34-41:
-export function buildMessages(systemMessage: string, userMessage: string) {
-  return [
-    { role: 'user', parts: [{ text: systemMessage }] },
-    { role: 'user', parts: [{ text: userMessage }] }
-  ];
-}
-```
+CODE‑5: Unused imports across multiple files
+Severity: Medium
+Description: Multiple files contain unused imports (e.g., React imports that are not needed, unused utility imports, unused type imports).
+Location: Various .tsx and .ts files across the codebase
+Refactoring Suggestion: Run a linter (eslint) to identify and remove unused imports. Use tools like ts-prune for TypeScript-specific dead exports.
 
----
+CODE‑6: Duplicated Stream Processing Logic in AI Providers
+Severity: High
+Description: Five AI provider classes (Gemini, OpenAI, Claude, DeepSeek, OpenRouter) each contain nearly identical SSE stream processing logic with while loops, buffer management, line splitting, and chunk processing. The only difference is the JSON path for extracting content.
+Location: src/ai/ai-router.ts - GeminiProvider (lines 159-250), OpenAIProvider (lines 299-389), ClaudeProvider (lines 438-530), DeepSeekProvider (lines 579-669), OpenRouterProvider (lines 718-808)
+Refactoring Suggestion: Extract a shared `processSSEStream(response, contentExtractor)` utility function that accepts a provider-specific content extraction callback.
 
-### CODE-2: Dead Code - `currentPlayerUid` Field Never Used
-**Severity:** Low  
-**Description:** The `currentPlayerUid` field is defined in the `GameState` interface and initialized in `initialState`, but it is **never used** anywhere in the reducers or context.
-**Location:** `src/types/game-types.ts` line 44, `src/context/game-initial-state.ts` line 142
-**Root Cause:** Field was likely planned for multiplayer identity but never implemented.
-**Reproduction Steps:**
-1. Search for `currentPlayerUid` across the codebase
-2. Find only definition and initialization, no actual usage
+CODE‑7: handlePlayerAction in Gameplay.tsx too large
+Severity: High
+Description: The handlePlayerAction function in Gameplay.tsx is overly complex with mixed concerns (AI calls, state updates, error handling, turn management) all in one function.
+Location: src/components/screens/Gameplay.tsx (handlePlayerAction function)
+Refactoring Suggestion: Split into smaller functions: validateAction(), processAIResponse(), updateGameState(), handleTurnTransition().
 
-**Fix:** Remove the field from `GameState` interface and `initialState` to avoid confusion.
+CODE‑8: WebRTC signalling functions overly complex
+Severity: Medium
+Description: Functions in webrtc-signalling.ts have high cyclomatic complexity with many branches, long functions over 100 lines, and mixed concerns (encoding, decoding, connection management).
+Location: src/lib/webrtc-signalling.ts (multiple functions)
+Refactoring Suggestion: Split into smaller modules: signalling-encoding.ts, signalling-connection.ts, signalling-queue.ts. Extract complex functions into smaller, focused helpers.
 
----
+CODE‑9: CharacterCreation.tsx has mixed concerns
+Severity: Medium
+Description: CharacterCreation.tsx is a large component with mixed concerns (form handling, AI generation, validation, UI rendering all in one file).
+Location: src/components/screens/CharacterCreation.tsx (entire file)
+Refactoring Suggestion: Extract custom hooks: useCharacterForm(), useAIGeneration(), useClassSelection(). Split into smaller sub-components.
 
-### CODE-3: Dead Code - `firebase.ts` File Entirely Unused
-**Severity:** Medium  
-**Description:** The file `src/lib/firebase.ts` exports dummy objects (`app`, `db`, `auth`) with `as any` casts. The file comment states "Firebase is no longer used" and "exports dummy objects". No imports of this file exist anywhere in the codebase.
-**Location:** `src/lib/firebase.ts` (entire file)
-**Root Cause:** Firebase was removed but the file was left behind.
-**Reproduction Steps:**
-1. Search for imports of `firebase.ts` across the codebase
-2. Find zero imports
+CODE‑10: Inconsistent React import style
+Severity: Low
+Description: Some files use `import * as React from "react"` while others use `import React from 'react'`. Also inconsistent quote usage (double vs single quotes).
+Location: Various .tsx files (CardboardCard.tsx uses `* as React` with double quotes, BasicCharacterForm.tsx uses `React` with single quotes)
+Refactoring Suggestion: Standardize on `import * as React from "react"` with double quotes for consistency across all files.
 
-**Fix:** Delete the file entirely:
-```bash
-rm src/lib/firebase.ts
-```
+CODE‑11: Inconsistent forwardRef usage
+Severity: Low
+Description: Some components use `React.forwardRef` while others don't, even when they accept ref props. Inconsistent pattern across UI components.
+Location: src/components/ui/ (various components)
+Refactoring Suggestion: Standardize forwardRef usage. Either all UI components use forwardRef, or none do (use ref prop directly if needed).
 
----
+CODE‑12: Inconsistent component patterns
+Severity: Medium
+Description: Some components use React.memo, some use useCallback/useMemo, others don't. No consistent pattern for performance optimizations.
+Location: src/components/ (various components)
+Refactoring Suggestion: Define clear guidelines: all components that receive stable props should use React.memo. All event handlers in render should use useCallback.
 
-### CODE-4: Dead Code - `multiplayer-service.ts` File Entirely Unused
-**Severity:** Medium  
-**Description:** The file `src/services/multiplayer-service.ts` contains stub functions that all throw "Multiplayer is now handled via WebRTC". The file comment states "kept for reference but is no longer used". No imports of this file exist anywhere in the codebase.
-**Location:** `src/services/multiplayer-service.ts` (entire file)
-**Root Cause:** Old multiplayer service was replaced by WebRTC but file was kept "for reference".
-**Reproduction Steps:**
-1. Search for imports of `multiplayer-service.ts` across the codebase
-2. Find zero imports
+CODE‑13: Inconsistent prop naming across similar components
+Severity: Medium
+Description: Similar components use different prop names for the same concept (e.g., onSubmit vs onSave vs onComplete across forms).
+Location: src/components/character/ (BasicCharacterForm, TextCharacterForm, CharacterStatsAllocator)
+Refactoring Suggestion: Standardize prop names across similar components. Create a shared types file for common prop interfaces.
 
-**Fix:** Delete the file entirely:
-```bash
-rm src/services/multiplayer-service.ts
-```
+CODE‑14: Mixed quote usage in imports
+Severity: Low
+Description: Some files use double quotes for imports (`"react"`), others use single quotes (`'react'`). Inconsistent across the codebase.
+Location: Various .ts and .tsx files
+Refactoring Suggestion: Standardize on double quotes for all imports. Configure ESLint rule `quotes` to enforce consistency.
 
----
+CODE‑15: Untyped 'any' in migrateSavedAdventure
+Severity: Medium
+Description: The adventure parameter in migrateSavedAdventure is typed as `any`, bypassing TypeScript type checking for saved adventure migration logic.
+Location: src/context/GameContext.tsx (line 30)
+Refactoring Suggestion: Define a migration input type (e.g., `type MigrationAdventureInput = Partial<SavedAdventure> & { version?: number }`) and use it instead of `any`. Add runtime validation for required fields.
 
-### CODE-5: Dead Code - Unused Imports in Gameplay.tsx
-**Severity:** Low  
-**Description:** The `Gameplay.tsx` component has several unused imports:
-- Line 5: `AssessedDifficultyLevel` imported but only used as type annotation
-- Line 36: `Alert, AlertDescription, AlertTitle` imported but **NOT USED**
-- Line 37: `Skeleton` imported but **NOT USED**
-- Multiple lucide-react icons imported but not used (`Settings, ArrowLeft, Skull, Info, Dice5, Hammer, BookCopy, CalendarClock, GitBranch, RefreshCw`)
+CODE‑16: Untyped 'any[]' for parsed localStorage data
+Severity: Medium
+Description: The result of `JSON.parse(savedData)` is typed as `any[]`, skipping type checking for loaded saved adventures.
+Location: src/context/GameContext.tsx (line 89)
+Refactoring Suggestion: Define a type for the parsed data and validate with a runtime schema (e.g., Zod) before using the data.
 
-**Location:** `src/components/screens/Gameplay.tsx`, lines 5, 36-37, and various icon imports
-**Root Cause:** Components were likely planned but never added, or were removed without cleaning up imports.
-**Reproduction Steps:**
-1. Review the imports at the top of Gameplay.tsx
-2. Search for usage of `Alert`, `Skeleton`, and unused icons
-3. Find no references in the component
+CODE‑17: Multiple 'any' types in ai-router.ts
+Severity: Medium
+Description: The ai-router.ts file contains multiple uses of `any` type, particularly in provider classes, stream processing, and message handling.
+Location: src/ai/ai-router.ts (multiple locations)
+Refactoring Suggestion: Replace `any` with proper types: define provider config interfaces, message types, stream response types. Use generics where appropriate.
 
-**Fix:** Remove all unused imports to reduce bundle size and improve clarity.
+CODE‑18: ErrorBoundary not integrated in component tree
+Severity: High
+Description: ErrorBoundary.tsx exists but is not integrated into the component tree. If any component throws, the entire app crashes without a fallback UI.
+Location: src/components/ErrorBoundary.tsx (not used in app/layout.tsx or app/page.tsx)
+Refactoring Suggestion: Wrap the main app content in ErrorBoundary in layout.tsx or page.tsx to catch and display errors gracefully.
 
----
+CODE‑19: Missing error boundaries in gameplay screens
+Severity: High
+Description: Gameplay screens and components don't have error boundaries. A crash in AI processing, state management, or rendering will crash the entire game.
+Location: src/components/screens/Gameplay.tsx, src/components/gameplay/ (various components)
+Refactoring Suggestion: Add ErrorBoundary wrappers around major gameplay sections. Consider per-section boundaries so one section crashing doesn't affect others.
 
-### CODE-6: Overly Complex Function - `WebLLMProvider.getEngine()` (113 lines)
-**Severity:** High  
-**Description:** The `getEngine()` method in `WebLLMProvider` is 113 lines long (lines 710-822) and does too many things: checks engine state, loads WebLLM module, validates configuration, finds available models, handles fallbacks, creates engine with config, and manages loading promises.
-**Location:** `src/ai/ai-router.ts`, lines 710-822
-**Root Cause:** Function violates Single Responsibility Principle - handles too many concerns.
-**Reproduction Steps:**
-1. Open `ai-router.ts`
-2. Navigate to `WebLLMProvider.getEngine()`
-3. Observe the 113-line function with deep nesting
+CODE‑20: 'any' type in webrtc-signalling.ts
+Severity: Medium
+Description: The webrtc-signalling.ts file uses `any` type for signalling data, peer info, and message queue items.
+Location: src/lib/webrtc-signalling.ts (multiple locations)
+Refactoring Suggestion: Define proper types for SignallingPackage, PeerInfo, and queue items. Replace `any` with specific interfaces.
 
-**Fix:** Split into smaller functions:
-```typescript
-// Extract these helper functions:
-async function getCachedEngine(): Promise<any> { ... }
-async function loadWebLLMModule(): Promise<any> { ... }
-async function findAvailableModel(models: any[], modelName: string): Promise<string> { ... }
-async function createEngineWithConfig(model: string, systemPrompt: string): Promise<any> { ... }
+CODE‑21: Duplicated Skill Tree Validation in characterReducer
+Severity: Medium
+Description: Skill tree validation code (checking MAX_SKILL_TREE_STAGES, mapping stages/skills with defaults) is duplicated in SET_SKILL_TREE and CHANGE_CLASS_AND_RESET_SKILLS cases.
+Location: src/context/reducers/characterReducer.ts (lines 175-191 and 199-213)
+Refactoring Suggestion: Extract a `validateSkillTree(stages: any[], className: string): SkillTree` helper function to consolidate validation logic.
 
-// Then getEngine becomes:
-async getEngine(model: string, systemPrompt: string): Promise<any> {
-  let engine = await getCachedEngine();
-  if (engine) return engine;
-  // ... simplified flow calling helpers
-}
-```
+CODE‑22: Duplicated Inventory Item Validation in inventoryReducer
+Severity: Medium
+Description: Item validation logic (defaulting name, description, quality, weight, durability, magicalEffect) is duplicated in ADD_ITEM, UPDATE_INVENTORY, and LOAD_ADVENTURE cases.
+Location: src/context/reducers/inventoryReducer.ts (lines 9-16, 50-57, 91-98)
+Refactoring Suggestion: Extract a `validateInventoryItem(item: Partial<InventoryItem>): InventoryItem` helper function.
 
----
+CODE‑23: Complex algorithms without comments
+Severity: Medium
+Description: Skill tree rendering and validation algorithms lack comments, making the logic non-obvious to new developers.
+Location: src/components/game/SkillTreeDisplay.tsx; src/context/reducers/characterReducer.ts
+Refactoring Suggestion: Add comments explaining complex algorithms: O(n*m) lookups, skill tree traversal, validation rules.
 
-### CODE-7: Overly Complex Function - `loadWebLLM()` (52 lines)
-**Severity:** Medium  
-**Description:** The `loadWebLLM()` function (lines 623-674) exceeds the 50-line threshold. It handles module loading, caching, retry logic, and promise management.
-**Location:** `src/ai/ai-router.ts`, lines 623-674
-**Root Cause:** Function does too many things - should be split.
-**Reproduction Steps:**
-1. Open `ai-router.ts`
-2. Navigate to `loadWebLLM()` function
-3. Observe 52 lines with retry logic mixed with module loading
+CODE‑24: Duplicated SDP processing in WebRTC
+Severity: Medium
+Description: SDP offer/answer processing logic is duplicated across connection initiation and response handling in webrtc-signalling.ts.
+Location: src/lib/webrtc-signalling.ts (multiple functions)
+Refactoring Suggestion: Extract shared SDP processing helpers: createOffer(), createAnswer(), processIceCandidates().
 
-**Fix:** Split into smaller functions:
-```typescript
-function getCachedModule(): any { ... }
-function retryLoadModule(maxRetries: number): Promise<any> { ... }
-async function loadWebLLMModule(): Promise<any> { ... }
+CODE‑25: Missing comments in game-reducer.ts
+Severity: Low
+Description: The main game-reducer.ts file lacks comments explaining the reducer structure, action handling, and state transitions.
+Location: src/context/game-reducer.ts (entire file)
+Refactoring Suggestion: Add header comments explaining the reducer structure, inline comments for complex state transitions, and JSDoc for helper functions.
 
-// Then loadWebLLM becomes simpler:
-async function loadWebLLM(): Promise<any> {
-  const cached = getCachedModule();
-  if (cached) return cached;
-  return await retryLoadModule(3);
-}
-```
+### Overall Maintainability Rating: C+
 
----
+The project has decent structure with clear separation of concerns (context, components, AI, lib), but needs refactoring in key areas: duplicated logic in AI providers and reducers, missing TypeScript types, inconsistent patterns, and lack of error boundaries.
 
-### CODE-8: Overly Complex Component - `Gameplay.tsx` (1276 lines)
-**Severity:** High  
-**Description:** The `Gameplay.tsx` screen component has 1276 lines, making it extremely difficult to maintain, test, and debug. It contains multiple responsibilities: game state management, UI rendering for multiple panels, action handling, and more.
-**Location:** `src/components/screens/Gameplay.tsx` (1276 lines)
-**Root Cause:** Component violates Single Responsibility Principle - does too much.
-**Reproduction Steps:**
-1. Open `Gameplay.tsx`
-2. Scroll through 1276 lines of code
-3. Notice multiple logical sections that could be separate components
-
-**Fix:** Extract logical sections into separate components:
-1. Extract `GameHeader` component (title, status indicators)
-2. Extract `GameStats` component (character stats display)
-3. Extract `GameActions` component (action buttons)
-4. Consider using a layout component pattern
-
----
-
-### CODE-9: Missing TypeScript Types - 110 `any` Usages Across Codebase
-**Severity:** High  
-**Description:** The codebase has **110 total `any` mentions**:
-- `": any"` type annotations: 83
-- `"as any"` type assertions: 9
-- `"catch (err: any)"` patterns: 18
-
-**Top files by `any` usage:**
-1. `src/app/api/ai-proxy/route.ts` - 15 occurrences
-2. `src/ai/ai-router.ts` - 12 occurrences
-3. `src/components/screens/Gameplay.tsx` - 9 occurrences
-4. `src/context/game-actions.ts` - 7 occurrences
-5. `src/ai/flows/narrate-adventure.ts` - 5 occurrences
-
-**Location:** Multiple files across the codebase
-**Root Cause:** TypeScript types not properly defined, developers used `any` as a shortcut.
-**Reproduction Steps:**
-1. Run a search for `: any` and `as any` across the codebase
-2. Find 110 occurrences
-
-**Fix:** Replace `any` with proper TypeScript types:
-1. Define proper interfaces for AI provider responses
-2. Use `unknown` instead of `any` for error handling
-3. Create types for game actions, state, etc.
-
----
-
-### CODE-10: Deprecated API Usage - `substr()` in characterReducer
-**Severity:** Low  
-**Description:** The code uses `Math.random().toString(36).substr(2, 6)` which uses the deprecated `String.prototype.substr()` method.
-**Location:** `src/context/reducers/characterReducer.ts`, line 9
-**Root Cause:** Using deprecated API - `substr` is deprecated in favor of `substring` or `slice`.
-**Reproduction Steps:**
-1. Open `characterReducer.ts`
-2. Find `substr` usage on line 9
-
-**Fix:** Replace with `substring` or `slice`:
-```typescript
-// Instead of:
-Math.random().toString(36).substr(2, 6)
-
-// Use:
-Math.random().toString(36).substring(2, 8)
-// or
-Math.random().toString(36).slice(2, 8)
-```
-
----
-
-### CODE-11: No-op Action in Multiplayer Reducer
-**Severity:** Low  
-**Description:** The `SEND_PLAYER_ACTION` case in `multiplayerReducer.ts` is explicitly a no-op - it just returns the state without doing anything. The action is handled elsewhere (via data channel messages).
-**Location:** `src/context/reducers/multiplayerReducer.ts`, lines 105-109
-**Root Cause:** Action was likely planned to be handled in reducer but implementation moved to data channel handling.
-**Reproduction Steps:**
-1. Open `multiplayerReducer.ts`
-2. Find `SEND_PLAYER_ACTION` case
-3. Observe it does nothing
-
-**Fix:** Either implement the action properly or remove it entirely to avoid confusion. If it's documented as "handled elsewhere", add a comment explaining why.
-
----
-
-### CODE-12: Missing Error Boundaries for Sub-Components
-**Severity:** High  
-**Description:** While `ErrorBoundary.tsx` exists and is used in `page.tsx` to wrap screen-level components, there are **no error boundaries for sub-components**. If `NarrationDisplay`, `ActionInput`, or `LeftPanel` crash, they will take down the entire gameplay screen.
-**Location:** `src/components/screens/Gameplay.tsx`, `src/components/ui/ErrorBoundary.tsx`
-**Root Cause:** Error boundaries only applied at page level, not component level.
-**Reproduction Steps:**
-1. Open Gameplay screen
-2. If any sub-component throws an error, entire screen crashes
-3. No graceful degradation
-
-**Fix:** Wrap critical sub-components with error boundaries:
-```tsx
-// In Gameplay.tsx:
-<ErrorBoundary>
-  <NarrationDisplay ... />
-</ErrorBoundary>
-<ErrorBoundary>
-  <ActionInput ... />
-</ErrorBoundary>
-<ErrorBoundary>
-  <LeftPanel ... />
-</ErrorBoundary>
-```
-
----
-
-### CODE-13: Inconsistent Patterns - Mixing Class-Based and Function-Based AI Providers
-**Severity:** Medium  
-**Description:** The AI router mixes class-based providers (`WebLLMProvider`) with function-based providers (`GeminiProvider`, `OpenAIProvider`, etc.). This inconsistency makes the codebase harder to understand and maintain.
-**Location:** `src/ai/ai-router.ts` - provider definitions
-**Root Cause:** Different providers were added at different times with different patterns.
-**Reproduction Steps:**
-1. Open `ai-router.ts`
-2. Observe `WebLLMProvider` is a class with static properties
-3. Observe other providers are plain objects with functions
-
-**Fix:** Standardize on one pattern:
-1. Convert `WebLLMProvider` to use instance properties instead of static
-2. Or convert all providers to classes for consistency
-
----
-
-### CODE-14: Inconsistent React.memo Usage
-**Severity:** Medium  
-**Description:** Some components use `React.memo()` for performance optimization, while others don't. There's no consistent pattern for which components should be memoized.
-**Location:** Multiple component files
-**Root Cause:** Developers added memoization ad-hoc without a consistent strategy.
-**Reproduction Steps:**
-1. Search for `React.memo` usage across the codebase
-2. Find inconsistent application
-
-**Fix:** Define a clear strategy:
-1. Memoize components that receive complex props or render frequently
-2. Add `React.memo` to `PartySidebar`, `NarrationDisplay`, etc.
-3. Document the strategy for future development
-
----
-
-### CODE-15: Dead State Variables in useMultiplayer Hook
-**Severity:** Low  
-**Description:** The `useMultiplayer` hook defines `lastSessionId` and `lastIsHost` state variables (lines 57-58) that are returned from the hook but never destructured or used by any consumer (CoopLobby.tsx or Gameplay.tsx).
-**Location:** `src/hooks/use-multiplayer.ts`, lines 57-58
-**Root Cause:** State variables were likely used in a previous version but consumers were updated without removing the dead state.
-**Reproduction Steps:**
-1. Check all consumers of `useMultiplayer` hook
-2. Find that `lastSessionId` and `lastIsHost` are never destructured
-
-**Fix:** Remove the dead state variables if they're not needed, or implement the missing functionality.
-
----
-
-### Top 10 Worst Offenders for Maintainability
-
-1. **`src/components/screens/Gameplay.tsx`** (1276 lines, 9 `any` usages, unused imports, no error boundary)
-2. **`src/ai/ai-router.ts`** (12 `any` usages, 113-line function, 52-line function, dead code)
-3. **`src/app/api/ai-proxy/route.ts`** (15 `any` usages, malformed JSON bugs, no rate limiting)
-4. **`src/context/game-actions.ts`** (7 `any` usages, unclear action flow)
-5. **`src/ai/flows/narrate-adventure.ts`** (5 `any` usages, complex normalizer, typos)
-6. **`src/hooks/use-multiplayer.ts`** (complex hook, memory leaks, stale closures, dead state)
-7. **`src/context/reducers/characterReducer.ts`** (deprecated `substr`, complex respawn logic)
-8. **`src/context/reducers/multiplayerReducer.ts`** (no-op actions, missing bounds checking)
-9. **`src/lib/webrtc-signalling.ts`** (complex WebRTC logic, no validation, no backpressure)
-10. **`src/context/GameContext.tsx`** (context value issues, theme CSS bugs, API key storage)
+### Top 10 Worst Offenders:
+1. **src/ai/ai-router.ts** - Duplicated stream logic, many 'any' types, overly complex provider classes
+2. **src/context/GameContext.tsx** - Too large, mixed concerns, missing TypeScript types
+3. **src/lib/webrtc-signalling.ts** - Complex, duplicated logic, many 'any' types
+4. **src/context/reducers/characterReducer.ts** - Duplicated validation logic, missing comments
+5. **src/components/screens/CharacterCreation.tsx** - Too large, mixed concerns
+6. **src/components/screens/Gameplay.tsx** - handlePlayerAction too complex
+7. **src/context/reducers/inventoryReducer.ts** - Duplicated validation logic
+8. **src/components/gameplay/NarrationDisplay.tsx** - Complex rendering logic
+9. **src/app/api/ai-proxy/route.ts** - Long functions, missing validation
+10. **src/lib/utils.ts** - Missing type definitions, weak sanitization

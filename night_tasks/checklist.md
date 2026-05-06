@@ -1,95 +1,246 @@
 ## Checklist
 
 ### Bugs
-- [ ] BUG-1: Fix malformed JSON in AI proxy streaming responses
-- [ ] BUG-2: Implement real-time ICE candidate exchange for WebRTC
-- [ ] BUG-3: Pass systemMessage in non-streaming AI call
-- [ ] BUG-4: Add bounds checking for turn index in multiplayer reducer
-- [ ] BUG-5: Fix stale closure in handleMessage callback
-- [ ] BUG-6: Improve AI response normalizer error handling
-- [ ] BUG-7: Fix WebLLMProvider static property race conditions
-- [ ] BUG-8: Fix character respawn max stat calculation with debuffs
-- [ ] BUG-9: Add backoff and better reconnect logic
-- [ ] BUG-10: Fix typo in progressedToStage property name
+- [ ] BUG-1: Fix type/payload mismatch in UPDATE_NARRATION action
+- [ ] BUG-2: Fix stale state persistence in GameContext
+- [ ] BUG-3: Fix silent JSON parse failures in AI flows
+- [ ] BUG-4: Fix non-JSON error handling in AI proxy route
+- [ ] BUG-5: Fix ActionInput stale ref re-render issue
+- [ ] BUG-6: Fix ActionInput submission lock race condition
+- [ ] BUG-7: Fix ChatPanel array index as key
+- [ ] BUG-8: Fix divide by zero errors in character display
+- [ ] BUG-9: Fix SkillTree potential null pointer
+- [ ] BUG-10: Fix missing AI API key handling
+- [ ] BUG-11: Fix deprecated WebRTC Unicode encoding
+- [ ] BUG-12: Fix module-level WebRTC message queue
 
 ### Polish & UX
-- [ ] POLISH-1: Fix inconsistent font usage in MainMenu
-- [ ] POLISH-2: Replace hardcoded color classes with theme-aware classes in CoopLobby
-- [ ] POLISH-3: Add player stats display (health/stamina/mana) to PartySidebar
-- [ ] POLISH-4: Remove unused 'guest-input' connection step in CoopLobby
-- [ ] POLISH-5: Replace text "✕" with X icon in ChatPanel close button
-- [ ] POLISH-6: Remove duplicate logic for Randomized adventure in AdventureSetup
-- [ ] POLISH-7: Fix typo "startingSituation" → "startingSituation"
-- [ ] POLISH-8: Add loading spinner to ActionInput during guest action wait
-- [ ] POLISH-9: Standardize icon imports across components
-- [ ] POLISH-10: Add proper ARIA labels and inline error messages to AdventureSetup form
+- [ ] POLISH-1: Fix inline styles on Ko-fi image in MainMenu
+- [ ] POLISH-2: Fix CharacterCreation submit button missing loading state
+- [ ] POLISH-3: Fix invalid <br/> inside <p> tag in Immersed mode
+- [ ] POLISH-4: Fix ChatPanel onSendMessage empty function (broken chat)
+- [ ] POLISH-5: Fix PartySidebar missing player stats in turn order
+- [ ] POLISH-6: Fix PartySidebar missing self stats display
+- [ ] POLISH-7: Fix CoopLobby screen unreachable from UI
+- [ ] POLISH-8: Fix AdventureSummary screen unreachable
+- [ ] POLISH-9: Fix Badge.tsx focus styles on non-interactive element
+- [ ] POLISH-10: Fix CardTitle uses <div> instead of heading element
+- [ ] POLISH-11: Fix CardDescription uses <div> instead of <p>
+- [ ] POLISH-12: Fix GameContext missing loading state during initialization
+- [ ] POLISH-13: Fix GameContext silent error handling without user toasts
 
 ### Performance
-- [ ] PERF-1: Fix context value changing reference on every dispatch
-- [ ] PERF-2: Debounce scrollToBottom during streaming
-- [ ] PERF-3: Clean up event listeners and timeouts in useMultiplayer
-- [ ] PERF-4: Use array-based buffering for streaming responses
-- [ ] PERF-5: Fix theme CSS accumulation bug
-- [ ] PERF-6: Memoize displayLog in NarrationDisplay
-- [ ] PERF-7: Use GPU-accelerated animations instead of height
-- [ ] PERF-8: Fix WebLLM static properties (performance impact)
-- [ ] PERF-9: Remove or guard dev logging in production
-- [ ] PERF-10: Implement backpressure for WebRTC data channel sends
+- [ ] PERF‑1: Fix sub-reducers creating new state references unnecessarily
+- [ ] PERF‑2: Fix single context causing widespread unnecessary re-renders
+- [ ] PERF‑3: Fix module-level setInterval never cleared (WebRTC memory leak)
+- [ ] PERF‑4: Fix direct console.error calls bypassing logger
+- [ ] PERF‑5: Fix unmemoized array sorting in SavedAdventuresList
+- [ ] PERF‑6: Add React.memo to 6+ major components
+- [ ] PERF‑7: Fix array index as key in dynamic lists
+- [ ] PERF‑8: Fix bundle size concerns with lucide-react icon imports
+- [ ] PERF‑9: Fix inline arrow functions in JSX loops
+- [ ] PERF‑10: Fix O(n*m) lookups in skill rendering
+- [ ] PERF‑11: Fix WebLLM heavy dependency bundled even when unused
+- [ ] PERF‑12: Fix AI proxy route decoding/re-encoding streaming responses
+- [ ] PERF‑13: Fix production dev logging (console.error without env check)
+- [ ] PERF‑14: Fix large dependencies (@mlc-ai/web-llm in package.json)
 
 ### Security
-- [ ] SEC-1: Encrypt API keys in sessionStorage or warn users
-- [ ] SEC-2: Add rate limiting and input validation to AI proxy
-- [ ] SEC-3: Validate signalling strings and add size limits
-- [ ] SEC-4: Sanitize error messages to not expose internal details
-- [ ] SEC-5: Strengthen XSS protection (improve sanitize function)
-- [ ] SEC-6: Update vulnerable dependencies (npm audit fix)
-- [ ] SEC-7: Validate ICE candidates before adding to peer connection
-- [ ] SEC-8: Add session password or allow-list for multiplayer
-- [ ] SEC-9: Use generic error messages in production for API config
-- [ ] SEC-10: Add payload size limits to AI proxy route
+- [ ] SEC-1: Encrypt API keys in sessionStorage or avoid client-side storage
+- [ ] SEC-2: Encrypt API keys in sessionStorage or avoid client-side storage
+- [ ] SEC-3: Sanitize error messages sent to clients in AI proxy
+- [ ] SEC-4: Add rate limiting to AI proxy endpoint
+- [ ] SEC-5: Add input validation to AI proxy
+- [ ] SEC-6: Add prompt injection protection for user input
+- [ ] SEC-7: Add comprehensive validation to decodeSignallingData
+- [ ] SEC-8: Improve input sanitization or remove false sense of security
+- [ ] SEC-9: Sanitize AI-generated content before rendering
+- [ ] SEC-10: Add size limits on signalling data
+- [ ] SEC-11: Validate model parameters in AI proxy
+- [ ] SEC-12: Update outdated legacy dependencies
 
 ### Code Quality & Maintainability
-- [ ] CODE-1: Remove unused `buildMessages` function from ai-router.ts
-- [ ] CODE-2: Remove unused `currentPlayerUid` field from game-types.ts
-- [ ] CODE-3: Delete dead file `firebase.ts`
-- [ ] CODE-4: Delete dead file `multiplayer-service.ts`
-- [ ] CODE-5: Remove unused imports from Gameplay.tsx
-- [ ] CODE-6: Split `WebLLMProvider.getEngine()` into smaller functions
-- [ ] CODE-7: Split `loadWebLLM()` into smaller functions
-- [ ] CODE-8: Extract components from `Gameplay.tsx` (1276 lines)
-- [ ] CODE-9: Replace 110 `any` type usages with proper TypeScript types
-- [ ] CODE-10: Replace deprecated `substr()` with `substring()` or `slice()`
-- [ ] CODE-11: Remove or implement `SEND_PLAYER_ACTION` no-op in reducer
-- [ ] CODE-12: Add error boundaries for sub-components in Gameplay
-- [ ] CODE-13: Standardize AI provider patterns (class vs function)
-- [ ] CODE-14: Apply consistent React.memo strategy
-- [ ] CODE-15: Remove dead state variables from useMultiplayer hook
+- [ ] CODE‑1: Remove unused VALID_ASSESSMENT_DIFFICULTY_LEVELS constant
+- [ ] CODE‑2: Remove unused devLog function from logger.ts
+- [ ] CODE‑3: Delete unused dice-roller.ts service file
+- [ ] CODE‑4: Delete dead file firebase.ts in lib/
+- [ ] CODE‑5: Remove unused imports across multiple files
+- [ ] CODE‑6: Extract shared SSE stream processing logic from AI providers
+- [ ] CODE‑7: Split handlePlayerAction in Gameplay.tsx into smaller functions
+- [ ] CODE‑8: Split WebRTC signalling functions into smaller modules
+- [ ] CODE‑9: Extract custom hooks from CharacterCreation.tsx
+- [ ] CODE‑10: Standardize React import style across all files
+- [ ] CODE‑11: Standardize forwardRef usage across UI components
+- [ ] CODE‑12: Standardize component patterns (React.memo, useCallback)
+- [ ] CODE‑13: Standardize prop naming across similar components
+- [ ] CODE‑14: Standardize quote usage in imports to double quotes
+- [ ] CODE‑15: Add proper TypeScript type for migrateSavedAdventure parameter
+- [ ] CODE‑16: Add proper TypeScript type for parsed localStorage data
+- [ ] CODE‑17: Replace 'any' types with proper interfaces in ai-router.ts
+- [ ] CODE‑18: Integrate ErrorBoundary into component tree (layout.tsx)
+- [ ] CODE‑19: Add error boundaries to gameplay screens
+- [ ] CODE‑20: Replace 'any' types with proper interfaces in webrtc-signalling.ts
+- [ ] CODE‑21: Extract shared skill tree validation helper in characterReducer
+- [ ] CODE‑22: Extract shared inventory item validation helper in inventoryReducer
+- [ ] CODE‑23: Add comments to complex algorithms (skill tree rendering)
+- [ ] CODE‑24: Extract shared SDP processing helpers in WebRTC
+- [ ] CODE‑25: Add comments to game-reducer.ts explaining structure
 
 ### Error Handling & Diagnostics
-- [ ] ERR-1: Add try-catch blocks to all 11 AI provider methods
-- [ ] ERR-2: Preserve raw AI response text when parsing fails
-- [ ] ERR-3: Fix AI proxy route to catch async handler errors
-- [ ] ERR-4: Sanitize provider-specific error messages
-- [ ] ERR-5: Propagate WebRTC data channel errors to UI
-- [ ] ERR-6: Show clear error messages for connection failures
-- [ ] ERR-7: Add user-facing recovery options for save/load errors
-- [ ] ERR-8: Add "Show Raw Response" debug option for AI failures
-- [ ] ERR-9: Handle streaming errors mid-stream gracefully
-- [ ] ERR-10: Don't swallow error details in generic catch blocks
-- [ ] ERR-11: Add retry button for failed AI requests
-- [ ] ERR-12: Notify user of ICE candidate errors
-- [ ] ERR-13: Handle abort/timeout errors with clear messages
+- [ ] ERR‑1: Add provider-specific error messages in AI router
+- [ ] ERR‑2: Preserve raw AI response on parse failure in proxy
+- [ ] ERR‑3: Add provider-specific error messages to users
+- [ ] ERR‑4: Preserve raw text on stream processing errors
+- [ ] ERR‑5: Add retry button for AI generation failures
+- [ ] ERR‑6: Fix silent JSON parse failures in AI flows (show raw response)
+- [ ] ERR‑7: Add timeout/abort handling for AI requests
+- [ ] ERR‑8: Notify users when falling back to default values
+- [ ] ERR‑9: Differentiate network vs API errors
+- [ ] ERR‑10: Fix ErrorBoundary raw error exposure to users
+- [ ] ERR‑11: Display raw AI response in UI when parsing fails
+- [ ] ERR‑12: Add retry button to NarrationDisplay errors
+- [ ] ERR‑13: Improve network error messages with recovery options
+- [ ] ERR‑14: Notify players when AI fallback is active
+- [ ] ERR‑15: Improve action failure feedback
+- [ ] ERR‑16: Surface ChatPanel errors to users
+- [ ] ERR‑17: Add error toasts for save/load operations
+- [ ] ERR‑18: Show clear save/load failure messages with recovery
+- [ ] ERR‑19: Improve generic catch blocks with error context
+- [ ] ERR‑20: Add recovery options for corrupted save data
+- [ ] ERR‑21: Explain migration errors to users
+- [ ] ERR‑22: Notify users of localStorage errors
+- [ ] ERR‑23: Improve form validation error messages
+- [ ] ERR‑24: Show state persistence errors to users
+- [ ] ERR‑25: Surface data channel errors to users with reconnect
+- [ ] ERR‑26: Add reconnect button after connection failure
+- [ ] ERR‑27: Surface ICE candidate errors to users
+- [ ] ERR‑28: Explain SDP negotiation failures to users
+- [ ] ERR‑29: Show multiplayer state errors to users
+- [ ] ERR‑30: Notify users of peer disconnects
+- [ ] ERR‑31: Improve signalling error context
+- [ ] ERR‑32: Add fallback for data channel failure
+- [ ] ERR‑33: Add retry UI for connection timeouts
+- [ ] ERR‑34: Log WebRTC errors with full context
 
-### Accessibility
-- [ ] A11Y-1: Make SVG circle elements keyboard accessible
-- [ ] A11Y-2: Add aria-live regions for dynamic updates (NarrationDisplay, ChatPanel)
-- [ ] A11Y-3: Add aria-label to all icon-only buttons
-- [ ] A11Y-4: Add skip navigation link to main screens
-- [ ] A11Y-5: Add aria-expanded to PartySidebar toggle button
-- [ ] A11Y-6: Fix form inputs with proper labels and error linking (AdventureSetup)
-- [ ] A11Y-7: Add text labels to StatAllocation (not color-only)
-- [ ] A11Y-8: Hide decorative icons with aria-hidden="true"
-- [ ] A11Y-9: Add reduced-motion option in Settings
-- [ ] A11Y-10: Fix heading structure (use h1, h2, h3 properly)
-- [ ] A11Y-11: Add aria-live to ChatPanel message container
-- [ ] A11Y-12: Add role="alert" to error toasts
+### Architecture & Data Flow
+- [ ] ARCH‑1: Split GameState interface into domain-specific interfaces
+- [ ] ARCH‑2: Move module-level state in AI router to class instances
+- [ ] ARCH‑3: Promote local state to global context where appropriate
+- [ ] ARCH‑4: Replace prop drilling with React Context in GameplayLayout
+- [ ] ARCH‑5: Refactor circular dependencies to use proper state lifting
+- [ ] ARCH‑6: Batch state updates after AI responses
+- [ ] ARCH‑7: Split Gameplay.tsx into custom hooks and sub-components
+- [ ] ARCH‑8: Create service layer to abstract AI calls from UI
+- [ ] ARCH‑9: Move business logic from UI components to reducers
+- [ ] ARCH‑10: Split AI router god file into modular provider files
+- [ ] ARCH‑11: Refactor Gameplay.tsx god component into smaller pieces
+- [ ] ARCH‑12: Extract CharacterCreation.tsx into hooks and sub-components
+- [ ] ARCH‑13: Decouple AI and UI systems with proper abstraction
+- [ ] ARCH‑14: Split utils.ts into domain-specific modules
+- [ ] ARCH‑15: Move toast system to proper React context (ToastProvider)
+- [ ] ARCH‑16: Make component dependencies explicit (avoid implicit global state)
+- [ ] ARCH‑17: Use registry pattern for AI provider configurations
+
+### Persistence & Save Integrity
+- [ ] SAVE-1: Add version field to SavedAdventure interface
+- [ ] SAVE-2: Add validation for required fields in migrateSavedAdventure
+- [ ] SAVE-3: Implement schema validation for saved adventures
+- [ ] SAVE-4: Implement proper version-based migration system
+- [ ] SAVE-5: Add runtime validation for loaded save data
+- [ ] SAVE-6: Implement atomic writes to localStorage
+- [ ] SAVE-7: Create backup before deleting corrupted save data
+- [ ] SAVE-8: Handle QuotaExceededError in localStorage writes
+- [ ] SAVE-9: Add storage event listeners for stale data detection
+- [ ] SAVE-10: Add size checks before writing save data
+- [ ] SAVE-11: Strip transient multiplayer fields before persisting state
+- [ ] SAVE-12: Implement conflict detection for local vs remote state
+- [ ] SAVE-13: Separate multiplayer state from single-player saves
+- [ ] SAVE-14: Create automatic backups before overwriting saves
+- [ ] SAVE-15: Implement repair wizard for partially corrupted saves
+- [ ] SAVE-16: Validate game state before serializing and saving
+- [ ] SAVE-17: Auto-create timestamped backups for each save operation
+
+### Multiplayer & Sync
+- [ ] NET-1: Implement turn advancement after each action
+- [ ] NET-2: Add turn-based lock/queue for player actions
+- [ ] NET-3: Implement proper turn synchronization across peers
+- [ ] NET-4: Validate action is from current player in turn
+- [ ] NET-5: Fix message queue to process in FIFO order
+- [ ] NET-6: Implement message acknowledgment and retry logic
+- [ ] NET-7: Add detection and retransmission for dropped messages
+- [ ] NET-8: Add sequence numbers to messages for ordering
+- [ ] NET-9: Implement rate limiting on data channel sends
+- [ ] NET-10: Move message queue to per-peer state (isolate peers)
+- [ ] NET-11: Add version checking on APPLY_REMOTE_STATE
+- [ ] NET-12: Add integrity checks for host state updates
+- [ ] NET-13: Implement state reconciliation and mismatch detection
+- [ ] NET-14: Add sender verification for remote state updates
+- [ ] NET-15: Implement conflict resolution for divergent states
+- [ ] NET-16: Add reconnection trigger on RTCPeerConnection state changes
+- [ ] NET-17: Implement automatic reconnection with exponential backoff
+- [ ] NET-18: Persist pending actions to sessionStorage on disconnect
+- [ ] NET-19: Improve ICE candidate error handling and user feedback
+- [ ] NET-20: Implement heartbeat/health checks for connections
+- [ ] NET-21: Handle SDP negotiation failures with helpful messages
+- [ ] NET-22: Add timeout for connection establishment
+- [ ] NET-23: Implement host migration when host leaves session
+- [ ] NET-24: Add comprehensive validation to decodeSignallingData
+- [ ] NET-25: Add robust error handling for malformed invite codes
+- [ ] NET-26: Add timeout for join process (host not responding)
+- [ ] NET-27: Implement per-peer rate limiting on data channels
+- [ ] NET-28: Add size limits on signalling data input
+
+### AI Narrative & Coherence
+- [ ] AI-1: Add permanent death enforcement to AI prompt
+- [ ] AI-2: Include character personality summary in every prompt
+- [ ] AI-3: Generate story state summary after each turn
+- [ ] AI-4: Include NPC relationship data in AI context
+- [ ] AI-5: Add explicit game constraints to AI prompt
+- [ ] AI-6: Implement story continuity summary mechanism
+- [ ] AI-7: Create modular prompt template system
+- [ ] AI-8: Standardize system messages across all flows
+- [ ] AI-9: Create buildGameContext() for prompt injection
+- [ ] AI-10: Add prompt versioning and A/B testing
+- [ ] AI-11: Move prompts to configurable location
+- [ ] AI-12: Add anti-repetition instructions to prompt
+- [ ] AI-13: Generate context-aware fallback choices
+- [ ] AI-14: Add anti-meta instruction to system prompt
+- [ ] AI-15: Instruct AI to vary sentence structure
+- [ ] AI-16: Validate AI output against game rules
+- [ ] AI-17: Maintain "story facts" list to prevent contradictions
+- [ ] AI-18: Implement server-side prompt injection detection
+- [ ] AI-19: Add content safety guardrails for inputs
+- [ ] AI-20: Add anti-trickery instructions to system prompt
+- [ ] AI-21: Log suspected injection attempts for analysis
+- [ ] AI-22: Add strong anti-leakage instruction to prompt
+- [ ] AI-23: Detect and handle AI refusals gracefully
+- [ ] AI-24: Implement retry logic in processAiResponse
+- [ ] AI-25: Validate AI output against current game state
+- [ ] AI-26: Inject recent events summary into AI context
+- [ ] AI-27: Maintain "game facts" list for hallucination detection
+- [ ] AI-28: Add immersion validation for AI responses
+
+### Logging & Observability
+- [ ] OBS-1: Refactor logger to output structured JSON logs
+- [ ] OBS-2: Replace all direct console calls with centralized logger
+- [ ] OBS-3: Add ISO 8601 timestamps to all log entries
+- [ ] OBS-4: Add module/source identification to logger
+- [ ] OBS-5: Implement configurable log levels via environment variable
+- [ ] OBS-6: Generate unique requestId for each user action
+- [ ] OBS-7: Implement distributed tracing across UI → Server → AI
+- [ ] OBS-8: Integrate OpenTelemetry or similar tracing framework
+- [ ] OBS-9: Include context in error logs for reproducibility
+- [ ] OBS-10: Add structured logs for AI API calls (request/response)
+- [ ] OBS-11: Add structured logs for multiplayer events
+- [ ] OBS-12: Log all save/load operations with context
+- [ ] OBS-13: Add logs for WebRTC signaling events
+- [ ] OBS-14: Include operation context in catch block logs
+- [ ] OBS-15: Implement field redaction for API keys in logs
+- [ ] OBS-16: Sanitize user inputs before logging
+- [ ] OBS-17: Disable non-essential logging in production builds
+- [ ] OBS-18: Implement automatic redaction of sensitive fields
+- [ ] OBS-19: Add granular log level configuration (LOG_LEVEL env var)
+- [ ] OBS-20: Add log category system for granular control
+- [ ] OBS-21: Implement metrics collection (latency, error rates, retries)
+- [ ] OBS-22: Add performance monitoring for critical paths
+- [ ] OBS-23: Implement debug mode with state snapshots and action history
