@@ -156,6 +156,8 @@ export function characterReducer(state: Character | null, action: Action): Chara
             const { faction, change } = action.payload;
             const currentScore = state.reputation[faction] ?? 0;
             const newScore = Math.max(-100, Math.min(100, currentScore + change));
+            // Only create new object if the score actually changed
+            if (newScore === currentScore) return state;
             return { ...state, reputation: { ...state.reputation, [faction]: newScore } };
         }
         case "UPDATE_NPC_RELATIONSHIP": {
@@ -163,6 +165,8 @@ export function characterReducer(state: Character | null, action: Action): Chara
             const { npcName, change } = action.payload;
             const currentScore = state.npcRelationships[npcName] ?? 0;
             const newScore = Math.max(-100, Math.min(100, currentScore + change));
+            // Only create new object if the score actually changed
+            if (newScore === currentScore) return state;
             return { ...state, npcRelationships: { ...state.npcRelationships, [npcName]: newScore } };
         }
         case "SET_SKILL_TREE": {

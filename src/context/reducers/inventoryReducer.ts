@@ -24,6 +24,12 @@ export function inventoryReducer(state: InventoryItem[], action: Action): Invent
             if (process.env.NODE_ENV === 'development') {
                 console.log(`Attempting to remove ${quantity} of item:`, itemName);
             }
+            // Check if item exists before creating new array
+            const itemExists = state.some(item => item.name === itemName);
+            if (!itemExists) {
+                console.warn(`Item ${itemName} not found in inventory.`);
+                return state;
+            }
             const updatedInventory = [...state];
             let removedCount = 0;
             for (let i = updatedInventory.length - 1; i >= 0 && removedCount < quantity; i--) {
@@ -35,13 +41,24 @@ export function inventoryReducer(state: InventoryItem[], action: Action): Invent
             if (removedCount < quantity) {
                 console.warn(`Tried to remove ${quantity} of ${itemName}, but only found ${removedCount}.`);
             }
-            return updatedInventory;
+            // Only return new array if items were actually removed
+            return removedCount > 0 ? updatedInventory : state;
         }
         case "UPDATE_ITEM": {
             const { itemName, updates } = action.payload;
             if (process.env.NODE_ENV === 'development') {
                 console.log("Updating item:", itemName, "with", updates);
             }
+            // Check if any item actually needs updating
+            const needsUpdate = state.some(item => {
+                if (item.name !== itemName) return false;
+                // Check if any update field actually changes the item
+                return Object.keys(updates).some(key => {
+                    const updateKey = key as keyof InventoryItem;
+                    return item[updateKey] !== updates[updateKey];
+                });
+            });
+            if (!needsUpdate) return state;
             return state.map(item =>
                 item.name === itemName ? { ...item, ...updates } : item
             );
