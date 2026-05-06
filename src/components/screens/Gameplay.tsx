@@ -1,7 +1,7 @@
 // src/components/screens/Gameplay.tsx
 "use client";
 
-import React, { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useRef, useMemo, memo } from "react";
 import type { StoryLogEntry, DifficultyLevel as AssessedDifficultyLevel, AdventureSettings } from '../../types/adventure-types';
 import type { InventoryItem } from '../../types/inventory-types';
 import type { Skill, CharacterStats } from '../../types/character-types';
@@ -33,6 +33,33 @@ const GENERIC_BRANCHING_CHOICES: NarrateAdventureOutput['branchingChoices'] = [
     { text: "Check your inventory.", consequenceHint: "Review your belongings." },
     { text: "Rest for a moment.", consequenceHint: "Conserve your strength." }
 ];
+
+interface InteractionTypeButtonProps {
+  type: 'trade' | 'gift' | 'duel';
+  isSelected: boolean;
+  onSelect: (type: 'trade' | 'gift' | 'duel') => void;
+}
+
+const InteractionTypeButton = memo(function InteractionTypeButton({ 
+  type, 
+  isSelected, 
+  onSelect 
+}: InteractionTypeButtonProps) {
+  const handleClick = useCallback(() => {
+    onSelect(type);
+  }, [onSelect, type]);
+
+  return (
+    <Button
+      variant={isSelected ? 'default' : 'outline'}
+      size="sm"
+      onClick={handleClick}
+      className="capitalize"
+    >
+      {type}
+    </Button>
+  );
+});
 
 const INITIAL_ACTION_STRING = "Begin the adventure by looking around.";
 
@@ -1165,15 +1192,12 @@ export function Gameplay() {
                             <label className="text-sm font-medium">Interaction Type</label>
                             <div className="flex gap-2">
                                 {(['trade', 'gift', 'duel'] as const).map(type => (
-                                    <Button
+                                    <InteractionTypeButton
                                         key={type}
-                                        variant={outgoingInteractionType === type ? 'default' : 'outline'}
-                                        size="sm"
-                                        onClick={() => setOutgoingInteractionType(type)}
-                                        className="capitalize"
-                                    >
-                                        {type}
-                                    </Button>
+                                        type={type}
+                                        isSelected={outgoingInteractionType === type}
+                                        onSelect={setOutgoingInteractionType}
+                                    />
                                 ))}
                             </div>
                         </div>

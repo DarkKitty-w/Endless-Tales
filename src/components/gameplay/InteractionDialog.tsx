@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useCallback, memo } from "react";
 import type { InteractionRequest, PendingInteraction } from "../../types/multiplayer-types";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "../ui/card";
 import { Button } from "../ui/button";
@@ -18,6 +18,31 @@ interface InteractionDialogProps {
   onDecline?: () => void;
   onClose?: () => void;
 }
+
+interface TradeItemProps {
+  item: { name: string; quantity?: number };
+  isSelected: boolean;
+  onToggle: (itemName: string) => void;
+}
+
+const TradeItem = memo(function TradeItem({ item, isSelected, onToggle }: TradeItemProps) {
+  const handleCheckedChange = useCallback(() => {
+    onToggle(item.name);
+  }, [onToggle, item.name]);
+
+  return (
+    <div className="flex items-center space-x-2 py-2">
+      <Checkbox 
+        id={`item-${item.name}`}
+        checked={isSelected}
+        onCheckedChange={handleCheckedChange}
+      />
+      <Label htmlFor={`item-${item.name}`} className="text-sm cursor-pointer">
+        {item.name} {item.quantity && item.quantity > 1 && `(${item.quantity})`}
+      </Label>
+    </div>
+  );
+});
 
 export function InteractionDialog({ 
   isOpen, 
@@ -64,13 +89,13 @@ export function InteractionDialog({
     }
   };
 
-  const toggleItemSelection = (itemName: string) => {
+  const toggleItemSelection = useCallback((itemName: string) => {
     setSelectedItems(prev => 
       prev.includes(itemName) 
         ? prev.filter(i => i !== itemName)
         : [...prev, itemName]
     );
-  };
+  }, []);
 
   const handleAccept = () => {
     if (interaction.type === 'trade' && isTarget && tradeStep === 'confirm') {
@@ -145,16 +170,12 @@ export function InteractionDialog({
                   <p className="text-sm text-muted-foreground">No items in inventory.</p>
                 ) : (
                   inventory.map((item, index) => (
-                    <div key={item.name ? `item-${item.name}-${index}` : `item-fallback-${index}`} className="flex items-center space-x-2 py-2">
-                      <Checkbox 
-                        id={`item-${item.name || index}`}
-                        checked={selectedItems.includes(item.name)}
-                        onCheckedChange={() => toggleItemSelection(item.name)}
-                      />
-                      <Label htmlFor={`item-${item.name || index}`} className="text-sm cursor-pointer">
-                        {item.name} {item.quantity > 1 && `(${item.quantity})`}
-                      </Label>
-                    </div>
+                    <TradeItem 
+                      key={item.name ? `item-${item.name}-${index}` : `item-fallback-${index}`}
+                      item={item}
+                      isSelected={selectedItems.includes(item.name)}
+                      onToggle={toggleItemSelection}
+                    />
                   ))
                 )}
               </ScrollArea>

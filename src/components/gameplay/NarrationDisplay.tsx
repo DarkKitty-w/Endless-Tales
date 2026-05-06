@@ -1,7 +1,7 @@
 // src/components/gameplay/NarrationDisplay.tsx
 "use client";
 
-import React, { useRef, useEffect, useCallback, useMemo } from "react";
+import React, { useRef, useEffect, useCallback, useMemo, memo } from "react";
 import type { StoryLogEntry } from "../../types/adventure-types";
 import type { NarrateAdventureOutput } from "../../ai/flows/narrate-adventure";
 import { ScrollArea } from "../../components/ui/scroll-area";
@@ -38,6 +38,35 @@ interface NarrationDisplayProps {
     isConnected?: boolean;
     isMultiplayerHost?: boolean;
 }
+
+interface ChoiceButtonProps {
+  choice: { text: string; consequenceHint?: string };
+  onClick: (text: string) => void;
+  busy: boolean;
+}
+
+const ChoiceButton = memo(function ChoiceButton({ choice, onClick, busy }: ChoiceButtonProps) {
+  const handleClick = useCallback(() => {
+    onClick(choice.text);
+  }, [onClick, choice.text]);
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      className="text-left justify-start h-auto py-1.5 whitespace-normal"
+      onClick={handleClick}
+      disabled={busy}
+    >
+      <div className="flex flex-col items-start w-full">
+        <span className="font-medium text-foreground">{choice.text}</span>
+        {choice.consequenceHint && (
+          <p className="text-xs text-muted-foreground whitespace-normal">{choice.consequenceHint}</p>
+        )}
+      </div>
+    </Button>
+  );
+});
 
 function NarrationDisplayInternal({
     storyLog,
@@ -186,21 +215,12 @@ function NarrationDisplayInternal({
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {branchingChoices.map((choice, index) => (
-                            <Button
+                            <ChoiceButton 
                                 key={`${choice.text}-${index}`}
-                                variant="outline"
-                                size="sm"
-                                className="text-left justify-start h-auto py-1.5 whitespace-normal"
-                                onClick={() => onChoiceClick(choice.text)}
-                                disabled={busy}
-                            >
-                                <div className="flex flex-col items-start w-full">
-                                    <span className="font-medium text-foreground">{choice.text}</span>
-                                    {choice.consequenceHint && (
-                                        <p className="text-xs text-muted-foreground whitespace-normal">{choice.consequenceHint}</p>
-                                    )}
-                                </div>
-                            </Button>
+                                choice={choice}
+                                onClick={onChoiceClick}
+                                busy={busy}
+                            />
                         ))}
                     </div>
                 </div>
