@@ -6,6 +6,7 @@ import { initialState, initialInventory, initialWorldMap, CURRENT_STATE_VERSION 
 import { generateAdventureId } from "../../lib/gameUtils";
 import { buildGameStateContext, formatGameStateContextForPrompt } from "../game-state-utils";
 import { logger } from "../../lib/logger";
+import { createSaveBackup } from "../../lib/storage-utils";
 
 const MAX_LOG_SIZE = 200; // Prevent unbounded memory growth
 
@@ -184,6 +185,14 @@ export function adventureReducer(state: GameState, action: Action): GameState {
             if (!state.character || !state.currentAdventureId || state.status !== "Gameplay") {
                 return state;
             }
+            
+            // SAVE-14 Fix: Create backup before overwriting existing save
+            const existingSave = state.savedAdventures.find(adv => adv.id === state.currentAdventureId);
+            if (existingSave) {
+                createSaveBackup(state.currentAdventureId, existingSave);
+                logger.log(`Created backup for save ${state.currentAdventureId}`);
+            }
+            
             const cappedStoryLog = state.storyLog.slice(-50);
             const currentSave: SavedAdventure = {
                 id: state.currentAdventureId,

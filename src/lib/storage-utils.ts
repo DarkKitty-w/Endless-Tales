@@ -148,3 +148,109 @@ export function isLocalStorageQuotaLow(thresholdPercent: number = 10): boolean {
     return true;
   }
 }
+
+const SAVE_BACKUP_PREFIX = '_savebackup_';
+const MAX_BACKUPS_PER_SAVE = 5;
+
+/**
+ * Create a backup of a save before overwriting (SAVE-14, SAVE-17)
+ * Keeps up to MAX_BACKUPS_PER_SAVE backups per save ID
+ * 
+ * @param saveId - The ID of the save to backup
+ * @param saveData - The save data to backup
+ */
+export function createSaveBackup(saveId: string, saveData: unknown): void {
+  try {
+    const backupKey = `${SAVE_BACKUP_PREFIX}${saveId}_${Date.now()}`;
+    const serialized = JSON.stringify(saveData);
+    localStorage.setItem(backupKey, serialized);
+    
+    // Clean up old backups - keep only the most recent MAX_BACKUPS_PER_SAVE
+    const keysToRemove: string[] = [];
+    const saveBackups: { key: string; timestamp: number }[] = [];
+    
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(`${SAVE_BACKUP_PREFIX}${saveId}_`)) {
+        const parts = key.split('_');
+        const timestamp = parseInt(parts[parts.length - 1]);
+        if (!isNaN(timestamp)) {
+          saveBackups.push({ key, timestamp });
+        }
+      }
+    }
+    
+    // Sort by timestamp descending (newest first)
+    saveBackups.sort((a, b) => b.timestamp - a.timestamp);
+    
+    // Mark old backups for removal
+    if (saveBackups.length > MAX_BACKUPS_PER_SAVE) {
+      for (let i = MAX_BACKUPS_PER_SAVE; i < saveBackups.length; i++) {
+        keysToRemove.push(saveBackups[i].key);
+      }
+    }
+    
+    // Remove old backups
+    keysToRemove.forEach(key => {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    });
+  } catch (error) {
+    console.error('Failed to create save backup:', error);
+  }
+}
+
+/**
+ * Get all backups for a specific save ID
+ * 
+ * @param saveId - The save ID to get backups for
+ * @returns Array of backup data with metadata
+ */
+export function getSaveBackups(saveId: string): Array<{ key: string; timestamp: number; data: unknown }> {
+  const backups: Array<{ key: string; timestamp: number; data: unknown }> = [];
+  
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(`${SAVE_BACKUP_PREFIX}${saveId}_`)) {
+        const parts = key.split('_');
+        const timestamp = parseInt(parts[parts.length - 1]);
+        if (!isNaN(timestamp)) {
+          try {
+            const data = JSON.parse(localStorage.getItem(key) || 'null');
+            backups.push({ key, timestamp, data });
+          } catch (e) {
+            // Skip invalid backups
+          }
+        }
+      }
+    }
+    
+    // Sort by timestamp descending (newest first)
+    backups.sort((a, b) => b.timestamp - a.timestamp);
+  } catch (error) {
+    console.error('Failed to get save backups:', error);
+  }
+  
+  return backups;
+}
+
+/**
+ * Restore a save from backup
+ * 
+ * @param backupKey - The backup key to restore from
+ * @returns The restored save data, or null if failed
+ */
+export function restoreFromBackup(backupKey: string): unknown {
+  try {
+    const data = localStorage.getItem(backupKey);
+    if (data === null) return null;
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Failed to restore from backup:', error);
+    return null;
+  }
+}
