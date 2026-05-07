@@ -1,3 +1,25 @@
+## 📁 Final `ORDERED_FILES` (bash)
+
+```bash
+ORDERED_FILES=(
+  "bugs.md"
+  "polish_ux.md"
+  "performance.md"
+  "security.md"
+  "code_quality.md"
+  "error_handling.md"
+  "architecture.md"
+  "persistence.md"
+  "multiplayer.md"
+  "ai_coherence.md"
+  "observability.md"
+  "game_design.md"
+  "feature_gaps.md"
+)
+```
+
+---
+
 # 🐞 Prompt 1 – Bug Detection & Logical Errors
 
 You are auditing the "Endless Tales" project at /workspaces/Endless-Tales for **bugs and logical errors only**. Do not focus on UI polish, performance, or security – only on functionality that is broken, unreliable, or throws unexpected errors at runtime.
@@ -28,16 +50,7 @@ Use Cline's subagent feature if it helps you scan many files in parallel.
   **Fix:** ...  
   ```
 
-**Update `night_tasks/checklist.md`:**
-- If the file doesn't exist, create it with a `## Checklist` heading.
-- Add or update a `### Bugs` sub‑section.
-- Add a checkbox for each bug:
-  ```
-  - [ ] BUG‑1: Fix race condition in turn loop
-  - [ ] BUG‑2: Handle missing character data gracefully
-  ```
-
-Finally, output the **complete updated content** of both `night_tasks/bugs.md` and `night_tasks/checklist.md` so I can save them.
+Output the **complete updated content** of `night_tasks/bugs.md` so I can save it.
 
 
 # ✨ Prompt 2 – Polish & UX Consistency
@@ -74,15 +87,7 @@ For each issue, provide:
   **Fix:** ...  
   ```
 
-**Update `night_tasks/checklist.md`:**
-- Add or update a `### Polish & UX` sub‑section under `## Checklist`.
-- Add a checkbox for each issue:
-  ```
-  - [ ] POLISH‑1: Fix inconsistent font usage in MainMenu
-  - [ ] POLISH‑2: Replace hardcoded colors with theme-aware classes
-  ```
-
-Output the **complete updated content** of both `night_tasks/polish_ux.md` and `night_tasks/checklist.md`.
+Output the **complete updated content** of `night_tasks/polish_ux.md`.
 
 
 # ⚡ Prompt 3 – Performance & Efficiency
@@ -117,15 +122,8 @@ For each issue, create:
   **Fix:** ...  
   ```
 
-**Update `night_tasks/checklist.md`:**
-- Add or update a `### Performance` sub‑section.
-- Add checkboxes:
-  ```
-  - [ ] PERF‑1: Fix context value reference on every dispatch
-  - [ ] PERF‑2: Debounce scrollToBottom during streaming
-  ```
+Output the **complete updated content** of `night_tasks/performance.md`.
 
-Output the **complete updated content** of both `night_tasks/performance.md` and `night_tasks/checklist.md`.
 
 # 🔒 Prompt 4 – Security & Data Exposure
 
@@ -158,15 +156,7 @@ For each finding, create:
   **Mitigation:** ...  
   ```
 
-**Update `night_tasks/checklist.md`:**
-- Add or update a `### Security` sub‑section.
-- Add checkboxes:
-  ```
-  - [ ] SEC‑1: Encrypt API keys in sessionStorage or warn users
-  - [ ] SEC‑2: Add rate limiting and input validation to AI proxy
-  ```
-
-Output the **complete updated content** of both `night_tasks/security.md` and `night_tasks/checklist.md`.
+Output the **complete updated content** of `night_tasks/security.md`.
 
 
 # 🧹 Prompt 5 – Code Quality & Maintainability
@@ -200,19 +190,11 @@ For each issue, create:
   **Refactoring Suggestion:** ...  
   ```
 
-**Update `night_tasks/checklist.md`:**
-- Add or update a `### Code Quality & Maintainability` sub‑section.
-- Add checkboxes:
-  ```
-  - [ ] CODE‑1: Remove unused buildMessages function
-  - [ ] CODE‑2: Delete dead file firebase.ts
-  ```
-
-Output the **complete updated content** of both `night_tasks/code_quality.md` and `night_tasks/checklist.md`.
- 
+Output the **complete updated content** of `night_tasks/code_quality.md`.
 
 
 # ❗ Prompt 6 – Error Handling & Diagnostics
+
 Audit the Endless Tales project at /workspaces/Endless-Tales for **error handling robustness**, with a special emphasis on AI failures. The critical requirement: **when the AI returns invalid JSON or fails, the raw AI response text must never be hidden from the user/developer.**
 
 Use Cline subagents to check all error paths.
@@ -246,16 +228,7 @@ For each issue, create:
   **Fix:** ...  
   ```
 
-**Update `night_tasks/checklist.md`:**
-- Add or update an `### Error Handling & Diagnostics` sub‑section.
-- Add checkboxes:
-  ```
-  - [ ] ERR‑1: Add try-catch to all AI provider methods
-  - [ ] ERR‑2: Preserve raw AI response text when parsing fails
-  ```
-
-Output the **complete updated content** of both `night_tasks/error_handling.md` and `night_tasks/checklist.md`.
-
+Output the **complete updated content** of `night_tasks/error_handling.md`.
 
 
 # 🏗️ Prompt 8 – Architecture & Data Flow
@@ -282,33 +255,20 @@ For each issue, create:
 **Write to `night_tasks/architecture.md`:**
 - Create if not exists; keep existing content; append under `## Detailed Findings`.
 - Format:
-```
+  ```
+  ### ARCH-1: Title  
+  **Severity:** High / Medium / Low  
+  **Description:** ...  
+  **Location:** `path/file.tsx`  
+  **Problem:** ...  
+  **Recommendation:** ...  
+  ```
 
-### ARCH-1: Title
+Output the **complete updated content** of `night_tasks/architecture.md`.
 
-**Severity:** High / Medium / Low
-**Description:** ...
-**Location:** `path/file.tsx`
-**Problem:** ...
-**Recommendation:** ...
-
-```
-
-**Update `night_tasks/checklist.md`:**
-- Add or update a `### Architecture & Data Flow` sub-section.
-- Add checkboxes:
-```
-
-* [ ] ARCH-1: Split GameManager into smaller modules
-* [ ] ARCH-2: Decouple AI logic from UI components
-
-```
-
-Output the **complete updated content** of both `night_tasks/architecture.md` and `night_tasks/checklist.md`.
 
 # 💾 Prompt 10 – Persistence & Save Integrity
 
-```
 Audit the "Endless Tales" project at /workspaces/Endless-Tales for **data persistence, save/load reliability, and integrity**. Use Cline subagents to inspect all storage-related logic.
 
 Focus on:
@@ -331,30 +291,16 @@ For each issue, create:
 **Write to `night_tasks/persistence.md`:**
 - Create if not exists; keep existing content; append under `## Detailed Findings`.
 - Format:
-```
+  ```
+  ### SAVE-1: Title  
+  **Severity:** High / Medium / Low  
+  **Description:** ...  
+  **Location:** `path/file.ts`  
+  **Risk:** ...  
+  **Fix:** ...  
+  ```
 
-### SAVE-1: Title
-
-**Severity:** High / Medium / Low
-**Description:** ...
-**Location:** `path/file.ts`
-**Risk:** ...
-**Fix:** ...
-
-```
-
-**Update `night_tasks/checklist.md`:**
-- Add or update a `### Persistence & Save Integrity` sub-section.
-- Add checkboxes:
-```
-
-* [ ] SAVE-1: Add versioning to save schema
-* [ ] SAVE-2: Validate save data before loading
-
-```
-
-Output the **complete updated content** of both `night_tasks/persistence.md` and `night_tasks/checklist.md`.
-```
+Output the **complete updated content** of `night_tasks/persistence.md`.
 
 
 # 🌐 Prompt 11 – Multiplayer Consistency & Sync
@@ -381,34 +327,20 @@ For each issue, create:
 **Write to `night_tasks/multiplayer.md`:**
 - Create if not exists; keep existing content; append under `## Detailed Findings`.
 - Format:
-```
+  ```
+  ### NET-1: Title  
+  **Severity:** Critical / High / Medium / Low  
+  **Description:** ...  
+  **Location:** `path/file.ts`  
+  **Scenario:** ...  
+  **Fix:** ...  
+  ```
 
-### NET-1: Title
-
-**Severity:** Critical / High / Medium / Low
-**Description:** ...
-**Location:** `path/file.ts`
-**Scenario:** ...
-**Fix:** ...
-
-```
-
-**Update `night_tasks/checklist.md`:**
-- Add or update a `### Multiplayer & Sync` sub-section.
-- Add checkboxes:
-```
-
-* [ ] NET-1: Handle simultaneous player actions safely
-* [ ] NET-2: Add message ordering guarantees
-
-```
-
-Output the **complete updated content** of both `night_tasks/multiplayer.md` and `night_tasks/checklist.md`.
+Output the **complete updated content** of `night_tasks/multiplayer.md`.
 
 
 # 🎭 Prompt 12 – AI Narrative & Gameplay Coherence
 
-```
 Audit the "Endless Tales" project at /workspaces/Endless-Tales for **AI narrative quality, gameplay coherence, and rule consistency**. This is not about error handling, but about whether the AI produces a good and consistent experience.
 
 Focus on:
@@ -431,36 +363,20 @@ For each issue, create:
 **Write to `night_tasks/ai_coherence.md`:**
 - Create if not exists; keep existing content; append under `## Detailed Findings`.
 - Format:
-```
+  ```
+  ### AI-1: Title  
+  **Severity:** High / Medium / Low  
+  **Description:** ...  
+  **Location:** `path/file.ts`  
+  **Impact:** ...  
+  **Fix:** ...  
+  ```
 
-### AI-1: Title
+Output the **complete updated content** of `night_tasks/ai_coherence.md`.
 
-**Severity:** High / Medium / Low
-**Description:** ...
-**Location:** `path/file.ts`
-**Impact:** ...
-**Fix:** ...
-
-```
-
-**Update `night_tasks/checklist.md`:**
-- Add or update a `### AI Narrative & Coherence` sub-section.
-- Add checkboxes:
-```
-
-* [ ] AI-1: Improve character memory consistency
-* [ ] AI-2: Prevent repetitive narrative loops
-
-```
-
-Output the **complete updated content** of both `night_tasks/ai_coherence.md` and `night_tasks/checklist.md`.
-```
-
----
 
 # 📊 Prompt 13 – Logging & Observability
 
-```
 Audit the "Endless Tales" project at /workspaces/Endless-Tales for **logging, monitoring, and observability**. The goal is to ensure that issues can be diagnosed quickly in development and production.
 
 Focus on:
@@ -482,32 +398,17 @@ For each issue, create:
 **Write to `night_tasks/observability.md`:**
 - Create if not exists; keep existing content; append under `## Detailed Findings`.
 - Format:
-```
+  ```
+  ### OBS-1: Title  
+  **Severity:** High / Medium / Low  
+  **Description:** ...  
+  **Location:** `path/file.ts`  
+  **Impact:** ...  
+  **Fix:** ...  
+  ```
 
-### OBS-1: Title
+Output the **complete updated content** of `night_tasks/observability.md`.
 
-**Severity:** High / Medium / Low
-**Description:** ...
-**Location:** `path/file.ts`
-**Impact:** ...
-**Fix:** ...
-
-```
-
-**Update `night_tasks/checklist.md`:**
-- Add or update a `### Logging & Observability` sub-section.
-- Add checkboxes:
-```
-
-* [ ] OBS-1: Replace console.log with structured logger
-* [ ] OBS-2: Add tracing for AI request lifecycle
-
-```
-
-Output the **complete updated content** of both `night_tasks/observability.md` and `night_tasks/checklist.md`.
-```
-
----
 
 # 🎮 Prompt 15 – Game Design & Feature Completeness
 
@@ -533,29 +434,15 @@ For each issue, create:
 **Write to `night_tasks/game_design.md`:**
 - Create if not exists; keep existing content; append under `## Detailed Findings`.
 - Format:
-```
+  ```
+  ### GAME-1: Title  
+  **Severity:** High / Medium / Low  
+  **Description:** ...  
+  **Impact:** ...  
+  **Fix:** ...  
+  ```
 
-### GAME-1: Title
-
-**Severity:** High / Medium / Low
-**Description:** ...
-**Impact:** ...
-**Fix:** ...
-
-```
-
-**Update `night_tasks/checklist.md`:**
-- Add or update a `### Game Design & Completeness` sub-section.
-- Add checkboxes:
-```
-
-* [ ] GAME-1: Fix unclear gameplay loop in early turns
-* [ ] GAME-2: Add progression feedback for player actions
-
-```
-
-Output the **complete updated content** of both `night_tasks/game_design.md` and `night_tasks/checklist.md`.
-
+Output the **complete updated content** of `night_tasks/game_design.md`.
 
 
 # ❗ Prompt 7 – Features and tweaks addition
@@ -613,10 +500,8 @@ Do **not** re‑report bugs that are purely about broken functionality – those
 4. For enrichment, consider what conventional RPG/adventure games offer and whether your codebase could support it with minor additions.
 
 ### Output Requirements
-You will create **two files**:
-
-#### 1. `night_tasks/feature_gaps.md`
-This file will contain a detailed analysis, exactly following the style in the example below.  
+You will create **one file**: `night_tasks/feature_gaps.md`.  
+This file will contain all findings, exactly following the style in the example below.  
 Use sections: `## Features Not Completely Implemented`, `## Refinements`, `## Tweaks`, `## Enrichment Ideas`.
 
 Each item must have:
@@ -640,40 +525,63 @@ Each item must have:
 **Suggestion:** Add a `respecSkillPoints` function that resets the tree and dispatches the necessary actions. Show a confirmation dialog before proceeding.
 ```
 
-#### 2. `night_tasks/checklist.md`
-If this file doesn’t exist, create it with a heading `## Checklist`.  
-Under it (or appended to existing content), add a new section `### Feature Gaps & Enrichments` and list **every item ID as a checkbox**, e.g.:
+Output the **complete content** of `night_tasks/feature_gaps.md`.
+
+
+# 🔍 Prompt DEDUP – Cross‑File Task Deduplication & Merging
+
+You are responsible for ensuring the task files in `night_tasks/` contain **no duplicate or overlapping tasks** across different `.md` files.  
+Read **all** the following files (use sub‑agents if you wish):  
+`bugs.md`, `polish_ux.md`, `performance.md`, `security.md`, `code_quality.md`, `error_handling.md`, `architecture.md`, `persistence.md`, `multiplayer.md`, `ai_coherence.md`, `observability.md`, `game_design.md`, `feature_gaps.md`.
+
+### Your job
+1. **Find exact duplicates** – tasks that are word‑for‑word identical or describe the same code change with the same scope.
+2. **Find overlapping tasks** – tasks that target the same code area, same feature, or same objective, even if worded differently.
+3. **For each duplicate/overlap**, decide:
+   - Which task to **keep** (the most precise or the one in the most relevant category).
+   - Which task(s) to **remove** (delete them from their file).
+   - Whether to **merge** details from the removed task into the kept one (e.g., add a note, combine descriptions).
+4. **Apply the changes directly** to the `.md` files:
+   - Remove duplicate entries entirely.
+   - Update the kept entry if more details have been merged.
+   - Do **not** create a checklist; only edit the existing task files.
+
+### Rules
+- Never remove a task without ensuring the same intent is covered elsewhere.
+- If the same intent exists in two categories, merge into the **most specific** category (e.g., a performance‑related bug fix goes into `bugs.md`, not `performance.md`).
+- Keep the existing ID and format of the kept task; add a note like `(merged with POLISH‑X)` if helpful.
+- Preserve all non‑duplicate content in every file.
+
+### Output
+After processing, output the **complete updated content** of each modified `.md` file, one after the other, so they can be saved. Also provide a short summary of every change made (what was removed, what was merged).
+
+
+# ✅ Prompt CHECKLIST – Generate Final `checklist.md`
+
+Read **all** the following task files in `night_tasks/`:  
+`bugs.md`, `polish_ux.md`, `performance.md`, `security.md`, `code_quality.md`, `error_handling.md`, `architecture.md`, `persistence.md`, `multiplayer.md`, `ai_coherence.md`, `observability.md`, `game_design.md`, `feature_gaps.md`.
+
+From these, generate a **single** `night_tasks/checklist.md` file.
+
+### Format
+```markdown
+## Checklist
+
+### Bugs
+- [ ] BUG‑1: Fix type/payload mismatch in UPDATE_NARRATION action
+- [ ] BUG‑2: Fix stale state persistence in GameContext
+...
+
+### Polish & UX
+- [ ] POLISH‑1: Fix inline styles on Ko‑fi image in MainMenu
+...
 ```
-- [ ] F-001: Complete multiplayer host lobby flow
-- [ ] R-003: Add respec option to skill tree
-- [ ] T-002: Add tooltips to action buttons
-- [ ] E-001: Implement journal system
-```
 
-Keep any existing content in both files intact. Output the **complete, updated content** of both files so I can save them directly.
+### Rules
+- Include **every** unique task ID and title from all files.
+- Group by category, using the heading names exactly as shown above (matching the file prefixes).
+- Do not re‑evaluate or change the task descriptions – just aggregate.
+- If a task appears in more than one file (shouldn’t happen after dedup), include it only once under its primary category.
+- The file must be self‑contained and ready to be used by the automated fix script.
 
-
----
-
-
-
-
-
-
-#
-
-ORDERED_FILES=(
-  "bugs.md"
-  "polish_ux.md"
-  "performance.md"
-  "security.md"
-  "code_quality.md"
-  "error_handling.md"
-  "architecture.md"
-  "persistence.md"
-  "multiplayer.md"
-  "ai_coherence.md"
-  "observability.md"
-  "game_design.md"
-  "feature_gaps.md"
-)
+Output the **complete content** of `night_tasks/checklist.md`.
