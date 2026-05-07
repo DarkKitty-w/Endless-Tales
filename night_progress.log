@@ -4,7 +4,6 @@ performance:DONE
 security:DONE
 error_handling:DONE
 persistence:DONE
-multiplayer:DONE
 ai_coherence:DONE
 observability:DONE
 game_design:DONE
