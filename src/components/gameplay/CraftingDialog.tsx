@@ -28,11 +28,68 @@ interface CraftingDialogProps {
     onCraft: (goal: string, ingredients: string[]) => Promise<void>;
 }
 
+// Common crafting materials by category
+const MATERIAL_CATEGORIES = {
+    'Metal': ['iron ore', 'copper', 'gold', 'silver', 'steel', 'bronze', 'ingot', 'metal'],
+    'Wood': ['wood', 'oak', 'pine', 'branch', 'log', 'timber', 'plank'],
+    'Leather': ['leather', 'hide', 'skin', 'pelt'],
+    'Cloth': ['cloth', 'silk', 'linen', 'cotton', 'wool', 'fabric'],
+    'Gem': ['gem', 'ruby', 'sapphire', 'emerald', 'diamond', 'crystal', 'stone', 'amethyst'],
+    'Herb': ['herb', 'plant', 'flower', 'mushroom', 'root', 'leaf', 'berry'],
+    'Liquid': ['water', 'oil', 'potion', 'elixir', 'juice', 'wine'],
+    'Mineral': ['salt', 'sulfur', 'coal', 'dust', 'powder', 'clay']
+};
+
+// Function to guess what materials might be needed based on crafting goal
+const guessRequiredMaterials = (goal: string): string[] => {
+    const goalLower = goal.toLowerCase();
+    const guessedMaterials: string[] = [];
+    
+    // Check each category for matches
+    Object.entries(MATERIAL_CATEGORIES).forEach(([category, keywords]) => {
+        // If goal mentions the category or related words
+        if (keywords.some(keyword => goalLower.includes(keyword))) {
+            guessedMaterials.push(category);
+        }
+    });
+    
+    // Specific item type guesses
+    if (goalLower.includes('sword') || goalLower.includes('blade') || goalLower.includes('dagger')) {
+        guessedMaterials.push('Metal');
+    }
+    if (goalLower.includes('bow') || goalLower.includes('staff') || goalLower.includes('wand')) {
+        guessedMaterials.push('Wood');
+    }
+    if (goalLower.includes('armor') || goalLower.includes('shield') || goalLower.includes('boots')) {
+        if (goalLower.includes('leather')) guessedMaterials.push('Leather');
+        else guessedMaterials.push('Metal');
+    }
+    if (goalLower.includes('potion') || goalLower.includes('elixir') || goalLower.includes('tonic')) {
+        guessedMaterials.push('Herb', 'Liquid');
+    }
+    if (goalLower.includes('ring') || goalLower.includes('amulet') || goalLower.includes('necklace')) {
+        guessedMaterials.push('Gem', 'Metal');
+    }
+    
+    return [...new Set(guessedMaterials)]; // Remove duplicates
+};
+
 export function CraftingDialog({ isOpen, onOpenChange, inventory, onCraft }: CraftingDialogProps) {
     const [craftingGoal, setCraftingGoal] = useState("");
     const [selectedIngredients, setSelectedIngredients] = useState<string[]>([]);
     const [isCraftingLoading, setIsCraftingLoading] = useState(false);
     const [craftingError, setCraftingError] = useState<string | null>(null);
+    const [guessedMaterials, setGuessedMaterials] = useState<string[]>([]);
+
+    // Update guessed materials when crafting goal changes
+    useEffect(() => {
+        if (craftingGoal.trim()) {
+            const guessed = guessRequiredMaterials(craftingGoal);
+            setGuessedMaterials(guessed);
+        } else {
+            setGuessedMaterials([]);
+        }
+    }, [craftingGoal]);
 
     const handleIngredientToggle = (itemName: string) => {
         setSelectedIngredients(prev =>
@@ -167,6 +224,66 @@ export function CraftingDialog({ isOpen, onOpenChange, inventory, onCraft }: Cra
                             </div>
                         </div>
                     </div>
+                    {/* Material Feedback Section */}
+                    {craftingGoal.trim() && guessedMaterials.length > 0 && (
+                        <div className="col-span-4 p-3 bg-muted/30 rounded-md border border-dashed">
+                            <p className="text-xs font-medium text-muted-foreground mb-2">
+                                Suggested Materials for &quot;{craftingGoal}&quot;:
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {guessedMaterials.map((material) => {
+                                    // Find items in inventory that match this material category
+                                    const matchingItems = inventory.filter(item => {
+                                        const categoryKeywords = MATERIAL_CATEGORIES[material as keyof typeof MATERIAL_CATEGORIES] || [];
+                                        return categoryKeywords.some(keyword => 
+                                            item.name.toLowerCase().includes(keyword)
+                                        );
+                                    });
+                                    const hasMaterial = matchingItems.length > 0;
+                                    
+                                    return (
+                                        <div
+                                            key={material}
+                                            className={`flex items-center gap-1 px-2 py-1 rounded-md text-xs ${
+                                                hasMaterial 
+                                                    ? 'bg-green-500/10 text-green-600 border border-green-500/30' 
+                                                    : 'bg-red-500/10 text-red-600 border border-red-500/30'
+                                            }`}
+                                            title={hasMaterial 
+                                                ? `Found: ${matchingItems.map(i => i.name).join(', ')}` 
+                                                : `No ${material.toLowerCase()} items in inventory`
+                                            }
+                                        >
+                                            {hasMaterial ? (
+                                                <CheckCircle className="w-3 h-3" />
+                                            ) : (
+                                                <XCircle className="w-3 h-3" />
+                                            )}
+                                            <span>{material}</span>
+                                            {hasMaterial && (
+                                                <span className="text-[10px] opacity-70">
+                                                    ({matchingItems.length})
+                                                </span>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            {guessedMaterials.some(material => {
+                                const matchingItems = inventory.filter(item => {
+                                    const categoryKeywords = MATERIAL_CATEGORIES[material as keyof typeof MATERIAL_CATEGORIES] || [];
+                                    return categoryKeywords.some(keyword => 
+                                        item.name.toLowerCase().includes(keyword)
+                                    );
+                                });
+                                return matchingItems.length === 0;
+                            }) && (
+                                <p className="text-xs text-red-600 mt-2">
+                                    ⚠️ Some suggested materials are missing from your inventory.
+                                </p>
+                            )}
+                        </div>
+                    )}
                     {craftingError && (
                         <Alert variant="destructive" className="col-span-4">
                             <AlertTriangle className="h-4 w-4" />
