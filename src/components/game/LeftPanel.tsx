@@ -21,6 +21,7 @@ import {
     Award, Users, HeartPulse, CalendarClock, Milestone, Backpack, Workflow, Loader2, User, Map
 } from "lucide-react";
 import { ScrollArea } from "../../components/ui/scroll-area";
+import { Skeleton } from "../../components/ui/skeleton";
 
 interface LeftPanelProps {
     character: Character;
@@ -141,12 +142,21 @@ export const LeftPanel = React.memo(function LeftPanel({
                                     onRespecAll={onRespecAll}
                                 />
                             ) : (
-                                <div className="flex items-center justify-center h-full text-muted-foreground italic p-4">
+                                <div className="flex flex-col items-center justify-center h-full text-muted-foreground italic p-4">
                                     {isGeneratingSkillTree ? (
-                                        <>
-                                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                                            Generating skill tree...
-                                        </>
+                                        <div className="w-full space-y-3">
+                                            <div className="flex items-center gap-2 mb-4">
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                <span className="text-sm">Generating skill tree...</span>
+                                            </div>
+                                            {/* T-010: Skeleton loader for skill tree */}
+                                            <Skeleton className="h-8 w-3/4" />
+                                            <Skeleton className="h-20 w-full" />
+                                            <Skeleton className="h-8 w-1/2" />
+                                            <Skeleton className="h-16 w-full" />
+                                            <Skeleton className="h-8 w-2/3" />
+                                            <Skeleton className="h-16 w-full" />
+                                        </div>
                                     ) : (
                                         state.adventureSettings.adventureType === "Immersed"
                                             ? "Skill progression is narrative-driven in Immersed mode."
