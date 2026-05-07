@@ -145,6 +145,53 @@ export function Gameplay() {
     useEffect(() => {
       gameStateRef.current = state;
     }, [state]);
+    // T-007: Keyboard shortcuts for common actions
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Escape to close dialogs
+            if (e.key === 'Escape') {
+                if (isCraftingDialogOpen) {
+                    setIsCraftingDialogOpen(false);
+                    return;
+                }
+                if (isDesktopSettingsOpen) {
+                    setIsDesktopSettingsOpen(false);
+                    return;
+                }
+                if (isPartySidebarOpen) {
+                    setIsPartySidebarOpen(false);
+                    return;
+                }
+                if (isChatPanelOpen) {
+                    setIsChatPanelOpen(false);
+                    return;
+                }
+                if (isInteractionDialogOpen) {
+                    setIsInteractionDialogOpen(false);
+                    return;
+                }
+                if (isTradeDialogOpen) {
+                    setIsTradeDialogOpen(false);
+                    return;
+                }
+            }
+            
+            // Ctrl+S to save
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                if (!anyLoading) {
+                    handleSaveGame();
+                }
+                return;
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [isCraftingDialogOpen, isDesktopSettingsOpen, isPartySidebarOpen, isChatPanelOpen, 
+         isInteractionDialogOpen, isTradeDialogOpen, anyLoading]);
+
+
 
     // Define handleGuestActionReceived using refs to avoid circular deps
     const handleGuestActionReceived = useCallback(async (playerId: string, action: string, turnNumber: number, isInitial: boolean) => {

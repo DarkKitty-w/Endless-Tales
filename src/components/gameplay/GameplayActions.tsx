@@ -54,6 +54,7 @@ export function GameplayActions({
         <div className={`flex-none flex flex-wrap gap-2 mt-4 items-center ${isMobile ? 'justify-center' : 'md:justify-start'}`}>
             <Button variant="secondary" size="sm" onClick={onSave} disabled={disabled || !currentAdventureId}>
                 <Save className="mr-1 h-4 w-4" /> Save Game
+                <span className="ml-1 text-xs opacity-60 hidden sm:inline">(Ctrl+S)</span>
             </Button>
             <AlertDialog>
                 <AlertDialogTrigger asChild>
