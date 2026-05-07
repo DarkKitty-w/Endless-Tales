@@ -38,7 +38,7 @@ export interface AssessActionDifficultyOutput {
 
 // Zod schema for validation
 const AssessActionDifficultyOutputSchema = z.object({
-    difficulty: z.enum(["Trivial", "Easy", "Normal", "Hard", "Very Hard", "Impossible"]),
+    difficulty: z.enum(["Trivial", "Easy", "Normal", "Hard", "Very Hard", "Impossible", "Nightmare"]),
     reasoning: z.string(),
     suggestedDice: z.enum(["d6", "d10", "d20", "d100", "None"]),
 });
@@ -95,13 +95,15 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
 
   try {
       const client = getClient(input.userApiKey);
+      
+      // OBS-6 & OBS-7: Set requestId and traceId for correlation logging
+      if (input.requestId) setRequestId(input.requestId);
+      if (input.traceId) setTraceId(input.traceId);
+      
       const response = await client.models.generateContent({
           contents: prompt,
           config: { responseMimeType: "application/json" },
           signal: input.signal,
-          // OBS-6 & OBS-7: Pass requestId and traceId for correlation
-          requestId: input.requestId,
-          traceId: input.traceId,
       });
 
       const text = response.text;

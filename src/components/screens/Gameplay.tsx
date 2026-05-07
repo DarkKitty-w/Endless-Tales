@@ -547,6 +547,7 @@ export function Gameplay() {
 
         let actionWithDice = action;
         let assessedDifficulty: AssessedDifficultyLevel = "Normal";
+        let difficultyResult: any = null;
 
         try {
             if (character.class === 'admin000') {
@@ -562,14 +563,75 @@ export function Gameplay() {
                 if (needsAssessment) {
                     setIsAssessingDifficulty(true);
                     toast({ title: "Assessing Challenge...", duration: 1000 });
+                    
+                    // F-004: Call standalone assessActionDifficulty function
+                    try {
+                        const repString = character.reputation ? Object.entries(character.reputation).map(([f, s]) => `${f}: ${s}`).join(', ') || 'None' : 'None';
+                        const relString = character.npcRelationships ? Object.entries(character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'None' : 'None';
+                        const capabilitiesSummary = `Lvl: ${character.level}. Class: ${character.class}. Stage: ${character.skillTreeStage}. Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, WIS ${character.stats.wisdom}. Health: ${character.currentHealth}/${character.maxHealth}. Action STA: ${character.currentStamina}/${character.maxStamina}. Mana: ${character.currentMana}/${character.maxMana}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}. Inventory: ${inventory.map(i => i.name).join(', ') || 'Empty'}. Learned Skills: ${character.learnedSkills.map(s => s.name).join(', ') || 'None'}. Rep: ${repString}. Rel: ${relString}`;
+                        
+                        const difficultyInput: AssessActionDifficultyInput = {
+                            playerAction: action,
+                            characterCapabilities: capabilitiesSummary,
+                            characterClass: character.class,
+                            currentSituation: storyLog.length > 0 ? storyLog[storyLog.length - 1].narration.substring(0, 500) : "Starting adventure",
+                            gameStateSummary: currentGameStateString.substring(0, 500),
+                            gameStateContext: gameStateContext ?? undefined,
+                            gameDifficulty: adventureSettings.difficulty || "Normal",
+                            turnCount: turnCount,
+                            userApiKey: activeApiKey,
+                            signal,
+                            requestId,
+                            traceId,
+                        };
+                        
+                        difficultyResult = await assessActionDifficulty(difficultyInput);
+                        assessedDifficulty = difficultyResult.difficulty;
+                        setDiceType(difficultyResult.suggestedDice);
+                        
+                        toast({ 
+                            title: `Difficulty: ${difficultyResult.difficulty}`, 
+                            description: difficultyResult.reasoning,
+                            duration: 3000 
+                        });
+                    } catch (diffError) {
+                        logger.warn("Failed to assess action difficulty, using fallback", 'Gameplay', { error: diffError });
+                        assessedDifficulty = "Normal";
+                        setDiceType("d10");
+                    }
                 } else {
                     assessedDifficulty = "Trivial";
                     setDiceType("None");
                 }
-
-                const repString = character.reputation ? Object.entries(character.reputation).map(([f, s]) => `${f}: ${s}`).join(', ') || 'None' : 'None';
-                const relString = character.npcRelationships ? Object.entries(character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'None' : 'None';
-                const capabilitiesSummary = `Lvl: ${character.level}. Class: ${character.class}. Stage: ${character.skillTreeStage}. Stats: STR ${character.stats.strength}, STA ${character.stats.stamina}, WIS ${character.stats.wisdom}. Health: ${character.currentHealth}/${character.maxHealth}. Action STA: ${character.currentStamina}/${character.maxStamina}. Mana: ${character.currentMana}/${character.maxMana}. Traits: ${character.traits.join(', ') || 'None'}. Knowledge: ${character.knowledge.join(', ') || 'None'}. Background: ${character.background}. Inventory: ${inventory.map(i => i.name).join(', ') || 'Empty'}. Learned Skills: ${character.learnedSkills.map(s => s.name).join(', ') || 'None'}. Rep: ${repString}. Rel: ${relString}`;
+                
+                // Roll the dice based on suggestedDice type
+                if (needsAssessment && difficultyResult?.suggestedDice && difficultyResult.suggestedDice !== "None") {
+                    const diceType = difficultyResult.suggestedDice;
+                    let rollResult: number | undefined = undefined;
+                    switch (diceType) {
+                        case 'd6': rollResult = Math.floor(Math.random() * 6) + 1; break;
+                        case 'd10': rollResult = Math.floor(Math.random() * 10) + 1; break;
+                        case 'd20': rollResult = Math.floor(Math.random() * 20) + 1; break;
+                        case 'd100': rollResult = Math.floor(Math.random() * 100) + 1; break;
+                    }
+                    if (rollResult !== undefined) {
+                        setDiceResult(rollResult);
+                        setIsRollingDice(true);
+                        await new Promise(resolve => setTimeout(resolve, 1400));
+                        setIsRollingDice(false);
+                        setDiceResult(null);
+                        actionWithDice += ` (Difficulty: ${assessedDifficulty}, Dice Roll: ${rollResult}/${diceType})`;
+                    }
+                } else if (needsAssessment && difficultyResult === null) {
+                    // If assessActionDifficulty failed, use default dice
+                    const rollResult = Math.floor(Math.random() * 10) + 1;
+                    setDiceResult(rollResult);
+                    setIsRollingDice(true);
+                    await new Promise(resolve => setTimeout(resolve, 1400));
+                    setIsRollingDice(false);
+                    setDiceResult(null);
+                    actionWithDice += ` (Difficulty: ${assessedDifficulty}, Dice Roll: ${rollResult}/d10)`;
+                }
 
                 let skillTreeSummaryForAI = null;
                 if (character.skillTree && character.skillTreeStage >= 0) {
@@ -602,7 +664,7 @@ export function Gameplay() {
                     adventureSettings: adventureSettings,
                     turnCount: turnCount,
                     userApiKey: activeApiKey,
-                    assessDifficulty: needsAssessment,
+                    assessDifficulty: false, // F-004: Difficulty now assessed separately via assessActionDifficulty
                     capabilitiesSummary: needsAssessment ? capabilitiesSummary : undefined,
                     signal,
                     // OBS-6: Pass requestId and traceId for correlation
@@ -620,32 +682,19 @@ export function Gameplay() {
 
                 setIsAssessingDifficulty(false);
 
-                if (narrationResult.assessedDifficulty) {
-                    assessedDifficulty = narrationResult.assessedDifficulty;
-                    setDiceType(narrationResult.diceType || "None");
-                    if (narrationResult.diceRoll !== undefined && narrationResult.diceRoll !== null) {
-                        setDiceResult(narrationResult.diceRoll);
-                        setIsRollingDice(true);
-                        await new Promise(resolve => setTimeout(resolve, 1400));
-                        setIsRollingDice(false);
-                        setDiceResult(null);
-                        actionWithDice += ` (Difficulty: ${assessedDifficulty}, Dice Roll Result: ${narrationResult.diceRoll}/${narrationResult.diceType})`;
-                    } else if (narrationResult.diceType && narrationResult.diceType !== 'None') {
-                        actionWithDice += ` (Difficulty: ${assessedDifficulty}, No Roll Required)`;
-                    }
-                    
-                    if (assessedDifficulty === "Impossible") {
-                        const impossibleActionLog: StoryLogEntry = {
-                            narration: narrationResult.narration,
-                            updatedGameState: narrationResult.updatedGameState,
-                            timestamp: Date.now(),
-                            branchingChoices: narrationResult.branchingChoices ?? GENERIC_BRANCHING_CHOICES,
-                        };
-                        dispatch({ type: "UPDATE_NARRATION", payload: impossibleActionLog });
-                        setBranchingChoices(narrationResult.branchingChoices ?? GENERIC_BRANCHING_CHOICES);
-                        toast({ title: "Action Impossible", description: narrationResult.narration, variant: "destructive", duration: 4000 });
-                        return;
-                    }
+                // F-004: Dice roll is now handled separately after assessActionDifficulty call
+                // This section only handles the "Impossible" case
+                if (assessedDifficulty === "Impossible") {
+                    const impossibleActionLog: StoryLogEntry = {
+                        narration: narrationResult.narration,
+                        updatedGameState: narrationResult.updatedGameState,
+                        timestamp: Date.now(),
+                        branchingChoices: narrationResult.branchingChoices ?? GENERIC_BRANCHING_CHOICES,
+                    };
+                    dispatch({ type: "UPDATE_NARRATION", payload: impossibleActionLog });
+                    setBranchingChoices(narrationResult.branchingChoices ?? GENERIC_BRANCHING_CHOICES);
+                    toast({ title: "Action Impossible", description: narrationResult.narration, variant: "destructive", duration: 4000 });
+                    return;
                 }
 
                 if (narrationResult && narrationResult.narration && narrationResult.updatedGameState) {
