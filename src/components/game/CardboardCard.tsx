@@ -19,6 +19,9 @@ const CardboardCard = React.forwardRef<
     ref={ref}
     className={cn(
       "border-2 border-foreground/30 shadow-md rounded-sm bg-card", // Slightly less rounded, visible border
+      "transition-all duration-200 ease-in-out",
+      "hover:shadow-lg hover:border-foreground/50 hover:scale-[1.02]",
+      "cursor-pointer",
       className
     )}
     {...props}
