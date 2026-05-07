@@ -1,12 +1,23 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import type { MultiplayerState, PeerInfo, PlayerSummary } from "../../types/multiplayer-types";
 import { Users, Crown, Sword, MessageSquare, Handshake } from "lucide-react";
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
 import { Separator } from "../ui/separator";
 import { Badge } from "../ui/badge";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "../ui/alert-dialog";
 
 interface PartySidebarProps {
   multiplayerState: MultiplayerState;
@@ -50,6 +61,30 @@ function PartySidebarInternal({
 
   const isCurrentTurn = (peerId: string): boolean => {
     return turnOrder[currentTurnIndex] === peerId;
+  };
+
+  // State for kick confirmation
+  const [kickPeerId, setKickPeerId] = useState<string | null>(null);
+  const [kickPlayerName, setKickPlayerName] = useState<string>("");
+
+  // Handle kick confirmation
+  const handleKickClick = (peerId: string) => {
+    const displayName = getPeerDisplayName(peerId);
+    setKickPeerId(peerId);
+    setKickPlayerName(displayName);
+  };
+
+  const handleKickConfirm = () => {
+    if (kickPeerId && onKickPeer) {
+      onKickPeer(kickPeerId);
+      setKickPeerId(null);
+      setKickPlayerName("");
+    }
+  };
+
+  const handleKickCancel = () => {
+    setKickPeerId(null);
+    setKickPlayerName("");
   };
 
   return (
@@ -172,14 +207,39 @@ function PartySidebarInternal({
                     </Button>
                   )}
                   {isHost && !isYou && onKickPeer && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => onKickPeer(peerId)}
-                      className="text-destructive hover:text-destructive text-xs"
-                    >
-                      Kick
-                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="text-destructive hover:text-destructive text-xs"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleKickClick(peerId);
+                          }}
+                        >
+                          Kick
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Kick Player?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will remove <span className="font-semibold">{kickPlayerName}</span> from the party. 
+                            This action is disruptive and irreversible for the guest. They will need to rejoin if they want to continue playing.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel onClick={handleKickCancel}>Cancel</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={handleKickConfirm}
+                            className="bg-destructive hover:bg-destructive/90"
+                          >
+                            Kick Player
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   )}
                 </div>
               </div>
@@ -242,14 +302,39 @@ function PartySidebarInternal({
                 </div>
                 <div className="flex gap-1">
                   {isHost && onKickPeer && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => onKickPeer(peerId)}
-                      className="text-destructive hover:text-destructive text-xs"
-                    >
-                      Kick
-                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="text-destructive hover:text-destructive text-xs"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            handleKickClick(peerId);
+                          }}
+                        >
+                          Kick
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Kick Player?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This will remove <span className="font-semibold">{kickPlayerName}</span> from the party. 
+                            This action is disruptive and irreversible for the guest. They will need to rejoin if they want to continue playing.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel onClick={handleKickCancel}>Cancel</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={handleKickConfirm}
+                            className="bg-destructive hover:bg-destructive/90"
+                          >
+                            Kick Player
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   )}
                 </div>
               </div>
