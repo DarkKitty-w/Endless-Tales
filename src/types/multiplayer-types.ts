@@ -48,6 +48,8 @@ export interface MultiplayerMessage {
   senderId: string;
   timestamp: number;
   messageId?: string;
+  // NET-8 Fix: Add sequence number for message ordering
+  sequenceNumber?: number;
 }
 
 export interface GameActionMessage {

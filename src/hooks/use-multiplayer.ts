@@ -73,6 +73,9 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   // NET-10 Fix: Per-peer message queues to prevent cross-peer message leakage
   const peerMessageQueues = useRef<Record<string, { data: any; timestamp: number }[]>>({});
   const peerQueueTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // NET-8 Fix: Sequence number tracking per peer for message ordering
+  const peerSequenceNumbers = useRef<Record<string, number>>({}); // Track expected sequence number per peer
+  const peerOutboxSequence = useRef<Record<string, number>>({}); // Track outgoing sequence number per peer
   const iceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const multiplayerStateRef = useRef(multiplayerState);
 
@@ -139,11 +142,18 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       return false;
     }
 
+    // NET-8 Fix: Assign sequence number to outgoing messages
+    if (!peerOutboxSequence.current[type]) {
+      peerOutboxSequence.current[type] = 0;
+    }
+    const sequenceNumber = peerOutboxSequence.current[type]++;
+
     const message: MultiplayerMessage = {
       type,
       payload,
       senderId: multiplayerStateRef.current.peerId,
       timestamp: Date.now(),
+      sequenceNumber,
     };
 
     // Try to send immediately
@@ -454,6 +464,20 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   // Handle incoming messages
   const handleMessage = useCallback((data: MultiplayerMessage, channelLabel: string) => {
     logger.log(`Received message on ${channelLabel}:`, data);
+
+    // NET-8 Fix: Basic sequence number validation (channels are ordered: true, but this adds extra safety)
+    const senderId = data.senderId || channelLabel;
+    if (data.sequenceNumber !== undefined) {
+      if (!peerSequenceNumbers.current[senderId]) {
+        peerSequenceNumbers.current[senderId] = 0;
+      }
+      const expectedSeq = peerSequenceNumbers.current[senderId];
+      if (data.sequenceNumber < expectedSeq) {
+        logger.warn(`Received old message from ${senderId}: got ${data.sequenceNumber}, expected ${expectedSeq}. Ignoring duplicate/old message.`);
+        return;
+      }
+      peerSequenceNumbers.current[senderId] = data.sequenceNumber + 1;
+    }
 
     // Use ref to get current state (avoids stale closures)
     const currentState = multiplayerStateRef.current;
