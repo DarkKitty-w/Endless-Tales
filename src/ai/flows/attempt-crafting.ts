@@ -133,7 +133,22 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
 
   } catch (error: any) {
       if (error.name === 'AbortError') throw error;
-      logger.error("AI Crafting Error:", error);
+      
+      // OBS-9 Fix: Include requestId/traceId and input context for reproducibility
+      logger.error("AI Crafting Error", 'ai-flows', {
+        requestId: input.requestId,
+        traceId: input.traceId,
+        desiredItem: input.desiredItem,
+        usedIngredients: input.usedIngredients,
+        inventoryItemsCount: input.inventoryItems.length,
+        characterSkillsCount: input.characterSkills.length,
+        error: error instanceof Error ? {
+          message: error.message,
+          name: error.name,
+          stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+        } : String(error),
+      });
+      
       return {
           success: false,
           message: "The crafting attempt failed due to an external force (AI Error).",

@@ -139,7 +139,21 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
 
   } catch (error: any) {
       if (error.name === 'AbortError') throw error;
-      logger.error("AI Error in assessActionDifficulty:", error);
+      
+      // OBS-9 Fix: Include requestId/traceId and input context for reproducibility
+      logger.error("AI Error in assessActionDifficulty", 'ai-flows', {
+        requestId: input.requestId,
+        traceId: input.traceId,
+        playerAction: input.playerAction.substring(0, 100), // Truncated for safety
+        characterClass: input.characterClass,
+        gameDifficulty: input.gameDifficulty,
+        turnCount: input.turnCount,
+        error: error instanceof Error ? {
+          message: error.message,
+          name: error.name,
+          stack: error.stack?.split('\n').slice(0, 3).join('\n'), // First 3 lines only
+        } : String(error),
+      });
       
       const gameDiffKey = input.gameDifficulty?.toLowerCase() ?? 'normal';
       const fallbackMapping = FALLBACK_DIFFICULTY_MAP[gameDiffKey] ?? FALLBACK_DIFFICULTY_MAP['normal'];

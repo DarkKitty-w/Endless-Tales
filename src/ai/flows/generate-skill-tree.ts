@@ -159,7 +159,19 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
 
   } catch (error: any) {
       if (error.name === 'AbortError') throw error;
-      logger.error("AI Skill Tree Error:", error);
+      
+      // OBS-9 Fix: Include requestId/traceId and input context for reproducibility
+      logger.error("AI Skill Tree Error", 'ai-flows', {
+        requestId: input.requestId,
+        traceId: input.traceId,
+        characterClass: input.characterClass,
+        error: error instanceof Error ? {
+          message: error.message,
+          name: error.name,
+          stack: error.stack?.split('\n').slice(0, 3).join('\n'),
+        } : String(error),
+      });
+      
       const fallback = createFallbackSkillTree(input.characterClass);
       fallback.usedFallback = true;
       fallback.rawResponse = error.message || 'Unknown error';
