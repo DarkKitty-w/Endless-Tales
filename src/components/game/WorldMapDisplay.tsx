@@ -82,14 +82,20 @@ export function WorldMapDisplay() {
 
   // Render location nodes
   const renderLocations = () => {
-    return locations.filter(loc => loc.discovered).map(loc => {
+    return locations.map(loc => {
       const isCurrent = loc.id === currentLocationId;
       const isSelected = loc.id === selectedLocationId;
       const isConnectedToCurrent = currentLocation?.connectedLocationIds.includes(loc.id) ?? false;
+      const isDiscovered = loc.discovered;
       
       let nodeColor = "hsl(var(--muted-foreground))";
       let nodeSize = 6;
-      if (isCurrent) {
+      let opacity = isDiscovered ? 1 : 0.4;
+      
+      if (!isDiscovered) {
+        nodeColor = "hsl(var(--muted))";
+        nodeSize = 5;
+      } else if (isCurrent) {
         nodeColor = "hsl(var(--primary))";
         nodeSize = 10;
       } else if (isConnectedToCurrent) {
@@ -106,19 +112,22 @@ export function WorldMapDisplay() {
               fill={nodeColor}
               stroke="hsl(var(--background))"
               strokeWidth="2"
-              className="cursor-pointer transition-all hover:scale-125"
+              className={`cursor-pointer transition-all hover:scale-125 ${!isDiscovered ? 'cursor-not-allowed' : ''}`}
               role="button"
-              tabIndex={0}
-              aria-label={`Select location: ${loc.name}`}
-              onClick={() => setSelectedLocationId(isSelected ? null : loc.id)}
+              tabIndex={isDiscovered ? 0 : -1}
+              aria-label={`${isDiscovered ? 'Select' : 'Undiscovered'} location: ${loc.name}`}
+              onClick={() => isDiscovered && setSelectedLocationId(isSelected ? null : loc.id)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  setSelectedLocationId(isSelected ? null : loc.id);
+                  if (isDiscovered) {
+                    setSelectedLocationId(isSelected ? null : loc.id);
+                  }
                 }
               }}
+              opacity={opacity}
             />
-          {isCurrent && (
+          {isCurrent && isDiscovered && (
             <circle
               cx={`${loc.x}%`}
               cy={`${loc.y}%`}
@@ -129,13 +138,25 @@ export function WorldMapDisplay() {
               className="animate-pulse"
             />
           )}
+          {!isDiscovered && (
+            <text
+              x={`${loc.x}%`}
+              y={`${loc.y + 4}%`}
+              textAnchor="middle"
+              className="text-[10px] fill-muted-foreground pointer-events-none"
+              opacity={0.6}
+            >
+              ?
+            </text>
+          )}
           <text
             x={`${loc.x}%`}
             y={`${loc.y + 8}%`}
             textAnchor="middle"
-            className="text-[8px] fill-foreground font-medium pointer-events-none"
+            className={`text-[8px] pointer-events-none ${isDiscovered ? 'fill-foreground' : 'fill-muted-foreground'}`}
+            opacity={isDiscovered ? 1 : 0.5}
           >
-            {loc.name}
+            {isDiscovered ? loc.name : '???'}
           </text>
         </g>
       );
