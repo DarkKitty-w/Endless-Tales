@@ -76,9 +76,29 @@ export function GameplayActions({
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-            <Button variant="destructive" size="sm" onClick={onEnd} disabled={disabled}>
-                <Skull className="mr-1 h-4 w-4" /> End Adventure
-            </Button>
+            <AlertDialog>
+                <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm" disabled={disabled}>
+                        <Skull className="mr-1 h-4 w-4" /> End Adventure
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>End Adventure Permanently?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will <span className="font-semibold">permanently end</span> the adventure. 
+                            Unlike "Abandon" which returns you to the main menu, this action completes the adventure 
+                            and you will not be able to continue this playthrough. Make sure you have saved your progress.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={onEnd} className="bg-destructive hover:bg-destructive/90">
+                            End Adventure
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
             <Button variant="outline" size="sm" onClick={onChangeClass} disabled={disabled}>
                 <RefreshCw className="mr-1 h-4 w-4" /> Change Class
             </Button>
