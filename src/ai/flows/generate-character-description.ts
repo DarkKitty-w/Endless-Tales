@@ -5,7 +5,8 @@
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import { extractJsonFromResponse } from '../../lib/utils';
-import { logger } from '../../lib/logger';
+import { logger, setRequestId, setTraceId } from '../../lib/logger';
+import { CHARACTER_GENERATION_SYSTEM_MESSAGE, buildSystemMessage } from '../prompt-templates';
 
 export interface GenerateCharacterDescriptionInput {
   characterDescription: string;
@@ -15,6 +16,9 @@ export interface GenerateCharacterDescriptionInput {
   characterOriginType?: 'original' | 'existing';
   userApiKey?: string | null;
   signal?: AbortSignal;
+  // OBS-6: Add requestId and traceId for correlation
+  requestId?: string;
+  traceId?: string;
 }
 
 export interface GenerateCharacterDescriptionOutput {
@@ -40,6 +44,22 @@ export async function generateCharacterDescription(
   input: GenerateCharacterDescriptionInput
 ): Promise<GenerateCharacterDescriptionOutput> {
   
+  // OBS-6: Set requestId and traceId from input if provided (for correlation UI → AI)
+  if (input.requestId) {
+    setRequestId(input.requestId);
+  }
+  if (input.traceId) {
+    setTraceId(input.traceId);
+  }
+  
+  const systemMessage = buildSystemMessage(
+    CHARACTER_GENERATION_SYSTEM_MESSAGE,
+    [
+      'Output ONLY valid JSON matching the required schema.',
+      'Do not include markdown formatting or code blocks in the response.',
+    ]
+  );
+
   let promptContext = "";
   if (input.isImmersedMode) {
       if (input.characterOriginType === 'existing') {
@@ -79,21 +99,23 @@ Task:
 `;
   }
 
-  const prompt = `You are a fantasy/sci-fi story writer and character profiler.
-${promptContext}
+  const userPrompt = `${promptContext}
 
-Output JSON matching the schema.
-`;
+Output JSON matching the schema.`;
 
   try {
       const client = getClient(input.userApiKey);
       const response = await client.models.generateContent({
           // ✅ model removed – provider uses its default
-          contents: prompt,
+          contents: userPrompt,
+          systemMessage: systemMessage,
           config: {
               responseMimeType: "application/json",
           },
           signal: input.signal,
+          // OBS-6 & OBS-7: Pass requestId and traceId for correlation
+          requestId: input.requestId,
+          traceId: input.traceId,
       });
 
       const text = response.text;

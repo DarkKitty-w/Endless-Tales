@@ -123,21 +123,25 @@ class GeminiProvider implements AIProvider {
     systemMessage,
     config,
     signal,
+    requestId: passedRequestId,
+    traceId: passedTraceId,
   }: {
     model?: string;
     contents: string;
     systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
+    requestId?: string;
+    traceId?: string;
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'gemini-2.5-flash';
     
-    // OBS-6 Fix: Generate requestId for correlation
-    const requestId = generateRequestId();
+    // OBS-6 Fix: Use passed requestId or generate new one for correlation
+    const requestId = passedRequestId || generateRequestId();
     setRequestId(requestId);
     
-    // OBS-7 Fix: Generate or reuse traceId for distributed tracing
-    let traceId = getTraceId();
+    // OBS-7 Fix: Use passed traceId or generate/reuse traceId for distributed tracing
+    let traceId = passedTraceId || getTraceId();
     if (!traceId) {
       traceId = generateRequestId(); // In production, use proper trace ID
       setTraceId(traceId);
@@ -202,21 +206,25 @@ class GeminiProvider implements AIProvider {
     systemMessage,
     config,
     signal,
+    requestId: passedRequestId,
+    traceId: passedTraceId,
   }: {
     model?: string;
     contents: string;
     systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
+    requestId?: string;
+    traceId?: string;
   }): AsyncIterable<string> {
     const effectiveModel = model || 'gemini-2.5-flash';
     
-    // OBS-6 Fix: Generate requestId for correlation
-    const requestId = generateRequestId();
+    // OBS-6 Fix: Use passed requestId or generate new one for correlation
+    const requestId = passedRequestId || generateRequestId();
     setRequestId(requestId);
     
-    // OBS-7 Fix: Generate or reuse traceId for distributed tracing
-    let traceId = getTraceId();
+    // OBS-7 Fix: Use passed traceId or generate/reuse traceId for distributed tracing
+    let traceId = passedTraceId || getTraceId();
     if (!traceId) {
       traceId = generateRequestId();
       setTraceId(traceId);

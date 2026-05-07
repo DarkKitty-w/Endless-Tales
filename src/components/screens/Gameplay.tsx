@@ -24,7 +24,7 @@ import { useIsMobile } from "../../hooks/use-mobile";
 import { Button } from '../../components/ui/button';
 import { TooltipProvider } from "../../components/ui/tooltip";
 import type { InteractionRequest } from "../../types/multiplayer-types";
-import { logger } from "@/lib/logger";
+import { logger, generateRequestId, setRequestId, setTraceId } from "@/lib/logger";
 import { rollDie, getDiceRollFunction, DICE_TYPES, DiceType } from "../../lib/game-utils/dice";
 
 const GENERIC_BRANCHING_CHOICES: NarrateAdventureOutput['branchingChoices'] = [
@@ -479,7 +479,15 @@ export function Gameplay() {
     }, [loadingPhase, storyLog, character, dispatch, toast, createAbortSignal, activeApiKey]);
 
     const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
-        logger.log(`Gameplay: handlePlayerAction called. Action: "${action.substring(0,50)}...", isInitialAction: ${isInitialAction}`);
+        // OBS-6 Fix: Generate requestId and traceId for correlation when user takes action
+        const requestId = generateRequestId();
+        setRequestId(requestId);
+        
+        // For traceId, start a new trace for new user actions (not continuing from previous)
+        const traceId = generateRequestId(); // In production, use proper trace ID generation
+        setTraceId(traceId);
+        
+        logger.log(`Gameplay: handlePlayerAction called. Action: "${action.substring(0,50)}...", isInitialAction: ${isInitialAction}`, 'Gameplay', { requestId, traceId });
         if (!character) {
             toast({ title: "Error", description: "Character data is missing.", variant: "destructive" });
             if (isInitialAction) setIsInitialLoading(false);
@@ -579,6 +587,9 @@ export function Gameplay() {
                     assessDifficulty: needsAssessment,
                     capabilitiesSummary: needsAssessment ? capabilitiesSummary : undefined,
                     signal,
+                    // OBS-6: Pass requestId and traceId for correlation
+                    requestId,
+                    traceId,
                 };
 
                 let narrationResult: NarrateAdventureOutput;
