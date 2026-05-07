@@ -64,9 +64,36 @@ export function SkillTreeDisplay({
   const sortedStages = [...skillTree.stages].sort((a, b) => a.stage - b.stage);
   const defaultOpenStageValue = `stage-${currentStage}`;
 
+  // Calculate overall progress
+  const totalSkills = sortedStages.reduce((acc, stage) => acc + (stage.skills?.length || 0), 0);
+  const learnedCount = learnedSkills.length;
+  const progressPercentage = totalSkills > 0 ? Math.round((learnedCount / totalSkills) * 100) : 0;
+
   return (
     <ScrollArea className="h-full p-4">
       <TooltipProvider delayDuration={100}>
+        {/* Progress Section */}
+        <div className="mb-4 border-b pb-3">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-sm font-semibold flex items-center gap-1">
+              <CheckCircle2 className="w-4 h-4 text-primary" /> Skill Progress
+            </h4>
+            <span className="text-xs text-muted-foreground">{learnedCount}/{totalSkills} skills</span>
+          </div>
+          <div className="w-full bg-secondary rounded-full h-2.5 overflow-hidden">
+            <div 
+              className="bg-primary h-full rounded-full transition-all duration-500 ease-out"
+              style={{ width: `${progressPercentage}%` }}
+              role="progressbar"
+              aria-valuenow={progressPercentage}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={`Skill progress: ${progressPercentage}%`}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-1">{progressPercentage}% of all skills learned</p>
+        </div>
+
         {/* Learned Skills Section */}
         <div className="mb-4 border-b pb-3">
           <h4 className="text-sm font-semibold mb-2 flex items-center gap-1">
