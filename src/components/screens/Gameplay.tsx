@@ -160,6 +160,15 @@ export function Gameplay() {
         // After processing, broadcast the updated story and party state
         setTimeout(() => {
           const currentState = gameStateRef.current;
+          const mpState = multiplayerStateRef.current;
+          
+          // NET-1 Fix: Calculate next turn index and dispatch ADVANCE_TURN
+          if (mpState && mpState.turnOrder && mpState.turnOrder.length > 0) {
+            const nextTurnIndex = (mpState.currentTurnIndex + 1) % mpState.turnOrder.length;
+            dispatch({ type: "ADVANCE_TURN", payload: nextTurnIndex });
+            logger.log(`Turn advanced from ${mpState.currentTurnIndex} to ${nextTurnIndex}`);
+          }
+          
           // Broadcast story update if available
           if (currentState.storyLog.length > 0) {
             const latestEntry = currentState.storyLog[currentState.storyLog.length - 1];
@@ -168,7 +177,7 @@ export function Gameplay() {
             }
           }
           
-          // Broadcast party state
+          // Broadcast party state with updated turn info
           const partyState: Record<string, any> = {};
           // Add host
           if (currentState.character) {
@@ -187,15 +196,16 @@ export function Gameplay() {
             };
           }
           // Add peers from multiplayerState ref
-          const mpState = multiplayerStateRef.current;
           if (mpState?.partyState) {
             Object.entries(mpState.partyState).forEach(([peerId, summary]) => {
               partyState[peerId] = summary;
             });
           }
           
-          if (broadcastPartyStateRef.current && mpState) {
-            broadcastPartyStateRef.current(partyState, mpState.turnOrder || [], mpState.currentTurnIndex || 0);
+          // Get updated turn state after dispatch
+          const updatedMpState = multiplayerStateRef.current;
+          if (broadcastPartyStateRef.current && updatedMpState) {
+            broadcastPartyStateRef.current(partyState, updatedMpState.turnOrder || [], updatedMpState.currentTurnIndex || 0);
           }
         }, 100);
         
@@ -203,7 +213,7 @@ export function Gameplay() {
         logger.error('Error processing guest action:', error);
         toast({ title: "Error", description: "Failed to process guest action.", variant: "destructive" });
       }
-    }, [toast]);
+    }, [toast, dispatch]);
 
     // Multiplayer hook
     const { multiplayerState, sendGameAction, broadcastStoryUpdate, broadcastPartyState, sendChatMessage, sendControlMessage, sendInteractionRequest, sendInteractionResponse, disconnect, reconnect, setGameActionReceivedHandler, isConnected, isMyTurn, isHost: isMultiplayerHost, isReconnecting } = useMultiplayer({
