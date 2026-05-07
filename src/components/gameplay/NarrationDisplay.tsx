@@ -309,7 +309,7 @@ function NarrationDisplayInternal({
                         </div>
                     ) : displayLog.length > 0 ? (
                         displayLog.map((log, index) => (
-                            <div key={`log-${log.timestamp}-${index}`} className="mb-3 pb-3 border-b border-border/50 last:border-b-0">
+                            <div key={`log-${log.timestamp}-${index}`} className="mb-3 pb-3 border-b border-border/50 last:border-b-0 animate-fade-in">
                                 <p className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
                                     <CalendarClock className="w-3 h-3" /> Turn {log.turnNumber || (storyLog.length - displayLog.length + index + 1)}
                                     <span className="ml-auto text-xs">
