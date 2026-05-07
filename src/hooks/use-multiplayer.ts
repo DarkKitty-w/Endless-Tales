@@ -463,6 +463,16 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         // Host receives player actions
         if (currentState.isHost && gameActionReceivedRef.current) {
           const msg = data as unknown as GameActionMessage;
+          
+          // NET-4 Fix: Validate that the action is from the current player in turn order
+          if (currentState.turnOrder.length > 0) {
+            const expectedPlayerId = currentState.turnOrder[currentState.currentTurnIndex];
+            if (msg.payload.playerId !== expectedPlayerId) {
+              logger.warn(`Received action from ${msg.payload.playerId} but it's ${expectedPlayerId}'s turn. Ignoring.`);
+              return; // Ignore actions from players not currently in turn
+            }
+          }
+          
           gameActionReceivedRef.current(
             msg.payload.playerId,
             msg.payload.action,
