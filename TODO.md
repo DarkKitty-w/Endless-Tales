@@ -231,7 +231,7 @@ For each issue, create:
 Output the **complete updated content** of `night_tasks/error_handling.md`.
 
 
-# 🏗️ Prompt 8 – Architecture & Data Flow
+# 🏗️ Prompt 7 – Architecture & Data Flow
 
 Audit the "Endless Tales" project at /workspaces/Endless-Tales for **architecture quality and data flow coherence**. This is a high-level structural audit, not a style or bug check. Use Cline subagents to scan broadly.
 
@@ -267,7 +267,7 @@ For each issue, create:
 Output the **complete updated content** of `night_tasks/architecture.md`.
 
 
-# 💾 Prompt 10 – Persistence & Save Integrity
+# 💾 Prompt 8 – Persistence & Save Integrity
 
 Audit the "Endless Tales" project at /workspaces/Endless-Tales for **data persistence, save/load reliability, and integrity**. Use Cline subagents to inspect all storage-related logic.
 
@@ -303,7 +303,7 @@ For each issue, create:
 Output the **complete updated content** of `night_tasks/persistence.md`.
 
 
-# 🌐 Prompt 11 – Multiplayer Consistency & Sync
+# 🌐 Prompt 9 – Multiplayer Consistency & Sync
 
 Audit the "Endless Tales" project at /workspaces/Endless-Tales for **multiplayer consistency, synchronization, and reliability**. Use Cline subagents to analyze all multiplayer/WebRTC-related logic.
 
@@ -339,7 +339,7 @@ For each issue, create:
 Output the **complete updated content** of `night_tasks/multiplayer.md`.
 
 
-# 🎭 Prompt 12 – AI Narrative & Gameplay Coherence
+# 🎭 Prompt 10 – AI Narrative & Gameplay Coherence
 
 Audit the "Endless Tales" project at /workspaces/Endless-Tales for **AI narrative quality, gameplay coherence, and rule consistency**. This is not about error handling, but about whether the AI produces a good and consistent experience.
 
@@ -375,7 +375,7 @@ For each issue, create:
 Output the **complete updated content** of `night_tasks/ai_coherence.md`.
 
 
-# 📊 Prompt 13 – Logging & Observability
+# 📊 Prompt 11 – Logging & Observability
 
 Audit the "Endless Tales" project at /workspaces/Endless-Tales for **logging, monitoring, and observability**. The goal is to ensure that issues can be diagnosed quickly in development and production.
 
@@ -410,7 +410,7 @@ For each issue, create:
 Output the **complete updated content** of `night_tasks/observability.md`.
 
 
-# 🎮 Prompt 15 – Game Design & Feature Completeness
+# 🎮 Prompt 12 – Game Design & Feature Completeness
 
 Audit the "Endless Tales" project at /workspaces/Endless-Tales for **game design quality, feature completeness, and gameplay coherence**. This is a product-level audit, not just code.
 
@@ -445,7 +445,7 @@ For each issue, create:
 Output the **complete updated content** of `night_tasks/game_design.md`.
 
 
-# ❗ Prompt 7 – Features and tweaks addition
+# ❗ Prompt 13 – Features and tweaks addition
 
 You are a senior product-focused auditor for the **Endless Tales** project at `/workspaces/Endless-Tales`.  
 You have access to the full codebase and the up‑to‑date README (provided below).  

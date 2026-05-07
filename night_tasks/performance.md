@@ -1,99 +1,106 @@
+# Performance Audit Report
+
+## Summary
+Performance audit conducted on Endless Tales codebase. Issues found range from memory leaks to bundle size concerns.
+
 ## Detailed Findings
 
-PERF‑1: Sub-reducers create new state references unnecessarily
-Severity: High
-Description: CharacterReducer returns new reputation/npcRelationships objects even when computed values match current values; InventoryReducer returns new arrays even when no items change. This causes main reducer to detect state change (reference inequality) and trigger re-renders.
-Location: src/context/reducers/characterReducer.ts (lines 159, 166); src/context/reducers/inventoryReducer.ts (lines 27-38, 45-47)
-Impact: Unnecessary re-renders of all components consuming useGame(), even when no meaningful state change occurs.
-Fix: In sub-reducers, compare new values with current values before creating new objects/arrays. Return old state reference if no change detected.
+### PERF-1: Sub-reducers creating new state references unnecessarily
+**Severity:** Medium  
+**Description:** The reducers in `src/context/reducers/*.ts` create new state objects for every action, even when values haven't changed.
+**Location:** `src/context/reducers/adventureReducer.ts`, `characterReducer.ts`, `inventoryReducer.ts`, `multiplayerReducer.ts`, `settingsReducer.ts`  
+**Impact:** Widespread unnecessary re-renders; lag when state updates frequently.  
+**Fix:** Use shallow comparison to avoid returning new objects when nothing changed.
 
-PERF‑2: Single context causes widespread unnecessary re-renders
-Severity: High
-Description: Entire game state is exposed via single GameContext. Context value ({ state, dispatch }) is recreated every time state changes, causing all consumers to re-render even if they only use a small slice of state.
-Location: src/context/GameContext.tsx (lines 49-252)
-Impact: Widespread unnecessary re-renders across all components using useGame(), degrading UI responsiveness.
-Fix: Split into multiple contexts by domain (adventure, character, inventory, multiplayer, settings) or use useMemo to stabilize context value.
+### PERF-2: Single context causing widespread unnecessary re-renders [FIXED]
+**Severity:** N/A (Fixed)  
+**Description:** Fixed by implementing domain-specific contexts (AdventureContext, CharacterContext, etc.)
+**Location:** `src/context/GameContext.tsx` lines 607-690  
+**Impact:** N/A - Fixed.
 
-PERF‑3: Module-level setInterval never cleared (WebRTC memory leak)
-Severity: High
-Description: initializeQueueProcessor in webrtc-signalling.ts creates a setInterval (every 50ms) to process message queue, which is never cleared even when all WebRTC connections close.
-Location: src/lib/webrtc-signalling.ts, line 388
-Impact: Major memory leak; interval runs indefinitely, consuming CPU and preventing event loop exit. Message queue and closures persist in memory.
-Fix: Use setTimeout that reschedules only when queue has messages, or track active connections and clear interval when last connection closes.
+### PERF-3: Module-level setInterval never cleared (rate-limit.ts memory leak)
+**Severity:** High  
+**Description:** The `setInterval` in `rate-limit.ts` at module level runs every 5 minutes but is never cleared.
+**Location:** `src/lib/rate-limit.ts`, line 9  
+**Impact:** Major memory leak; interval runs indefinitely.  
+**Fix:** Convert to lazy-initialized interval with cleanup function.
 
-PERF‑4: Direct console.error calls bypass logger (dev logging in production)
-Severity: Low
-Description: Multiple console.error calls in catch blocks (no environment check) bypass project's logger and output in production, potentially exposing internal details.
-Location: src/context/GameContext.tsx (lines 99, 137)
-Impact: Production builds output error logs, violating logging best practices and potentially leaking internal info.
-Fix: Wrap in if (process.env.NODE_ENV === 'development') or use project's logger with environment awareness.
+### PERF-4: Direct console.log/error calls bypassing logger
+**Severity:** Medium  
+**Description:** Several files use `console.log/error` directly instead of using the logger utility.
+**Location:** `src/components/screens/MainMenu.tsx` (lines 32, 38, 57), `src/components/ErrorBoundary.tsx` (line 51)  
+**Impact:** Sensitive data may be exposed in production console logs.  
+**Fix:** Replace all direct console calls with the logger utility.
 
-PERF‑5: Unmemoized array sorting in SavedAdventuresList
-Severity: Medium
-Description: SavedAdventuresList sorts adventures array on every render without memoization, causing O(n log n) work repeatedly.
-Location: src/components/screens/SavedAdventuresList.tsx (sorting logic)
-Impact: Unnecessary computation on every render, worsening with large adventure lists.
-Fix: Wrap sorting logic in useMemo with proper dependencies.
+### PERF-5: Unmemoized array sorting in SavedAdventuresList [FIXED]
+**Severity:** N/A (Fixed)  
+**Description:** Fixed with useMemo wrapper.
+**Location:** `src/components/screens/SavedAdventuresList.tsx`, lines 65-67  
+**Impact:** N/A - Fixed.
 
-PERF‑6: Missing React.memo on 6+ major components
-Severity: Medium
-Description: Key components like SavedAdventuresList, CharacterDisplay, InventoryDisplay lack React.memo, causing re-renders when parent re-renders even if props don't change.
-Location: Multiple components in src/components/screens/, src/components/game/
-Impact: Unnecessary re-renders of complex components, degrading performance.
-Fix: Add React.memo to components that receive stable props and don't need to re-render on parent changes.
+### PERF-6: Missing React.memo on components
+**Severity:** Medium  
+**Description:** Some key components that receive stable props may still be missing memoization.
+**Location:** Various components in `src/components/`  
+**Impact:** Unnecessary re-renders when parent components update.  
+**Fix:** Add React.memo to components that receive stable props.
 
-PERF‑7: Array index as key in dynamic lists
-Severity: Medium
-Description: ChatPanel, AdventureSummary use array index as key for dynamic lists, causing React to reuse components incorrectly when list order changes.
-Location: src/components/gameplay/ChatPanel.tsx; src/components/screens/AdventureSummary.tsx
-Impact: Stale UI, incorrect component state when list items are added/removed/reordered.
-Fix: Use unique identifiers (timestamp, ID) as keys instead of array index.
+### PERF-7: Fire-and-forget setTimeout without cleanup in InteractionDialog
+**Severity:** Medium  
+**Description:** InteractionDialog.tsx uses setTimeout without storing the timeout ID.
+**Location:** `src/components/gameplay/InteractionDialog.tsx`, lines 108, 114, 120  
+**Impact:** Potential state updates on unmounted components.  
+**Fix:** Store timeout IDs in refs and clear them on unmount.
 
-PERF‑8: Bundle size concerns with lucide-react icon imports
-Severity: Medium
-Description: Lucide-react icons are imported as entire library or large subsets, increasing bundle size unnecessarily.
-Location: Multiple component files importing from lucide-react
-Impact: Larger bundle size, slower initial load for users.
-Fix: Use tree-shaking imports (import { IconName } from 'lucide-react' with proper config) or switch to individual icon imports.
+### PERF-8: Theme CSS accumulation bug [FIXED]
+**Severity:** N/A (Fixed)  
+**Description:** Fixed by clearing all theme CSS properties before applying new ones.
+**Location:** `src/context/GameContext.tsx`, lines 188-211  
+**Impact:** N/A - Fixed.
 
-PERF‑9: Inline arrow functions in JSX loops
-Severity: Low
-Description: Inline arrow functions created in JSX loops (e.g., map callbacks) are recreated on every render, causing child components to re-render unnecessarily.
-Location: Multiple component files with list rendering
-Impact: Minor unnecessary re-renders of list items.
-Fix: Extract inline functions to useCallback or define outside render scope.
+### PERF-9: Reconciliation interval not properly cleaned up in use-multiplayer
+**Severity:** Medium  
+**Description:** The reconciliationInterval may not be properly cleared in all code paths.
+**Location:** `src/hooks/use-multiplayer.ts`, line 197  
+**Impact:** Potential memory leak if the interval continues after component unmounts.  
+**Fix:** Ensure the interval is cleared in the cleanup effect.
 
-PERF‑10: O(n*m) lookups in skill rendering
-Severity: Medium
-Description: Skill tree rendering performs nested loops (O(n*m)) to match skills with user progress, inefficient for large skill trees.
-Location: src/components/game/SkillTreeDisplay.tsx
-Impact: Slow rendering of skill trees with many skills/stages.
-Fix: Precompute a map of skill IDs to progress for O(1) lookups.
+### PERF-10: Large bundle contributor - lucide-react icons
+**Severity:** Low  
+**Description:** The lucide-react package is imported across many components.
+**Location:** Multiple files importing from `lucide-react`  
+**Impact:** Increased bundle size; slower initial page load.  
+**Fix:** Consider using a single icon barrel file or SVG sprites.
 
-PERF‑11: WebLLM heavy dependency bundled even when unused
-Severity: Medium
-Description: @mlc-ai/web-llm is listed in package.json and bundled even when users never select local AI, adding significant size.
-Location: package.json; src/ai/ai-router.ts (line 989)
-Impact: Increased install and bundle size for users who never use local AI models.
-Fix: Move to optional peer dependency or lazy-load with fallback that doesn't require the package.
+### PERF-11: Inline className functions in JSX
+**Severity:** Low  
+**Description:** Many components create new objects or call functions on every render for className props.
+**Location:** Throughout `src/components/`  
+**Impact:** Minor performance degradation; unnecessary re-renders.  
+**Fix:** Memoize complex className calculations with useMemo.
 
-PERF‑12: AI proxy route decodes/re-encodes streaming responses
-Severity: Medium
-Description: AI proxy route reads entire streaming response, decodes chunks, reformats, and re-encodes, adding latency and memory overhead.
-Location: src/app/api/ai-proxy/route.ts (lines 112-151, 206-259, 345-396)
-Impact: Doubled memory usage during streaming, increased latency for AI responses.
-Fix: Pipe streaming responses directly without decoding/re-encoding.
+### PERF-12: WebRTC data channel flooding [IMPLEMENTED]
+**Severity:** N/A (Well Implemented)  
+**Description:** Has per-peer queue management and backpressure handling.
+**Location:** `src/hooks/use-multiplayer.ts`, `src/lib/webrtc-signalling.ts`  
+**Impact:** N/A - Well implemented.  
+**Fix:** N/A - Current implementation is good.
 
-PERF‑13: Production dev logging (console.error without env check)
-Severity: Low
-Description: Console.error calls in production code bypass environment checks, outputting logs in production builds.
-Location: Multiple files (src/context/GameContext.tsx, etc.)
-Impact: Violates logging best practices, potential internal info leakage.
-Fix: Wrap all console.error calls in environment checks or use project logger.
+### PERF-13: Unnecessary development-only logging in production build
+**Severity:** Low  
+**Description:** Debug log effect still runs (and does the check) in production.
+**Location:** `src/context/GameContext.tsx`, lines 572-605  
+**Impact:** Minor performance hit in production.  
+**Fix:** Use a build-time check or move to a separate development-only module.
 
-PERF‑14: Large dependencies (@mlc-ai/web-llm in package.json)
-Severity: Medium
-Description: @mlc-ai/web-llm is a large dependency (includes WASM files, model weights) bundled unconditionally.
-Location: package.json
-Impact: Significantly larger bundle/install size.
-Fix: Make dependency optional or dynamically import only when local AI is selected.
+### PERF-14: Potential O(n²) operations in Gameplay.tsx
+**Severity:** Low  
+**Description:** Arrays are mapped/filtered during rendering which could cause lag with large state.
+**Location:** `src/components/screens/Gameplay.tsx`  
+**Impact:** UI lag with large game state.  
+**Fix:** Memoize derived data with useMemo.
+
+## Detailed Findings
+
+### PERF-1: Sub-reducers creating new state references unnecessarily
+**Severity:** Medium
