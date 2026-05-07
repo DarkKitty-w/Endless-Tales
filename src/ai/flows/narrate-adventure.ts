@@ -499,6 +499,18 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           normalizer
       );
 
+      // AI-23: Handle AI refusal if present in result
+      if ((result as any)._refusalReason) {
+          const refusalReason = (result as any)._refusalReason;
+          logger.warn(`[narrateAdventure] AI refused to respond: ${refusalReason}`);
+          return {
+              ...fallback,
+              narration: `The Narrator is unable to respond to that action. ${refusalReason} Try rephrasing your action.`,
+              usedFallback: true,
+              rawResponse: refusalReason,
+          } as any;
+      }
+
       // Ensure branching choices are exactly 4
       if (!result.branchingChoices || result.branchingChoices.length !== 4) {
           result.branchingChoices = fallback.branchingChoices;

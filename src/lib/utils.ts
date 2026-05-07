@@ -201,6 +201,56 @@ export function validateChoicesAgainstGameState(
 }
 
 /* -------------------------------------------------------
+   AI REFUSAL DETECTION (AI-23)
+------------------------------------------------------- */
+/**
+ * Checks if the AI response indicates a refusal to generate content.
+ * Returns the refusal reason if detected, otherwise null.
+ */
+export function detectAiRefusal(text: string): string | null {
+  const lowerText = text.toLowerCase();
+  
+  // Common AI refusal patterns
+  const refusalPatterns = [
+    /i can'?t generate/i,
+    /i cannot generate/i,
+    /content policy/i,
+    /safety (guidelines|policy|filters?)/i,
+    /i'm not allowed to/i,
+    /i am not allowed to/i,
+    /i don'?t feel comfortable/i,
+    /i do not feel comfortable/i,
+    /i can'?t (create|write|provide|produce)/i,
+    /against my (guidelines|programming|instructions)/i,
+    /i'?m unable to (generate|create|write)/i,
+    /violates? (policy|guidelines?|terms)/i,
+    /inappropriate content/i,
+    /harmful content/i,
+    /as an ai language model/i,
+    /as a language model/i,
+  ];
+  
+  for (const pattern of refusalPatterns) {
+    const match = lowerText.match(pattern);
+    if (match) {
+      // Extract a user-friendly reason
+      if (/content policy|safety|inappropriate|harmful|violates?/i.test(match[0])) {
+        return "The AI couldn't generate a response due to content safety filters.";
+      }
+      if (/can'?t generate|cannot generate|unable/i.test(match[0])) {
+        return "The AI was unable to generate a response for this action.";
+      }
+      if (/not allowed|not comfortable/i.test(match[0])) {
+        return "The AI couldn't generate an appropriate response for this action.";
+      }
+      return "The AI refused to generate a response. Please try rephrasing your action.";
+    }
+  }
+  
+  return null;
+}
+
+/* -------------------------------------------------------
    UNIVERSAL AI PIPELINE (REAL RETRIES + DEBUG LOGS)
 ------------------------------------------------------- */
 export async function processAiResponse<T>(
@@ -209,6 +259,21 @@ export async function processAiResponse<T>(
   fallback: T,
   normalizer?: (data: any) => any
 ): Promise<T> {
+  // AI-23: Check for AI refusal before attempting to parse
+  const refusalReason = detectAiRefusal(rawText);
+  if (refusalReason) {
+    logger.warn(`[processAiResponse] AI refusal detected: ${refusalReason}`);
+    // Return fallback with error message for the UI to display
+    if (typeof fallback === 'object' && fallback !== null) {
+      const fallbackWithError = { 
+        ...fallback as any, 
+        _refusalReason: refusalReason 
+      };
+      return fallbackWithError as T;
+    }
+    return fallback;
+  }
+
   // Helper that runs extraction, jsonrepair, and parse in sequence
   const tryParse = (text: string): any | null => {
     try {
