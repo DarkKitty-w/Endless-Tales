@@ -20,6 +20,15 @@ interface ActionInputProps {
   isWaitingForHost?: boolean;
 }
 
+const QUICK_ACTIONS = [
+  { label: "Look", action: "Look around", icon: "👀" },
+  { label: "Inventory", action: "Check inventory", icon: "🎒" },
+  { label: "Rest", action: "Rest", icon: "😴" },
+  { label: "Status", action: "Check my status", icon: "📊" },
+  { label: "Map", action: "Check map", icon: "🗺️" },
+  { label: "Skills", action: "Check skills", icon: "⚡" },
+];
+
 const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
   ({ onSubmit, onSuggest, onCraft, disabled, isWaitingForHost = false }, ref) => {
     const [playerInput, setPlayerInput] = useState("");
@@ -172,6 +181,35 @@ const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
             </TooltipContent>
           </Tooltip>
         </form>
+        
+        {/* Quick Action Buttons */}
+        <div className="flex gap-1.5 mt-2 flex-wrap" role="group" aria-label="Quick actions">
+          {QUICK_ACTIONS.map((quick) => (
+            <Tooltip key={quick.label}>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => {
+                    if (!disabled) {
+                      onSubmit(quick.action);
+                    }
+                  }}
+                  disabled={disabled}
+                  aria-label={quick.action}
+                >
+                  <span className="mr-1" role="img" aria-hidden="true">{quick.icon}</span>
+                  {quick.label}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{quick.action}</p>
+              </TooltipContent>
+            </Tooltip>
+          ))}
+        </div>
       </div>
     );
   }
