@@ -5,12 +5,15 @@
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import { extractJsonFromResponse } from '../../lib/utils';
-import { logger } from '../../lib/logger';
+import { logger, setRequestId, setTraceId } from '../../lib/logger';
 
 export interface SuggestExistingCharactersInput {
   universeName: string;
   userApiKey?: string | null;
   signal?: AbortSignal;
+  // OBS-6: Add requestId and traceId for correlation
+  requestId?: string;
+  traceId?: string;
 }
 
 export interface SuggestExistingCharactersOutput {
@@ -25,6 +28,14 @@ const SuggestExistingCharactersOutputSchema = z.object({
 });
 
 export async function suggestExistingCharacters(input: SuggestExistingCharactersInput): Promise<SuggestExistingCharactersOutput> {
+  // OBS-6: Set requestId and traceId from input if provided
+  if (input.requestId) {
+    setRequestId(input.requestId);
+  }
+  if (input.traceId) {
+    setTraceId(input.traceId);
+  }
+  
   const prompt = `Suggest 3 to 5 well-known existing characters from the universe "${input.universeName}" suitable for a player character. Return only a JSON object with 'suggestedNames' array.`;
 
   try {
@@ -36,6 +47,9 @@ export async function suggestExistingCharacters(input: SuggestExistingCharacters
               responseMimeType: "application/json",
           },
           signal: input.signal,
+          // OBS-6 & OBS-7: Pass requestId and traceId for correlation
+          requestId: input.requestId,
+          traceId: input.traceId,
       });
 
       const text = response.text;

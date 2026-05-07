@@ -5,12 +5,15 @@
 import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import { extractJsonFromResponse } from '../../lib/utils';
-import { logger } from '../../lib/logger';
+import { logger, setRequestId, setTraceId } from '../../lib/logger';
 
 export interface SummarizeAdventureInput {
   story: string;
   userApiKey?: string | null;
   signal?: AbortSignal;
+  // OBS-6: Add requestId and traceId for correlation
+  requestId?: string;
+  traceId?: string;
 }
 
 export interface SummarizeAdventureOutput {
@@ -25,6 +28,14 @@ const SummarizeAdventureOutputSchema = z.object({
 });
 
 export async function summarizeAdventure(input: SummarizeAdventureInput): Promise<SummarizeAdventureOutput> {
+  // OBS-6: Set requestId and traceId from input if provided
+  if (input.requestId) {
+    setRequestId(input.requestId);
+  }
+  if (input.traceId) {
+    setTraceId(input.traceId);
+  }
+  
   const prompt = `Summarize the following adventure story concisely, highlighting key events and consequences:\n\n${input.story}`;
 
   try {
@@ -36,6 +47,9 @@ export async function summarizeAdventure(input: SummarizeAdventureInput): Promis
               responseMimeType: "application/json",
           },
           signal: input.signal,
+          // OBS-6 & OBS-7: Pass requestId and traceId for correlation
+          requestId: input.requestId,
+          traceId: input.traceId,
       });
 
       const text = response.text;

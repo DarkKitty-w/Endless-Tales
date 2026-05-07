@@ -7,7 +7,7 @@ import { getClient } from '../ai-instance';
 import type { DifficultyLevel, GameStateContext } from '../../types/game-types';
 import { formatGameStateContextForPrompt } from '../../context/game-state-utils';
 import { processAiResponse } from '../../lib/utils';
-import { logger } from '../../lib/logger';
+import { logger, setRequestId, setTraceId } from '../../lib/logger';
 
 export type { DifficultyLevel };
 
@@ -22,6 +22,9 @@ export interface AssessActionDifficultyInput {
     turnCount: number;
     userApiKey?: string | null;
     signal?: AbortSignal;
+    // OBS-6: Add requestId and traceId for correlation
+    requestId?: string;
+    traceId?: string;
 }
 
 export interface AssessActionDifficultyOutput {
@@ -49,6 +52,14 @@ const FALLBACK_DIFFICULTY_MAP: Record<string, { difficulty: DifficultyLevel; dic
 };
 
 export async function assessActionDifficulty(input: AssessActionDifficultyInput): Promise<AssessActionDifficultyOutput> {
+  // OBS-6: Set requestId and traceId from input if provided
+  if (input.requestId) {
+    setRequestId(input.requestId);
+  }
+  if (input.traceId) {
+    setTraceId(input.traceId);
+  }
+  
   if (process.env.NODE_ENV === 'development' && input.characterClass === 'admin000') {
     return {
       difficulty: "Trivial",
@@ -88,6 +99,9 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           contents: prompt,
           config: { responseMimeType: "application/json" },
           signal: input.signal,
+          // OBS-6 & OBS-7: Pass requestId and traceId for correlation
+          requestId: input.requestId,
+          traceId: input.traceId,
       });
 
       const text = response.text;

@@ -7,12 +7,15 @@ import { getClient } from '../ai-instance';
 import type { SkillTree } from '../../types/game-types';
 import { MAX_SKILL_TREE_STAGES } from '../../lib/constants';
 import { processAiResponse } from '../../lib/utils';
-import { logger } from '../../lib/logger';
+import { logger, setRequestId, setTraceId } from '../../lib/logger';
 
 export interface GenerateSkillTreeInput {
   characterClass: string;
   userApiKey?: string | null;
   signal?: AbortSignal;
+  // OBS-6: Add requestId and traceId for correlation
+  requestId?: string;
+  traceId?: string;
 }
 
 export type GenerateSkillTreeOutput = SkillTree;
@@ -54,6 +57,14 @@ const createFallbackSkillTree = (className: string): SkillTree => ({
 });
 
 export async function generateSkillTree(input: GenerateSkillTreeInput): Promise<GenerateSkillTreeOutput> {
+  // OBS-6: Set requestId and traceId from input if provided
+  if (input.requestId) {
+    setRequestId(input.requestId);
+  }
+  if (input.traceId) {
+    setTraceId(input.traceId);
+  }
+  
   const prompt = `
 You are a game designer. Generate a ${MAX_SKILL_TREE_STAGES}-stage skill tree (stages 0-${MAX_SKILL_TREE_STAGES - 1}) for the class: ${input.characterClass}.
 
@@ -72,6 +83,9 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           contents: prompt,
           config: { responseMimeType: "application/json" },
           signal: input.signal,
+          // OBS-6 & OBS-7: Pass requestId and traceId for correlation
+          requestId: input.requestId,
+          traceId: input.traceId,
       });
 
       const text = response.text;

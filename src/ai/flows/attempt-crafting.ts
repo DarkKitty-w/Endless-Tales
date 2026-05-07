@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { getClient } from '../ai-instance';
 import type { InventoryItem, ItemQuality } from '../../types/game-types';
 import { processAiResponse } from '../../lib/utils';
-import { logger } from '../../lib/logger';
+import { logger, setRequestId, setTraceId } from '../../lib/logger';
 
 export interface AttemptCraftingInput {
   characterKnowledge: string[];
@@ -16,6 +16,9 @@ export interface AttemptCraftingInput {
   usedIngredients: string[];
   userApiKey?: string | null;
   signal?: AbortSignal;
+  // OBS-6: Add requestId and traceId for correlation
+  requestId?: string;
+  traceId?: string;
 }
 
 export interface AttemptCraftingOutput {
@@ -51,6 +54,14 @@ const AttemptCraftingOutputSchema = z.object({
 });
 
 export async function attemptCrafting(input: AttemptCraftingInput): Promise<AttemptCraftingOutput> {
+  // OBS-6: Set requestId and traceId from input if provided
+  if (input.requestId) {
+    setRequestId(input.requestId);
+  }
+  if (input.traceId) {
+    setTraceId(input.traceId);
+  }
+  
   const prompt = `
 You are a Master Crafter AI for the text adventure "Endless Tales". Evaluate a player's crafting attempt.
 
@@ -83,6 +94,9 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           contents: prompt,
           config: { responseMimeType: "application/json" },
           signal: input.signal,
+          // OBS-6 & OBS-7: Pass requestId and traceId for correlation
+          requestId: input.requestId,
+          traceId: input.traceId,
       });
 
       const text = response.text;
