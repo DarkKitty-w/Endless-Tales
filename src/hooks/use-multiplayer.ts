@@ -15,6 +15,27 @@ import {
 import type { StoryLogEntry, GameState } from "../types/game-types";
 import { logger } from "@/lib/logger";
 
+// NET-13 Fix: Simple checksum function for state reconciliation
+function calculateStateChecksum(state: any): string {
+  // Simple checksum: create a string from key state fields and hash it
+  const relevantFields = {
+    storyLogLength: state.storyLog?.length || 0,
+    turnCount: state.turnCount || 0,
+    currentTurnIndex: state.currentTurnIndex || 0,
+    players: state.players?.sort().join(',') || '',
+    partyStateKeys: Object.keys(state.partyState || {}).sort().join(','),
+  };
+  const str = JSON.stringify(relevantFields);
+  // Simple hash function
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return `checksum_${Math.abs(hash)}`;
+}
+
 interface UseMultiplayerOptions {
   playerName: string;
   onGameActionReceived?: (playerId: string, action: string, turnNumber: number, isInitial: boolean) => void;
@@ -78,6 +99,10 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   const peerOutboxSequence = useRef<Record<string, number>>({}); // Track outgoing sequence number per peer
   const iceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const multiplayerStateRef = useRef(multiplayerState);
+  // NET-13 Fix: State reconciliation for detecting mismatched states
+  const lastSentChecksum = useRef<string | null>(null);
+  const reconciliationInterval = useRef<NodeJS.Timeout | null>(null);
+  const peerChecksums = useRef<Record<string, { checksum: string; timestamp: number }>>({});
 
   // Keep ref updated
   useEffect(() => {
@@ -88,6 +113,102 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   function generatePeerId(): string {
     return `peer_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   }
+
+  // NET-13 Fix: State reconciliation functions
+  const sendStateChecksum = useCallback(() => {
+    if (!multiplayerStateRef.current.isHost) return; // Only host sends checksums
+    
+    const checksum = calculateStateChecksum(multiplayerStateRef.current);
+    lastSentChecksum.current = checksum;
+    
+    // Broadcast checksum to all peers
+    Object.keys(dataChannelsRef.current).forEach(label => {
+      const channel = dataChannelsRef.current[label];
+      if (channel && channel.readyState === 'open') {
+        try {
+          const seq = (peerOutboxSequence.current[label] || 0);
+          peerOutboxSequence.current[label] = seq + 1;
+          channel.send(JSON.stringify({
+            type: 'control',
+            senderId: multiplayerStateRef.current.peerId,
+            sequenceNumber: seq,
+            payload: {
+              action: 'state-checksum',
+              data: { checksum, version: multiplayerStateRef.current.version },
+            },
+          } as ControlMessage));
+        } catch (error) {
+          logger.error('Failed to send state checksum:', error);
+        }
+      }
+    });
+  }, [peerOutboxSequence]);
+
+  const requestStateResync = useCallback((fromPeerId?: string) => {
+    logger.log('Requesting state resync', fromPeerId ? `from ${fromPeerId}` : '');
+    const channelKeys = Object.keys(dataChannelsRef.current);
+    
+    if (fromPeerId) {
+      // Request from specific peer (host)
+      const channel = dataChannelsRef.current[fromPeerId];
+      if (channel && channel.readyState === 'open') {
+        try {
+          const seq = (peerOutboxSequence.current[fromPeerId] || 0);
+          peerOutboxSequence.current[fromPeerId] = seq + 1;
+          channel.send(JSON.stringify({
+            type: 'control',
+            senderId: multiplayerStateRef.current.peerId,
+            sequenceNumber: seq,
+            payload: { action: 'request-sync' },
+          } as ControlMessage));
+        } catch (error) {
+          logger.error('Failed to request resync:', error);
+        }
+      }
+    } else {
+      // Broadcast request to all (should reach host)
+      channelKeys.forEach(label => {
+        const channel = dataChannelsRef.current[label];
+        if (channel && channel.readyState === 'open') {
+          try {
+            const seq = (peerOutboxSequence.current[label] || 0);
+            peerOutboxSequence.current[label] = seq + 1;
+            channel.send(JSON.stringify({
+              type: 'control',
+              senderId: multiplayerStateRef.current.peerId,
+              sequenceNumber: seq,
+              payload: { action: 'request-sync' },
+            } as ControlMessage));
+          } catch (error) {
+            logger.error('Failed to request resync:', error);
+          }
+        }
+      });
+    }
+  }, [peerOutboxSequence]);
+
+  const startReconciliation = useCallback(() => {
+    if (reconciliationInterval.current) return;
+    
+    // Send checksum every 30 seconds
+    reconciliationInterval.current = setInterval(() => {
+      if (multiplayerStateRef.current.isHost) {
+        sendStateChecksum();
+      }
+    }, 30000);
+    
+    // Send initial checksum
+    if (multiplayerStateRef.current.isHost) {
+      sendStateChecksum();
+    }
+  }, [sendStateChecksum]);
+
+  const stopReconciliation = useCallback(() => {
+    if (reconciliationInterval.current) {
+      clearInterval(reconciliationInterval.current);
+      reconciliationInterval.current = null;
+    }
+  }, []);
 
   // NET-10 Fix: Per-peer message queue processing
   const processPeerQueue = useCallback((channelLabel: string) => {
@@ -447,6 +568,8 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         if (peerConnectionRef.current) {
           sendBufferedIceCandidates(peerConnectionRef.current, channel);
         }
+        // NET-13 Fix: Start state reconciliation when channel opens
+        startReconciliation();
       },
       () => {
         logger.log(`Channel ${channel.label} closed`);
@@ -459,7 +582,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         }
       }
     );
-  }, [reconnect, lastInitParams]);
+  }, [reconnect, lastInitParams, startReconciliation]);
 
   // Handle incoming messages
   const handleMessage = useCallback((data: MultiplayerMessage, channelLabel: string) => {
@@ -604,6 +727,27 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
               onControlMessage({ action: 'sync-complete', data: { gameState, partyState, turnOrder, currentTurnIndex } });
             }
           }
+        } else if (controlMsg.payload.action === 'state-checksum' && !currentState.isHost) {
+          // Guest received state checksum from host - check for mismatch
+          const { checksum, version } = controlMsg.payload.data || {};
+          const senderId = controlMsg.senderId;
+          
+          if (checksum && senderId) {
+            // Store the checksum
+            peerChecksums.current[senderId] = { checksum, timestamp: Date.now() };
+            
+            // Calculate our own checksum
+            const localChecksum = calculateStateChecksum(multiplayerStateRef.current);
+            
+            // Compare checksums
+            if (localChecksum !== checksum) {
+              logger.warn(`State mismatch detected! Host checksum: ${checksum}, Local checksum: ${localChecksum}`);
+              // Request a full state resync from host
+              requestStateResync(senderId);
+            } else {
+              logger.log('State checksum matches host - all good!');
+            }
+          }
         }
         break;
       }
@@ -619,6 +763,10 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
+    
+    // NET-13 Fix: Stop state reconciliation
+    stopReconciliation();
+    peerChecksums.current = {}; // Clear stored checksums
     
     // NET-10 Fix: Clean up per-peer message queues and timeouts
     Object.keys(peerQueueTimeouts.current).forEach(channelLabel => {
@@ -666,7 +814,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     setTimeout(() => {
       intentionalDisconnect.current = false;
     }, 2000);
-  }, []);
+  }, [stopReconciliation]);
 
   // Cleanup on unmount
   useEffect(() => {
