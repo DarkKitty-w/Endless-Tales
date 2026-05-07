@@ -71,7 +71,7 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
     case "ADVANCE_TURN": {
       const newIndex = action.payload;
       if (newIndex < 0 || newIndex >= state.turnOrder.length) {
-        logger.error('ADVANCE_TURN: Invalid turn index', newIndex);
+        logger.error("ADVANCE_TURN: Invalid turn index", "multiplayer-reducer", { newIndex });
         return state;
       }
       return {
@@ -123,9 +123,9 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
             `endlessTales_temp_backup_${state.currentAdventureId}_${Date.now()}`,
             JSON.stringify(localBackup)
           );
-          logger.log('Created backup before applying remote state');
+          logger.log("Created backup before applying remote state", "multiplayer-reducer");
         } catch (e) {
-          logger.error('Failed to create backup before applying remote state:', e);
+          logger.error("Failed to create backup before applying remote state", "multiplayer-reducer", { error: String(e) });
         }
       }
       

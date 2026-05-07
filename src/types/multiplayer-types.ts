@@ -99,7 +99,7 @@ export interface ChatMessage {
 export interface ControlMessage {
   type: 'CONTROL';
   payload: {
-    action: 'kick' | 'pause' | 'resume' | 'set-turn-order' | 'reconnect' | 'interaction-request' | 'interaction-response' | 'request-sync' | 'sync-response' | 'sync-complete';
+    action: 'kick' | 'pause' | 'resume' | 'set-turn-order' | 'reconnect' | 'interaction-request' | 'interaction-response' | 'request-sync' | 'sync-response' | 'sync-complete' | 'state-checksum';
     targetPeerId?: string;
     data?: any;
   };

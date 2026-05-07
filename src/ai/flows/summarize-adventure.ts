@@ -77,15 +77,15 @@ export async function summarizeAdventure(input: SummarizeAdventureInput): Promis
           (result as any).usedFallback = false;
           return result;
       } else {
-          logger.error("Zod validation failed for summarizeAdventure. Raw response:", cleanedText.substring(0, 500));
-          logger.error("Validation error:", validation.error);
+          logger.error('Zod validation failed for summarizeAdventure', 'summarize-adventure', { rawResponse: cleanedText.substring(0, 500) });
+          logger.error('Validation error', 'summarize-adventure', { error: validation.error?.message || String(validation.error) });
           throw new Error(`Invalid response structure. Raw response: ${cleanedText.substring(0, 500)}`);
       }
   } catch (error: any) {
       if (error.name === 'AbortError') {
           throw error;
       }
-      logger.error("AI Summary Error:", error);
+      logger.error('AI Summary Error', 'summarize-adventure', { error: error.message || String(error) });
       return { 
         summary: "Summary generation failed.",
         // ERR-8/ERR-11: Indicate fallback is being used

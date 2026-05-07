@@ -8,6 +8,7 @@ import type { Skill, CharacterStats } from '../../types/character-types';
 import { useGame } from "../../context/GameContext";
 import { useMultiplayer } from "../../hooks/use-multiplayer";
 import { GameplayLayout } from "../../components/gameplay/GameplayLayout";
+import { ActionInput, type ActionInputRef } from "../../components/gameplay/ActionInput";
 import { TradeDialog } from "../../components/gameplay/TradeDialog";
 import { useToast } from "../../hooks/use-toast";
 import type { GameState, Character, SkillTree, Reputation, NpcRelationships, Location } from '../../types/game-types';
@@ -24,9 +25,9 @@ import { Loader2 } from "lucide-react";
 import { useIsMobile } from "../../hooks/use-mobile";
 import { Button } from '../../components/ui/button';
 import { TooltipProvider } from "../../components/ui/tooltip";
-import type { InteractionRequest } from "../../types/multiplayer-types";
+import type { InteractionRequest, PendingInteraction } from "../../types/multiplayer-types";
 import { logger, generateRequestId, setRequestId, setTraceId } from "@/lib/logger";
-import { rollDie, getDiceRollFunction, DICE_TYPES, DiceType } from "../../lib/game-utils/dice";
+import { rollD6, rollD10, rollD20, rollD100 } from "../../services/dice-roller";
 
 const GENERIC_BRANCHING_CHOICES: NarrateAdventureOutput['branchingChoices'] = [
     { text: "Look around more closely.", consequenceHint: "May reveal new details." },
@@ -117,7 +118,7 @@ export function Gameplay() {
     const [isPartySidebarOpen, setIsPartySidebarOpen] = useState(true);
     const [isChatPanelOpen, setIsChatPanelOpen] = useState(false);
      const [isInteractionDialogOpen, setIsInteractionDialogOpen] = useState(false);
-     const [currentInteraction, setCurrentInteraction] = useState<InteractionRequest | null>(null);
+     const [currentInteraction, setCurrentInteraction] = useState<PendingInteraction | null>(null);
      const [isInteractionTarget, setIsInteractionTarget] = useState(false);
      const [pendingGuestAction, setPendingGuestAction] = useState<string | null>(null);
      const [isOutgoingInteractionOpen, setIsOutgoingInteractionOpen] = useState(false);
@@ -128,6 +129,10 @@ export function Gameplay() {
      const [isTradeDialogOpen, setIsTradeDialogOpen] = useState(false);
      const [tradeTargetPeerId, setTradeTargetPeerId] = useState<string | null>(null);
      
+
+    // Compute anyLoading early so it can be used in callbacks and effects
+    const anyLoading = isLoading || isInitialLoading || isEnding || isSaving || 
+                       isAssessingDifficulty || isRollingDice || isCraftingLoading || localIsGeneratingSkillTree;
      const initialSetupAttemptedRef = useRef<Record<string, boolean>>({});
     const actionInputRef = useRef<ActionInputRef>(null);
     const isMobile = useIsMobile();
@@ -257,7 +262,7 @@ export function Gameplay() {
         }, 100);
         
       } catch (error) {
-        logger.error('Error processing guest action:', error);
+        logger.error('Error processing guest action', 'gameplay', { error: String(error) });
         toast({ title: "Error", description: "Failed to process guest action.", variant: "destructive" });
       }
     }, [toast, dispatch]);
@@ -268,23 +273,23 @@ export function Gameplay() {
       onGameActionReceived: handleGuestActionReceived,
       onStoryUpdate: (entry, newTurn) => {
         // Guest receives story update from host
-        logger.log('Guest received story update', entry);
+        logger.log('Guest received story update', 'gameplay', { entry });
         dispatch({ type: "UPDATE_NARRATION", payload: entry });
       },
       onPartyStateUpdate: (partyState) => {
-        logger.log('Party state update', partyState);
+        logger.log('Party state update', 'gameplay', { partyState });
         dispatch({ type: "UPDATE_PARTY_STATE", payload: partyState });
       },
       onChatMessage: (msg) => {
-        logger.log('Chat message', msg);
+        logger.log('Chat message', 'gameplay', { msg });
         dispatch({ type: "ADD_CHAT_MESSAGE", payload: msg });
       },
       onControlMessage: (msg) => {
-        logger.log('Control message', msg);
+        logger.log('Control message', 'gameplay', { msg });
       },
       onInteractionRequest: (interaction) => {
-        logger.log('Interaction request received', interaction);
-        setCurrentInteraction(interaction);
+        logger.log('Interaction request received', 'gameplay', { interaction });
+        setCurrentInteraction(interaction as unknown as PendingInteraction);
         setIsInteractionDialogOpen(true);
         if (interaction.targetPeerId === multiplayerState.peerId) {
           setIsInteractionTarget(true);
@@ -293,7 +298,7 @@ export function Gameplay() {
         }
       },
       onInteractionResponse: (interactionId, accepted) => {
-        logger.log('Interaction response', interactionId, accepted);
+        logger.log('Interaction response', 'gameplay', { interactionId, accepted });
         if (currentInteraction && currentInteraction.id === interactionId) {
           dispatch({ type: "RESOLVE_PENDING_INTERACTION", payload: { accepted } });
           setIsInteractionDialogOpen(false);
@@ -305,16 +310,17 @@ export function Gameplay() {
         }
       },
       onPeerConnected: (peer) => {
-        logger.log('Peer connected', peer);
+        logger.log('Peer connected', 'gameplay', { peer });
         dispatch({ type: "PEER_CONNECTED", payload: { peerId: peer.peerId, name: peer.name, isHost: false } });
       },
       onPeerDisconnected: (peerId) => {
-        logger.log('Peer disconnected', peerId);
+        logger.log('Peer disconnected', 'gameplay', { peerId });
         dispatch({ type: "PEER_DISCONNECTED", payload: peerId });
         toast({ title: "Player Disconnected", description: `A player has disconnected.`, variant: "destructive" });
       },
       // ERR-13: Handle multiplayer errors with user-friendly messages
       onError: (title, description, recoverable) => {
+        logger.error('Multiplayer error', 'gameplay', { title, description, recoverable });
         toast({ 
           title, 
           description: recoverable ? `${description} You can try reconnecting.` : description,
@@ -363,7 +369,7 @@ export function Gameplay() {
         try {
             sendChatMessage(text);
         } catch (error) {
-            logger.error("Failed to send chat message:", error);
+            logger.error("Failed to send chat message", "gameplay", { error: String(error) });
             toast({ 
                 title: "Chat Error", 
                 description: "Failed to send message. Please try again.", 
@@ -480,7 +486,7 @@ export function Gameplay() {
     }, [contextIsGeneratingSkillTree, localIsGeneratingSkillTree]);
 
     useEffect(() => {
-        logger.log("Gameplay: currentAdventureId changed or component mounted. Resetting relevant states. New ID:", currentAdventureId);
+        logger.log('Gameplay: currentAdventureId changed or component mounted. Resetting relevant states.', 'gameplay', { currentAdventureId });
         setIsInitialLoading(true);
         setError(null);
         setLastPlayerAction(null);
@@ -512,7 +518,7 @@ export function Gameplay() {
 
     const handleEndAdventure = useCallback(async (finalNarrationEntry?: StoryLogEntry, characterIsDefeated = false) => {
         if (loadingPhase.type !== 'idle' && loadingPhase.type !== 'initial-loading') return;
-        logger.log("Gameplay: Initiating end adventure. Defeated:", characterIsDefeated);
+        logger.log('Gameplay: Initiating end adventure.', 'gameplay', { characterIsDefeated });
         setIsEnding(true);
         setError(null);
         toast({ title: characterIsDefeated ? "Character Defeated" : "Ending Adventure", description: "Summarizing your tale..." });
@@ -615,6 +621,7 @@ export function Gameplay() {
             const isPassiveAction = [INITIAL_ACTION_STRING.toLowerCase(), "look", "look around", "check inventory", "check status", "check relationships", "check reputation"].includes(actionLower);
 
             if (USE_COMBINED_AI_CALL) {
+                let capabilitiesSummary: string | undefined;
                 const needsAssessment = !isInitialAction && !isPassiveAction;
                 
                 if (needsAssessment) {
@@ -1106,7 +1113,7 @@ export function Gameplay() {
                 await triggerSkillTreeGeneration(character.class);
                 const updatedCharacter = state.character;
                 skillTreeReady = adventureSettings.adventureType === "Immersed" || !!updatedCharacter?.skillTree;
-                logger.log("Gameplay Initial Setup: Skill tree generation attempt finished. Ready:", skillTreeReady);
+                logger.log("Gameplay Initial Setup: Skill tree generation attempt finished. Ready:", "Gameplay", { skillTreeReady });
             }
 
             if (skillTreeReady && storyLog.length === 0) {
@@ -1323,7 +1330,6 @@ export function Gameplay() {
         );
     }
 
-    const anyLoading = loadingPhase.type !== 'idle';
 
     return (
         <TooltipProvider>
@@ -1360,6 +1366,7 @@ export function Gameplay() {
                 onSubmitAction={handlePlayerAction}
                 onSuggestAction={handleSuggestAction}
                 onCraft={() => setIsCraftingDialogOpen(true)}
+                onCraftExecute={handleCrafting}
                 onSave={handleSaveGame}
                 onAbandon={handleGoBack}
                 onEnd={() => handleEndAdventure(undefined, character.currentHealth <= 0)}

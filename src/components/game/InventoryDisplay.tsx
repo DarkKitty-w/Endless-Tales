@@ -1,7 +1,7 @@
 // src/components/game/InventoryDisplay.tsx
 "use client";
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useGame } from "../../context/GameContext";
 import type { ItemQuality } from "../../types/game-types";
 import { ScrollArea } from "../../components/ui/scroll-area";

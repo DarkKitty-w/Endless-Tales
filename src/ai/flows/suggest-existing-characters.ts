@@ -77,15 +77,15 @@ export async function suggestExistingCharacters(input: SuggestExistingCharacters
           (result as any).usedFallback = false;
           return result;
       } else {
-          logger.error("Zod validation failed for suggestExistingCharacters. Raw response:", cleanedText.substring(0, 500));
-          logger.error("Validation error:", validation.error);
+          logger.error('Zod validation failed for suggestExistingCharacters', 'suggest-existing-characters', { rawResponse: cleanedText.substring(0, 500) });
+          logger.error('Validation error', 'suggest-existing-characters', { error: validation.error?.message || String(validation.error) });
           throw new Error(`Invalid response structure. Raw response: ${cleanedText.substring(0, 500)}`);
       }
   } catch (error: any) {
       if (error.name === 'AbortError') {
           throw error;
       }
-      logger.error("AI Suggestion Error:", error);
+      logger.error('AI Suggestion Error', 'suggest-existing-characters', { error: error.message || String(error) });
       return { 
         suggestedNames: ["Hero", "Villain", "Sidekick"],
         // ERR-8/ERR-11: Indicate fallback is being used

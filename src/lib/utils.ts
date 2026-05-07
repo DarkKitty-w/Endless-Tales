@@ -84,17 +84,22 @@ export function sanitizePlayerAction(input: string): string {
  * This function provides additional safety by removing potentially dangerous content.
  */
 export function sanitizeAIContent(content: unknown): string {
-  if (typeof content !== 'string') {
-    // If it's not a string, convert it safely
-    if (content === null || content === undefined) return '';
+  // Convert content to string safely
+  let strContent: string;
+  
+  if (typeof content === 'string') {
+    strContent = content;
+  } else if (content === null || content === undefined) {
+    return '';
+  } else {
     try {
-      content = String(content);
+      strContent = String(content);
     } catch {
       return '';
     }
   }
   
-  let sanitized = content;
+  let sanitized = strContent;
   
   // Remove any script tags or javascript: URLs
   sanitized = sanitized.replace(/<script[\s\S]*?<\/script>/gi, '');
@@ -334,7 +339,7 @@ export async function processAiResponse<T>(
         break;
       }
     } catch (e) {
-      logger.error(`[processAiResponse] Strategy ${i + 1} failed:`, e);
+      logger.error(`[processAiResponse] Strategy ${i + 1} failed:`, "utils", { error: String(e) });
     }
   }
 
@@ -395,11 +400,11 @@ export async function processAiResponse<T>(
     if (validation.success) {
       return validation.data;
     } else {
-      logger.error("[processAiResponse] Zod validation failed:", validation.error.issues);
+      logger.error("[processAiResponse] Zod validation failed:", "utils", { issues: validation.error.issues.map(issue => issue.message).join(', ') });
       return fallback;
     }
   } catch (e) {
-    logger.error("[processAiResponse] Processing error:", e);
+    logger.error("[processAiResponse] Processing error:", "utils", { error: String(e) });
     return fallback;
   }
 }

@@ -343,7 +343,7 @@ export function CharacterCreation() {
         }
         await trigger(); 
      } catch (err: unknown) {
-       logger.error("CharacterCreation: AI generation failed:", err);
+       logger.error("CharacterCreation: AI generation failed", "character-creation", { error: String(err) });
        setError("Failed to generate profile. The AI might be busy or encountered an error.");
        const errorMessage = (err instanceof Error) ? err.message : String(err);
        toast({ title: "AI Generation Failed", description: errorMessage, variant: "destructive" });

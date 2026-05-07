@@ -101,6 +101,7 @@ export interface GameStateCharacterContext {
   skillTreeStage: number;
   skillTreeStageName: string;
   learnedSkills: string[];
+  statusEffects?: { name: string; remainingTurns: number }[];
 }
 
 export interface GameStateInventoryItemContext {

@@ -129,16 +129,17 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
           const seq = (peerOutboxSequence.current[label] || 0);
           peerOutboxSequence.current[label] = seq + 1;
           channel.send(JSON.stringify({
-            type: 'control',
+            type: 'CONTROL',
             senderId: multiplayerStateRef.current.peerId,
             sequenceNumber: seq,
+            timestamp: Date.now(),
             payload: {
               action: 'state-checksum',
-              data: { checksum, version: multiplayerStateRef.current.version },
+              data: { checksum, version: 1 }, // Use a default version or remove this field
             },
           } as ControlMessage));
         } catch (error) {
-          logger.error('Failed to send state checksum:', error);
+          logger.error("Failed to send state checksum", "use-multiplayer", { error: String(error) });
         }
       }
     });
@@ -156,13 +157,14 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
           const seq = (peerOutboxSequence.current[fromPeerId] || 0);
           peerOutboxSequence.current[fromPeerId] = seq + 1;
           channel.send(JSON.stringify({
-            type: 'control',
+            type: 'CONTROL',
             senderId: multiplayerStateRef.current.peerId,
             sequenceNumber: seq,
+            timestamp: Date.now(),
             payload: { action: 'request-sync' },
           } as ControlMessage));
         } catch (error) {
-          logger.error('Failed to request resync:', error);
+          logger.error("Failed to request resync", "use-multiplayer", { error: String(error) });
         }
       }
     } else {
@@ -174,13 +176,14 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
             const seq = (peerOutboxSequence.current[label] || 0);
             peerOutboxSequence.current[label] = seq + 1;
             channel.send(JSON.stringify({
-              type: 'control',
+              type: 'CONTROL',
               senderId: multiplayerStateRef.current.peerId,
               sequenceNumber: seq,
+              timestamp: Date.now(),
               payload: { action: 'request-sync' },
             } as ControlMessage));
           } catch (error) {
-            logger.error('Failed to request resync:', error);
+            logger.error("Failed to request resync", "use-multiplayer", { error: String(error) });
           }
         }
       });
@@ -283,7 +286,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         channel.send(JSON.stringify(message));
         return true;
       } catch (error) {
-        logger.error('Failed to send immediately, queuing:', error);
+        logger.error("Failed to send immediately", "use-multiplayer", { error: String(error) });
       }
     }
     
@@ -586,7 +589,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
   // Handle incoming messages
   const handleMessage = useCallback((data: MultiplayerMessage, channelLabel: string) => {
-    logger.log(`Received message on ${channelLabel}:`, data);
+    logger.log(`Received message on ${channelLabel}:`, "use-multiplayer", { messageType: data.type });
 
     // NET-8 Fix: Basic sequence number validation (channels are ordered: true, but this adds extra safety)
     const senderId = data.senderId || channelLabel;

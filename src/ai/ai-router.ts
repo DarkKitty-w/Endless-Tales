@@ -67,6 +67,8 @@ export interface AIProvider {
     systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
+    requestId?: string;
+    traceId?: string;
   }): Promise<GenerateContentResponse>;
 
   generateContentStream(params: {
@@ -75,6 +77,8 @@ export interface AIProvider {
     systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
+    requestId?: string;
+    traceId?: string;
   }): AsyncIterable<string>;
 }
 
@@ -1413,9 +1417,9 @@ async function loadWebLLM(): Promise<WebLLMModule> {
 
 export function isWebLLMAvailable(): boolean {
   if (typeof window === 'undefined') return false;
-  logger.log('[WebLLM] isWebLLMAvailable called, current state:', webllmAvailable);
+  logger.log('[WebLLM] isWebLLMAvailable called', 'ai-router', { currentState: webllmAvailable });
   if (!webllmLoadAttempted) {
-    logger.log('[WebLLM] Triggering background load...');
+    logger.log('[WebLLM] Triggering background load...', 'ai-router');
     loadWebLLM().catch(() => {});
   }
   return webllmAvailable;
@@ -1445,13 +1449,13 @@ function getCachedEngine(instance: WebLLMProvider): WebLLMEngine | null {
  * Loads the WebLLM module, with retry logic
  */
 async function loadWebLLMModule(): Promise<WebLLMModule> {
-  logger.log('[WebLLM] Loading WebLLM module...');
+  logger.log('[WebLLM] Loading WebLLM module...', 'ai-router');
   const webllmModule = await loadWebLLM();
-  logger.log('[WebLLM] webllm module obtained, keys:', Object.keys(webllmModule));
+  logger.log('[WebLLM] webllm module obtained', 'ai-router', { keys: Object.keys(webllmModule) });
 
   const CreateMLCEngine = webllmModule.CreateMLCEngine || webllmModule.CreateWebWorkerMLCEngine;
   if (!CreateMLCEngine) {
-    logger.error('[WebLLM] webllm module contents:', webllmModule);
+    logger.error('[WebLLM] webllm module contents', 'ai-router', { module: webllmModule });
     throw new Error('[WebLLM] Engine creator not found in module. Check console for module keys.');
   }
 
@@ -1479,15 +1483,15 @@ function findAvailableModel(
   const { prebuiltAppConfig } = webllm;
 
   if (!prebuiltAppConfig || !Array.isArray(prebuiltAppConfig.model_list)) {
-    logger.error('[WebLLM] prebuiltAppConfig is not properly initialized:', prebuiltAppConfig);
+    logger.error('[WebLLM] prebuiltAppConfig is not properly initialized', 'ai-router', { prebuiltAppConfig });
     throw new Error('[WebLLM] Model registry is not initialized. Please try again later.');
   }
 
   const availableModels: string[] = prebuiltAppConfig.model_list.map((m: { model_id: string }) => m.model_id);
-  logger.log('[WebLLM] Available models:', availableModels);
+  logger.log('[WebLLM] Available models', 'ai-router', { availableModels });
 
   let effectiveModel = requestedModel || fallbackModels[0];
-  logger.log('[WebLLM] Effective model:', effectiveModel);
+  logger.log('[WebLLM] Effective model', 'ai-router', { effectiveModel });
 
   if (!availableModels.includes(effectiveModel)) {
     logger.warn(`[WebLLM] Model "${effectiveModel}" not found in registry.`);
@@ -1551,11 +1555,11 @@ async function retryLoadModule(maxRetries: number = 1): Promise<WebLLMModule> {
     try {
       logger.log(`[WebLLM] Loading @mlc-ai/web-llm (attempt ${attempt + 1})...`);
       const module = await import('@mlc-ai/web-llm');
-      logger.log('[WebLLM] Module loaded, keys:', Object.keys(module));
+      logger.log('[WebLLM] Module loaded, keys:', Object.keys(module).join(', '));
 
       const creator = module.CreateMLCEngine || module.CreateWebWorkerMLCEngine;
       if (!creator) {
-        logger.error('[WebLLM] No engine creator found in module keys:', Object.keys(module));
+        logger.error('[WebLLM] No engine creator found in module keys:', Object.keys(module).join(', '));
         throw new Error('[WebLLM] No engine creator found (expected CreateMLCEngine or CreateWebWorkerMLCEngine)');
       }
 
@@ -1571,7 +1575,7 @@ async function retryLoadModule(maxRetries: number = 1): Promise<WebLLMModule> {
       logger.log('[WebLLM] Engine creator found:', creator.name || 'anonymous');
       return typedModule;
     } catch (e) {
-      logger.error(`[WebLLM] Failed to load package (attempt ${attempt + 1}):`, e);
+      logger.error(`[WebLLM] Failed to load package (attempt ${attempt + 1}):`, e instanceof Error ? e.message : String(e));
       webllmAvailable = false;
 
       if (attempt < maxRetries) {
@@ -1595,7 +1599,7 @@ class WebLLMProvider implements AIProvider {
   private persistence: 'temporary' | 'persistent' = 'temporary';
 
   constructor(private options?: { model?: string; persistence?: 'temporary' | 'persistent'; onProgress?: (progress: number, text: string) => void }) {
-    logger.log('[WebLLM Provider] Constructor called with options:', options);
+    logger.log('[WebLLM Provider] Constructor called with options:', JSON.stringify(options));
     if (options?.persistence) {
       this.persistence = options.persistence;
     }
@@ -1610,11 +1614,11 @@ class WebLLMProvider implements AIProvider {
 
   private async getEngine(modelId?: string): Promise<WebLLMEngine> {
     logger.log('[WebLLM] getEngine called with modelId:', modelId);
-    logger.log('[WebLLM] Current engine state:', {
+    logger.log('[WebLLM] Current engine state:', JSON.stringify({
       hasEngine: !!this.engine,
       currentModel: this.currentModel,
       isLoading: !!this.loadingPromise,
-    });
+    }));
 
     // Check for cached engine
     const cachedEngine = getCachedEngine(this);
@@ -1664,7 +1668,7 @@ class WebLLMProvider implements AIProvider {
       // Create engine
       logger.log(`[WebLLM] Calling CreateMLCEngine with model: ${effectiveModel}`);
       const engine = await webllm.CreateMLCEngine(effectiveModel, engineConfig);
-      logger.log('[WebLLM] CreateMLCEngine returned successfully, engine:', !!engine);
+      logger.log('[WebLLM] CreateMLCEngine returned successfully, engine: ' + String(!!engine));
 
       // Store engine
       this.engine = engine;
@@ -1676,12 +1680,12 @@ class WebLLMProvider implements AIProvider {
       return engine;
     } catch (error) {
       this.loadingPromise = null;
-      logger.error('[WebLLM] Engine creation failed:', error);
-      logger.error('[WebLLM] Error details:', {
+      logger.error('[WebLLM] Engine creation failed:', error instanceof Error ? error.message : String(error));
+      logger.error('[WebLLM] Error details:', JSON.stringify({
         message: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,
         name: error instanceof Error ? error.name : 'unknown',
-      });
+      }));
       throw error;
     } finally {
       this.loadingPromise = null;
@@ -1821,6 +1825,9 @@ class WebLLMProvider implements AIProvider {
     // Type assertion for the engine
     const engineWithChat = engine as WebLLMEngineWithChat;
     
+    // ERR-4 Fix: Track accumulated text for error reporting - declare outside try block
+    let accumulatedText = '';
+    
     try {
       const stream = await engineWithChat.chat.completions.create({
         messages,
@@ -1830,9 +1837,6 @@ class WebLLMProvider implements AIProvider {
       }) as AsyncIterable<WebLLMStreamChunk>;
       
       logger.log('[WebLLM] Stream created');
-      
-      // ERR-4 Fix: Track accumulated text for error reporting
-      let accumulatedText = '';
       
       for await (const chunk of stream) {
         if (signal?.aborted) {
@@ -1871,6 +1875,7 @@ class WebLLMProvider implements AIProvider {
           } : undefined,
         },
         operation: 'generateContentStream',
+        accumulatedText: accumulatedText?.substring(0, 500) || 'none'
       });
       throw new Error(`${errorMessage}\n\nPartial response received: ${accumulatedText?.substring(0, 500) || 'none'}`);
     }
@@ -1896,7 +1901,7 @@ class WebLLMProvider implements AIProvider {
     const webgpu = 'gpu' in navigator;
     // navigator.deviceMemory is not in the standard TypeScript types
     const memory = (navigator as { deviceMemory?: number }).deviceMemory || 4;
-    logger.log('[WebLLM] Hardware:', { webgpu, memory });
+    logger.log('[WebLLM] Hardware:', JSON.stringify({ webgpu, memory }));
     return { webgpu, memory };
   }
 
@@ -1905,7 +1910,7 @@ class WebLLMProvider implements AIProvider {
     if (typeof window === 'undefined') return;
     try {
       const dbs = await indexedDB.databases();
-      logger.log('[WebLLM] IndexedDB databases:', dbs.map(db => db.name));
+      logger.log('[WebLLM] IndexedDB databases:', dbs.map(db => db.name).join(', '));
       for (const db of dbs) {
         if (db.name?.includes('webllm') || db.name?.includes('mlc')) {
           logger.log('[WebLLM] Deleting database:', db.name);
@@ -1914,7 +1919,7 @@ class WebLLMProvider implements AIProvider {
       }
       if ('caches' in window) {
         const cacheNames = await caches.keys();
-        logger.log('[WebLLM] Cache storage keys:', cacheNames);
+        logger.log('[WebLLM] Cache storage keys:', cacheNames.join(', '));
         for (const name of cacheNames) {
           if (name.includes('webllm') || name.includes('mlc')) {
             logger.log('[WebLLM] Deleting cache:', name);
@@ -1927,7 +1932,7 @@ class WebLLMProvider implements AIProvider {
       currentWebLLMModel = '';
       logger.log('[WebLLM] Cache cleared');
     } catch (error) {
-      logger.error('[WebLLM] Failed to clear cache:', error);
+      logger.error('[WebLLM] Failed to clear cache:', error instanceof Error ? error.message : String(error));
       throw error instanceof Error ? error : new Error(String(error));
     }
   }
@@ -1999,7 +2004,7 @@ export function getAIProvider(
     case 'openrouter':
       return new OpenRouterProvider(effectiveApiKey);
     case 'webllm':
-      logger.log('[AI Router] Creating WebLLM provider, webllmAvailable:', webllmAvailable);
+      logger.log('[AI Router] Creating WebLLM provider', 'ai-router', { webllmAvailable });
       if (webllmAvailable) {
         return new WebLLMProvider({ onProgress: webllmProgressCallback || undefined });
       } else {
@@ -2020,7 +2025,7 @@ export class GenAIClient {
       this.provider = getAIProvider(routerConfig.defaultProvider, userApiKey);
     } else {
       if (routerConfig.defaultProvider === 'webllm' && options) {
-        logger.log('[GenAIClient] Creating WebLLM provider with options:', options);
+        logger.log('[GenAIClient] Creating WebLLM provider', 'ai-router', { options });
         if (webllmAvailable) {
           this.provider = new WebLLMProvider(options);
         } else {
@@ -2039,6 +2044,8 @@ export class GenAIClient {
       systemMessage?: string;
       config?: GenerateContentConfig;
       signal?: AbortSignal;
+      requestId?: string;
+      traceId?: string;
     }): Promise<GenerateContentResponse> => {
       logger.log('[GenAIClient] generateContent called');
       return this.provider.generateContent(params);
@@ -2049,6 +2056,8 @@ export class GenAIClient {
       systemMessage?: string;
       config?: GenerateContentConfig;
       signal?: AbortSignal;
+      requestId?: string;
+      traceId?: string;
     }): AsyncIterable<string> => {
       logger.log('[GenAIClient] generateContentStream called');
       return this.provider.generateContentStream(params);

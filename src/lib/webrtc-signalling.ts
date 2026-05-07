@@ -41,7 +41,7 @@ export function encodeSignallingData(pkg: SignallingPackage): string {
     
     return encoded;
   } catch (error) {
-    logger.error('Failed to encode signalling data:', error);
+    logger.error("Failed to encode signalling data:", "webrtc-signalling", { error: String(error) });
     throw new Error('Failed to encode signalling data');
   }
 }
@@ -121,7 +121,7 @@ export function decodeSignallingData(encoded: string): SignallingPackage {
     
     return pkg as SignallingPackage;
   } catch (error) {
-    logger.error('Failed to decode signalling data:', error);
+    logger.error("Failed to decode signalling data:", "webrtc-signalling", { error: String(error) });
     if (error instanceof Error && error.message.includes('Invalid signalling data format')) {
       throw error; // Re-throw validation errors with specific message
     }
@@ -162,7 +162,7 @@ export function createPeerConnection(
         dataChannelForIce.send(JSON.stringify(message));
         return true;
       } catch (error) {
-        logger.error('Failed to send ICE candidate via data channel:', error);
+        logger.error("Failed to send ICE candidate via data channel:", "webrtc-signalling", { error: String(error) });
         return false;
       }
     }
@@ -265,14 +265,14 @@ export async function createOffer(
     try {
       offer = await pc.createOffer();
     } catch (error) {
-      logger.error('Host: Failed to create SDP offer', { peerId, error, connectionState: pc.connectionState });
+      logger.error("Host: Failed to create SDP offer", "webrtc-signalling", { peerId, error, connectionState: pc.connectionState });
       throw new Error(`Failed to create SDP offer: ${error instanceof Error ? error.message : 'Unknown error'}. This may be due to firewall or network restrictions.`);
     }
     
     try {
       await pc.setLocalDescription(offer);
     } catch (error) {
-      logger.error('Host: Failed to set local description (offer)', { peerId, error, connectionState: pc.connectionState });
+      logger.error("Host: Failed to set local description (offer)", "webrtc-signalling", { peerId, error, connectionState: pc.connectionState });
       throw new Error(`Failed to set local SDP description: ${error instanceof Error ? error.message : 'Unknown error'}. Check firewall/network settings.`);
     }
 
@@ -295,7 +295,7 @@ export async function createOffer(
     return { peerConnection: pc, encodedOffer };
   } catch (error) {
     // ERR-34 Fix: Log with full context
-    logger.error('Host: createOffer failed', { 
+    logger.error("Host: createOffer failed", "webrtc-signalling", { 
       peerId, 
       name,
       error: error instanceof Error ? error.message : String(error),
@@ -336,7 +336,7 @@ export async function createAnswer(
       const offerDesc = new RTCSessionDescription({ type: 'offer', sdp: pkg.sdp });
       await pc.setRemoteDescription(offerDesc);
     } catch (error) {
-      logger.error('Guest: Failed to set remote description (offer)', { peerId, name, error, connectionState: pc.connectionState });
+      logger.error("Guest: Failed to set remote description (offer)", "webrtc-signalling", { peerId, name, error, connectionState: pc.connectionState });
       throw new Error(`Failed to process SDP offer: ${error instanceof Error ? error.message : 'Unknown error'}. The offer may be invalid or corrupted.`);
     }
 
@@ -345,7 +345,7 @@ export async function createAnswer(
       try {
         await pc.addIceCandidate(candidate);
       } catch (error) {
-        logger.warn('Guest: Failed to add host ICE candidate during initial setup', { peerId, error });
+        logger.warn("Guest: Failed to add host ICE candidate during initial setup", "webrtc-signalling", { peerId, error });
         // Continue - non-fatal
       }
     }
@@ -354,14 +354,14 @@ export async function createAnswer(
     try {
       answer = await pc.createAnswer();
     } catch (error) {
-      logger.error('Guest: Failed to create SDP answer', { peerId, name, error, connectionState: pc.connectionState });
+      logger.error("Guest: Failed to create SDP answer", "webrtc-signalling", { peerId, name, error, connectionState: pc.connectionState });
       throw new Error(`Failed to create SDP answer: ${error instanceof Error ? error.message : 'Unknown error'}. Check firewall/network settings.`);
     }
 
     try {
       await pc.setLocalDescription(answer);
     } catch (error) {
-      logger.error('Guest: Failed to set local description (answer)', { peerId, name, error, connectionState: pc.connectionState });
+      logger.error("Guest: Failed to set local description (answer)", "webrtc-signalling", { peerId, name, error, connectionState: pc.connectionState });
       throw new Error(`Failed to set local SDP description: ${error instanceof Error ? error.message : 'Unknown error'}. Check firewall/network settings.`);
     }
 
@@ -394,7 +394,7 @@ export async function createAnswer(
     return { peerConnection: pc, encodedAnswer };
   } catch (error) {
     // ERR-34 Fix: Log with full context
-    logger.error('Guest: createAnswer failed', { 
+    logger.error("Guest: createAnswer failed", "webrtc-signalling", { 
       peerId, 
       name,
       error: error instanceof Error ? error.message : String(error),
@@ -427,7 +427,7 @@ export async function applyAnswer(
       await peerConnection.setRemoteDescription(answerDesc);
     } catch (error) {
       const context = peerId ? `from peer ${peerId}` : '';
-      logger.error(`Host: Failed to set remote description (answer) ${context}:`, { 
+      logger.error(`Host: Failed to set remote description (answer) ${context}:`, "webrtc-signalling", { 
         error, 
         connectionState: peerConnection.connectionState,
         signalingState: peerConnection.signalingState 
@@ -441,13 +441,13 @@ export async function applyAnswer(
         await peerConnection.addIceCandidate(candidate);
       } catch (error) {
         const context = peerId ? `from peer ${peerId}` : '';
-        logger.warn(`Host: Failed to add guest ICE candidate ${context}:`, error);
+        logger.warn(`Host: Failed to add guest ICE candidate ${context}:`, "webrtc-signalling", { error: String(error) });
         // Continue - non-fatal for initial setup
       }
     }
   } catch (error) {
     // ERR-34 Fix: Log with full context
-    logger.error('Host: applyAnswer failed', { 
+    logger.error("Host: applyAnswer failed", "webrtc-signalling", { 
       peerId,
       error: error instanceof Error ? error.message : String(error),
       connectionState: peerConnection.connectionState,
@@ -487,9 +487,9 @@ export async function handleIceCandidateMessage(
     } catch (error) {
       // ERR-27 Fix: Log with context
       const context = peerId ? `peer ${peerId}` : 'unknown peer';
-      logger.error(`Failed to add ICE candidate from ${context}:`, error);
+      logger.error(`Failed to add ICE candidate from ${context}:`, "webrtc-signalling", { error: String(error) });
       logger.error('Candidate that failed:', JSON.stringify(message.candidate).substring(0, 200));
-      logger.error('Connection state:', pc.connectionState, 'ICE state:', pc.iceConnectionState);
+      logger.error("Connection state:", "webrtc-signalling", { connectionState: pc.connectionState, iceState: pc.iceConnectionState });
       
       // If the connection is already closed or failed, this is expected
       if (pc.connectionState === 'closed' || pc.iceConnectionState === 'failed') {
@@ -540,7 +540,7 @@ export function setupDataChannel(
       const data = JSON.parse(event.data);
       onMessage(data);
     } catch (error) {
-      logger.error('Failed to parse data channel message:', error);
+      logger.error("Failed to parse data channel message:", "webrtc-signalling", { error: String(error) });
     }
   };
 
@@ -555,7 +555,7 @@ export function setupDataChannel(
   };
 
   channel.onerror = (error) => {
-    logger.error(`Data channel "${channel.label}" error:`, error);
+    logger.error(`Data channel "${channel.label}" error:`, "webrtc-signalling", { error: String(error) });
     // ERR-25 Fix: Call the onError callback if provided
     if (onError) onError(error);
   };
@@ -586,7 +586,7 @@ export function sendDataChannelMessage(channel: RTCDataChannel, data: any): bool
     channel.send(JSON.stringify(data));
     return true;
   } catch (error) {
-    logger.error('Failed to send data channel message:', error);
+    logger.error("Failed to send data channel message:", "webrtc-signalling", { error: String(error) });
     return false;
   }
 }

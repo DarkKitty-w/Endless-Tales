@@ -166,7 +166,7 @@ export const AdventureSetup = React.memo(function AdventureSetup(props: Adventur
       }
 
     } catch (err) {
-      logger.error("AdventureSetup: Failed to get name/concept suggestion:", err);
+      logger.error('AdventureSetup: Failed to get name/concept suggestion', 'adventure-setup', { error: String(err) });
       toast({ title: "Suggestion Error", description: "Could not fetch suggestions at this time.", variant: "destructive" });
     } finally {
       setIsSuggestingNameLoading(false);
@@ -252,7 +252,7 @@ export const AdventureSetup = React.memo(function AdventureSetup(props: Adventur
             toast({ title: "Adventure Starting!", description: `Stepping into the shoes of ${playerCharacterConcept} in the universe of ${universeName}!` });
 
         } catch (err) {
-            logger.error("AdventureSetup: Failed to generate immersed character profile:", err);
+            logger.error('AdventureSetup: Failed to generate immersed character profile', 'adventure-setup', { error: String(err) });
             toast({ title: "Character Profile Error", description: "Could not retrieve character details. Please try again.", variant: "destructive" });
         } finally {
             setIsLoadingImmersedCharacter(false);

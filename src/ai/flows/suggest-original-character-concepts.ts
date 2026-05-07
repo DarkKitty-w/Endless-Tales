@@ -77,15 +77,15 @@ export async function suggestOriginalCharacterConcepts(input: SuggestOriginalCha
           (result as any).usedFallback = false;
           return result;
       } else {
-          logger.error("Zod validation failed for suggestOriginalCharacterConcepts. Raw response:", cleanedText.substring(0, 500));
-          logger.error("Validation error:", validation.error);
+          logger.error('Zod validation failed for suggestOriginalCharacterConcepts', 'suggest-original-character-concepts', { rawResponse: cleanedText.substring(0, 500) });
+          logger.error('Validation error', 'suggest-original-character-concepts', { error: validation.error?.message || String(validation.error) });
           throw new Error(`Invalid response structure. Raw response: ${cleanedText.substring(0, 500)}`);
       }
   } catch (error: any) {
       if (error.name === 'AbortError') {
           throw error;
       }
-      logger.error("AI Suggestion Error:", error);
+      logger.error('AI Suggestion Error', 'suggest-original-character-concepts', { error: error.message || String(error) });
       return { 
         suggestedConcepts: ["A wanderer", "A local merchant", "A lost soldier"],
         // ERR-8/ERR-11: Indicate fallback is being used

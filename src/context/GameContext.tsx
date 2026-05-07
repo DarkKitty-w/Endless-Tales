@@ -92,7 +92,7 @@ function migrateSavedAdventure(adventure: any, onError?: (title: string, descrip
   const validationResult = validateSavedAdventure(adventure);
   
   if (!validationResult.success) {
-    logger.error('Schema validation failed for adventure:', { 
+    logger.error('Schema validation failed for adventure', 'game-context', { 
       adventureId: adventure.id, 
       error: validationResult.error 
     });
@@ -124,10 +124,10 @@ function migrateSavedAdventure(adventure: any, onError?: (title: string, descrip
         if (pendingMigs.length > 0) {
           logger.log(`Applied migrations to repaired save: ${pendingMigs.map(v => `v${v}->v${v+1}`).join(', ')}`);
         }
-        const sanitized = sanitizeStateForPersistence(migrated);
-        return sanitized as SavedAdventure;
+        const sanitized = sanitizeStateForPersistence(migrated as unknown as Record<string, unknown>) as unknown as SavedAdventure;
+        return sanitized;
       } catch (error: any) {
-        logger.error('Migration failed for repaired adventure:', error);
+      logger.error('Migration failed for repaired adventure', 'game-context', { error: error.message, adventureId: adventure.id });
       }
     }
     
@@ -153,12 +153,12 @@ function migrateSavedAdventure(adventure: any, onError?: (title: string, descrip
     
     // SAVE-13 Fix: Sanitize migrated adventure to remove any multiplayer fields
     // that might have been added to the save (from older versions or bugs)
-    const sanitized = sanitizeStateForPersistence(migrated);
+    const sanitized = sanitizeStateForPersistence(migrated as unknown as Record<string, unknown>) as unknown as SavedAdventure;
     
-    return sanitized as SavedAdventure;
+    return sanitized;
   } catch (error: any) {
     // ERR-21 Fix: Surface migration errors to user
-    logger.error('Migration failed for adventure:', { adventureId: adventure.id, error: error.message });
+    logger.error('Migration failed for adventure', 'game-context', { error: error.message, adventureId: adventure.id });
     if (onError) {
       onError("Save Data Migration Failed", `Failed to migrate save data${adventure.id ? ` for adventure ${adventure.id}` : ''}. ${error.message || 'Unknown error'}`);
     }
@@ -244,7 +244,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
               dispatch({ type: "LOAD_SAVED_ADVENTURES", payload: migratedAdventures });
             }
           } catch (error) {
-            logger.error('Failed to parse saved adventures from storage event:', error);
+            logger.error('Failed to parse saved adventures from storage event', 'game-context', { error: String(error) });
           }
         }
       }
@@ -322,7 +322,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
         }
       }
     } catch (error) {
-      logger.error("Failed to load saved adventures:", error);
+      logger.error('Failed to load saved adventures', 'game-context', { error: String(error) });
       
       // ERR-18/ERR-20/ERR-21 Fix: Provide detailed error and recovery options
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -340,7 +340,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
             logger.log(`Backed up corrupted save data to ${backupKey}`);
           }
         } catch (backupError) {
-          logger.error("Failed to backup corrupted data:", backupError);
+          logger.error('Failed to backup corrupted data', 'game-context', { error: String(backupError) });
         }
       }
       
@@ -449,7 +449,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
           const validation = validateSavedAdventure(adventure);
           if (!validation.success) {
             invalidSaves.push(adventure.id || 'unknown');
-            logger.error('Skipping invalid save during persist:', { 
+            logger.error('Skipping invalid save during persist', 'game-context', { 
               adventureId: adventure.id, 
               error: validation.error 
             });
@@ -515,7 +515,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
         // Note: API keys are now server-side only (no client-side storage)
       } catch (storageError) {
         // ERR-22/ERR-24 Fix: Handle localStorage errors
-        logger.error("Failed to save to localStorage:", storageError);
+        logger.error('Failed to save to localStorage', 'game-context', { error: String(storageError) });
         
         // Check if it's a quota exceeded error
         const isQuotaExceeded = storageError instanceof DOMException && 
@@ -535,7 +535,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
                     localStorage.removeItem(SAVED_ADVENTURES_KEY);
                     toast({ title: "Save Data Cleared", description: "You can now save new adventures." });
                   } catch (e) {
-                    logger.error("Failed to clear save data:", e);
+                    logger.error('Failed to clear save data', 'game-context', { error: String(e) });
                   }
                 }
               }}
@@ -577,7 +577,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
       const reputationString = state.character ? Object.entries(state.character.reputation).map(([f, s]) => `${f}: ${s}`).join(', ') || 'None' : 'N/A';
       const relationshipString = state.character ? Object.entries(state.character.npcRelationships).map(([n, s]) => `${n}: ${s}`).join(', ') || 'None' : 'N/A';
       const inventoryString = state.inventory.map(i => `${i.name}${i.quality ? ` (${i.quality})` : ''}`).join(', ') || 'Empty';
-      logger.log("Game State Updated:", {
+      logger.log("Game State Updated", "game-context", {
         version: state.version,
         status: state.status,
         turn: state.turnCount,

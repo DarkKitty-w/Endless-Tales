@@ -8,7 +8,7 @@ import type { AdventureSettings } from '../../types/adventure-types';
 import type { DifficultyLevel, GameStateContext } from '../../types/game-types';
 import { formatGameStateContextForPrompt } from '../../context/game-state-utils';
 import { processAiResponse, sanitizePlayerAction, validateChoicesAgainstGameState } from '../../lib/utils';
-import { logger } from '../../lib/logger';
+import { logger, setRequestId, setTraceId } from '../../lib/logger';
 import {
   BASE_NARRATOR_SYSTEM_MESSAGE,
   buildSystemMessage,
@@ -229,7 +229,7 @@ If the action is "Impossible", the narration should reflect that the action cann
     ],
     // Additional context about the current game
     input.gameStateContext?.character 
-      ? `Current Location: ${input.gameStateContext?.currentLocation || 'Unknown'}`
+      ? `Current Location: ${input.gameStateContext?.worldMap?.locations.find(l => l.id === input.gameStateContext?.worldMap?.currentLocationId)?.name || 'Unknown'}`
       : ''
   );
 

@@ -1,6 +1,6 @@
 // src/app/api/ai-proxy/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { logger, generateRequestId, getCurrentRequestId } from '@/lib/logger';
+import { logger, generateRequestId, getCurrentRequestId, setRequestId, setTraceId, getTraceId } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 // ERR-7 Fix: Timeout for AI requests (30 seconds)
@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
     const config = validateModelConfig(rawConfig);
 
     // Only use server-side API keys (security fix: no client-side API keys)
-    const apiKey = getServerApiKey(provider);
+    const apiKey = getServerApiKey(provider) as string;
     
     if (!apiKey && provider !== 'webllm') {
       const providerLabels: Record<string, string> = {
@@ -167,15 +167,15 @@ export async function POST(request: NextRequest) {
 
     switch (provider) {
       case 'gemini':
-        return handleGemini(model, contents, config, apiKey, stream, systemMessage);
+        return handleGemini(model as string | undefined, contents, config as any, apiKey, stream, systemMessage as string | undefined);
       case 'openai':
-        return handleOpenAI(model, contents, config, apiKey, stream, systemMessage);
+        return handleOpenAI(model as string | undefined, contents, config as any, apiKey, stream, systemMessage as string | undefined);
       case 'claude':
-        return handleClaude(model, contents, config, apiKey, stream, systemMessage);
+        return handleClaude(model as string | undefined, contents, config as any, apiKey, stream, systemMessage as string | undefined);
       case 'deepseek':
-        return handleDeepSeek(model, contents, config, apiKey, stream, systemMessage);
+        return handleDeepSeek(model as string | undefined, contents, config as any, apiKey, stream, systemMessage as string | undefined);
       case 'openrouter':
-        return handleOpenRouter(model, contents, config, apiKey, stream, systemMessage);
+        return handleOpenRouter(model as string | undefined, contents, config as any, apiKey, stream, systemMessage as string | undefined);
       default:
         return NextResponse.json(
           { error: `Unsupported provider: ${provider}` },
@@ -187,7 +187,7 @@ export async function POST(request: NextRequest) {
     const traceId = getTraceId();
     
     logger.error('AI Proxy error:', 'ai-proxy', { 
-      error,
+      error: error instanceof Error ? error.message : String(error),
       requestId,
       traceId
     });
@@ -204,7 +204,7 @@ export async function POST(request: NextRequest) {
     if (error instanceof TypeError && error.message.includes('fetch')) {
       // Network error (connection refused, DNS failure, etc.)
       logger.error('Network error in AI Proxy:', 'ai-proxy', { 
-        message: error.message,
+        message: error instanceof Error ? error.message : String(error),
         requestId,
         traceId
       });

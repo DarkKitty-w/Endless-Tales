@@ -57,7 +57,7 @@ export function runMigrations(adventure: SavedAdventure): SavedAdventure {
         migrated = migration(migrated);
         logger.log(`Migration: Applied v${v} -> v${v + 1}`);
       } catch (error) {
-        logger.error(`Migration failed at v${v} -> v${v + 1}:`, error);
+        logger.error(`Migration failed at v${v} -> v${v + 1}:`, "migration-system", { error: String(error) });
         // Continue with next migration - best effort
       }
     } else {

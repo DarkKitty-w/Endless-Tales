@@ -80,6 +80,7 @@ export function buildGameStateContext(state: GameState): GameStateContext {
         skillTreeStage: character.skillTreeStage,
         skillTreeStageName: character.skillTree?.stages[character.skillTreeStage]?.stageName ?? 'Potential',
         learnedSkills: character.learnedSkills.map(s => s.name),
+        statusEffects: character.statusEffects?.map(e => ({ name: e.name, remainingTurns: e.remainingTurns })),
     } : null;
 
     const inventoryContext: GameStateContext['inventory'] = inventory.map(item => ({
@@ -277,7 +278,11 @@ export function formatGameStateContextForPrompt(ctx: GameStateContext): string {
         lines.push(`Character: ${c.name} (${c.class}), Level ${c.level} (XP: ${c.xp}/${c.xpToNextLevel})`);
         lines.push(`Stats: STR ${c.stats.strength}, STA ${c.stats.stamina}, WIS ${c.stats.wisdom}`);
         lines.push(`Health: ${c.health.current}/${c.health.max}, Action STA: ${c.stamina.current}/${c.stamina.max}, Mana: ${c.mana.current}/${c.mana.max}`);
-        lines.push(`Status Effects: ${c.statusEffects.length > 0 ? c.statusEffects.map(e => `${e.name} (${e.duration} turns remaining)`).join(', ') : 'None'}`);
+        const statusEffects = c.statusEffects || [];
+        const statusEffectsText = statusEffects.length > 0 
+          ? statusEffects.map(e => `${e.name} (${e.remainingTurns} turns remaining)`).join(', ') 
+          : 'None';
+        lines.push(`Status Effects: ${statusEffectsText}`);
         lines.push(`Traits: ${c.traits.join(', ') || 'None'}`);
         lines.push(`Knowledge: ${c.knowledge.join(', ') || 'None'}`);
         lines.push(`Background: ${c.background}`);

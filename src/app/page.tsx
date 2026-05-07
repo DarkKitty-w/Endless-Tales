@@ -61,7 +61,7 @@ export default function Home() {
       case "ViewSavedAdventures":
         return <ErrorBoundary><SavedAdventuresList /></ErrorBoundary>;
       default:
-        logger.warn("Unknown game status in page.tsx:", state.status, "Defaulting to MainMenu.");
+        logger.warn('Unknown game status in page.tsx', 'page', { status: state.status, message: "Defaulting to MainMenu" });
         return <ErrorBoundary><MainMenu /></ErrorBoundary>;
     }
   };

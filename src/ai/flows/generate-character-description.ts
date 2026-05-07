@@ -143,8 +143,8 @@ Output JSON matching the schema.`;
           (result as any).usedFallback = false;
           return result;
       } else {
-          logger.error("Zod validation failed for generateCharacterDescription. Raw response:", cleanedText.substring(0, 500));
-          logger.error("Validation error:", validation.error);
+          logger.error('Zod validation failed for generateCharacterDescription', 'generate-character-description', { rawResponse: cleanedText.substring(0, 500) });
+          logger.error('Validation error', 'generate-character-description', { error: validation.error?.message || String(validation.error) });
           throw new Error(`Invalid response structure. Raw response: ${cleanedText.substring(0, 500)}`);
       }
 
@@ -152,7 +152,7 @@ Output JSON matching the schema.`;
       if (error.name === 'AbortError') {
           throw error;
       }
-      logger.error("AI Character Generation Error:", error);
+      logger.error('AI Character Generation Error', 'generate-character-description', { error: error.message || String(error) });
       return {
           detailedDescription: `AI generation failed for: "${input.characterDescription}".`,
           inferredClass: input.isImmersedMode ? "Immersed Protagonist" : "Adventurer",

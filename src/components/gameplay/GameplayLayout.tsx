@@ -15,9 +15,21 @@ import { PartySidebar } from "./PartySidebar";
 import { ChatPanel } from "./ChatPanel";
 import { InteractionDialog } from "./InteractionDialog";
 import { ErrorBoundary } from "../ErrorBoundary";
-import type { Character, InventoryItem, StoryLogEntry, NarrateAdventureOutput, LoadingPhase, MultiplayerState } from "../types/game-types";
-import type { InteractionRequest } from "../types/multiplayer-types";
-import type { Skill } from "../types/character-types";
+import type { Character, InventoryItem, StoryLogEntry, GameStateContext } from "../../types/game-types";
+import type { ProviderType } from "../../ai/ai-router";
+import type { InteractionRequest, PendingInteraction, MultiplayerState } from "../../types/multiplayer-types";
+import type { Skill } from "../../types/character-types";
+import type { NarrateAdventureOutput } from "../../ai/flows/narrate-adventure";
+type LoadingPhase =
+  | { type: 'idle' }
+  | { type: 'initial-loading' }
+  | { type: 'narrating' }
+  | { type: 'assessing' }
+  | { type: 'rolling-dice' }
+  | { type: 'generating-skill-tree' }
+  | { type: 'ending' }
+  | { type: 'saving' }
+  | { type: 'crafting' };
 import { Button } from "../ui/button";
 import { Users } from "lucide-react";
 
@@ -45,26 +57,27 @@ interface GameplayLayoutProps {
   isMultiplayerHost: boolean;
   pendingGuestAction: string | null;
   currentAdventureId: string | null;
-  aiProvider: string;
+  aiProvider: ProviderType;
   multiplayerState: MultiplayerState;
   isPartySidebarOpen: boolean;
   isChatPanelOpen: boolean;
   isDesktopSettingsOpen: boolean;
   isCraftingDialogOpen: boolean;
   pendingClassChange: string | null;
-  onUseSkill: (skill: Skill) => void;
+  onUseSkill: (skillName: string) => void;
   onUnlearnSkill: (skillName: string) => void;
   onRespecAll: () => void;
-  onChoiceClick: (choice: BranchingChoice) => void;
+  onChoiceClick: (action: string, isInitialAction?: boolean) => void;
   onRetryNarration: () => void;
   onSubmitAction: (action: string) => void;
   onSuggestAction: () => void;
   onCraft: () => void;
+  onCraftExecute: (goal: string, ingredients: string[]) => Promise<void>;
   onSave: () => void;
   onAbandon: () => void;
   onEnd: () => void;
   onSettings: () => void;
-  onChangeClass: (className: string) => void;
+  onChangeClass: () => void;
   onConfirmClassChange: (className: string) => void;
   onKickPeer: (peerId: string) => void;
   onTogglePause: () => void;
@@ -122,6 +135,7 @@ export function GameplayLayout({
   onSubmitAction,
   onSuggestAction,
   onCraft,
+  onCraftExecute,
   onSave,
   onAbandon,
   onEnd,
@@ -222,7 +236,7 @@ export function GameplayLayout({
           isOpen={isCraftingDialogOpen}
           onOpenChange={(open) => !open && onCloseCrafting()}
           inventory={inventory}
-          onCraft={() => {}}
+          onCraft={onCraftExecute}
         />
         <SettingsPanel isOpen={isDesktopSettingsOpen} onOpenChange={(open) => !open && onCloseSettings()} />
       </div>

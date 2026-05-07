@@ -4,6 +4,9 @@
  */
 
 import type { SavedAdventure } from "../types/adventure-types";
+import type { Character } from "../types/character-types";
+import type { AdventureSettings } from "../types/adventure-types";
+import type { GameStatus } from "../types/game-types";
 import { CURRENT_STATE_VERSION } from "../context/game-initial-state";
 import { logger } from "./logger";
 
@@ -373,14 +376,14 @@ export function repairSaveData(
     
     // Repair character
     if (corruptedData.character && typeof corruptedData.character === 'object' && corruptedData.character !== null) {
-      repaired.character = corruptedData.character;
+      repaired.character = corruptedData.character as any as Character;
     } else {
       repaired.character = initialState.character;
     }
     
     // Repair adventureSettings
     if (corruptedData.adventureSettings && typeof corruptedData.adventureSettings === 'object' && corruptedData.adventureSettings !== null) {
-      repaired.adventureSettings = corruptedData.adventureSettings;
+      repaired.adventureSettings = corruptedData.adventureSettings as any as AdventureSettings;
     } else {
       repaired.adventureSettings = initialState.adventureSettings;
     }
@@ -414,9 +417,10 @@ export function repairSaveData(
     }
     
     // Copy optional fields if valid
-    if (typeof corruptedData.statusBeforeSave === 'string' || corruptedData.statusBeforeSave === null) {
-      repaired.statusBeforeSave = corruptedData.statusBeforeSave as string | null | undefined;
+    if (typeof corruptedData.statusBeforeSave === 'string') {
+      repaired.statusBeforeSave = corruptedData.statusBeforeSave as GameStatus;
     }
+    // null is not allowed, so we skip it (leaves it undefined)
     
     if (typeof corruptedData.adventureSummary === 'string' || corruptedData.adventureSummary === null) {
       repaired.adventureSummary = corruptedData.adventureSummary as string | null | undefined;

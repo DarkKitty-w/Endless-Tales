@@ -38,7 +38,7 @@ export function CoopLobby() {
     playerName,
     onGameActionReceived: (playerId, action, turnNumber, isInitial) => {
       // Host receives game actions from guests
-      logger.log("Host received game action:", { playerId, action, turnNumber, isInitial });
+      logger.log('Host received game action', 'coop-lobby', { playerId, action, turnNumber, isInitial });
     },
     onStoryUpdate: (entry, newTurn) => {
       dispatch({ type: "APPLY_REMOTE_NARRATION", payload: { entry, newTurn } });
@@ -50,7 +50,7 @@ export function CoopLobby() {
       dispatch({ type: "ADD_CHAT_MESSAGE", payload: msg });
     },
     onControlMessage: (msg) => {
-      logger.log("Control message received:", msg);
+      logger.log('Control message received', 'coop-lobby', { msg });
     },
   });
 

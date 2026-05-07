@@ -4,21 +4,21 @@
  * into strings that can be injected into AI prompts.
  */
 
-import type { Character, GameStateContext } from '../../types/game-types';
+import type { Character, GameStateContext, GameStateCharacterContext, GameStateInventoryItemContext, GameStateAdventureSettingsContext } from '../../types/game-types';
 import type { AdventureSettings } from '../../types/adventure-types';
 
 /**
  * Formats character information for AI prompts
  */
-export function formatCharacterContext(character: Character): string {
+export function formatCharacterContext(character: GameStateCharacterContext): string {
   const lines: string[] = [];
   
   lines.push(`Name: ${character.name}`);
   lines.push(`Class: ${character.class}`);
   lines.push(`Level: ${character.level}`);
-  lines.push(`HP: ${character.stats.health}/${character.stats.maxHealth}`);
-  lines.push(`MP: ${character.stats.mana}/${character.stats.maxMana}`);
-  lines.push(`Stamina: ${character.stats.stamina}/${character.stats.maxStamina}`);
+  lines.push(`HP: ${character.health.current}/${character.health.max}`);
+  lines.push(`MP: ${character.mana.current}/${character.mana.max}`);
+  lines.push(`Stamina: ${character.stamina.current}/${character.stamina.max}`);
   
   if (character.traits && character.traits.length > 0) {
     lines.push(`Traits: ${character.traits.join(', ')}`);
@@ -42,11 +42,11 @@ export function formatCharacterContext(character: Character): string {
 /**
  * Formats inventory for AI prompts
  */
-export function formatInventoryContext(inventory: Array<{ name: string; quantity: number; description?: string }>): string {
+export function formatInventoryContext(inventory: GameStateInventoryItemContext[]): string {
   if (!inventory || inventory.length === 0) return 'Inventory: Empty';
   
   const items = inventory.map(item => {
-    let str = `${item.name} (x${item.quantity})`;
+    let str = `${item.name}`;
     if (item.description) str += ` - ${item.description}`;
     return str;
   });
@@ -57,7 +57,7 @@ export function formatInventoryContext(inventory: Array<{ name: string; quantity
 /**
  * Formats NPC relationships for AI prompts
  */
-export function formatRelationshipsContext(npcRelationships: Record<string, string>): string {
+export function formatRelationshipsContext(npcRelationships: Record<string, number>): string {
   const entries = Object.entries(npcRelationships);
   if (entries.length === 0) return 'NPC Relationships: None';
   
@@ -68,13 +68,12 @@ export function formatRelationshipsContext(npcRelationships: Record<string, stri
 /**
  * Formats adventure settings for AI prompts
  */
-export function formatAdventureSettings(settings: AdventureSettings): string {
+export function formatAdventureSettings(settings: GameStateAdventureSettingsContext): string {
   const lines: string[] = [];
   
   lines.push(`Difficulty: ${settings.difficulty}`);
-  if (settings.permadeath) lines.push('PERMANENT DEATH MODE: ENABLED - Character death is permanent!');
-  if (settings.allowPVP) lines.push('PVP: Enabled');
-  if (settings.multiplayer) lines.push('Multiplayer: Enabled');
+  if (settings.permanentDeath) lines.push('PERMANENT DEATH MODE: ENABLED - Character death is permanent!');
+  if (settings.type === 'Coop') lines.push('Multiplayer: Enabled');
   
   return lines.join('\n');
 }
@@ -98,7 +97,11 @@ export function buildGameContextForPrompt(gameState: GameStateContext): string {
   
   // Character info
   parts.push('=== CHARACTER ===');
-  parts.push(formatCharacterContext(gameState.character));
+  if (gameState.character) {
+    parts.push(formatCharacterContext(gameState.character));
+  } else {
+    parts.push('No character data available');
+  }
   
   // Inventory
   if (gameState.inventory && gameState.inventory.length > 0) {
@@ -107,7 +110,7 @@ export function buildGameContextForPrompt(gameState: GameStateContext): string {
   }
   
   // NPC Relationships
-  if (gameState.character.npcRelationships && 
+  if (gameState.character && gameState.character.npcRelationships && 
       Object.keys(gameState.character.npcRelationships).length > 0) {
     parts.push('\n=== NPC RELATIONSHIPS ===');
     parts.push(formatRelationshipsContext(gameState.character.npcRelationships));

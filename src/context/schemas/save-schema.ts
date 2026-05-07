@@ -48,7 +48,7 @@ export type ValidatedSavedAdventure = z.infer<typeof SavedAdventureSchema>;
 export function validateSavedAdventure(data: unknown): { success: true; data: SavedAdventure } | { success: false; error: string } {
   const result = SavedAdventureSchema.safeParse(data);  
   if (result.success) {
-    return { success: true, data: result.data as SavedAdventure };
+    return { success: true, data: result.data as unknown as SavedAdventure };
   } else {
     const errorMessage = result.error.errors
       .map((err: z.ZodIssue) => `${err.path.join('.')}: ${err.message}`)

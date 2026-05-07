@@ -1,6 +1,3 @@
-import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
-
 // SEC-4 Fix: Rate limiting for AI proxy endpoint
 // Uses a simple in-memory store if Redis is not configured
 

@@ -133,14 +133,14 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
 
     const checkAvailability = () => {
       const available = isWebLLMAvailable();
-      logger.log('[SettingsPanel] WebLLM available check:', available);
+      logger.log("[SettingsPanel] WebLLM available check", "settings-panel", { available });
       
       if (mounted) {
         setWebllmSupported(available);
         if (available) {
           setWebllmChecking(false);
           WebLLMProvider.checkHardware().then(info => {
-            logger.log('[SettingsPanel] Hardware info:', info);
+            logger.log("[SettingsPanel] Hardware info", "settings-panel", { info });
             setHardwareInfo(info);
           });
           clearInterval(interval);

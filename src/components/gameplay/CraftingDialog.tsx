@@ -109,7 +109,7 @@ export function CraftingDialog({ isOpen, onOpenChange, inventory, onCraft }: Cra
         try {
             await onCraft(craftingGoal, selectedIngredients);
         } catch (error) {
-            logger.error("CraftingDialog: Error during craft attempt", error);
+            logger.error("CraftingDialog: Error during craft attempt", 'crafting-dialog', { error: String(error) });
             setCraftingError("An unexpected error occurred during crafting.");
         } finally {
             setIsCraftingLoading(false);
