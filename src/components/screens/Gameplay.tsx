@@ -1183,6 +1183,16 @@ export function Gameplay() {
         actionInputRef.current?.setValue(`Use skill: ${skillName}`);
     }, []);
 
+    const handleUnlearnSkill = useCallback((skillName: string) => {
+        dispatch({ type: "UNLEARN_SKILL", payload: skillName });
+        toast({ title: "Skill Unlearned", description: `${skillName} has been unlearned.` });
+    }, [dispatch, toast]);
+
+    const handleRespecAll = useCallback(() => {
+        dispatch({ type: "RESPEC_ALL_SKILLS" });
+        toast({ title: "Skills Respecced", description: "All non-starter skills have been unlearned." });
+    }, [dispatch, toast]);
+
     const processDevCommand = useCallback((action: string) => {
         if (!character) return;
         
@@ -1296,6 +1306,8 @@ export function Gameplay() {
                 isCraftingDialogOpen={isCraftingDialogOpen}
                 pendingClassChange={pendingClassChange}
                 onUseSkill={handleUseSkill}
+                onUnlearnSkill={handleUnlearnSkill}
+                onRespecAll={handleRespecAll}
                 onChoiceClick={handleBranchingChoiceClick}
                 onRetryNarration={handleRetryNarration}
                 onSubmitAction={handlePlayerAction}

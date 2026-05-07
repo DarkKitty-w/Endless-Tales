@@ -33,6 +33,8 @@ interface MobileSheetProps {
     turnCount: number;
     onSettingsOpen: () => void;
     onUseSkill?: (skillName: string) => void;
+    onUnlearnSkill?: (skillName: string) => void;
+    onRespecAll?: () => void;
 }
 
 export function MobileSheet({
@@ -42,6 +44,8 @@ export function MobileSheet({
     turnCount,
     onSettingsOpen,
     onUseSkill,
+    onUnlearnSkill,
+    onRespecAll,
 }: MobileSheetProps) {
     const { state } = useGame();
     const showSkillsTab = state.adventureSettings.adventureType !== "Immersed";
@@ -122,6 +126,8 @@ export function MobileSheet({
                                                         learnedSkills={character.learnedSkills}
                                                         currentStage={character.skillTreeStage}
                                                         onUseSkill={onUseSkill}
+                                                        onUnlearnSkill={onUnlearnSkill}
+                                                        onRespecAll={onRespecAll}
                                                     />
                                                 ) : (
                                                     <div className="flex items-center justify-center h-full text-muted-foreground italic p-4">

@@ -31,6 +31,8 @@ export type Action =
   | { type: "SET_SKILL_TREE"; payload: { class: string; skillTree: SkillTree } }
   | { type: "CHANGE_CLASS_AND_RESET_SKILLS"; payload: { newClass: string; newSkillTree: SkillTree } }
   | { type: "PROGRESS_SKILL_STAGE"; payload: number }
+  | { type: "UNLEARN_SKILL"; payload: string }
+  | { type: "RESPEC_ALL_SKILLS" }
   | { type: "ADD_ITEM"; payload: InventoryItem }
   | { type: "REMOVE_ITEM"; payload: { itemName: string; quantity?: number } }
   | { type: "UPDATE_ITEM"; payload: { itemName: string; updates: Partial<InventoryItem> } }

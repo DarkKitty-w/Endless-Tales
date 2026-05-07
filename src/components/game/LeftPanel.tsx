@@ -28,6 +28,8 @@ interface LeftPanelProps {
     isGeneratingSkillTree: boolean;
     turnCount: number;
     onUseSkill?: (skillName: string) => void;
+    onUnlearnSkill?: (skillName: string) => void;
+    onRespecAll?: () => void;
 }
 
 export const LeftPanel = React.memo(function LeftPanel({
@@ -36,6 +38,8 @@ export const LeftPanel = React.memo(function LeftPanel({
     isGeneratingSkillTree,
     turnCount,
     onUseSkill,
+    onUnlearnSkill,
+    onRespecAll,
 }: LeftPanelProps) {
     const { state } = useGame();
     const showSkillsTab = state.adventureSettings.adventureType !== "Immersed";
@@ -133,6 +137,8 @@ export const LeftPanel = React.memo(function LeftPanel({
                                     learnedSkills={character.learnedSkills}
                                     currentStage={character.skillTreeStage}
                                     onUseSkill={onUseSkill}
+                                    onUnlearnSkill={onUnlearnSkill}
+                                    onRespecAll={onRespecAll}
                                 />
                             ) : (
                                 <div className="flex items-center justify-center h-full text-muted-foreground italic p-4">

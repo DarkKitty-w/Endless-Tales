@@ -226,6 +226,29 @@ export function characterReducer(state: Character | null, action: Action): Chara
             if (newStage > state.skillTreeStage) return { ...state, skillTreeStage: newStage };
             return state;
         }
+        case "UNLEARN_SKILL": {
+            if (!state) return null;
+            const skillName = action.payload;
+            // Don't allow unlearning starter skills
+            const skillToRemove = state.learnedSkills.find(s => s.name === skillName);
+            if (!skillToRemove || skillToRemove.type === 'Starter') {
+                logger.warn(`Cannot unlearn skill: ${skillName}`, 'characterReducer', { reason: skillToRemove?.type === 'Starter' ? 'Starter skill' : 'Not found' });
+                return state;
+            }
+            return {
+                ...state,
+                learnedSkills: state.learnedSkills.filter(s => s.name !== skillName)
+            };
+        }
+        case "RESPEC_ALL_SKILLS": {
+            if (!state) return null;
+            // Keep only starter skills
+            const starterSkills = state.learnedSkills.filter(s => s.type === 'Starter');
+            return {
+                ...state,
+                learnedSkills: starterSkills
+            };
+        }
         case "UPDATE_NARRATION": {
             if (!state) return null;
             const { updatedStats, updatedTraits, updatedKnowledge, healthChange, staminaChange, manaChange, gainedSkill, xpGained, reputationChange, npcRelationshipChange, progressedToStage } = action.payload;

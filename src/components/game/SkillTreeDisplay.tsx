@@ -27,6 +27,8 @@ interface SkillTreeDisplayProps {
   currentStage: number;
   learnedSkills: Skill[];
   onUseSkill?: (skillName: string) => void;
+  onUnlearnSkill?: (skillName: string) => void;
+  onRespecAll?: () => void;
 }
 
 export function SkillTreeDisplay({
@@ -34,6 +36,8 @@ export function SkillTreeDisplay({
   currentStage,
   learnedSkills,
   onUseSkill,
+  onUnlearnSkill,
+  onRespecAll,
 }: SkillTreeDisplayProps) {
   const maxStage = MAX_SKILL_TREE_STAGES - 1;
 
@@ -101,11 +105,34 @@ export function SkillTreeDisplay({
                       <Wand2 className="h-3 w-3" />
                     </Button>
                   )}
+                  {onUnlearnSkill && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 text-destructive hover:text-destructive"
+                      onClick={() => onUnlearnSkill(skill.name)}
+                      title={`Unlearn ${skill.name}`}
+                      aria-label={`Unlearn skill: ${skill.name}`}
+                    >
+                      <span className="text-xs">×</span>
+                    </Button>
+                  )}
                 </div>
               ))}
             </div>
           ) : (
             <p className="text-xs text-muted-foreground italic">No skills learned yet.</p>
+          )}
+          {onRespecAll && learnedSkills.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRespecAll}
+              className="mt-2 text-xs"
+              aria-label="Respec all skills"
+            >
+              Respec All
+            </Button>
           )}
         </div>
 

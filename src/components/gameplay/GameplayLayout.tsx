@@ -53,6 +53,8 @@ interface GameplayLayoutProps {
   isCraftingDialogOpen: boolean;
   pendingClassChange: string | null;
   onUseSkill: (skill: Skill) => void;
+  onUnlearnSkill: (skillName: string) => void;
+  onRespecAll: () => void;
   onChoiceClick: (choice: BranchingChoice) => void;
   onRetryNarration: () => void;
   onSubmitAction: (action: string) => void;
@@ -113,6 +115,8 @@ export function GameplayLayout({
   isCraftingDialogOpen,
   pendingClassChange,
   onUseSkill,
+  onUnlearnSkill,
+  onRespecAll,
   onChoiceClick,
   onRetryNarration,
   onSubmitAction,
@@ -155,6 +159,8 @@ export function GameplayLayout({
           isGeneratingSkillTree={isGeneratingSkillTree}
           turnCount={turnCount}
           onUseSkill={onUseSkill}
+          onUnlearnSkill={onUnlearnSkill}
+          onRespecAll={onRespecAll}
         />
       </ErrorBoundary>
       <div className="flex-1 flex flex-col p-4 overflow-hidden">
