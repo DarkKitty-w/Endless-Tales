@@ -221,23 +221,36 @@ const createLogger = (defaultModule?: string): Logger => {
       const effectiveModule = module || defaultModule;
       const formattedLog = formatLogEntry(level, message, effectiveModule, context);
 
-      // In production, only output to console for errors, or use a proper log transport
-      // For now, we still use console but with structured JSON
-      switch (level) {
-        case 'error':
+      // In production, only output errors to console
+      // Non-error logs in production should be sent to a logging service or suppressed
+      const isProduction = process.env.NODE_ENV === 'production';
+      
+      if (isProduction) {
+        // In production: only log errors to console
+        // In a real app, you'd send non-error logs to a logging service
+        if (level === 'error') {
           console.error(formattedLog);
-          break;
-        case 'warn':
-          console.warn(formattedLog);
-          break;
-        case 'info':
-          console.info(formattedLog);
-          break;
-        case 'debug':
-          console.debug(formattedLog);
-          break;
-        default:
-          console.log(formattedLog);
+        }
+        // Optionally: send to logging service
+        // sendToLoggingService(formattedLog);
+      } else {
+        // In development: log everything to console with structured JSON
+        switch (level) {
+          case 'error':
+            console.error(formattedLog);
+            break;
+          case 'warn':
+            console.warn(formattedLog);
+            break;
+          case 'info':
+            console.info(formattedLog);
+            break;
+          case 'debug':
+            console.debug(formattedLog);
+            break;
+          default:
+            console.log(formattedLog);
+        }
       }
     };
   };
