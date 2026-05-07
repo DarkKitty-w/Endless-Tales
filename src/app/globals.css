@@ -161,3 +161,26 @@ body {
 .transition-all-smooth {
   transition: all 0.2s ease-in-out;
 }
+
+/* T-009: Focus Rings on Interactive Elements */
+@layer base {
+  /* Ensure all interactive elements have visible focus indicators */
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible,
+  a:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+  
+  /* Smooth focus transitions */
+  button,
+  [role="button"],
+  input,
+  select,
+  textarea,
+  a {
+    @apply transition-all duration-150 ease-in-out;
+  }
+}
