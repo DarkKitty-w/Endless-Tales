@@ -83,6 +83,18 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
 
     case "APPLY_REMOTE_STATE": {
       const remoteState = action.payload;
+      
+      // NET-11 Fix: Validate that remote state is newer than current state
+      if (remoteState.version !== undefined && state.version !== undefined) {
+        if (remoteState.version < state.version) {
+          logger.warn(`APPLY_REMOTE_STATE: Rejecting stale remote state. Remote version: ${remoteState.version}, Local version: ${state.version}`);
+          return state; // Reject stale state
+        }
+        if (remoteState.version === state.version) {
+          logger.log(`APPLY_REMOTE_STATE: Remote state version matches local version (${remoteState.version}). Applying.`);
+        }
+      }
+      
       // SAVE-11 Fix: Sanitize remote state to remove multiplayer-specific fields
       // before merging into local state to prevent persisting them in saves
       const sanitizedRemote = sanitizeStateForPersistence(remoteState);
