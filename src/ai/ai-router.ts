@@ -1,4 +1,4 @@
-import { logger, generateRequestId, setRequestId } from '@/lib/logger';
+import { logger, generateRequestId, setRequestId, setTraceId, getTraceId } from '@/lib/logger';
 import { protectUserAction, PROMPT_INJECTION_DEFENSE } from '@/lib/prompt-injection-protection';
 // src/ai/ai-router.ts
 
@@ -136,6 +136,13 @@ class GeminiProvider implements AIProvider {
     const requestId = generateRequestId();
     setRequestId(requestId);
     
+    // OBS-7 Fix: Generate or reuse traceId for distributed tracing
+    let traceId = getTraceId();
+    if (!traceId) {
+      traceId = generateRequestId(); // In production, use proper trace ID
+      setTraceId(traceId);
+    }
+    
     // SEC-6 Fix: Apply prompt injection protection
     const protectedContents = protectUserAction(contents);
     const enhancedSystemMessage = systemMessage 
@@ -144,6 +151,7 @@ class GeminiProvider implements AIProvider {
     
     logger.info('AI request initiated', 'ai-router', { 
       requestId, 
+      traceId,
       provider: 'gemini', 
       model: effectiveModel,
       contentLength: contents.length 
@@ -159,6 +167,7 @@ class GeminiProvider implements AIProvider {
         systemMessage: enhancedSystemMessage,
         config,
         requestId, // OBS-6 Fix: Pass requestId for correlation
+        traceId, // OBS-7 Fix: Pass traceId for distributed tracing
       }),
       signal: getSignalWithTimeout(signal),
     });
@@ -168,6 +177,7 @@ class GeminiProvider implements AIProvider {
       // Use the provider-specific error message from ai-proxy, or fallback to generic
       logger.error('AI request failed', 'ai-router', { 
         requestId, 
+        traceId,
         error: error.error 
       });
       throw new Error(error.error || `Gemini API error: Request failed`);
@@ -179,6 +189,7 @@ class GeminiProvider implements AIProvider {
     
     logger.info('AI request completed', 'ai-router', { 
       requestId, 
+      traceId,
       responseLength: text.length 
     });
     
@@ -204,6 +215,13 @@ class GeminiProvider implements AIProvider {
     const requestId = generateRequestId();
     setRequestId(requestId);
     
+    // OBS-7 Fix: Generate or reuse traceId for distributed tracing
+    let traceId = getTraceId();
+    if (!traceId) {
+      traceId = generateRequestId();
+      setTraceId(traceId);
+    }
+    
     // SEC-6 Fix: Apply prompt injection protection
     const protectedContents = protectUserAction(contents);
     const enhancedSystemMessage = systemMessage 
@@ -212,6 +230,7 @@ class GeminiProvider implements AIProvider {
     
     logger.info('AI streaming request initiated', 'ai-router', { 
       requestId, 
+      traceId,
       provider: 'gemini', 
       model: effectiveModel,
       contentLength: contents.length 
@@ -228,6 +247,7 @@ class GeminiProvider implements AIProvider {
         config,
         stream: true,
         requestId, // OBS-6 Fix: Pass requestId for correlation
+        traceId, // OBS-7 Fix: Pass traceId for distributed tracing
       }),
       signal: getSignalWithTimeout(signal),
     });
@@ -237,6 +257,7 @@ class GeminiProvider implements AIProvider {
       // Use the provider-specific error message from ai-proxy, or fallback to generic
       logger.error('AI streaming request failed', 'ai-router', { 
         requestId, 
+        traceId,
         error: error.error 
       });
       throw new Error(error.error || `Gemini API streaming error: Streaming request failed`);
@@ -250,7 +271,7 @@ class GeminiProvider implements AIProvider {
     let buffer = '';
     let accumulatedText = ''; // ERR-4 Fix: Track accumulated text for error reporting
     
-    logger.info('AI streaming started', 'ai-router', { requestId });
+    logger.info('AI streaming started', 'ai-router', { requestId, traceId });
 
     try {
       while (true) {
@@ -258,6 +279,7 @@ class GeminiProvider implements AIProvider {
         if (done) {
           logger.info('AI streaming completed', 'ai-router', { 
             requestId,
+            traceId,
             accumulatedLength: accumulatedText.length 
           });
           break;

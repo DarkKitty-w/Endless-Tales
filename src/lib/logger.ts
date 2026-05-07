@@ -155,6 +155,13 @@ export function setRequestId(requestId: string): void {
 }
 
 /**
+ * Get the current trace ID
+ */
+export function getTraceId(): string | undefined {
+  return currentTraceId;
+}
+
+/**
  * Set the trace ID for the current context
  */
 export function setTraceId(traceId: string): void {

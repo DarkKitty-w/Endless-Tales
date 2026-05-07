@@ -92,17 +92,22 @@ function validateModelConfig(config: any): ValidatedConfig | null {
 }
 
 export async function POST(request: NextRequest) {
-  // Generate or extract request ID for correlation
+  // Generate or extract request ID and trace ID for correlation
   const body = await request.json();
-  const { provider, model, contents, config: rawConfig, stream, systemMessage, requestId: clientRequestId } = body;
+  const { provider, model, contents, config: rawConfig, stream, systemMessage, requestId: clientRequestId, traceId: clientTraceId } = body;
   
   // Use client-provided requestId or generate a new one
   const requestId = clientRequestId || generateRequestId();
   setRequestId(requestId);
   
-  // Log the incoming request with requestId
+  // For traceId, use client-provided or generate a new one (traceId persists across related requests)
+  const traceId = clientTraceId || generateRequestId(); // In production, use a proper trace ID generation
+  setTraceId(traceId);
+  
+  // Log the incoming request with requestId and traceId
   logger.info('AI Proxy request received', 'ai-proxy', { 
     requestId, 
+    traceId,
     provider, 
     model,
     stream,
@@ -178,15 +183,19 @@ export async function POST(request: NextRequest) {
         );
     }
   } catch (error: unknown) {
+    const requestId = getCurrentRequestId();
+    const traceId = getTraceId();
+    
     logger.error('AI Proxy error:', 'ai-proxy', { 
-      error, 
-      requestId: getCurrentRequestId() 
+      error,
+      requestId,
+      traceId
     });
     
     // ERR-7 Fix: Handle timeout errors with specific message
     if (error instanceof DOMException && error.name === 'TimeoutError') {
       return NextResponse.json(
-        { error: 'AI request timed out. Please try again later.', requestId: getCurrentRequestId() },
+        { error: 'AI request timed out. Please try again later.', requestId, traceId },
         { status: 504 }
       );
     }
@@ -196,10 +205,11 @@ export async function POST(request: NextRequest) {
       // Network error (connection refused, DNS failure, etc.)
       logger.error('Network error in AI Proxy:', 'ai-proxy', { 
         message: error.message,
-        requestId: getCurrentRequestId() 
+        requestId,
+        traceId
       });
       return NextResponse.json(
-        { error: 'Network connection failed. Please check your internet connection and try again.', requestId: getCurrentRequestId() },
+        { error: 'Network connection failed. Please check your internet connection and try again.', requestId, traceId },
         { status: 503 }
       );
     }
@@ -207,7 +217,7 @@ export async function POST(request: NextRequest) {
     // ERR-9 Fix: Check for AbortError (request was aborted)
     if (error instanceof DOMException && error.name === 'AbortError') {
       return NextResponse.json(
-        { error: 'AI request was cancelled. Please try again.', requestId: getCurrentRequestId() },
+        { error: 'AI request was cancelled. Please try again.', requestId, traceId },
         { status: 499 }
       );
     }
@@ -215,7 +225,7 @@ export async function POST(request: NextRequest) {
     // SEC-3 Fix: Sanitize error messages sent to clients
     // Only return generic error messages, log detailed errors server-side only
     return NextResponse.json(
-      { error: 'AI request failed. Please try again later.', requestId: getCurrentRequestId() },
+      { error: 'AI request failed. Please try again later.', requestId, traceId },
       { status: 500 }
     );
   }
@@ -243,6 +253,9 @@ async function handleGemini(
 ) {
   const effectiveModel = model || 'gemini-2.5-flash';
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${effectiveModel}:${stream ? 'streamGenerateContent' : 'generateContent'}?key=${apiKey}`;
+  
+  const requestId = getCurrentRequestId();
+  const traceId = getTraceId();
 
   const body: any = {
     contents: typeof contents === 'string' ? [{ parts: [{ text: contents }] }] : contents,
@@ -272,6 +285,18 @@ async function handleGemini(
     body.generationConfig = { ...body.generationConfig, stream: true };
   }
 
+  // OBS-10 Fix: Log outgoing request details
+  const requestStartTime = Date.now();
+  logger.info('Gemini API request', 'ai-proxy', {
+    requestId,
+    traceId,
+    provider: 'gemini',
+    model: effectiveModel,
+    stream,
+    promptLength: typeof contents === 'string' ? contents.length : JSON.stringify(contents).length,
+    config: body.generationConfig ? { ...body.generationConfig, apiKey: undefined } : undefined
+  });
+
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -279,6 +304,8 @@ async function handleGemini(
     // ERR-7 Fix: Add timeout signal
     signal: getTimeoutSignal(),
   });
+
+  const duration = Date.now() - requestStartTime;
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -303,13 +330,34 @@ async function handleGemini(
       // If we can't parse the error, use the generic message
     }
     
-    logger.error('Gemini API error:', response.status, errorText);
+    // OBS-10 Fix: Log API error with context
+    logger.error('Gemini API error', 'ai-proxy', {
+      requestId,
+      traceId,
+      status: response.status,
+      duration,
+      error: errorText.substring(0, 500), // Truncate to avoid log overload
+      provider: 'gemini',
+      model: effectiveModel
+    });
+    
     // SEC-3 Fix: Sanitize error messages sent to clients
     return NextResponse.json(
-      { error: errorMessage },
+      { error: errorMessage, requestId, traceId },
       { status: 500 }
     );
   }
+
+  // OBS-10 Fix: Log successful response
+  logger.info('Gemini API response', 'ai-proxy', {
+    requestId,
+    traceId,
+    status: response.status,
+    duration,
+    provider: 'gemini',
+    model: effectiveModel,
+    stream
+  });
 
   if (stream) {
     // PERF-12 fix: Pipe streaming response directly without decoding/re-encoding
@@ -326,12 +374,29 @@ async function handleGemini(
     const responseText = await response.text();
     try {
       const data = JSON.parse(responseText);
+      
+      // OBS-10 Fix: Log response details
+      const extractedText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      logger.info('Gemini API response parsed', 'ai-proxy', {
+        requestId,
+        traceId,
+        responseLength: extractedText.length,
+        candidateCount: data.candidates?.length || 0
+      });
+      
       return NextResponse.json(data);
     } catch (parseError) {
-      logger.error('Failed to parse Gemini response as JSON. Raw response:', responseText);
+      logger.error('Failed to parse Gemini response as JSON', 'ai-proxy', {
+        requestId,
+        traceId,
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+        rawResponse: responseText.substring(0, 500)
+      });
       return NextResponse.json(
         { 
           error: 'Invalid response from Gemini API (not valid JSON)', 
+          requestId,
+          traceId,
           rawResponse: responseText.substring(0, 1000) // Include first 1000 chars for debugging
         },
         { status: 500 }
@@ -353,6 +418,9 @@ async function handleOpenAICompatible(
 ) {
   const effectiveModel = model || 'gpt-4o';
   const url = `${baseUrl}/chat/completions`;
+  
+  const requestId = getCurrentRequestId();
+  const traceId = getTraceId();
 
   // Build messages array with system message separation
   const messages: { role: string; content: string }[] = [];
@@ -378,6 +446,18 @@ async function handleOpenAICompatible(
     if (config.stopSequences !== undefined) body.stop = config.stopSequences;
   }
 
+  // OBS-10 Fix: Log outgoing request details (mask API key in logs)
+  const requestStartTime = Date.now();
+  logger.info(`${providerName} API request`, 'ai-proxy', {
+    requestId,
+    traceId,
+    provider: providerName.toLowerCase(),
+    model: effectiveModel,
+    stream,
+    messageCount: messages.length,
+    promptLength: JSON.stringify(messages).length
+  });
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -388,6 +468,8 @@ async function handleOpenAICompatible(
     // ERR-7 Fix: Add timeout signal
     signal: getTimeoutSignal(),
   });
+
+  const duration = Date.now() - requestStartTime;
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -416,13 +498,34 @@ async function handleOpenAICompatible(
       // If we can't parse the error, use the generic message
     }
     
-    logger.error(`${providerName} API error:`, response.status, errorText);
+    // OBS-10 Fix: Log API error with context
+    logger.error(`${providerName} API error`, 'ai-proxy', {
+      requestId,
+      traceId,
+      status: response.status,
+      duration,
+      error: errorText.substring(0, 500),
+      provider: providerName.toLowerCase(),
+      model: effectiveModel
+    });
+    
     // SEC-3 Fix: Sanitize error messages sent to clients
     return NextResponse.json(
-      { error: errorMessage },
+      { error: errorMessage, requestId, traceId },
       { status: 500 }
     );
   }
+
+  // OBS-10 Fix: Log successful response
+  logger.info(`${providerName} API response`, 'ai-proxy', {
+    requestId,
+    traceId,
+    status: response.status,
+    duration,
+    provider: providerName.toLowerCase(),
+    model: effectiveModel,
+    stream
+  });
 
   if (stream) {
     // PERF-12 fix: Pipe streaming response directly without decoding/re-encoding
@@ -439,13 +542,30 @@ async function handleOpenAICompatible(
     const responseText = await response.text();
     try {
       const data = JSON.parse(responseText);
+      
+      // OBS-10 Fix: Log response details
+      const extractedText = data.choices?.[0]?.message?.content || '';
+      logger.info(`${providerName} API response parsed`, 'ai-proxy', {
+        requestId,
+        traceId,
+        responseLength: extractedText.length,
+        choiceCount: data.choices?.length || 0
+      });
+      
       return NextResponse.json(data);
     } catch (parseError) {
-      logger.error(`Failed to parse ${providerName} response as JSON. Raw response:`, responseText);
+      logger.error(`Failed to parse ${providerName} response as JSON`, 'ai-proxy', {
+        requestId,
+        traceId,
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+        rawResponse: responseText.substring(0, 500)
+      });
       return NextResponse.json(
         { 
           error: `Invalid response from ${providerName} API (not valid JSON)`, 
-          rawResponse: responseText.substring(0, 1000) // Include first 1000 chars for debugging
+          requestId,
+          traceId,
+          rawResponse: responseText.substring(0, 1000)
         },
         { status: 500 }
       );
@@ -500,7 +620,9 @@ async function handleClaude(
 ) {
   const effectiveModel = model || 'claude-3-5-sonnet-20241022';
   const url = `https://api.anthropic.com/v1/messages`;
-
+  const requestId = getCurrentRequestId();
+  const traceId = getTraceId();
+  
   const body: any = {
     model: effectiveModel,
     stream: stream || false,
@@ -526,6 +648,18 @@ async function handleClaude(
   // Claude expects messages array
   body.messages = [{ role: 'user', content: typeof contents === 'string' ? contents : JSON.stringify(contents) }];
 
+  // OBS-10 Fix: Log outgoing request details
+  const requestStartTime = Date.now();
+  logger.info('Claude API request', 'ai-proxy', {
+    requestId,
+    traceId,
+    provider: 'claude',
+    model: effectiveModel,
+    stream,
+    messageCount: body.messages.length,
+    promptLength: JSON.stringify(body.messages).length
+  });
+
   const response = await fetch(url, {
     method: 'POST',
     headers: {
@@ -537,6 +671,8 @@ async function handleClaude(
     // ERR-7 Fix: Add timeout signal
     signal: getTimeoutSignal(),
   });
+
+  const duration = Date.now() - requestStartTime;
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -564,13 +700,34 @@ async function handleClaude(
       // If we can't parse the error, use the generic message
     }
     
-    logger.error('Claude API error:', response.status, errorText);
+    // OBS-10 Fix: Log API error with context
+    logger.error('Claude API error', 'ai-proxy', {
+      requestId,
+      traceId,
+      status: response.status,
+      duration,
+      error: errorText.substring(0, 500),
+      provider: 'claude',
+      model: effectiveModel
+    });
+    
     // SEC-3 Fix: Sanitize error messages sent to clients
     return NextResponse.json(
-      { error: errorMessage },
+      { error: errorMessage, requestId, traceId },
       { status: 500 }
     );
   }
+
+  // OBS-10 Fix: Log successful response
+  logger.info('Claude API response', 'ai-proxy', {
+    requestId,
+    traceId,
+    status: response.status,
+    duration,
+    provider: 'claude',
+    model: effectiveModel,
+    stream
+  });
 
   if (stream) {
     // PERF-12 fix: Pipe streaming response directly without decoding/re-encoding
@@ -587,23 +744,39 @@ async function handleClaude(
     const responseText = await response.text();
     try {
       const data = JSON.parse(responseText);
+      
+      // OBS-10 Fix: Log response details
+      const extractedText = data.content?.[0]?.text || '';
+      logger.info('Claude API response parsed', 'ai-proxy', {
+        requestId,
+        traceId,
+        responseLength: extractedText.length,
+      });
+      
       // Transform Claude response to match our expected format
       const transformed = {
         candidates: [{
           content: {
             parts: [{
-              text: data.content?.[0]?.text || ''
+              text: extractedText
             }]
           }
         }]
       };
       return NextResponse.json(transformed);
     } catch (parseError) {
-      logger.error('Failed to parse Claude response as JSON. Raw response:', responseText);
+      logger.error('Failed to parse Claude response as JSON', 'ai-proxy', {
+        requestId,
+        traceId,
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+        rawResponse: responseText.substring(0, 500)
+      });
       return NextResponse.json(
         { 
           error: 'Invalid response from Claude API (not valid JSON)', 
-          rawResponse: responseText.substring(0, 1000) // Include first 1000 chars for debugging
+          requestId,
+          traceId,
+          rawResponse: responseText.substring(0, 1000)
         },
         { status: 500 }
       );
