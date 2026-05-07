@@ -8,3 +8,4 @@ architecture:DONE
 persistence:DONE
 multiplayer:DONE
 ai_coherence:DONE
+observability:DONE
