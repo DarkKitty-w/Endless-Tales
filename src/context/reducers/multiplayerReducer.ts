@@ -291,7 +291,7 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
         newPartyState[fromPeerId] = senderSummary;
         newPartyState[toPeerId] = receiverSummary;
         
-        console.log(`Trade processed: ${fromPeerId} -> ${toPeerId}, items:`, items);
+        logger.info(`Trade processed: ${fromPeerId} -> ${toPeerId}`, "multiplayerReducer", { items });
       }
       
       return {

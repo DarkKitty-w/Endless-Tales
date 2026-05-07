@@ -2,6 +2,7 @@
 import type { InventoryItem, ItemQuality } from "../../types/inventory-types";
 import type { Action } from "../game-actions";
 import { initialInventory } from "../game-initial-state";
+import { logger } from "../../lib/logger";
 
 export function inventoryReducer(state: InventoryItem[], action: Action): InventoryItem[] {
     switch (action.type) {
@@ -14,20 +15,16 @@ export function inventoryReducer(state: InventoryItem[], action: Action): Invent
                 durability: typeof action.payload.durability === 'number' ? action.payload.durability : undefined,
                 magicalEffect: action.payload.magicalEffect || undefined,
             };
-            if (process.env.NODE_ENV === 'development') {
-                console.log("Adding validated item:", newItem.name);
-            }
+            logger.debug("Adding validated item:", "inventoryReducer", { itemName: newItem.name });
             return [...state, newItem];
         }
         case "REMOVE_ITEM": {
             const { itemName, quantity = 1 } = action.payload;
-            if (process.env.NODE_ENV === 'development') {
-                console.log(`Attempting to remove ${quantity} of item:`, itemName);
-            }
+            logger.debug(`Attempting to remove ${quantity} of item:`, "inventoryReducer", { itemName });
             // Check if item exists before creating new array
             const itemExists = state.some(item => item.name === itemName);
             if (!itemExists) {
-                console.warn(`Item ${itemName} not found in inventory.`);
+                logger.warn(`Item ${itemName} not found in inventory.`, "inventoryReducer");
                 return state;
             }
             const updatedInventory = [...state];
@@ -39,16 +36,14 @@ export function inventoryReducer(state: InventoryItem[], action: Action): Invent
                 }
             }
             if (removedCount < quantity) {
-                console.warn(`Tried to remove ${quantity} of ${itemName}, but only found ${removedCount}.`);
+                logger.warn(`Tried to remove ${quantity} of ${itemName}, but only found ${removedCount}.`, "inventoryReducer");
             }
             // Only return new array if items were actually removed
             return removedCount > 0 ? updatedInventory : state;
         }
         case "UPDATE_ITEM": {
             const { itemName, updates } = action.payload;
-            if (process.env.NODE_ENV === 'development') {
-                console.log("Updating item:", itemName, "with", updates);
-            }
+            logger.debug("Updating item:", "inventoryReducer", { itemName, updates });
             // Check if any item actually needs updating
             const needsUpdate = state.some(item => {
                 if (item.name !== itemName) return false;
@@ -72,9 +67,9 @@ export function inventoryReducer(state: InventoryItem[], action: Action): Invent
                 durability: typeof item.durability === 'number' ? item.durability : undefined,
                 magicalEffect: item.magicalEffect || undefined,
             }));
-            if (process.env.NODE_ENV === 'development') {
-                console.log("Replacing inventory with new list:", validatedNewInventory.map(i => i.name));
-            }
+            logger.debug("Replacing inventory with new list:", "inventoryReducer", { 
+                itemNames: validatedNewInventory.map(i => i.name) 
+            });
             return validatedNewInventory;
         }
         case "UPDATE_CRAFTING_RESULT": {
@@ -87,7 +82,7 @@ export function inventoryReducer(state: InventoryItem[], action: Action): Invent
                 if (indexToRemove > -1) {
                     updatedInventory.splice(indexToRemove, 1);
                 } else {
-                    console.warn(`Attempted to consume non-existent item: ${itemName}`);
+                    logger.warn(`Attempted to consume non-existent item: ${itemName}`, "inventoryReducer");
                 }
             });
 

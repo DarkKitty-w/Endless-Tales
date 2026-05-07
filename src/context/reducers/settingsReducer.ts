@@ -54,15 +54,11 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
                 universeName: finalAdventureType === 'Immersed' ? (incomingPayload.universeName ?? state.adventureSettings.universeName ?? "") : "",
                 playerCharacterConcept: finalAdventureType === 'Immersed' ? (incomingPayload.playerCharacterConcept ?? state.adventureSettings.playerCharacterConcept ?? "") : "",
             };
-            if (process.env.NODE_ENV === 'development') {
-                console.log("SettingsReducer: SET_ADVENTURE_SETTINGS. Final settings being applied:", JSON.stringify(newSettings));
-            }
+            logger.debug("SettingsReducer: SET_ADVENTURE_SETTINGS. Final settings being applied:", "settingsReducer", { settings: newSettings });
             return { ...state, adventureSettings: newSettings };
         }
         case "SET_ADVENTURE_TYPE": {
-            if (process.env.NODE_ENV === 'development') {
-                console.log("SettingsReducer: Setting adventure type to", action.payload, ". Resetting specific fields.");
-            }
+            logger.debug("SettingsReducer: Setting adventure type to " + action.payload + ". Resetting specific fields.", "settingsReducer");
             const preservedDifficulty = state.adventureSettings.difficulty || initialAdventureSettings.difficulty;
             const preservedPermadeath = state.adventureSettings.permanentDeath !== undefined
                 ? state.adventureSettings.permanentDeath
@@ -129,9 +125,7 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
                 universeName: loadedAdventureType === 'Immersed' ? (settingsToLoad?.universeName ?? "") : "",
                 playerCharacterConcept: loadedAdventureType === 'Immersed' ? (settingsToLoad?.playerCharacterConcept ?? "") : "",
              };
-             if (process.env.NODE_ENV === 'development') {
-                 console.log("SettingsReducer: Loaded adventure settings:", JSON.stringify(validatedSettings));
-             }
+             logger.debug("SettingsReducer: Loaded adventure settings:", "settingsReducer", { settings: validatedSettings });
              return {
                 ...state,
                  adventureSettings: validatedSettings

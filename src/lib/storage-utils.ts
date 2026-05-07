@@ -5,6 +5,7 @@
 
 import type { SavedAdventure } from "../types/adventure-types";
 import { CURRENT_STATE_VERSION } from "../context/game-initial-state";
+import { logger } from "./logger";
 
 const TEMP_PREFIX = '_temp_';
 const BACKUP_PREFIX = '_backup_';
@@ -34,7 +35,7 @@ export function atomicLocalStorageWrite(key: string, value: unknown): boolean {
     if (!verifyRead || verifyRead !== serialized) {
       // Write validation failed, clean up temp
       localStorage.removeItem(tempKey);
-      console.error('Atomic write failed: verification failed for key', key);
+      logger.error('Atomic write failed: verification failed for key', 'storage-utils', { key });
       return false;
     }
     
@@ -56,7 +57,7 @@ export function atomicLocalStorageWrite(key: string, value: unknown): boolean {
       }
       localStorage.removeItem(tempKey);
       localStorage.removeItem(backupKey);
-      console.error('Atomic write failed: final verification failed for key', key);
+      logger.error('Atomic write failed: final verification failed for key', 'storage-utils', { key });
       return false;
     }
     
@@ -73,7 +74,7 @@ export function atomicLocalStorageWrite(key: string, value: unknown): boolean {
       // Ignore cleanup errors
     }
     
-    console.error('Atomic write failed with error:', error);
+    logger.error('Atomic write failed with error:', 'storage-utils', { error });
     return false;
   }
 }
@@ -93,17 +94,17 @@ export function safeLocalStorageRead<T = unknown>(key: string): T | null {
     
     return JSON.parse(data) as T;
   } catch (error) {
-    console.warn(`Failed to read ${key}, trying backup...`, error);
+    logger.warn(`Failed to read ${key}, trying backup...`, 'storage-utils', { error });
     
     // Try backup
     try {
       const backupData = localStorage.getItem(backupKey);
       if (backupData !== null) {
-        console.log(`Successfully read backup for ${key}`);
+        logger.info(`Successfully read backup for ${key}`, 'storage-utils');
         return JSON.parse(backupData) as T;
       }
     } catch (backupError) {
-      console.error(`Backup read also failed for ${key}`, backupError);
+      logger.error(`Backup read also failed for ${key}`, 'storage-utils', { backupError });
     }
     
     return null;
@@ -180,7 +181,7 @@ export function checkSaveSize(saveData: unknown): {
       sizeFormatted: formatBytes(size)
     };
   } catch (error) {
-    console.error('Failed to check save size:', error);
+    logger.error('Failed to check save size:', 'storage-utils', { error });
     return { size: 0, isTooLarge: false, isApproachingLimit: false, sizeFormatted: '0 B' };
   }
 }
@@ -243,7 +244,7 @@ export function createSaveBackup(saveId: string, saveData: unknown): void {
       }
     });
   } catch (error) {
-    console.error('Failed to create save backup:', error);
+    logger.error('Failed to create save backup:', 'storage-utils', { error });
   }
 }
 
@@ -276,7 +277,7 @@ export function getSaveBackups(saveId: string): Array<{ key: string; timestamp: 
     // Sort by timestamp descending (newest first)
     backups.sort((a, b) => b.timestamp - a.timestamp);
   } catch (error) {
-    console.error('Failed to get save backups:', error);
+    logger.error('Failed to get save backups:', 'storage-utils', { error });
   }
   
   return backups;
@@ -294,7 +295,7 @@ export function restoreFromBackup(backupKey: string): unknown {
     if (data === null) return null;
     return JSON.parse(data);
   } catch (error) {
-    console.error('Failed to restore from backup:', error);
+    logger.error('Failed to restore from backup:', 'storage-utils', { error });
     return null;
   }
 }
@@ -428,13 +429,13 @@ export function repairSaveData(
     // Validate the repaired save has all required fields
     if (!repaired.id || !repaired.characterName || !repaired.character || !repaired.adventureSettings || 
         !repaired.storyLog || !repaired.currentGameStateString || !repaired.inventory) {
-      console.error('Repair failed: missing required fields after repair');
+      logger.error('Repair failed: missing required fields after repair', 'storage-utils');
       return null;
     }
     
     return repaired as SavedAdventure;
   } catch (error) {
-    console.error('Failed to repair save data:', error);
+    logger.error('Failed to repair save data:', 'storage-utils', { error });
     return null;
   }
 }

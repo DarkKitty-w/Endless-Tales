@@ -7,6 +7,8 @@
  * - rollD100 - Rolls a hundred-sided die (d100).
  */
 
+import { logger } from "../lib/logger";
+
 /**
  * Rolls a die with the specified number of sides.
  *
@@ -21,7 +23,7 @@ async function rollDie(sides: number): Promise<number> {
   // await new Promise(resolve => setTimeout(resolve, 50));
 
   const result = Math.floor(Math.random() * sides) + 1;
-  console.log(`Dice Service: Rolled a d${sides}: ${result}`);
+  logger.debug(`Dice Service: Rolled a d${sides}: ${result}`, 'dice-roller');
   return result;
 }
 

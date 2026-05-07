@@ -6,6 +6,8 @@
  * override system prompts or extract sensitive information.
  */
 
+import { logger } from "./logger";
+
 // Patterns that might indicate prompt injection attempts
 const INJECTION_PATTERNS = [
   // Direct instruction overrides
@@ -92,7 +94,7 @@ export function protectUserAction(action: string): {
   
   if (hasInjection) {
     // Log suspicious input (server-side only)
-    console.warn('Potential prompt injection detected:', action.substring(0, 100));
+    logger.warn('Potential prompt injection detected:', 'prompt-injection-protection', { actionPreview: action.substring(0, 100) });
   }
   
   return {
