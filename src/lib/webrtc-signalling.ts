@@ -580,8 +580,10 @@ function processMessageQueue() {
   messageQueue.length = 0;
   messageQueue.push(...validMessages);
   
-  // Try to send queued messages
-  for (let i = messageQueue.length - 1; i >= 0; i--) {
+  // NET-5 Fix: Process messages in FIFO order (oldest first)
+  // Use a while loop to process from the front of the queue
+  let i = 0;
+  while (i < messageQueue.length) {
     const msg = messageQueue[i];
     if (msg.channel.readyState === 'open' && msg.channel.bufferedAmount < BUFFER_LIMIT / 2) {
       try {
@@ -589,7 +591,10 @@ function processMessageQueue() {
         messageQueue.splice(i, 1); // Remove from queue on successful send
       } catch (error) {
         // Keep in queue, will retry next time
+        i++;
       }
+    } else {
+      i++;
     }
   }
   
