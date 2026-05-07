@@ -8,7 +8,7 @@ import type {
   PendingInteraction, InteractionRequest
 } from "../types/multiplayer-types";
 import {
-  createOffer, createAnswer, applyAnswer, setupDataChannel, sendDataChannelMessage,
+  createOffer, createAnswer, applyAnswer, setupDataChannel,
   sendBufferedIceCandidates, handleIceCandidateMessage,
   type SignallingPackage
 } from "../lib/webrtc-signalling";
@@ -70,6 +70,9 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelsRef = useRef<Record<string, RTCDataChannel>>({});
+  // NET-10 Fix: Per-peer message queues to prevent cross-peer message leakage
+  const peerMessageQueues = useRef<Record<string, { data: any; timestamp: number }[]>>({});
+  const peerQueueTimeouts = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const iceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const multiplayerStateRef = useRef(multiplayerState);
 
@@ -82,6 +85,48 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   function generatePeerId(): string {
     return `peer_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   }
+
+  // NET-10 Fix: Per-peer message queue processing
+  const processPeerQueue = useCallback((channelLabel: string) => {
+    const channel = dataChannelsRef.current[channelLabel];
+    if (!channel || channel.readyState !== 'open') return;
+    
+    const queue = peerMessageQueues.current[channelLabel];
+    if (!queue || queue.length === 0) return;
+    
+    const now = Date.now();
+    const BUFFER_LIMIT = 1024 * 1024; // 1MB
+    let i = 0;
+    while (i < queue.length) {
+      const msg = queue[i];
+      // Remove messages older than 30 seconds
+      if (now - msg.timestamp > 30000) {
+        queue.splice(i, 1);
+        continue;
+      }
+      if (channel.bufferedAmount < BUFFER_LIMIT / 2) {
+        try {
+          channel.send(JSON.stringify(msg.data));
+          queue.splice(i, 1); // Remove on successful send
+        } catch (error) {
+          i++; // Keep in queue, will retry next time
+        }
+      } else {
+        i++; // Channel buffer full, keep message in queue
+      }
+    }
+    
+    // Reschedule if there are still messages in the queue
+    if (queue.length > 0) {
+      if (peerQueueTimeouts.current[channelLabel]) {
+        clearTimeout(peerQueueTimeouts.current[channelLabel]);
+      }
+      peerQueueTimeouts.current[channelLabel] = setTimeout(() => processPeerQueue(channelLabel), 50);
+    } else {
+      delete peerQueueTimeouts.current[channelLabel];
+      delete peerMessageQueues.current[channelLabel];
+    }
+  }, []);
 
   // Send a message via a specific data channel
   const sendMessage = useCallback((type: MultiplayerMessage['type'], payload: any) => {
@@ -101,13 +146,38 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       timestamp: Date.now(),
     };
 
-    const sent = sendDataChannelMessage(channel, message);
-    if (!sent && onError) {
-      // ERR-32 Fix: Notify user when message is dropped due to queue full or channel issues
-      onError("Message Not Sent", `Failed to send ${type} message. The connection may be congested.`, false);
+    // Try to send immediately
+    if (channel.readyState === 'open') {
+      try {
+        channel.send(JSON.stringify(message));
+        return true;
+      } catch (error) {
+        logger.error('Failed to send immediately, queuing:', error);
+      }
     }
-    return sent;
-  }, [onError]);
+    
+    // Queue the message if channel not open or send failed
+    if (!peerMessageQueues.current[type]) {
+      peerMessageQueues.current[type] = [];
+    }
+    
+    const queue = peerMessageQueues.current[type];
+    const MAX_QUEUE_SIZE = 100;
+    if (queue.length < MAX_QUEUE_SIZE) {
+      queue.push({ data: message, timestamp: Date.now() });
+      // Schedule processing for queued messages
+      if (!peerQueueTimeouts.current[type]) {
+        peerQueueTimeouts.current[type] = setTimeout(() => processPeerQueue(type), 50);
+      }
+      return true; // Message is queued (will be sent later)
+    } else {
+      logger.error('Message queue full, dropping message');
+      if (onError) {
+        onError("Message Not Sent", `Failed to send ${type} message. The connection may be congested.`, false);
+      }
+      return false; // Queue is full, message dropped
+    }
+  }, [onError, processPeerQueue]);
 
   // Send game action (guest sends to host)
   const sendGameAction = useCallback((action: string, turnNumber: number, isInitial = false) => {
@@ -515,6 +585,13 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
+    
+    // NET-10 Fix: Clean up per-peer message queues and timeouts
+    Object.keys(peerQueueTimeouts.current).forEach(channelLabel => {
+      clearTimeout(peerQueueTimeouts.current[channelLabel]);
+    });
+    peerQueueTimeouts.current = {};
+    peerMessageQueues.current = {};
     
     // Close all data channels with proper cleanup
     Object.values(dataChannelsRef.current).forEach(channel => {

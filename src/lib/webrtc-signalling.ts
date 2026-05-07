@@ -565,96 +565,21 @@ export function setupDataChannel(
  * Send a message via data channel with backpressure handling
  * Returns true if message was sent or queued, false if it was dropped
  */
-// Queue for storing messages when buffer is full
-const messageQueue: { channel: RTCDataChannel; data: any; timestamp: number }[] = [];
+// Queue for storing messages when buffer is full - now managed per-channel in use-multiplayer.ts
+// These are kept for backward compatibility but queues are now per-channel
 const MAX_QUEUE_SIZE = 100;
 const BUFFER_LIMIT = 1024 * 1024; // 1MB
 const QUEUE_PROCESS_INTERVAL = 50; // ms
-let queueProcessorInitialized = false;
-let queueProcessorTimeoutId: ReturnType<typeof setTimeout> | null = null;
-
-function processMessageQueue() {
-  const now = Date.now();
-  // Remove messages older than 30 seconds
-  const validMessages = messageQueue.filter(msg => now - msg.timestamp < 30000);
-  messageQueue.length = 0;
-  messageQueue.push(...validMessages);
-  
-  // NET-5 Fix: Process messages in FIFO order (oldest first)
-  // Use a while loop to process from the front of the queue
-  let i = 0;
-  while (i < messageQueue.length) {
-    const msg = messageQueue[i];
-    if (msg.channel.readyState === 'open' && msg.channel.bufferedAmount < BUFFER_LIMIT / 2) {
-      try {
-        msg.channel.send(JSON.stringify(msg.data));
-        messageQueue.splice(i, 1); // Remove from queue on successful send
-      } catch (error) {
-        // Keep in queue, will retry next time
-        i++;
-      }
-    } else {
-      i++;
-    }
-  }
-  
-  // Reschedule if there are still messages in the queue
-  if (messageQueue.length > 0) {
-    queueProcessorTimeoutId = setTimeout(processMessageQueue, QUEUE_PROCESS_INTERVAL);
-  } else {
-    queueProcessorTimeoutId = null;
-  }
-}
-
-function initializeQueueProcessor() {
-  if (queueProcessorInitialized) return;
-  queueProcessorInitialized = true;
-  
-  // Start processing if there are messages
-  if (messageQueue.length > 0 && !queueProcessorTimeoutId) {
-    queueProcessorTimeoutId = setTimeout(processMessageQueue, QUEUE_PROCESS_INTERVAL);
-  }
-}
-
-// Helper function to schedule queue processing when a new message is queued
-function scheduleQueueProcessing() {
-  if (!queueProcessorTimeoutId && messageQueue.length > 0) {
-    queueProcessorTimeoutId = setTimeout(processMessageQueue, QUEUE_PROCESS_INTERVAL);
-  }
-}
 
 /**
- * Clean up the queue processor and clear any pending timeout
- * Should be called when all WebRTC connections are closed
+ * Send a message via data channel
+ * Returns true if message was sent, false otherwise
+ * Note: For queuing messages with backpressure handling, use the per-peer
+ * queue management in use-multiplayer.ts
  */
-export function cleanupQueueProcessor() {
-  if (queueProcessorTimeoutId) {
-    clearTimeout(queueProcessorTimeoutId);
-    queueProcessorTimeoutId = null;
-  }
-  queueProcessorInitialized = false;
-  messageQueue.length = 0; // Clear any remaining messages
-}
-
 export function sendDataChannelMessage(channel: RTCDataChannel, data: any): boolean {
   if (channel.readyState !== 'open') {
     return false;
-  }
-  
-  // Check buffer amount to implement backpressure
-  if (channel.bufferedAmount > BUFFER_LIMIT) {
-    logger.warn('Data channel buffer full, message queued');
-    
-    // Queue the message if not too many already
-    if (messageQueue.length < MAX_QUEUE_SIZE) {
-      messageQueue.push({ channel, data, timestamp: Date.now() });
-      // Schedule processing for queued messages
-      scheduleQueueProcessing();
-      return true; // Message is queued (will be sent later)
-    } else {
-      logger.error('Message queue full, dropping message');
-      return false; // Queue is full, message dropped
-    }
   }
   
   try {
@@ -664,4 +589,14 @@ export function sendDataChannelMessage(channel: RTCDataChannel, data: any): bool
     logger.error('Failed to send data channel message:', error);
     return false;
   }
+}
+
+/**
+ * Clean up queue processor - kept for backward compatibility
+ * Queue processing is now handled per-peer in use-multiplayer.ts
+ * @deprecated Use per-peer queue management in use-multiplayer.ts
+ */
+export function cleanupQueueProcessor() {
+  // No-op: queue processing is now handled per-peer in use-multiplayer.ts
+  logger.log('cleanupQueueProcessor: Queue processing moved to per-peer management in use-multiplayer.ts');
 }
