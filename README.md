@@ -1,6 +1,12 @@
+Here's the rewritten README, now clearly stating that the game operates on a **Bring Your Own Key** (BYOK) model for cloud AI providers, with **WebLLM** as the no-key alternative.
+
+---
+
 # Endless Tales — AI-Powered Text Adventure with Multiplayer Co-op
 
 Endless Tales is a browser-based, AI-driven text adventure game with support for solo play and WebRTC-based peer-to-peer cooperative multiplayer. It features dynamic AI narration, character progression, crafting, skill trees, and a fully host-authoritative multiplayer system.
+
+**AI Provider Model:** All cloud AI providers (Gemini, OpenAI, Claude, DeepSeek, OpenRouter) require **you to bring your own API key**. Keys are stored in your browser's persistent storage per provider — you can save your keys for convenience or choose session-only mode. Alternatively, you can use the built-in **WebLLM** provider, which runs entirely on your device with **no API key required**.
 
 ## Table of Contents
 - [Features](#features)
@@ -19,7 +25,7 @@ All features below are fully implemented in the codebase:
   - **Custom**: Define your own world settings (genre, magic system, tech level, tone, etc.)
   - **Immersed**: Play in existing fictional universes (e.g., Star Wars, Harry Potter, Lord of the Rings) as existing characters or original creations, with AI-generated character profiles
   - **Co-op**: Host/join P2P sessions with manual QR code/invite code signalling
-- **6 AI Providers**: Google Gemini, OpenAI, Anthropic Claude, DeepSeek, OpenRouter, and local browser-based WebLLM (no API key required)
+- **6 AI Providers**: Google Gemini, OpenAI, Anthropic Claude, DeepSeek, OpenRouter (all **BYOK – you supply the key**), and WebLLM (local, **no key needed**)
 - **Dynamic Character System**: Stat allocation (STR/STA/WIS), class selection, AI-generated character descriptions, XP progression, and leveling
 - **AI-Driven Gameplay**: Dynamic narration, adventure generation, skill tree creation, action difficulty assessment, and adventure summarization
 - **Progression Systems**: Crafting, skill trees, world map with discoverable locations, inventory management, NPC relationships, and faction reputation
@@ -50,7 +56,8 @@ npm install
 ```
 
 ### Environment Variables
-Create a `.env.local` file in the project root with the following keys (only required for cloud AI providers, WebLLM needs no keys):
+Create a `.env.local` file in the project root. These variables are used by the server-side proxy **only**, but the actual API keys are provided by each user in their browser and stored **in persistent browser storage per provider** — they are never written to disk or shared with other players. You can manage your saved keys in the Settings panel.
+
 | Variable | Description | Required For |
 |----------|-------------|--------------|
 | `GEMINI_API_KEY` | Google Gemini API key | Gemini provider |
@@ -59,7 +66,7 @@ Create a `.env.local` file in the project root with the following keys (only req
 | `DEEPSEEK_API_KEY` | DeepSeek API key | DeepSeek provider |
 | `OPENROUTER_API_KEY` | OpenRouter API key | OpenRouter provider |
 
-API keys are stored only in sessionStorage and cleared when the browser tab is closed.
+> **Note:** These environment variables are optional for local development if you only use WebLLM. If you want to allow cloud AI, set them to any placeholder value — the actual key is always supplied by the user at runtime through the UI.
 
 ### Development
 Start the Next.js development server with Turbopack:
@@ -85,6 +92,8 @@ After starting the app, choose from four adventure types:
 2. **Custom Adventure**: Configure your world settings (genre, magic system, tech level, etc.) before creating your character
 3. **Immersed Adventure**: Enter an existing universe name (e.g., "Star Wars") and play as an existing character or create an original one
 4. **Co-op Adventure**: Access the Co-op Lobby to host a new session or join an existing one via invite code/QR code
+
+**Before you start**, you can select your AI provider and, if using a cloud provider, enter your own API key. Keys are saved in your browser's persistent storage per provider, and you can manage them in the Settings panel. Your keys are never visible to other players or the host.
 
 ### Adventure Setup
 Depending on your chosen mode:
@@ -145,7 +154,6 @@ Endless-Tales/
 │   ├── hooks/              # Custom hooks (use-multiplayer, use-mobile, use-toast)
 │   ├── lib/                # Utilities
 │   │   ├── webrtc-signalling.ts # WebRTC SDP handling
-│   │   ├── firebase.ts     # Firebase config (unused for signalling)
 │   │   ├── gameUtils.ts    # Game logic utilities
 │   │   ├── themes.ts       # UI theme definitions
 │   │   └── constants.ts    # App-wide constants
@@ -159,6 +167,8 @@ Endless-Tales/
 
 ## Multiplayer Co-op
 Endless Tales uses **pure P2P WebRTC with no signalling server or Firebase dependency**:
+- **NO Firebase or external services are used for multiplayer** — it is strictly client-to-client communication
+- **NO server-side components** beyond the optional AI proxy for cloud providers
 1. **Host**: Creates a session and generates a base64-encoded SDP offer (shared via QR code or copy-paste)
 2. **Guest**: Imports the offer, generates an SDP answer, and shares it back with the host
 3. **Connection**: Uses Google STUN servers for NAT traversal, with 5 dedicated data channels for game state, chat, and control

@@ -11,15 +11,20 @@
 
 ### CODE-1: God File - ai-router.ts (2072 lines)
 **Severity:** High  
-**Description:** The `ai-router.ts` file contains 2072 lines of code, handling logic for 6+ AI providers (Gemini, OpenAI, Claude, DeepSeek, WebLLM, OpenRouter) in a single file. This violates the single responsibility principle, makes code difficult to maintain, test, and modify individual provider implementations.  
+**Description:** The `ai-router.ts` file contains 2072 lines of code, handling AI provider configuration, multiple provider implementations (Gemini, OpenAI, Claude, DeepSeek, WebLLM, OpenRouter), request routing, streaming logic, error handling, prompt injection protection, observability logging, timeout handling, and WebLLM engine management in a single file. This violates the single responsibility principle, makes code difficult to maintain, test, and modify individual provider implementations.  
 **Location:** `src/ai/ai-router.ts`, lines 1-2072  
-**Refactoring Suggestion:** Split into provider-specific modules (e.g., `src/ai/providers/gemini.ts`, `openai.ts`, `webllm.ts`), extract common types and utilities into `src/ai/providers/common.ts`, and implement a factory pattern to instantiate providers based on configuration.
+**Refactoring Suggestion:** Split into modular components (proposed files - do not exist yet):
+- `src/ai/providers/base-provider.ts` (AIProvider interface) - **proposed, not yet created**
+- `src/ai/providers/gemini-provider.ts`, `openai-provider.ts`, etc. (individual provider implementations) - **proposed, not yet created**
+- `src/ai/ai-router.ts` (lean routing logic only) - **existing file to be refactored**
+- `src/ai/ai-utils.ts` (shared utilities: timeout, logging, prompt protection) - **proposed, not yet created**
+- `src/ai/webllm-manager.ts` (WebLLM engine lifecycle management) - **proposed, not yet created**
 
 ### CODE-2: God File - Gameplay.tsx (1471 lines)
 **Severity:** High  
 **Description:** `Gameplay.tsx` contains 1471 lines of code mixing game state management, UI rendering, and gameplay logic. This makes the component hard to test, maintain, and extend.  
 **Location:** `src/components/screens/Gameplay.tsx`, lines 1-1471  
-**Refactoring Suggestion:** Split into smaller components (e.g., `GameplayHeader.tsx`, `GameplayStatsPanel.tsx`), extract gameplay logic into custom hooks (`useGameplayState`, `useGameplayActions`), and move AI interaction logic to a separate service layer.
+**Refactoring Suggestion:** Split into smaller components (e.g., `GameplayHeader.tsx`, `GameplayStatsPanel.tsx`), extract gameplay logic into custom hooks (`useGameplayState`, `useGameplayActions`), and move AI interaction logic to a separate service layer (proposed: `src/services/ai-service.ts` - **not yet created**).
 
 ### CODE-3: Widespread `any` Type Usage
 **Severity:** High  

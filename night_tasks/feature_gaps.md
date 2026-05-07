@@ -35,13 +35,13 @@
 **Expected:** Host can adjust turn order before or during the game to accommodate player preferences.  
 **Suggestion:** Add a simple ordered list in the Coop Lobby or Gameplay settings showing current turn order, with up/down arrows next to each player name to reorder. Dispatch `SET_TURN_ORDER` with the new order when changes are made.
 
-### F-004: Adventure Summary Save Logic Incomplete
-**Severity:** Low  
-**Description:** `AdventureSummary.tsx` contains a TODO comment: `// TODO: Implement saving/loading logic if required later`. While the core save/load system works, the summary screen does not auto-save or provide a clear save button for completed adventures.  
-**Location:** `src/components/screens/AdventureSummary.tsx` (line 1)  
-**Current Behaviour:** Completed adventures may not be saved automatically, and the summary screen lacks a save action.  
-**Expected:** Completed adventures should either auto-save or provide a prominent "Save Adventure" button in the summary screen.  
-**Suggestion:** Dispatch `SAVE_CURRENT_ADVENTURE` when the adventure ends and the summary is generated. Add a save button to the summary screen for manual saves.
+### F-004: Adventure Summary Save Logic Incomplete (merged with POLISH-2)
+**Severity:** High  
+**Description:** `AdventureSummary.tsx` contains a TODO comment: `// TODO: Implement saving/loading logic if required later`. The README lists "Save/Load System" as a fully implemented feature, and core save logic exists (SAVE_CURRENT_ADVENTURE action, Gameplay screen save button). However, the AdventureSummary screen has a commented-out "Save Story" button and the saving logic is not implemented for the summary screen.
+**Location:** `src/components/screens/AdventureSummary.tsx`, lines 23-25, 74-75   
+**Current Behaviour:** Users cannot save the adventure summary/story log from the AdventureSummary screen; the only option is to return to the main menu. 
+**Expected:** AdventureSummary should have a functional "Save Story" button that persists the summary and story log to localStorage, matching the existing save system. 
+**Fix:** Uncomment the save button, implement the `handleSaveStory` function to dispatch `SAVE_CURRENT_ADVENTURE` (or a dedicated summary save action), and remove the TODO comment. Dispatch `SAVE_CURRENT_ADVENTURE` when the adventure ends and the summary is generated. Add a save button to the summary screen for manual saves.
 
 ---
 

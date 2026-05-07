@@ -16,17 +16,7 @@ Audit of the Endless Tales project for polish and UX inconsistencies, focusing o
 
 ---
 
-### POLISH-2: AdventureSummary Save Button Commented Out (Save Feature Not Fully Exposed)
-**Severity:** High  
-**Description:** The README lists "Save/Load System" as a fully implemented feature, and core save logic exists (SAVE_CURRENT_ADVENTURE action, Gameplay screen save button). However, the AdventureSummary screen has a commented-out "Save Story" button and a TODO comment indicating saving logic is not implemented for the summary screen. 
-**Location:** `src/components/screens/AdventureSummary.tsx`, lines 23-25, 74-75   
-**Current Behaviour:** Users cannot save the adventure summary/story log from the AdventureSummary screen; the only option is to return to the main menu. 
-**Expected:** AdventureSummary should have a functional "Save Story" button that persists the summary and story log to localStorage, matching the existing save system. 
-**Fix:** Uncomment the save button, implement the `handleSaveStory` function to dispatch `SAVE_CURRENT_ADVENTURE` (or a dedicated summary save action), and remove the TODO comment.
-
----
-
-### POLISH-3: Missing ARIA Label on Trade Request Button (PartySidebar)
+### POLISH-2: Missing ARIA Label on Trade Request Button (PartySidebar)
 **Severity:** Medium  
 **Description:** The trade request button in PartySidebar uses a `title` attribute but no `aria-label`, making it inaccessible to screen readers. 
 **Location:** `src/components/gameplay/PartySidebar.tsx`, lines 136-144   
@@ -36,7 +26,7 @@ Audit of the Endless Tales project for polish and UX inconsistencies, focusing o
 
 ---
 
-### POLISH-4: Missing ARIA Label on Chat Send Button
+### POLISH-3: Missing ARIA Label on Chat Send Button
 **Severity:** Medium  
 **Description:** The chat send button in ChatPanel only has an icon (Send) with no `aria-label`. 
 **Location:** `src/components/gameplay/ChatPanel.tsx`, lines 117-119   
@@ -46,7 +36,7 @@ Audit of the Endless Tales project for polish and UX inconsistencies, focusing o
 
 ---
 
-### POLISH-5: No API Key Input Fields for Cloud AI Providers in SettingsPanel
+### POLISH-4: No API Key Input Fields for Cloud AI Providers in SettingsPanel
 **Severity:** High  
 **Description:** The README states "API keys are stored only in sessionStorage and cleared when the browser tab is closed." The SettingsPanel has state for API keys (lines 106-110) and a `handleSaveProviderKey` function (line 174), but the UI only shows configuration for WebLLM. For cloud providers (Gemini, OpenAI, Claude, DeepSeek, OpenRouter), it displays "AI provider is configured server-side. Contact administrator for API key configuration." 
 **Location:** `src/components/screens/SettingsPanel.tsx`, lines 443-453   
@@ -55,7 +45,7 @@ Audit of the Endless Tales project for polish and UX inconsistencies, focusing o
 **Fix:** Add conditional API key input fields for each cloud provider (shown when the provider is selected) in the SettingsPanel, using the existing `handleSaveProviderKey` function.
 ---
 
-### POLISH-6: No Visual Loading State for Action Submission
+### POLISH-5: No Visual Loading State for Action Submission
 **Severity:** Medium  
 **Description:** When a user submits an action, the `submittingRef` lock prevents duplicate submissions, but no visual loading state is shown. The send button only shows a `Loader2` spinner when `isWaitingForHost` is true, not during action processing.  
 **Location:** `src/components/gameplay/ActionInput.tsx`, lines 106-132  
@@ -65,7 +55,7 @@ Audit of the Endless Tales project for polish and UX inconsistencies, focusing o
 
 ---
 
-### POLISH-7: Duplicate Player Stats Display in PartySidebar
+### POLISH-6: Duplicate Player Stats Display in PartySidebar
 **Severity:** Low  
 **Description:** Player stats (currentHealth/maxHealth, currentStamina/maxStamina, currentMana/maxMana) are displayed twice for each player: once in the turn order list and again in the "Connected Players" section below.  
 **Location:** `src/components/gameplay/PartySidebar.tsx`, lines 122-129 (SortableTurnOrderItem) and lines 389-395 (Connected Players section)  
@@ -75,7 +65,7 @@ Audit of the Endless Tales project for polish and UX inconsistencies, focusing o
 
 ---
 
-### POLISH-8: SettingsPanel Provider Options Missing WebLLM During Availability Check
+### POLISH-7: SettingsPanel Provider Options Missing WebLLM During Availability Check
 **Severity:** Low  
 **Description:** The `providerOptions` array only includes WebLLM if `webllmSupported` is true. During the WebLLM availability check (`webllmChecking` is true), WebLLM is not shown at all in the provider dropdown, leaving users unaware it is a pending option.  
 **Location:** `src/components/screens/SettingsPanel.tsx`, lines 241-253  
@@ -85,23 +75,13 @@ Audit of the Endless Tales project for polish and UX inconsistencies, focusing o
 
 ---
 
-### POLISH-9: Quick Action Buttons Use Emojis Instead of Lucide Icons
+### POLISH-8: Quick Action Buttons Use Emojis Instead of Lucide Icons
 **Severity:** Low  
 **Description:** The quick action buttons in ActionInput use emojis (👀, 🎒, 😴, etc.) instead of consistent Lucide React icons used elsewhere in the app.  
 **Location:** `src/components/gameplay/ActionInput.tsx`, lines 23-30 (QUICK_ACTIONS array)  
 **Current Behaviour:** Inconsistent icon style with the rest of the UI (which uses Lucide icons like Sword, Users, etc.).  
 **Expected:** Quick action buttons should use Lucide icons matching the app's design language.  
 **Fix:** Replace emojis in QUICK_ACTIONS with corresponding Lucide icons (e.g., `Eye` for Look, `Backpack` for Inventory, `Moon` for Rest, `User` for Status, `Map` for Map, `Zap` for Skills).
-
----
-
-### POLISH-10: No Keyboard Shortcut Indicator for Save Action
-**Severity:** Low  
-**Description:** The save button has a tooltip mentioning "(Ctrl+S)", but the quick action buttons show their shortcuts (e.g., "Ctrl+Space" for Suggest Action) in the tooltip. The save button's shortcut is only in the tooltip, not in the button text.  
-**Location:** `src/components/gameplay/GameplayActions.tsx`, line 70  
-**Current Behaviour:** Users may not discover the Ctrl+S shortcut for saving.  
-**Expected:** The save button should display the shortcut in the button text (like other actions) or have a more prominent indicator.  
-**Fix:** Add a hidden `sm:inline` span with the shortcut (like other buttons) or adjust the tooltip to be more noticeable.
 
 ---
 

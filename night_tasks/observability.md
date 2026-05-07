@@ -8,14 +8,13 @@
 
 ## Executive Summary
 
-The Endless Tales project has a **structured logging infrastructure** in place with the custom `logger.ts` utility. The logger supports JSON output, log levels, sensitive data redaction, and request/trace ID correlation. It is widely adopted across the codebase (33 files). However, there are gaps in metrics collection, distributed tracing, and monitoring capabilities that need to be addressed for production readiness.
+The Endless Tales project has a **structured logging infrastructure** in place with the custom `logger.ts` utility. The logger supports JSON output, log levels, sensitive data redaction, and request/trace ID correlation. It is widely adopted across the codebase (33 files). However, there are gaps in centralized error tracking, health check endpoints, and monitoring capabilities that need to be addressed for production readiness.
 
 **Overall Observability Score: 6.5/10**
 - ✅ Structured logging implemented
 - ✅ Sensitive data redaction
 - ✅ Log level control (dev vs production)
 - ✅ Request ID correlation for AI calls
-- ⚠️ No metrics collection/export
 - ⚠️ No centralized error tracking
 - ⚠️ No health check endpoint
 - ⚠️ Inconsistent error handling in some catch blocks
@@ -39,15 +38,6 @@ The Endless Tales project has a **structured logging infrastructure** in place w
 **Location:** `src/components/ErrorBoundary.tsx` (lines 31-34 and 51)  
 **Impact:** Low - creates some noise in logs.
 **Fix:** Remove the `console.error` on line 51 since the logger already captures this.
-
----
-
-### OBS-3: No Centralized Metrics Collection
-**Severity:** High  
-**Description:** The application has no metrics collection system. There is no tracking of AI request latency, error rates, retry counts, multiplayer connection rates, or save/load performance.
-**Location:** Project-wide  
-**Impact:** Without metrics, it's impossible to identify performance degradation or track AI provider reliability.
-**Fix:** Implement a metrics collection system (lightweight in-memory store to OpenTelemetry integration).
 
 ---
 
@@ -162,9 +152,9 @@ The Endless Tales project has a **structured logging infrastructure** in place w
 ### OBS-16: No Health Check Endpoint
 **Severity:** High  
 **Description:** There's no health check endpoint for monitoring system status. Critical for load balancer health checks and monitoring systems.
-**Location:** Should be at `src/app/api/health/route.ts`  
+**Location:** Should be at `src/app/api/health/route.ts` - **proposed, not yet created**
 **Impact:** Cannot monitor application health in production.
-**Fix:** Create a health check endpoint at `/api/health`.
+**Fix:** Create a health check endpoint at `/api/health` - **proposed file, does not exist yet**.
 
 ---
 
@@ -210,7 +200,6 @@ The Endless Tales project has a **structured logging infrastructure** in place w
 |----|-------|----------|--------|
 | OBS-1 | Inconsistent Console.log Usage | Medium | Open |
 | OBS-2 | Duplicate Error Logging in ErrorBoundary | Low | Open |
-| OBS-3 | No Centralized Metrics Collection | High | Open |
 | OBS-4 | AI API Calls Lack Structured Timing | Medium | Open |
 | OBS-5 | Streaming Responses Not Timed | Medium | Open |
 | OBS-6 | Request ID Propagation Gaps | Medium | Open |
@@ -230,45 +219,3 @@ The Endless Tales project has a **structured logging infrastructure** in place w
 | OBS-20 | No Alerting Mechanism | High | Open |
 
 ---
-
-## Recommendations by Priority
-
-### High Priority (Address Immediately)
-1. **OBS-16**: Implement health check endpoint
-2. **OBS-17**: Integrate error tracking service (e.g., Sentry)
-3. **OBS-3**: Implement basic metrics collection
-4. **OBS-8**: Test and enhance sensitive data redaction
-
-### Medium Priority (Address in Next Sprint)
-5. **OBS-4**: Add structured timing to AI API calls
-6. **OBS-5**: Time streaming responses
-7. **OBS-6/OBS-7**: Improve request/trace ID propagation
-8. **OBS-12**: Add multiplayer event aggregation
-9. **OBS-13**: Add save/load performance tracking
-10. **OBS-9**: Stop ignoring errors silently
-
-### Low Priority (Backlog)
-11. **OBS-1**: Replace remaining console.log usage
-12. **OBS-2**: Clean up duplicate error logging
-13. **OBS-11/OBS-18**: Add retry metrics
-14. **OBS-14**: Review debug logging strategy
-15. **OBS-15**: Document LOG_LEVEL configuration
-16. **OBS-19**: Optimize reducer logging
-
----
-
-## Conclusion
-
-The Endless Tales project has a solid foundation for observability with its structured logging system. However, to achieve production readiness, the project needs:
-
-1. **Metrics collection** to track performance and error rates
-2. **Error tracking integration** for centralized error management
-3. **Health check endpoint** for monitoring systems
-4. **Enhanced testing** of sensitive data redaction
-
-The recommended approach is to start with High Priority items, focusing on the health endpoint and error tracking integration, then build out the metrics system incrementally.
-
----
-
-*Report generated on May 7, 2026*  
-*Next review recommended: After implementing High Priority fixes*

@@ -33,7 +33,6 @@ This audit analyzes the data persistence, save/load reliability, and integrity m
 **Risk:** Complete data loss on browser data clearance, device switching, or localStorage corruption. No way for users to backup their saves externally.  
 **Fix:** 
 - Implement save export/import functionality (JSON file download/upload)
-- Consider optional cloud sync using Firebase/Supabase for cross-device play
 - Add "Export Save" and "Import Save" buttons in the UI
 
 ### SAVE-3: localStorage Quota Limits (5MB)
