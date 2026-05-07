@@ -88,6 +88,7 @@ const MULTIPLAYER_ACTIONS = new Set<Action['type']>([
     "SET_SESSION_ID",
     "SET_IS_HOST",
     "SET_PLAYERS",
+    "PROCESS_TRADE",
 ]);
 
 export function gameReducer(state: GameState, action: Action): GameState {

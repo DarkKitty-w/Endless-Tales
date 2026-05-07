@@ -8,6 +8,7 @@ import type { Skill, CharacterStats } from '../../types/character-types';
 import { useGame } from "../../context/GameContext";
 import { useMultiplayer } from "../../hooks/use-multiplayer";
 import { GameplayLayout } from "../../components/gameplay/GameplayLayout";
+import { TradeDialog } from "../../components/gameplay/TradeDialog";
 import { useToast } from "../../hooks/use-toast";
 import type { GameState, Character, SkillTree, Reputation, NpcRelationships, Location } from '../../types/game-types';
 import { updateGameStateString, buildGameStateContext } from "../../context/game-state-utils";
@@ -123,6 +124,9 @@ export function Gameplay() {
      const [outgoingTargetPeerId, setOutgoingTargetPeerId] = useState<string | null>(null);
      const [outgoingInteractionType, setOutgoingInteractionType] = useState<'gift' | 'trade' | 'duel'>('trade');
      const [outgoingInteractionDetails, setOutgoingInteractionDetails] = useState('');
+     // Trade dialog state
+     const [isTradeDialogOpen, setIsTradeDialogOpen] = useState(false);
+     const [tradeTargetPeerId, setTradeTargetPeerId] = useState<string | null>(null);
      
      const initialSetupAttemptedRef = useRef<Record<string, boolean>>({});
     const actionInputRef = useRef<ActionInputRef>(null);
@@ -332,11 +336,25 @@ export function Gameplay() {
         toast({ title: "Interaction Declined", description: "You declined the interaction." });
     }, [currentInteraction, isInteractionTarget, sendInteractionResponse, dispatch, toast]);
 
-    // Send interaction request to another player
+    // Send trade request to another player - opens TradeDialog
     const handleSendTradeRequest = useCallback((targetPeerId: string) => {
-        setOutgoingTargetPeerId(targetPeerId);
-        setIsOutgoingInteractionOpen(true);
+        setTradeTargetPeerId(targetPeerId);
+        setIsTradeDialogOpen(true);
     }, []);
+
+    // Handle trade completion from TradeDialog
+    const handleTradeComplete = useCallback((fromPeerId: string, toPeerId: string, items: string[]) => {
+        dispatch({ 
+            type: "PROCESS_TRADE", 
+            payload: { fromPeerId, toPeerId, items } 
+        });
+        setIsTradeDialogOpen(false);
+        setTradeTargetPeerId(null);
+        toast({ 
+            title: "Trade Complete", 
+            description: `Successfully traded ${items.length} item(s).` 
+        });
+    }, [dispatch, toast]);
 
     const handleOutgoingInteractionSubmit = useCallback(() => {
         if (!outgoingTargetPeerId || !outgoingInteractionDetails.trim()) {
@@ -1306,6 +1324,22 @@ export function Gameplay() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Trade Dialog */}
+            {isTradeDialogOpen && tradeTargetPeerId && (
+                <TradeDialog
+                    isOpen={isTradeDialogOpen}
+                    onClose={() => {
+                        setIsTradeDialogOpen(false);
+                        setTradeTargetPeerId(null);
+                    }}
+                    currentPlayerId={state.peerId || 'host'}
+                    targetPlayerId={tradeTargetPeerId}
+                    targetPlayerName={multiplayerState.partyState[tradeTargetPeerId]?.name || 'Unknown Player'}
+                    inventory={state.inventory}
+                    onTradeComplete={handleTradeComplete}
+                />
             )}
         </TooltipProvider>
     );

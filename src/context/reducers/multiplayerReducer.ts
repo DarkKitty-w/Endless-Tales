@@ -268,6 +268,7 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
       const { fromPeerId, toPeerId, items } = action.payload;
       // Process trade - transfer items between players
       const newPartyState = { ...state.partyState };
+      let newInventory = state.inventory;
       
       if (newPartyState[fromPeerId] && newPartyState[toPeerId]) {
         // Update inventory summaries in party state
@@ -292,11 +293,37 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
         newPartyState[toPeerId] = receiverSummary;
         
         logger.info(`Trade processed: ${fromPeerId} -> ${toPeerId}`, "multiplayerReducer", { items });
+        
+        // Update actual inventory if current player is involved
+        if (state.peerId === fromPeerId || state.peerId === toPeerId) {
+          // Find the actual InventoryItem objects for the items being traded
+          const itemsToTransfer = state.inventory.filter(item => items.includes(item.name));
+          
+          if (state.peerId === fromPeerId) {
+            // Current player is the sender - remove items from their inventory
+            newInventory = state.inventory.filter(item => !items.includes(item.name));
+            logger.info(`Removed items from sender's inventory`, "multiplayerReducer", { items });
+          }
+          
+          if (state.peerId === toPeerId) {
+            // Current player is the receiver - add items to their inventory
+            // Note: In a real multiplayer scenario, the receiver would get the items from the sender's inventory
+            // For now, we'll create new items since we don't have the full item data in the trade
+            const newItems = items.map(itemName => ({
+              name: itemName,
+              description: `Traded item: ${itemName}`,
+              quality: 'Common' as const,
+            }));
+            newInventory = [...state.inventory, ...newItems];
+            logger.info(`Added items to receiver's inventory`, "multiplayerReducer", { items: newItems });
+          }
+        }
       }
       
       return {
         ...state,
         partyState: newPartyState,
+        inventory: newInventory,
       };
     }
 
