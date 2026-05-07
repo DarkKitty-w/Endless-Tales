@@ -178,11 +178,26 @@ class GeminiProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      // OBS-9 Fix: Include more context in error logs for reproducibility
       logger.error('AI request failed', 'ai-router', { 
         requestId, 
         traceId,
-        error: error.error 
+        provider: 'gemini',
+        model: effectiveModel,
+        error: error.error,
+        // Include sanitized input context (truncated for safety)
+        inputContext: {
+          contentLength: contents.length,
+          systemMessageLength: systemMessage?.length || 0,
+          config: config ? {
+            responseMimeType: config.responseMimeType,
+            temperature: config.temperature,
+            topP: config.topP,
+            topK: config.topK,
+          } : undefined,
+        },
+        // Indicate what operation was being attempted
+        operation: 'generateContent',
       });
       throw new Error(error.error || `Gemini API error: Request failed`);
     }
@@ -262,11 +277,26 @@ class GeminiProvider implements AIProvider {
 
     if (!response.ok) {
       const error = await response.json();
-      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      // OBS-9 Fix: Include more context in error logs for reproducibility
       logger.error('AI streaming request failed', 'ai-router', { 
         requestId, 
         traceId,
-        error: error.error 
+        provider: 'gemini',
+        model: effectiveModel,
+        error: error.error,
+        // Include sanitized input context (truncated for safety)
+        inputContext: {
+          contentLength: contents.length,
+          systemMessageLength: systemMessage?.length || 0,
+          config: config ? {
+            responseMimeType: config.responseMimeType,
+            temperature: config.temperature,
+            topP: config.topP,
+            topK: config.topK,
+          } : undefined,
+        },
+        // Indicate what operation was being attempted
+        operation: 'generateContentStream',
       });
       throw new Error(error.error || `Gemini API streaming error: Streaming request failed`);
     }
@@ -365,16 +395,39 @@ class OpenAIProvider implements AIProvider {
     contents,
     config,
     signal,
+    requestId: passedRequestId,
+    traceId: passedTraceId,
   }: {
     model?: string;
     contents: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
+    requestId?: string;
+    traceId?: string;
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'gpt-4o';
     
+    // OBS-6 Fix: Use passed requestId or generate new one for correlation
+    const requestId = passedRequestId || generateRequestId();
+    setRequestId(requestId);
+    
+    // OBS-7 Fix: Use passed traceId or generate/reuse traceId for distributed tracing
+    let traceId = passedTraceId || getTraceId();
+    if (!traceId) {
+      traceId = generateRequestId();
+      setTraceId(traceId);
+    }
+    
     // SEC-6 Fix: Apply prompt injection protection
     const protectedContents = protectUserAction(contents);
+    
+    logger.info('AI request initiated', 'ai-router', { 
+      requestId, 
+      traceId,
+      provider: 'openai', 
+      model: effectiveModel,
+      contentLength: contents.length 
+    });
     
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -385,19 +438,44 @@ class OpenAIProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
+        requestId,
+        traceId,
       }),
       signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      // OBS-9 Fix: Include more context in error logs for reproducibility
+      logger.error('AI request failed', 'ai-router', { 
+        requestId, 
+        traceId,
+        provider: 'openai',
+        model: effectiveModel,
+        error: error.error,
+        inputContext: {
+          contentLength: contents.length,
+          config: config ? {
+            temperature: config.temperature,
+            topP: config.topP,
+            topK: config.topK,
+          } : undefined,
+        },
+        operation: 'generateContent',
+      });
       throw new Error(error.error || `OpenAI API error: Request failed`);
     }
 
     const data = await response.json();
     const text = data.choices?.[0]?.message?.content;
     if (!text) throw new Error('No text returned from OpenAI');
+    
+    logger.info('AI request completed', 'ai-router', { 
+      requestId, 
+      traceId,
+      responseLength: text.length 
+    });
+    
     return { text };
   }
 
@@ -406,16 +484,39 @@ class OpenAIProvider implements AIProvider {
     contents,
     config,
     signal,
+    requestId: passedRequestId,
+    traceId: passedTraceId,
   }: {
     model?: string;
     contents: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
+    requestId?: string;
+    traceId?: string;
   }): AsyncIterable<string> {
     const effectiveModel = model || 'gpt-4o';
     
+    // OBS-6 Fix: Use passed requestId or generate new one for correlation
+    const requestId = passedRequestId || generateRequestId();
+    setRequestId(requestId);
+    
+    // OBS-7 Fix: Use passed traceId or generate/reuse traceId for distributed tracing
+    let traceId = passedTraceId || getTraceId();
+    if (!traceId) {
+      traceId = generateRequestId();
+      setTraceId(traceId);
+    }
+    
     // SEC-6 Fix: Apply prompt injection protection
     const protectedContents = protectUserAction(contents);
+    
+    logger.info('AI streaming request initiated', 'ai-router', { 
+      requestId, 
+      traceId,
+      provider: 'openai', 
+      model: effectiveModel,
+      contentLength: contents.length 
+    });
     
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -427,13 +528,31 @@ class OpenAIProvider implements AIProvider {
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
         stream: true,
+        requestId,
+        traceId,
       }),
       signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      // OBS-9 Fix: Include more context in error logs for reproducibility
+      logger.error('AI streaming request failed', 'ai-router', { 
+        requestId, 
+        traceId,
+        provider: 'openai',
+        model: effectiveModel,
+        error: error.error,
+        inputContext: {
+          contentLength: contents.length,
+          config: config ? {
+            temperature: config.temperature,
+            topP: config.topP,
+            topK: config.topK,
+          } : undefined,
+        },
+        operation: 'generateContentStream',
+      });
       throw new Error(error.error || `OpenAI API streaming error: Streaming request failed`);
     }
 
@@ -523,16 +642,39 @@ class ClaudeProvider implements AIProvider {
     contents,
     config,
     signal,
+    requestId: passedRequestId,
+    traceId: passedTraceId,
   }: {
     model?: string;
     contents: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
+    requestId?: string;
+    traceId?: string;
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'claude-3-5-sonnet-20241022';
     
+    // OBS-6 Fix: Use passed requestId or generate new one for correlation
+    const requestId = passedRequestId || generateRequestId();
+    setRequestId(requestId);
+    
+    // OBS-7 Fix: Use passed traceId or generate/reuse traceId for distributed tracing
+    let traceId = passedTraceId || getTraceId();
+    if (!traceId) {
+      traceId = generateRequestId();
+      setTraceId(traceId);
+    }
+    
     // SEC-6 Fix: Apply prompt injection protection
     const protectedContents = protectUserAction(contents);
+    
+    logger.info('AI request initiated', 'ai-router', { 
+      requestId, 
+      traceId,
+      provider: 'claude', 
+      model: effectiveModel,
+      contentLength: contents.length 
+    });
     
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -543,19 +685,44 @@ class ClaudeProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
+        requestId,
+        traceId,
       }),
       signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      // OBS-9 Fix: Include more context in error logs for reproducibility
+      logger.error('AI request failed', 'ai-router', { 
+        requestId, 
+        traceId,
+        provider: 'claude',
+        model: effectiveModel,
+        error: error.error,
+        inputContext: {
+          contentLength: contents.length,
+          config: config ? {
+            temperature: config.temperature,
+            topP: config.topP,
+            topK: config.topK,
+          } : undefined,
+        },
+        operation: 'generateContent',
+      });
       throw new Error(error.error || `Claude API error: Request failed`);
     }
 
     const data = await response.json();
     const text = data.content?.[0]?.text;
     if (!text) throw new Error('No text returned from Claude');
+    
+    logger.info('AI request completed', 'ai-router', { 
+      requestId, 
+      traceId,
+      responseLength: text.length 
+    });
+    
     return { text };
   }
 
@@ -564,16 +731,39 @@ class ClaudeProvider implements AIProvider {
     contents,
     config,
     signal,
+    requestId: passedRequestId,
+    traceId: passedTraceId,
   }: {
     model?: string;
     contents: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
+    requestId?: string;
+    traceId?: string;
   }): AsyncIterable<string> {
     const effectiveModel = model || 'claude-3-5-sonnet-20241022';
     
+    // OBS-6 Fix: Use passed requestId or generate new one for correlation
+    const requestId = passedRequestId || generateRequestId();
+    setRequestId(requestId);
+    
+    // OBS-7 Fix: Use passed traceId or generate/reuse traceId for distributed tracing
+    let traceId = passedTraceId || getTraceId();
+    if (!traceId) {
+      traceId = generateRequestId();
+      setTraceId(traceId);
+    }
+    
     // SEC-6 Fix: Apply prompt injection protection
     const protectedContents = protectUserAction(contents);
+    
+    logger.info('AI streaming request initiated', 'ai-router', { 
+      requestId, 
+      traceId,
+      provider: 'claude', 
+      model: effectiveModel,
+      contentLength: contents.length 
+    });
     
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -585,13 +775,31 @@ class ClaudeProvider implements AIProvider {
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
         stream: true,
+        requestId,
+        traceId,
       }),
       signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      // OBS-9 Fix: Include more context in error logs for reproducibility
+      logger.error('AI streaming request failed', 'ai-router', { 
+        requestId, 
+        traceId,
+        provider: 'claude',
+        model: effectiveModel,
+        error: error.error,
+        inputContext: {
+          contentLength: contents.length,
+          config: config ? {
+            temperature: config.temperature,
+            topP: config.topP,
+            topK: config.topK,
+          } : undefined,
+        },
+        operation: 'generateContentStream',
+      });
       throw new Error(error.error || `Claude API streaming error: Streaming request failed`);
     }
 
@@ -683,16 +891,39 @@ class DeepSeekProvider implements AIProvider {
     contents,
     config,
     signal,
+    requestId: passedRequestId,
+    traceId: passedTraceId,
   }: {
     model?: string;
     contents: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
+    requestId?: string;
+    traceId?: string;
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'deepseek-chat';
     
+    // OBS-6 Fix: Use passed requestId or generate new one for correlation
+    const requestId = passedRequestId || generateRequestId();
+    setRequestId(requestId);
+    
+    // OBS-7 Fix: Use passed traceId or generate/reuse traceId for distributed tracing
+    let traceId = passedTraceId || getTraceId();
+    if (!traceId) {
+      traceId = generateRequestId();
+      setTraceId(traceId);
+    }
+    
     // SEC-6 Fix: Apply prompt injection protection
     const protectedContents = protectUserAction(contents);
+    
+    logger.info('AI request initiated', 'ai-router', { 
+      requestId, 
+      traceId,
+      provider: 'deepseek', 
+      model: effectiveModel,
+      contentLength: contents.length 
+    });
     
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -703,19 +934,44 @@ class DeepSeekProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
+        requestId,
+        traceId,
       }),
       signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      // OBS-9 Fix: Include more context in error logs for reproducibility
+      logger.error('AI request failed', 'ai-router', { 
+        requestId, 
+        traceId,
+        provider: 'deepseek',
+        model: effectiveModel,
+        error: error.error,
+        inputContext: {
+          contentLength: contents.length,
+          config: config ? {
+            temperature: config.temperature,
+            topP: config.topP,
+            topK: config.topK,
+          } : undefined,
+        },
+        operation: 'generateContent',
+      });
       throw new Error(error.error || `DeepSeek API error: Request failed`);
     }
 
     const data = await response.json();
     const text = data.choices?.[0]?.message?.content;
     if (!text) throw new Error('No text returned from DeepSeek');
+    
+    logger.info('AI request completed', 'ai-router', { 
+      requestId, 
+      traceId,
+      responseLength: text.length 
+    });
+    
     return { text };
   }
 
@@ -724,16 +980,39 @@ class DeepSeekProvider implements AIProvider {
     contents,
     config,
     signal,
+    requestId: passedRequestId,
+    traceId: passedTraceId,
   }: {
     model?: string;
     contents: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
+    requestId?: string;
+    traceId?: string;
   }): AsyncIterable<string> {
     const effectiveModel = model || 'deepseek-chat';
     
+    // OBS-6 Fix: Use passed requestId or generate new one for correlation
+    const requestId = passedRequestId || generateRequestId();
+    setRequestId(requestId);
+    
+    // OBS-7 Fix: Use passed traceId or generate/reuse traceId for distributed tracing
+    let traceId = passedTraceId || getTraceId();
+    if (!traceId) {
+      traceId = generateRequestId();
+      setTraceId(traceId);
+    }
+    
     // SEC-6 Fix: Apply prompt injection protection
     const protectedContents = protectUserAction(contents);
+    
+    logger.info('AI streaming request initiated', 'ai-router', { 
+      requestId, 
+      traceId,
+      provider: 'deepseek', 
+      model: effectiveModel,
+      contentLength: contents.length 
+    });
     
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -745,13 +1024,31 @@ class DeepSeekProvider implements AIProvider {
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
         stream: true,
+        requestId,
+        traceId,
       }),
       signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      // OBS-9 Fix: Include more context in error logs for reproducibility
+      logger.error('AI streaming request failed', 'ai-router', { 
+        requestId, 
+        traceId,
+        provider: 'deepseek',
+        model: effectiveModel,
+        error: error.error,
+        inputContext: {
+          contentLength: contents.length,
+          config: config ? {
+            temperature: config.temperature,
+            topP: config.topP,
+            topK: config.topK,
+          } : undefined,
+        },
+        operation: 'generateContentStream',
+      });
       throw new Error(error.error || `DeepSeek API streaming error: Streaming request failed`);
     }
 
@@ -841,16 +1138,39 @@ class OpenRouterProvider implements AIProvider {
     contents,
     config,
     signal,
+    requestId: passedRequestId,
+    traceId: passedTraceId,
   }: {
     model?: string;
     contents: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
+    requestId?: string;
+    traceId?: string;
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'z-ai/glm-4.5-air:free';
     
+    // OBS-6 Fix: Use passed requestId or generate new one for correlation
+    const requestId = passedRequestId || generateRequestId();
+    setRequestId(requestId);
+    
+    // OBS-7 Fix: Use passed traceId or generate/reuse traceId for distributed tracing
+    let traceId = passedTraceId || getTraceId();
+    if (!traceId) {
+      traceId = generateRequestId();
+      setTraceId(traceId);
+    }
+    
     // SEC-6 Fix: Apply prompt injection protection
     const protectedContents = protectUserAction(contents);
+    
+    logger.info('AI request initiated', 'ai-router', { 
+      requestId, 
+      traceId,
+      provider: 'openrouter', 
+      model: effectiveModel,
+      contentLength: contents.length 
+    });
     
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -861,19 +1181,44 @@ class OpenRouterProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
+        requestId,
+        traceId,
       }),
       signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      // OBS-9 Fix: Include more context in error logs for reproducibility
+      logger.error('AI request failed', 'ai-router', { 
+        requestId, 
+        traceId,
+        provider: 'openrouter',
+        model: effectiveModel,
+        error: error.error,
+        inputContext: {
+          contentLength: contents.length,
+          config: config ? {
+            temperature: config.temperature,
+            topP: config.topP,
+            topK: config.topK,
+          } : undefined,
+        },
+        operation: 'generateContent',
+      });
       throw new Error(error.error || `OpenRouter API error: Request failed`);
     }
 
     const data = await response.json();
     const text = data.choices?.[0]?.message?.content;
     if (!text) throw new Error('No text returned from OpenRouter');
+    
+    logger.info('AI request completed', 'ai-router', { 
+      requestId, 
+      traceId,
+      responseLength: text.length 
+    });
+    
     return { text };
   }
 
@@ -882,16 +1227,39 @@ class OpenRouterProvider implements AIProvider {
     contents,
     config,
     signal,
+    requestId: passedRequestId,
+    traceId: passedTraceId,
   }: {
     model?: string;
     contents: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
+    requestId?: string;
+    traceId?: string;
   }): AsyncIterable<string> {
     const effectiveModel = model || 'z-ai/glm-4.5-air:free';
     
+    // OBS-6 Fix: Use passed requestId or generate new one for correlation
+    const requestId = passedRequestId || generateRequestId();
+    setRequestId(requestId);
+    
+    // OBS-7 Fix: Use passed traceId or generate/reuse traceId for distributed tracing
+    let traceId = passedTraceId || getTraceId();
+    if (!traceId) {
+      traceId = generateRequestId();
+      setTraceId(traceId);
+    }
+    
     // SEC-6 Fix: Apply prompt injection protection
     const protectedContents = protectUserAction(contents);
+    
+    logger.info('AI streaming request initiated', 'ai-router', { 
+      requestId, 
+      traceId,
+      provider: 'openrouter', 
+      model: effectiveModel,
+      contentLength: contents.length 
+    });
     
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -903,13 +1271,31 @@ class OpenRouterProvider implements AIProvider {
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
         stream: true,
+        requestId,
+        traceId,
       }),
       signal: getSignalWithTimeout(signal),
     });
 
     if (!response.ok) {
       const error = await response.json();
-      // Use the provider-specific error message from ai-proxy, or fallback to generic
+      // OBS-9 Fix: Include more context in error logs for reproducibility
+      logger.error('AI streaming request failed', 'ai-router', { 
+        requestId, 
+        traceId,
+        provider: 'openrouter',
+        model: effectiveModel,
+        error: error.error,
+        inputContext: {
+          contentLength: contents.length,
+          config: config ? {
+            temperature: config.temperature,
+            topP: config.topP,
+            topK: config.topK,
+          } : undefined,
+        },
+        operation: 'generateContentStream',
+      });
       throw new Error(error.error || `OpenRouter API streaming error: Streaming request failed`);
     }
 
@@ -1307,13 +1693,37 @@ class WebLLMProvider implements AIProvider {
     contents,
     config,
     signal,
+    requestId: passedRequestId,
+    traceId: passedTraceId,
   }: {
     model?: string;
     contents: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
+    requestId?: string;
+    traceId?: string;
   }): Promise<GenerateContentResponse> {
     logger.log('[WebLLM] generateContent called');
+    
+    // OBS-6 Fix: Use passed requestId or generate new one for correlation
+    const requestId = passedRequestId || generateRequestId();
+    setRequestId(requestId);
+    
+    // OBS-7 Fix: Use passed traceId or generate/reuse traceId for distributed tracing
+    let traceId = passedTraceId || getTraceId();
+    if (!traceId) {
+      traceId = generateRequestId();
+      setTraceId(traceId);
+    }
+    
+    logger.info('AI request initiated', 'ai-router', { 
+      requestId, 
+      traceId,
+      provider: 'webllm', 
+      model: model || 'auto',
+      contentLength: contents.length 
+    });
+    
     const engine = await this.getEngine(model);
     
     // SEC-6 Fix: Apply prompt injection protection
@@ -1323,16 +1733,46 @@ class WebLLMProvider implements AIProvider {
     logger.log('[WebLLM] Sending chat completion request...');
     // Type assertion for the engine since we know it has chat.completions.create
     const engineWithChat = engine as WebLLMEngineWithChat;
-    const response = await engineWithChat.chat.completions.create({
-      messages,
-      temperature: config?.temperature,
-      top_p: config?.topP,
-      stream: false,
-    }) as WebLLMChatResponse;
-    logger.log('[WebLLM] Chat completion response received');
-    const text = response.choices?.[0]?.message?.content;
-    if (!text) throw new Error('No text returned from WebLLM');
-    return { text };
+    
+    try {
+      const response = await engineWithChat.chat.completions.create({
+        messages,
+        temperature: config?.temperature,
+        top_p: config?.topP,
+        stream: false,
+      }) as WebLLMChatResponse;
+      
+      logger.log('[WebLLM] Chat completion response received');
+      const text = response.choices?.[0]?.message?.content;
+      if (!text) throw new Error('No text returned from WebLLM');
+      
+      logger.info('AI request completed', 'ai-router', { 
+        requestId, 
+        traceId,
+        responseLength: text.length 
+      });
+      
+      return { text };
+    } catch (error) {
+      // OBS-9 Fix: Include context in error logs for reproducibility
+      logger.error('[WebLLM] AI request failed', 'ai-router', { 
+        requestId, 
+        traceId,
+        provider: 'webllm',
+        model: model || 'auto',
+        error: error instanceof Error ? error.message : String(error),
+        inputContext: {
+          contentLength: contents.length,
+          config: config ? {
+            temperature: config.temperature,
+            topP: config.topP,
+            topK: config.topK,
+          } : undefined,
+        },
+        operation: 'generateContent',
+      });
+      throw error;
+    }
   }
 
   async *generateContentStream({
@@ -1340,13 +1780,37 @@ class WebLLMProvider implements AIProvider {
     contents,
     config,
     signal,
+    requestId: passedRequestId,
+    traceId: passedTraceId,
   }: {
     model?: string;
     contents: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
+    requestId?: string;
+    traceId?: string;
   }): AsyncIterable<string> {
     logger.log('[WebLLM] generateContentStream called');
+    
+    // OBS-6 Fix: Use passed requestId or generate new one for correlation
+    const requestId = passedRequestId || generateRequestId();
+    setRequestId(requestId);
+    
+    // OBS-7 Fix: Use passed traceId or generate/reuse traceId for distributed tracing
+    let traceId = passedTraceId || getTraceId();
+    if (!traceId) {
+      traceId = generateRequestId();
+      setTraceId(traceId);
+    }
+    
+    logger.info('AI streaming request initiated', 'ai-router', { 
+      requestId, 
+      traceId,
+      provider: 'webllm', 
+      model: model || 'auto',
+      contentLength: contents.length 
+    });
+    
     const engine = await this.getEngine(model);
     
     // SEC-6 Fix: Apply prompt injection protection
@@ -1356,18 +1820,20 @@ class WebLLMProvider implements AIProvider {
     logger.log('[WebLLM] Creating streaming chat completion...');
     // Type assertion for the engine
     const engineWithChat = engine as WebLLMEngineWithChat;
-    const stream = await engineWithChat.chat.completions.create({
-      messages,
-      temperature: config?.temperature,
-      top_p: config?.topP,
-      stream: true,
-    }) as AsyncIterable<WebLLMStreamChunk>;
-    logger.log('[WebLLM] Stream created');
-    
-    // ERR-4 Fix: Track accumulated text for error reporting
-    let accumulatedText = '';
     
     try {
+      const stream = await engineWithChat.chat.completions.create({
+        messages,
+        temperature: config?.temperature,
+        top_p: config?.topP,
+        stream: true,
+      }) as AsyncIterable<WebLLMStreamChunk>;
+      
+      logger.log('[WebLLM] Stream created');
+      
+      // ERR-4 Fix: Track accumulated text for error reporting
+      let accumulatedText = '';
+      
       for await (const chunk of stream) {
         if (signal?.aborted) {
           logger.log('[WebLLM] Stream aborted');
@@ -1379,11 +1845,34 @@ class WebLLMProvider implements AIProvider {
           yield content;
         }
       }
+      
       logger.log('[WebLLM] Stream completed');
+      logger.info('AI streaming completed', 'ai-router', { 
+        requestId, 
+        traceId,
+        accumulatedLength: accumulatedText.length 
+      });
+      
     } catch (error) {
-      // ERR-4 Fix: Include accumulated text in error
+      // OBS-9 Fix: Include context in error logs for reproducibility
       const errorMessage = error instanceof Error ? error.message : 'Stream processing error';
-      throw new Error(`${errorMessage}\n\nPartial response received: ${accumulatedText.substring(0, 500)}`);
+      logger.error('[WebLLM] AI streaming request failed', 'ai-router', { 
+        requestId, 
+        traceId,
+        provider: 'webllm',
+        model: model || 'auto',
+        error: errorMessage,
+        inputContext: {
+          contentLength: contents.length,
+          config: config ? {
+            temperature: config.temperature,
+            topP: config.topP,
+            topK: config.topK,
+          } : undefined,
+        },
+        operation: 'generateContentStream',
+      });
+      throw new Error(`${errorMessage}\n\nPartial response received: ${accumulatedText?.substring(0, 500) || 'none'}`);
     }
   }
 
