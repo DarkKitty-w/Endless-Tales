@@ -1,4 +1,4 @@
-import { logger } from '@/lib/logger';
+import { logger, generateRequestId, setRequestId } from '@/lib/logger';
 import { protectUserAction, PROMPT_INJECTION_DEFENSE } from '@/lib/prompt-injection-protection';
 // src/ai/ai-router.ts
 
@@ -132,11 +132,22 @@ class GeminiProvider implements AIProvider {
   }): Promise<GenerateContentResponse> {
     const effectiveModel = model || 'gemini-2.5-flash';
     
+    // OBS-6 Fix: Generate requestId for correlation
+    const requestId = generateRequestId();
+    setRequestId(requestId);
+    
     // SEC-6 Fix: Apply prompt injection protection
     const protectedContents = protectUserAction(contents);
     const enhancedSystemMessage = systemMessage 
       ? `${systemMessage}\n${PROMPT_INJECTION_DEFENSE}` 
       : PROMPT_INJECTION_DEFENSE;
+    
+    logger.info('AI request initiated', 'ai-router', { 
+      requestId, 
+      provider: 'gemini', 
+      model: effectiveModel,
+      contentLength: contents.length 
+    });
     
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -147,6 +158,7 @@ class GeminiProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: enhancedSystemMessage,
         config,
+        requestId, // OBS-6 Fix: Pass requestId for correlation
       }),
       signal: getSignalWithTimeout(signal),
     });
@@ -154,12 +166,22 @@ class GeminiProvider implements AIProvider {
     if (!response.ok) {
       const error = await response.json();
       // Use the provider-specific error message from ai-proxy, or fallback to generic
+      logger.error('AI request failed', 'ai-router', { 
+        requestId, 
+        error: error.error 
+      });
       throw new Error(error.error || `Gemini API error: Request failed`);
     }
 
     const data = await response.json();
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!text) throw new Error('No text returned from AI');
+    
+    logger.info('AI request completed', 'ai-router', { 
+      requestId, 
+      responseLength: text.length 
+    });
+    
     return { text };
   }
 
@@ -178,11 +200,22 @@ class GeminiProvider implements AIProvider {
   }): AsyncIterable<string> {
     const effectiveModel = model || 'gemini-2.5-flash';
     
+    // OBS-6 Fix: Generate requestId for correlation
+    const requestId = generateRequestId();
+    setRequestId(requestId);
+    
     // SEC-6 Fix: Apply prompt injection protection
     const protectedContents = protectUserAction(contents);
     const enhancedSystemMessage = systemMessage 
       ? `${systemMessage}\n${PROMPT_INJECTION_DEFENSE}` 
       : PROMPT_INJECTION_DEFENSE;
+    
+    logger.info('AI streaming request initiated', 'ai-router', { 
+      requestId, 
+      provider: 'gemini', 
+      model: effectiveModel,
+      contentLength: contents.length 
+    });
     
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
@@ -194,6 +227,7 @@ class GeminiProvider implements AIProvider {
         systemMessage: enhancedSystemMessage,
         config,
         stream: true,
+        requestId, // OBS-6 Fix: Pass requestId for correlation
       }),
       signal: getSignalWithTimeout(signal),
     });
@@ -201,6 +235,10 @@ class GeminiProvider implements AIProvider {
     if (!response.ok) {
       const error = await response.json();
       // Use the provider-specific error message from ai-proxy, or fallback to generic
+      logger.error('AI streaming request failed', 'ai-router', { 
+        requestId, 
+        error: error.error 
+      });
       throw new Error(error.error || `Gemini API streaming error: Streaming request failed`);
     }
 
@@ -211,11 +249,19 @@ class GeminiProvider implements AIProvider {
     const chunks: string[] = [];
     let buffer = '';
     let accumulatedText = ''; // ERR-4 Fix: Track accumulated text for error reporting
+    
+    logger.info('AI streaming started', 'ai-router', { requestId });
 
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          logger.info('AI streaming completed', 'ai-router', { 
+            requestId,
+            accumulatedLength: accumulatedText.length 
+          });
+          break;
+        }
 
         // PERF-4 Fix: Collect chunks in array and join periodically
         chunks.push(decoder.decode(value, { stream: true }));

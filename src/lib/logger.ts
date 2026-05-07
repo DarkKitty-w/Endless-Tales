@@ -141,6 +141,13 @@ let currentRequestId: string | undefined;
 let currentTraceId: string | undefined;
 
 /**
+ * Get the current request ID
+ */
+export function getCurrentRequestId(): string | undefined {
+  return currentRequestId;
+}
+
+/**
  * Set the request ID for the current context
  */
 export function setRequestId(requestId: string): void {

@@ -1,6 +1,6 @@
 // src/app/api/ai-proxy/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { logger } from '@/lib/logger';
+import { logger, generateRequestId, getCurrentRequestId } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 
 // ERR-7 Fix: Timeout for AI requests (30 seconds)
@@ -92,6 +92,23 @@ function validateModelConfig(config: any): ValidatedConfig | null {
 }
 
 export async function POST(request: NextRequest) {
+  // Generate or extract request ID for correlation
+  const body = await request.json();
+  const { provider, model, contents, config: rawConfig, stream, systemMessage, requestId: clientRequestId } = body;
+  
+  // Use client-provided requestId or generate a new one
+  const requestId = clientRequestId || generateRequestId();
+  setRequestId(requestId);
+  
+  // Log the incoming request with requestId
+  logger.info('AI Proxy request received', 'ai-proxy', { 
+    requestId, 
+    provider, 
+    model,
+    stream,
+    contentLength: typeof contents === 'string' ? contents.length : JSON.stringify(contents).length
+  });
+
   // SEC-4 Fix: Apply rate limiting
   const clientIp = request.headers.get('x-forwarded-for') || 
                    request.headers.get('x-real-ip') || 
@@ -114,9 +131,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
-    const { provider, model, contents, config: rawConfig, stream, systemMessage } = body;
-
     // SEC-5 Fix: Validate provider input
     if (!provider || !ALLOWED_PROVIDERS.includes(provider)) {
       return NextResponse.json(
@@ -164,12 +178,15 @@ export async function POST(request: NextRequest) {
         );
     }
   } catch (error: unknown) {
-    logger.error('AI Proxy error:', error);
+    logger.error('AI Proxy error:', 'ai-proxy', { 
+      error, 
+      requestId: getCurrentRequestId() 
+    });
     
     // ERR-7 Fix: Handle timeout errors with specific message
     if (error instanceof DOMException && error.name === 'TimeoutError') {
       return NextResponse.json(
-        { error: 'AI request timed out. Please try again later.' },
+        { error: 'AI request timed out. Please try again later.', requestId: getCurrentRequestId() },
         { status: 504 }
       );
     }
@@ -177,9 +194,12 @@ export async function POST(request: NextRequest) {
     // ERR-9 Fix: Differentiate network errors from API errors
     if (error instanceof TypeError && error.message.includes('fetch')) {
       // Network error (connection refused, DNS failure, etc.)
-      logger.error('Network error in AI Proxy:', error.message);
+      logger.error('Network error in AI Proxy:', 'ai-proxy', { 
+        message: error.message,
+        requestId: getCurrentRequestId() 
+      });
       return NextResponse.json(
-        { error: 'Network connection failed. Please check your internet connection and try again.' },
+        { error: 'Network connection failed. Please check your internet connection and try again.', requestId: getCurrentRequestId() },
         { status: 503 }
       );
     }
@@ -187,7 +207,7 @@ export async function POST(request: NextRequest) {
     // ERR-9 Fix: Check for AbortError (request was aborted)
     if (error instanceof DOMException && error.name === 'AbortError') {
       return NextResponse.json(
-        { error: 'AI request was cancelled. Please try again.' },
+        { error: 'AI request was cancelled. Please try again.', requestId: getCurrentRequestId() },
         { status: 499 }
       );
     }
@@ -195,7 +215,7 @@ export async function POST(request: NextRequest) {
     // SEC-3 Fix: Sanitize error messages sent to clients
     // Only return generic error messages, log detailed errors server-side only
     return NextResponse.json(
-      { error: 'AI request failed. Please try again later.' },
+      { error: 'AI request failed. Please try again later.', requestId: getCurrentRequestId() },
       { status: 500 }
     );
   }
