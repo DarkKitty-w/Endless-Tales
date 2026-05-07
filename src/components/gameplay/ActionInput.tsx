@@ -59,6 +59,32 @@ const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
       }
     };
 
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      // Escape to clear input
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setPlayerInput("");
+      }
+      // Ctrl/Cmd + Enter to submit (alternative)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        handleSubmit(e as unknown as React.FormEvent);
+      }
+      // Ctrl+Space to suggest action
+      if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
+        e.preventDefault();
+        if (!disabled) {
+          onSuggest();
+        }
+      }
+      // Ctrl+H to open crafting
+      if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
+        e.preventDefault();
+        if (!disabled) {
+          onCraft();
+        }
+      }
+    };
+
     // Cleanup timeout on unmount
     React.useEffect(() => {
       return () => {
@@ -77,6 +103,7 @@ const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
             type="text"
             value={playerInput}
             onChange={(e) => setPlayerInput(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="What do you do? (e.g., look around, use sword, talk to guard)"
             className="flex-1 text-sm h-10"
             aria-label="Enter your action or command"
@@ -95,7 +122,12 @@ const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
                 <Send className="w-4 h-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Send Action</TooltipContent>
+            <TooltipContent>
+              <div className="text-center">
+                <p>Send Action</p>
+                <p className="text-xs opacity-70">Enter</p>
+              </div>
+            </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -111,7 +143,12 @@ const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
                 <Sparkles className="w-4 h-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Suggest Action</TooltipContent>
+            <TooltipContent>
+              <div className="text-center">
+                <p>Suggest Action</p>
+                <p className="text-xs opacity-70">Ctrl+Space</p>
+              </div>
+            </TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -127,7 +164,12 @@ const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
                 <Hammer className="w-4 h-4" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Open Crafting</TooltipContent>
+            <TooltipContent>
+              <div className="text-center">
+                <p>Open Crafting</p>
+                <p className="text-xs opacity-70">Ctrl+H</p>
+              </div>
+            </TooltipContent>
           </Tooltip>
         </form>
       </div>
