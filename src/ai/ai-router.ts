@@ -1939,10 +1939,43 @@ export async function clearWebLLMCache(): Promise<void> {
 }
 
 class WebLLMStubProvider implements AIProvider {
-  async generateContent(): Promise<GenerateContentResponse> {
+  async generateContent({
+    requestId: passedRequestId,
+    traceId: passedTraceId,
+  }: {
+    requestId?: string;
+    traceId?: string;
+  } = {}): Promise<GenerateContentResponse> {
+    // OBS-6/7: Log with correlation IDs even for stub
+    const requestId = passedRequestId || generateRequestId();
+    const traceId = passedTraceId || getTraceId() || generateRequestId();
+    
+    logger.error('WebLLM is not installed', 'ai-router', { 
+      requestId, 
+      traceId,
+      provider: 'webllm-stub',
+      operation: 'generateContent',
+    });
     throw new Error('WebLLM is not installed. Please install @mlc-ai/web-llm to use local AI.');
   }
-  async *generateContentStream(): AsyncIterable<string> {
+  
+  async *generateContentStream({
+    requestId: passedRequestId,
+    traceId: passedTraceId,
+  }: {
+    requestId?: string;
+    traceId?: string;
+  } = {}): AsyncIterable<string> {
+    // OBS-6/7: Log with correlation IDs even for stub
+    const requestId = passedRequestId || generateRequestId();
+    const traceId = passedTraceId || getTraceId() || generateRequestId();
+    
+    logger.error('WebLLM is not installed', 'ai-router', { 
+      requestId, 
+      traceId,
+      provider: 'webllm-stub',
+      operation: 'generateContentStream',
+    });
     throw new Error('WebLLM is not installed. Please install @mlc-ai/web-llm to use local AI.');
   }
 }
