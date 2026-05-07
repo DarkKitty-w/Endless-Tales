@@ -16,7 +16,7 @@ import { Label } from '../../components/ui/label';
 import { Input } from '../../components/ui/input';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { Alert, AlertDescription } from '../../components/ui/alert';
-import { Loader2, Hammer, CheckCircle } from 'lucide-react';
+import { Loader2, Hammer, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import type { InventoryItem } from '../../types/inventory-types';
 import { getQualityColor, cn } from "../../lib/utils";
 import { logger } from "../../lib/logger";
@@ -104,44 +104,81 @@ export function CraftingDialog({ isOpen, onOpenChange, inventory, onCraft }: Cra
                                     <div className="space-y-1">
                                         {inventory.map((item, index) => {
                                             const ingredientId = `ingredient-${index}-${item.name.replace(/\s+/g, '-')}`;
+                                            const isSelected = selectedIngredients.includes(item.name);
                                             return (
-                                                <div key={ingredientId} className="flex items-center gap-2">
+                                                <div key={ingredientId} className={cn(
+                                                    "flex items-center gap-2 p-1 rounded transition-colors",
+                                                    isSelected ? "bg-accent/20" : "hover:bg-muted"
+                                                )}>
                                                     <button
                                                         type="button"
                                                         role="checkbox"
-                                                        aria-checked={selectedIngredients.includes(item.name)}
-                                                        data-state={selectedIngredients.includes(item.name) ? 'checked' : 'unchecked'}
+                                                        aria-checked={isSelected}
+                                                        data-state={isSelected ? 'checked' : 'unchecked'}
                                                         onClick={() => !isCraftingLoading && handleIngredientToggle(item.name)}
                                                         className={cn(
-                                                            "flex items-center justify-center w-4 h-4 rounded-sm border border-primary text-primary ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground",
+                                                            "flex items-center justify-center w-4 h-4 rounded-sm border border-primary text-primary ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50",
+                                                            isSelected ? 'bg-primary text-primary-foreground' : 'bg-background',
                                                             isCraftingLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'
                                                         )}
                                                         disabled={isCraftingLoading}
                                                         aria-label={`Select ${item.name}`}
                                                     >
-                                                        {selectedIngredients.includes(item.name) && <CheckCircle className="w-3 h-3" />}
+                                                        {isSelected ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3 opacity-30" />}
                                                     </button>
                                                     <Label
                                                         htmlFor={ingredientId}
-                                                        className={`text-sm flex-1 cursor-pointer ${getQualityColor(item.quality)}`}
+                                                        className={cn(
+                                                            `text-sm flex-1 cursor-pointer`,
+                                                            getQualityColor(item.quality),
+                                                            isSelected && "font-medium"
+                                                        )}
                                                         onClick={() => !isCraftingLoading && handleIngredientToggle(item.name)}
                                                     >
                                                         {item.name} {item.quality && item.quality !== "Common" ? `(${item.quality})` : ''}
+                                                        {isSelected && <span className="ml-1 text-xs text-muted-foreground">(selected)</span>}
                                                     </Label>
                                                 </div>
                                             );
                                         })}
                                     </div>
                                 ) : (
-                                    <p className="text-sm text-muted-foreground italic text-center py-4">Inventory is empty.</p>
+                                    <p className="text-sm text-muted-foreground italic text-center py-4">Inventory is empty. Cannot craft.</p>
                                 )}
                             </ScrollArea>
-                            <p className="text-xs text-muted-foreground mt-1">Select the items you want to use.</p>
+                            <div className="flex justify-between items-center mt-1">
+                                <p className="text-xs text-muted-foreground">
+                                    {selectedIngredients.length > 0 
+                                        ? `Selected ${selectedIngredients.length} ingredient(s)` 
+                                        : "Select the items you want to use."}
+                                </p>
+                                {selectedIngredients.length > 0 && (
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 text-xs"
+                                        onClick={() => setSelectedIngredients([])}
+                                        disabled={isCraftingLoading}
+                                    >
+                                        Clear selection
+                                    </Button>
+                                )}
+                            </div>
                         </div>
                     </div>
                     {craftingError && (
                         <Alert variant="destructive" className="col-span-4">
-                            <AlertDescription>{craftingError}</AlertDescription>
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertDescription>
+                                <div className="space-y-1">
+                                    <p className="font-medium">Crafting Failed</p>
+                                    <p className="text-sm">{craftingError}</p>
+                                    {craftingError?.includes('materials') || craftingError?.includes('ingredients') ? (
+                                        <p className="text-xs mt-1">Tip: Try selecting different ingredients or check if you have the required materials.</p>
+                                    ) : null}
+                                </div>
+                            </AlertDescription>
                         </Alert>
                     )}
                 </div>
