@@ -19,6 +19,7 @@ import { summarizeAdventure } from "../../ai/flows/summarize-adventure";
 import { assessActionDifficulty, type AssessActionDifficultyInput } from "../../ai/flows/assess-action-difficulty";
 import { generateSkillTree } from "../../ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "../../ai/flows/attempt-crafting";
+import type { ActionInputRef } from "../../components/gameplay/ActionInput";
 import { cn } from "../../lib/utils";
 import { Loader2 } from "lucide-react";
 import { useIsMobile } from "../../hooks/use-mobile";

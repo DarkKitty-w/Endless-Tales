@@ -1,7 +1,7 @@
 # Rapport de revue de qualité - Branch night-fixes
 
 ## Date de la revue
-7 mai 2026
+7 mai 2026 (mise à jour après corrections)
 
 ## Objectif
 Vérifier les corrections automatiques appliquées sur la branche `night-fixes` et s'assurer qu'aucune régression n'a été introduite.
@@ -13,6 +13,8 @@ Vérifier les corrections automatiques appliquées sur la branche `night-fixes` 
 4. **63ad71a** - T-020: Quick action buttons for common tasks
 5. **bf5b10b** - R-002: Crafting material visual feedback
 6. **6c158cb** - feature_gaps: Mark feature gaps complete
+7. **9ebe8fd** - Ajout du rapport de vérification post‑corrections
+8. **b419c42** - Fix TypeScript errors in InventoryDisplay, CraftingDialog, and Gameplay
 
 ## Fichiers modifiés examinés
 
@@ -24,8 +26,8 @@ Vérifier les corrections automatiques appliquées sur la branche `night-fixes` 
 ### 2. InventoryDisplay.tsx
 - **Changements**: Ajout de l'onglet de catégorisation pour les objets d'inventaire
 - **Problème initial**: Erreur TS2686 (React UMD global)
-- **Correction**: ✅ Import React corrigé (`import React from 'react'`)
-- **État**: Compilation TypeScript OK
+- **Correction**: ✅ Import React corrigé (`import React, { useState, useMemo } from 'react'`)
+- **État**: Compilation TypeScript OK, commité (b419c42)
 
 ### 3. SkillTreeDisplay.tsx
 - **Changements**: Indicateurs de progression dans l'arbre de compétences
@@ -47,8 +49,8 @@ Vérifier les corrections automatiques appliquées sur la branche `night-fixes` 
 ### 6. CraftingDialog.tsx
 - **Changements**: Retour visuel pour le crafting
 - **Problème initial**: Erreur TS2345 ligne 112 (logger.error avec Error au lieu de string)
-- **Correction**: ✅ Cast de l'erreur en string pour logger.error
-- **État**: Compilation TypeScript OK
+- **Correction**: ✅ Passage de l'erreur dans le contexte au lieu du second argument
+- **État**: Compilation TypeScript OK, commité (b419c42)
 
 ### 7. GameplayActions.tsx
 - **Changements**: Modifications pour les actions de jeu
@@ -92,32 +94,32 @@ Ces erreurs concernent des fichiers non modifiés par les commits récents.
 
 Toutes les erreurs TypeScript dans les fichiers modifiés par les commits ont été corrigées :
 - CardboardCard.tsx: ✅
-- InventoryDisplay.tsx: ✅
+- InventoryDisplay.tsx: ✅ (correction appliquée et commitée)
 - SkillTreeDisplay.tsx: ✅
 - WorldMapDisplay.tsx: ✅
 - ActionInput.tsx: ✅
-- CraftingDialog.tsx: ✅
+- CraftingDialog.tsx: ✅ (correction appliquée et commitée)
 - GameplayActions.tsx: ✅
 - PartySidebar.tsx: ✅
+- Gameplay.tsx: ✅ (correction appliquée et commitée)
 
 Les corrections apportées (imports manquants, packages manquants, types incorrects) étaient nécessaires pour que le code fonctionne correctement après les modifications.
 
 ## Recommandations
 
-1. Corriger les erreurs TypeScript pré-existantes dans `ai-router.ts` et `Gameplay.tsx` (utilisation incorrecte de logger.error)
+1. **Urgent**: Corriger les erreurs TypeScript pré-existantes dans `ai-router.ts` et `Gameplay.tsx` (utilisation incorrecte de logger.error)
 2. Vérifier pourquoi le module `game-utils/dice` n'est pas trouvé
 3. Mettre à jour Node.js vers la version 20+ pour la compatibilité avec Next.js
 4. Exécuter un build complet une fois les problèmes de version Node.js résolus
+5. Standardiser l'utilisation de `logger.error` dans tout le codebase (utiliser le paramètre context pour les objets)
 
 ## Statut des changements
 
-- Modifications non commitées :
-  - `src/components/game/InventoryDisplay.tsx` (correction import React)
-  - `src/components/gameplay/CraftingDialog.tsx` (correction logger.error)
-  - `src/components/screens/Gameplay.tsx` (ajout import ActionInputRef)
-  - `package.json` et `package-lock.json` (ajout dépendances @dnd-kit)
-
-Prêt pour commit et push.
+- ✅ Modifications commitées et poussées :
+  - `src/components/game/InventoryDisplay.tsx` (correction import React) - commit b419c42
+  - `src/components/gameplay/CraftingDialog.tsx` (correction logger.error) - commit b419c42
+  - `src/components/screens/Gameplay.tsx` (ajout import ActionInputRef) - commit b419c42
 
 ---
-**Branch**: night-fixes | **Reviewed**: 2026-05-07 | **No critical issues found**
+
+**Branch**: night-fixes | **Reviewed**: 2026-05-07 | **Critical issues**: 0 | **Fixed issues**: 3
