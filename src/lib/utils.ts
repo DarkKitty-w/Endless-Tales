@@ -158,6 +158,49 @@ export function extractJsonFromResponse(text: string): string {
 }
 
 /* -------------------------------------------------------
+   OUTPUT VALIDATION (GAME RULES)
+------------------------------------------------------- */
+/**
+ * Validates AI-generated choices against available game state.
+ * Filters out choices that reference skills/items the player doesn't have.
+ */
+export function validateChoicesAgainstGameState(
+  choices: Array<{ text: string; consequenceHint?: string }>,
+  availableSkills: string[],
+  inventory: string[]
+): Array<{ text: string; consequenceHint?: string }> {
+  if (!choices || choices.length === 0) return choices;
+  
+  return choices.filter(choice => {
+    const text = choice.text.toLowerCase();
+    
+    // Check if choice references a skill not in availableSkills
+    const mentionsSkill = availableSkills.some(skill => 
+      text.includes(skill.toLowerCase())
+    );
+    
+    // If the text mentions a skill not in the list, filter it out
+    const hasInvalidSkill = availableSkills.length > 0 && 
+      text.includes('skill') && 
+      !mentionsSkill && 
+      availableSkills.every(skill => !text.includes(skill.toLowerCase()));
+    
+    // Check if choice references an item not in inventory
+    const mentionsItem = inventory.some(item => 
+      text.includes(item.toLowerCase())
+    );
+    
+    // If text mentions an item not in inventory, filter it out
+    const hasInvalidItem = inventory.length > 0 && 
+      (text.includes('use') || text.includes('equip') || text.includes('drink') || text.includes('read')) &&
+      !mentionsItem &&
+      inventory.every(item => !text.includes(item.toLowerCase()));
+    
+    return !hasInvalidSkill && !hasInvalidItem;
+  });
+}
+
+/* -------------------------------------------------------
    UNIVERSAL AI PIPELINE (REAL RETRIES + DEBUG LOGS)
 ------------------------------------------------------- */
 export async function processAiResponse<T>(

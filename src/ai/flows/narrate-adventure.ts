@@ -7,8 +7,7 @@ import type { CharacterStats } from '../../types/character-types';
 import type { AdventureSettings } from '../../types/adventure-types';
 import type { DifficultyLevel, GameStateContext } from '../../types/game-types';
 import { formatGameStateContextForPrompt } from '../../context/game-state-utils';
-import { processAiResponse } from '../../lib/utils';
-import { sanitizePlayerAction } from '../../lib/utils';
+import { processAiResponse, sanitizePlayerAction, validateChoicesAgainstGameState } from '../../lib/utils';
 import { logger } from '../../lib/logger';
 
 export interface NarrateAdventureInput {
@@ -382,6 +381,20 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           }
           if (!Array.isArray(branchingChoices) || branchingChoices.length === 0) {
               branchingChoices = fallback.branchingChoices;
+          }
+
+          // --- VALIDATE choices against game state (AI-16, AI-25) ---
+          if (input.gameStateContext?.character) {
+              const availableSkills = input.gameStateContext.character.learnedSkills || [];
+              const inventory = input.gameStateContext.inventory?.map(i => i.name) || [];
+              const validatedChoices = validateChoicesAgainstGameState(branchingChoices, availableSkills, inventory);
+              
+              // Keep original choices if validation filters all of them out
+              if (validatedChoices.length > 0) {
+                  branchingChoices = validatedChoices;
+              } else {
+                  logger.warn('[narrateAdventure] All choices filtered by validation, keeping original choices');
+              }
           }
 
           // --- difficulty / dice ---
