@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import type { MultiplayerState, PeerInfo, PlayerSummary } from "../../types/multiplayer-types";
-import { Users, Crown, Sword, MessageSquare, Handshake } from "lucide-react";
+import { Users, Crown, Sword, MessageSquare, Handshake, GripVertical } from "lucide-react";
 import { Button } from "../ui/button";
 import { ScrollArea } from "../ui/scroll-area";
 import { Separator } from "../ui/separator";
@@ -18,6 +18,171 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "../ui/alert-dialog";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+// Sortable item component for turn order
+interface SortableTurnOrderItemProps {
+  peerId: string;
+  index: number;
+  isCurrent: boolean;
+  isYou: boolean;
+  displayName: string;
+  characterName: string;
+  playerSummary: PlayerSummary | undefined;
+  isHost: boolean;
+  onSetTurnOrder?: (turnOrder: string[]) => void;
+  turnOrder: string[];
+  onSendTradeRequest?: (targetPeerId: string) => void;
+  onKickPeer?: (peerId: string) => void;
+  kickPlayerName: string;
+  setKickPlayerName: (name: string) => void;
+  setKickPlayerId: (id: string) => void;
+  multiplayerState: MultiplayerState;
+}
+
+function SortableTurnOrderItem({ 
+  peerId, 
+  index, 
+  isCurrent, 
+  isYou, 
+  displayName, 
+  characterName, 
+  playerSummary,
+  isHost,
+  onSetTurnOrder,
+  turnOrder,
+  onSendTradeRequest,
+  onKickPeer,
+  kickPlayerName,
+  setKickPlayerName,
+  setKickPlayerId,
+  multiplayerState
+}: SortableTurnOrderItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: peerId });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div 
+      ref={setNodeRef} 
+      style={style} 
+      className={`flex items-center justify-between p-2 rounded-lg border ${
+        isCurrent ? 'border-primary bg-primary/10' : 'border-border'
+      } ${isDragging ? 'z-50 shadow-lg' : ''}`}
+    >
+      <div className="flex items-center gap-2 flex-1">
+        {/* Drag handle */}
+        {isHost && !isYou && onSetTurnOrder && (
+          <Button 
+            variant="ghost" 
+            size="sm"
+            {...attributes}
+            {...listeners}
+            className="cursor-grab hover:cursor-grab active:cursor-grabbing p-1"
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </Button>
+        )}
+        {isCurrent && <Sword className="h-4 w-4 text-primary" />}
+        {isYou && <Crown className="h-4 w-4 text-yellow-500" />}
+        <span className="text-sm">
+          {displayName}
+        </span>
+        {characterName && (
+          <span className="text-xs text-muted-foreground">
+            ({characterName})
+          </span>
+        )}
+        {/* Player stats display */}
+        {playerSummary && (
+          <div className="ml-2 flex gap-2 text-xs">
+            <span className="text-red-500">{playerSummary.currentHealth}/{playerSummary.maxHealth}</span>
+            <span className="text-blue-500">{playerSummary.currentStamina}/{playerSummary.maxStamina}</span>
+            <span className="text-purple-500">{playerSummary.currentMana}/{playerSummary.maxMana}</span>
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-1">
+        {isCurrent && (
+          <Badge variant="default" className="text-xs">Current Turn</Badge>
+        )}
+        {!isYou && onSendTradeRequest && (
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => onSendTradeRequest(peerId)}
+            className="text-blue-600 hover:text-blue-700"
+            title="Request Trade"
+          >
+            <Handshake className="h-4 w-4" />
+          </Button>
+        )}
+        {isHost && !isYou && onKickPeer && (
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="sm"
+                className="text-destructive hover:text-destructive text-xs"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setKickPlayerName(displayName);
+                  setKickPlayerId(peerId);
+                }}
+              >
+                Kick
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Kick Player?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will remove <span className="font-semibold">{kickPlayerName}</span> from the party. 
+                  This action is disruptive and irreversible for the guest. They will need to rejoin if they want to continue playing.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction 
+                  onClick={() => onKickPeer(peerId)}
+                  className="bg-destructive hover:bg-destructive/90"
+                >
+                  Kick Player
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        )}
+      </div>
+    </div>
+  );
+}
 
 interface PartySidebarProps {
   multiplayerState: MultiplayerState;
@@ -66,6 +231,35 @@ function PartySidebarInternal({
   // State for kick confirmation
   const [kickPeerId, setKickPeerId] = useState<string | null>(null);
   const [kickPlayerName, setKickPlayerName] = useState<string>("");
+
+  // Dnd-kit sensors for drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  // Handle drag end for turn order reordering
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (over && active.id !== over.id && onSetTurnOrder) {
+      const oldIndex = turnOrder.indexOf(active.id as string);
+      const newIndex = turnOrder.indexOf(over.id as string);
+      
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newOrder = [...turnOrder];
+        newOrder.splice(oldIndex, 1);
+        newOrder.splice(newIndex, 0, active.id as string);
+        onSetTurnOrder(newOrder);
+      }
+    }
+  };
 
   // Handle kick confirmation
   const handleKickClick = (peerId: string) => {
@@ -121,131 +315,54 @@ function PartySidebarInternal({
 
       <Separator />
 
-      {/* Turn Order */}
+      {/* Turn Order with Drag and Drop */}
       <div>
-        <h4 className="text-sm font-medium mb-2">Turn Order</h4>
-        <div className="space-y-2">
-          {turnOrder.map((peerId, index) => {
-            const isYou = peerId === multiplayerState.peerId;
-            const isCurrent = index === currentTurnIndex;
-            const displayName = getPeerDisplayName(peerId);
-            const characterName = getPeerCharacterName(peerId);
-            const playerSummary = partyState[peerId];
-            
-            return (
-              <div 
-                key={peerId} 
-                className={`flex items-center justify-between p-2 rounded-lg border ${
-                  isCurrent ? 'border-primary bg-primary/10' : 'border-border'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  {isCurrent && <Sword className="h-4 w-4 text-primary" />}
-                  {isYou && <Crown className="h-4 w-4 text-yellow-500" />}
-                  <span className="text-sm">
-                    {displayName}
-                  </span>
-                  {characterName && (
-                    <span className="text-xs text-muted-foreground">
-                      ({characterName})
-                    </span>
-                  )}
-                  {/* Player stats display */}
-                  {playerSummary && (
-                    <div className="ml-2 flex gap-2 text-xs">
-                      <span className="text-red-500">{playerSummary.currentHealth}/{playerSummary.maxHealth}</span>
-                      <span className="text-blue-500">{playerSummary.currentStamina}/{playerSummary.maxStamina}</span>
-                      <span className="text-purple-500">{playerSummary.currentMana}/{playerSummary.maxMana}</span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-1">
-                  {isCurrent && (
-                    <Badge variant="default" className="text-xs">Current Turn</Badge>
-                  )}
-                  {isHost && !isYou && onSetTurnOrder && (
-                    <div className="flex gap-1">
-                      {index > 0 && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => {
-                            const newOrder = [...turnOrder];
-                            [newOrder[index-1], newOrder[index]] = [newOrder[index], newOrder[index-1]];
-                            onSetTurnOrder(newOrder);
-                          }}
-                          className="text-xs px-1"
-                        >
-                          ↑
-                        </Button>
-                      )}
-                      {index < turnOrder.length - 1 && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={() => {
-                            const newOrder = [...turnOrder];
-                            [newOrder[index], newOrder[index+1]] = [newOrder[index+1], newOrder[index]];
-                            onSetTurnOrder(newOrder);
-                          }}
-                          className="text-xs px-1"
-                        >
-                          ↓
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                  {!isYou && onSendTradeRequest && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => onSendTradeRequest(peerId)}
-                      className="text-blue-600 hover:text-blue-700"
-                      title="Request Trade"
-                    >
-                      <Handshake className="h-4 w-4" />
-                    </Button>
-                  )}
-                  {isHost && !isYou && onKickPeer && (
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          className="text-destructive hover:text-destructive text-xs"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            handleKickClick(peerId);
-                          }}
-                        >
-                          Kick
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Kick Player?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This will remove <span className="font-semibold">{kickPlayerName}</span> from the party. 
-                            This action is disruptive and irreversible for the guest. They will need to rejoin if they want to continue playing.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel onClick={handleKickCancel}>Cancel</AlertDialogCancel>
-                          <AlertDialogAction 
-                            onClick={handleKickConfirm}
-                            className="bg-destructive hover:bg-destructive/90"
-                          >
-                            Kick Player
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <h4 className="text-sm font-medium mb-2">Turn Order (Drag to Reorder)</h4>
+        {isHost && onSetTurnOrder && turnOrder.length > 1 && (
+          <p className="text-xs text-muted-foreground mb-2">Drag players to reorder turn sequence</p>
+        )}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          <SortableContext
+            items={turnOrder}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="space-y-2">
+              {turnOrder.map((peerId, index) => {
+                const isYou = peerId === multiplayerState.peerId;
+                const isCurrent = index === currentTurnIndex;
+                const displayName = getPeerDisplayName(peerId);
+                const characterName = getPeerCharacterName(peerId);
+                const playerSummary = partyState[peerId];
+                
+                return (
+                  <SortableTurnOrderItem
+                    key={peerId}
+                    peerId={peerId}
+                    index={index}
+                    isCurrent={isCurrent}
+                    isYou={isYou}
+                    displayName={displayName}
+                    characterName={characterName || ''}
+                    playerSummary={playerSummary}
+                    isHost={isHost}
+                    onSetTurnOrder={onSetTurnOrder}
+                    turnOrder={turnOrder}
+                    onSendTradeRequest={onSendTradeRequest}
+                    onKickPeer={onKickPeer}
+                    kickPlayerName={kickPlayerName}
+                    setKickPlayerName={setKickPlayerName}
+                    setKickPlayerId={setKickPeerId}
+                    multiplayerState={multiplayerState}
+                  />
+                );
+              })}
+            </div>
+          </SortableContext>
+        </DndContext>
       </div>
 
       <Separator />
