@@ -339,6 +339,17 @@ function PartySidebarInternal({
                 </div>
               </div>
             ))}
+            
+            {/* Empty state when no other players */}
+            {Object.entries(partyState).filter(([peerId]) => peerId !== multiplayerState.peerId).length === 0 && (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <Users className="h-12 w-12 text-muted-foreground/50 mb-3" />
+                <p className="text-sm text-muted-foreground font-medium">No party members yet</p>
+                <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
+                  Invite players to join your party using the room code or invite link.
+                </p>
+              </div>
+            )}
           </div>
         </ScrollArea>
       </div>
