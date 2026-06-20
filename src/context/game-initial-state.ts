@@ -169,4 +169,7 @@ export const initialState: GameState = {
   worldMap: initialWorldMap,
   aiProvider: 'gemini',
   providerApiKeys: {},
+  providerModels: {
+    openrouter: 'z-ai/glm-4.5-air:free',
+  },
 };

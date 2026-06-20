@@ -25,6 +25,7 @@ import { atomicLocalStorageWrite, safeLocalStorageRead, isLocalStorageQuotaLow, 
 // Storage keys
 const AI_PROVIDER_KEY = "endlessTales_aiProvider";
 const PROVIDER_API_KEYS_KEY = "endlessTales_providerApiKeys";
+const PROVIDER_MODELS_KEY = "endlessTales_providerModels";
 const SUPPORTED_AI_PROVIDERS: ProviderType[] = ['gemini', 'openai', 'claude', 'deepseek', 'openrouter', 'webllm'];
 
 function isProviderType(value: unknown): value is ProviderType {
@@ -39,6 +40,19 @@ function sanitizeProviderApiKeys(value: unknown): Partial<Record<ProviderType, s
     const key = source[provider];
     if (typeof key === 'string' && key.trim()) {
       sanitized[provider] = key.trim();
+    }
+  }
+  return sanitized;
+}
+
+function sanitizeProviderModels(value: unknown): Partial<Record<ProviderType, string>> {
+  if (!value || typeof value !== 'object') return {};
+  const source = value as Record<string, unknown>;
+  const sanitized: Partial<Record<ProviderType, string>> = {};
+  for (const provider of SUPPORTED_AI_PROVIDERS) {
+    const model = source[provider];
+    if (typeof model === 'string' && model.trim()) {
+      sanitized[provider] = model.trim();
     }
   }
   return sanitized;
@@ -76,6 +90,7 @@ const SettingsContext = createContext<{
   userGoogleAiApiKey: string | null;
   aiProvider: ProviderType;
   providerApiKeys: Partial<Record<ProviderType, string>>;
+  providerModels: Partial<Record<ProviderType, string>>;
   dispatch: Dispatch<Action>;
 } | undefined>(undefined);
 
@@ -302,6 +317,22 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
           logger.error('Failed to parse provider API keys from storage event', 'game-context', { error: String(error) });
         }
       }
+
+      if (event.key === PROVIDER_MODELS_KEY) {
+        logger.log('AI provider models changed in another tab');
+        try {
+          const parsedModels = event.newValue ? JSON.parse(event.newValue) : {};
+          const sanitizedModels = sanitizeProviderModels(parsedModels);
+          for (const provider of SUPPORTED_AI_PROVIDERS) {
+            dispatch({
+              type: 'SET_PROVIDER_MODEL',
+              payload: { provider, model: sanitizedModels[provider] ?? null },
+            });
+          }
+        } catch (error) {
+          logger.error('Failed to parse provider models from storage event', 'game-context', { error: String(error) });
+        }
+      }
     };
     
     window.addEventListener('storage', handleStorageChange);
@@ -453,6 +484,21 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
       logger.error('Failed to load provider API keys', 'game-context', { error: String(error) });
     }
 
+    try {
+      const savedProviderModels = safeLocalStorageRead(PROVIDER_MODELS_KEY);
+      const sanitizedModels = sanitizeProviderModels(savedProviderModels);
+      for (const provider of SUPPORTED_AI_PROVIDERS) {
+        if (sanitizedModels[provider]) {
+          dispatch({
+            type: 'SET_PROVIDER_MODEL',
+            payload: { provider, model: sanitizedModels[provider] ?? null },
+          });
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to load provider models', 'game-context', { error: String(error) });
+    }
+
     dispatch({ type: 'SET_THEME_ID', payload: savedThemeId });
     dispatch({ type: 'SET_DARK_MODE', payload: initialDarkMode });
 
@@ -472,8 +518,9 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     configureAIRouter({
       defaultProvider: state.aiProvider,
       apiKeys: state.providerApiKeys,
+      models: state.providerModels,
     });
-  }, [state.aiProvider, state.providerApiKeys]);
+  }, [state.aiProvider, state.providerApiKeys, state.providerModels]);
 
   // Consolidated persistence hook with debouncing (storage writes only)
   useEffect(() => {
@@ -570,6 +617,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
         // AI provider preference and BYOK provider keys (localStorage)
         localStorage.setItem(AI_PROVIDER_KEY, state.aiProvider);
         localStorage.setItem(PROVIDER_API_KEYS_KEY, JSON.stringify(sanitizeProviderApiKeys(state.providerApiKeys)));
+        localStorage.setItem(PROVIDER_MODELS_KEY, JSON.stringify(sanitizeProviderModels(state.providerModels)));
       } catch (storageError) {
         // ERR-22/ERR-24 Fix: Handle localStorage errors
         logger.error('Failed to save to localStorage', 'game-context', { error: String(storageError) });
@@ -623,6 +671,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     state.savedAdventures,
     state.aiProvider,
     state.providerApiKeys,
+    state.providerModels,
     applyTheme,
   ]);
 
@@ -658,9 +707,10 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
         isGeneratingSkillTree: state.isGeneratingSkillTree,
         aiProvider: state.aiProvider,
         providerKeysCount: Object.keys(state.providerApiKeys).length,
+        providerModels: state.providerModels,
       });
     }
-  }, [state.version, state.status, state.turnCount, state.character, state.inventory, state.selectedThemeId, state.isDarkMode, state.userGoogleAiApiKey, state.storyLog.length, state.isGeneratingSkillTree, state.aiProvider, state.providerApiKeys]);
+  }, [state.version, state.status, state.turnCount, state.character, state.inventory, state.selectedThemeId, state.isDarkMode, state.userGoogleAiApiKey, state.storyLog.length, state.isGeneratingSkillTree, state.aiProvider, state.providerApiKeys, state.providerModels]);
 
   // Memoize each domain context value separately
   const adventureContextValue = useMemo(() => ({
@@ -707,6 +757,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     userGoogleAiApiKey: state.userGoogleAiApiKey,
     aiProvider: state.aiProvider,
     providerApiKeys: state.providerApiKeys,
+    providerModels: state.providerModels,
     dispatch,
   }), [
     state.selectedThemeId,
@@ -714,6 +765,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     state.userGoogleAiApiKey,
     state.aiProvider,
     state.providerApiKeys,
+    state.providerModels,
     dispatch
   ]);
 

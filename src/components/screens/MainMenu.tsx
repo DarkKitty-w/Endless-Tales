@@ -7,10 +7,6 @@ import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from ".
 import { Play, Settings, Sparkles, FolderClock, ChevronDown, Dices, Swords, Users, KeyRound, HardDrive } from "lucide-react";
 import { SettingsPanel } from '../../components/screens/SettingsPanel';
 import {
-  Sheet,
-  SheetTrigger,
-} from "../../components/ui/sheet";
-import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -67,8 +63,8 @@ export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
       // For Randomized, go to Character Creation first.
       dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
     } else if (adventureType === "Coop") {
-      // For Co-op, go to CoopLobby for hosting/joining sessions.
-      dispatch({ type: "SET_GAME_STATUS", payload: "CoopLobby" });
+      // Co-op still needs a local character before entering the lobby.
+      dispatch({ type: "SET_GAME_STATUS", payload: "CharacterCreation" });
     } else {
       // For Custom and Immersed, go to Adventure Setup first.
       dispatch({ type: "SET_GAME_STATUS", payload: "AdventureSetup" });
@@ -83,7 +79,7 @@ export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
   };
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background relative">
+    <div className="flex flex-col items-center justify-center min-h-dvh p-2 sm:p-4 bg-background relative overflow-y-auto">
       {/* Skip Navigation Link */}
       <a
         href="#main-content"
@@ -92,35 +88,36 @@ export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
         Skip to main content
       </a>
 
-      <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-10" aria-label="Open settings">
-            <Settings className="h-6 w-6 text-muted-foreground" />
-            <span className="sr-only">Open Settings</span>
-          </Button>
-        </SheetTrigger>
-        <SettingsPanel isOpen={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
-      </Sheet>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute top-2 right-2 sm:top-4 sm:right-4 z-10"
+        aria-label="Open settings"
+        onClick={() => setIsSettingsOpen(true)}
+      >
+        <Settings className="h-6 w-6 text-muted-foreground" />
+      </Button>
+      <SettingsPanel isOpen={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
 
-      <CardboardCard id="main-content" className="w-full max-w-md text-center shadow-xl border-2 border-foreground/20">
-        <CardHeader className="border-b border-foreground/10 pb-4">
-          <CardTitle className="text-4xl font-bold text-foreground mb-4">
+      <CardboardCard id="main-content" className="w-full max-w-lg text-center shadow-xl border-2 border-foreground/20 my-2">
+        <CardHeader className="border-b border-foreground/10 py-3 sm:py-4">
+          <CardTitle className="text-3xl sm:text-4xl font-bold text-foreground">
             Endless Tales
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4 pt-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
+        <CardContent className="flex flex-col gap-3 pt-3 sm:pt-4">
+          <div className="grid grid-cols-2 gap-2 text-left">
             {ADVENTURE_MODE_SUMMARIES.map(({ icon: Icon, title, description }) => (
-              <div key={title} className="rounded-md border border-foreground/10 bg-muted/20 p-3">
-                <div className="flex items-center gap-2 font-semibold text-sm">
-                  <Icon className="h-4 w-4 text-primary" /> {title}
+              <div key={title} className="rounded-md border border-foreground/10 bg-muted/20 p-2">
+                <div className="flex items-center gap-1.5 font-semibold text-xs sm:text-sm">
+                  <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" /> {title}
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{description}</p>
+                <p className="mt-1 text-[10px] sm:text-xs text-muted-foreground leading-snug">{description}</p>
               </div>
             ))}
           </div>
 
-          <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-left text-xs text-muted-foreground space-y-2">
+          <div className="rounded-md border border-primary/20 bg-primary/5 p-2 text-left text-[10px] sm:text-xs text-muted-foreground space-y-1.5">
             <p className="flex items-start gap-2">
               <KeyRound className="h-4 w-4 text-primary shrink-0 mt-0.5" />
               <span><strong className="text-foreground">BYOK AI:</strong> cloud providers use your own API keys from Settings. WebLLM is experimental and local.</span>
@@ -158,7 +155,7 @@ export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
             <FolderClock className="mr-2 h-5 w-5" /> View Saved Adventures
           </Button>
         </CardContent>
-        <CardFooter className="pt-4 justify-center flex-col items-center">
+        <CardFooter className="pt-3 pb-3 justify-center flex-col items-center">
           <p className="text-xs text-muted-foreground mb-2">v0.1.0 - Alpha · Browser-first · BYOK · Local saves</p>
           <a
             href='https://ko-fi.com/K3K31ELFCW'

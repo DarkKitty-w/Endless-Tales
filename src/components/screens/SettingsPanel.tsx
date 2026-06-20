@@ -4,6 +4,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useGame } from "../../context/GameContext";
 import {
+  Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
@@ -94,7 +95,7 @@ const WEBLLM_MODELS = [
 
 export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
   const { state, dispatch } = useGame();
-  const { selectedThemeId, isDarkMode, userGoogleAiApiKey, aiProvider, providerApiKeys } = state;
+  const { selectedThemeId, isDarkMode, userGoogleAiApiKey, aiProvider, providerApiKeys, providerModels } = state;
   const { toast } = useToast();
 
   const geminiKeyFromState = providerApiKeys?.gemini ?? userGoogleAiApiKey ?? "";
@@ -102,12 +103,14 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
   const claudeKeyFromState = providerApiKeys?.claude ?? "";
   const deepseekKeyFromState = providerApiKeys?.deepseek ?? "";
   const openrouterKeyFromState = providerApiKeys?.openrouter ?? "";
+  const openrouterModelFromState = providerModels?.openrouter ?? "z-ai/glm-4.5-air:free";
 
   const [geminiKey, setGeminiKey] = useState(geminiKeyFromState);
   const [openaiKey, setOpenaiKey] = useState(openaiKeyFromState);
   const [claudeKey, setClaudeKey] = useState(claudeKeyFromState);
   const [deepseekKey, setDeepseekKey] = useState(deepseekKeyFromState);
   const [openrouterKey, setOpenrouterKey] = useState(openrouterKeyFromState);
+  const [openrouterModel, setOpenrouterModel] = useState(openrouterModelFromState);
 
   // WebLLM state
   const [webllmSupported, setWebllmSupported] = useState(false);
@@ -124,7 +127,8 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
     setClaudeKey(providerApiKeys?.claude ?? "");
     setDeepseekKey(providerApiKeys?.deepseek ?? "");
     setOpenrouterKey(providerApiKeys?.openrouter ?? "");
-  }, [providerApiKeys, userGoogleAiApiKey]);
+    setOpenrouterModel(providerModels?.openrouter ?? "z-ai/glm-4.5-air:free");
+  }, [providerApiKeys, providerModels, userGoogleAiApiKey]);
 
   // Poll for WebLLM availability until it loads
   useEffect(() => {
@@ -183,6 +187,20 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
     toast({
       title: trimmedKey ? "API Key Saved" : "API Key Cleared",
       description: `${providerOptions.find(p => p.value === provider)?.label} API key ${trimmedKey ? 'saved' : 'cleared'}.`,
+    });
+  };
+
+  const handleSaveProviderModel = (provider: ProviderType, model: string) => {
+    const trimmedModel = model.trim();
+    dispatch({
+      type: 'SET_PROVIDER_MODEL',
+      payload: { provider, model: trimmedModel || null },
+    });
+    toast({
+      title: trimmedModel ? "Model Saved" : "Model Reset",
+      description: trimmedModel
+        ? `${providerOptions.find(p => p.value === provider)?.label} model set to ${trimmedModel}.`
+        : `${providerOptions.find(p => p.value === provider)?.label} will use its default model.`,
     });
   };
 
@@ -271,7 +289,8 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
   ];
 
   return (
-    <SheetContent side="right" className="w-[90vw] sm:w-[450px] flex flex-col">
+    <Sheet open={isOpen} onOpenChange={onOpenChange}>
+      <SheetContent side="right" className="w-[90vw] sm:w-[450px] flex flex-col">
       <SheetHeader className="p-4 border-b">
         <SheetTitle className="flex items-center gap-2 text-xl">
           <Palette className="w-5 h-5" /> Settings
@@ -517,6 +536,47 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
                           Clear
                         </Button>
                       </div>
+                      {provider === 'openrouter' && (
+                        <div className="space-y-2 rounded-md border border-dashed border-border bg-background/50 p-2">
+                          <Label htmlFor="openrouter-model" className="text-xs font-medium">
+                            OpenRouter model name
+                          </Label>
+                          <Input
+                            id="openrouter-model"
+                            value={openrouterModel}
+                            onChange={(event) => setOpenrouterModel(event.target.value)}
+                            placeholder="e.g., z-ai/glm-4.5-air:free or openai/gpt-4o-mini"
+                            autoComplete="off"
+                            className="text-xs"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => handleSaveProviderModel('openrouter', openrouterModel)}
+                              className="flex-1"
+                            >
+                              Save Model
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                const defaultModel = "z-ai/glm-4.5-air:free";
+                                setOpenrouterModel(defaultModel);
+                                handleSaveProviderModel('openrouter', defaultModel);
+                              }}
+                            >
+                              Default
+                            </Button>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            Use the exact model slug from OpenRouter, for example <code>provider/model-name</code>.
+                          </p>
+                        </div>
+                      )}
                       {isSelected && !savedKey && (
                         <p className="text-xs text-destructive">
                           This provider is selected. Save a key before starting or continuing an AI-powered adventure.
@@ -535,6 +595,7 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
           Close
         </Button>
       </SheetFooter>
-    </SheetContent>
+      </SheetContent>
+    </Sheet>
   );
 }

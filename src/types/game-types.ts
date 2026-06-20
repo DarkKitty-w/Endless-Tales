@@ -72,6 +72,7 @@ export interface GameState {
   // AI Provider settings
   aiProvider: ProviderType;
   providerApiKeys: Partial<Record<ProviderType, string>>;
+  providerModels: Partial<Record<ProviderType, string>>;
 }
 
 

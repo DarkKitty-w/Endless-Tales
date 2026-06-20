@@ -113,11 +113,13 @@ export type ProviderType = 'gemini' | 'openai' | 'claude' | 'deepseek' | 'webllm
 export interface AIRouterConfig {
   defaultProvider: ProviderType;
   apiKeys: Partial<Record<ProviderType, string>>;
+  models: Partial<Record<ProviderType, string>>;
 }
 
 let routerConfig: AIRouterConfig = {
   defaultProvider: 'gemini',
   apiKeys: {},
+  models: {},
 };
 
 export function configureAIRouter(config: Partial<AIRouterConfig>): void {
@@ -1160,6 +1162,10 @@ class OpenRouterProvider implements AIProvider {
     return this.apiKey || routerConfig.apiKeys.openrouter || '';
   }
 
+  private getDefaultModel(): string {
+    return routerConfig.models.openrouter || 'z-ai/glm-4.5-air:free';
+  }
+
   async generateContent({
     model,
     contents,
@@ -1175,7 +1181,7 @@ class OpenRouterProvider implements AIProvider {
     requestId?: string;
     traceId?: string;
   }): Promise<GenerateContentResponse> {
-    const effectiveModel = model || 'z-ai/glm-4.5-air:free';
+    const effectiveModel = model || this.getDefaultModel();
     
     // OBS-6 Fix: Use passed requestId or generate new one for correlation
     const requestId = passedRequestId || generateRequestId();
@@ -1265,7 +1271,7 @@ class OpenRouterProvider implements AIProvider {
     requestId?: string;
     traceId?: string;
   }): AsyncIterable<string> {
-    const effectiveModel = model || 'z-ai/glm-4.5-air:free';
+    const effectiveModel = model || this.getDefaultModel();
     
     // OBS-6 Fix: Use passed requestId or generate new one for correlation
     const requestId = passedRequestId || generateRequestId();

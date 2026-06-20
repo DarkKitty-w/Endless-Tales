@@ -6,7 +6,7 @@ import { initialAdventureSettings } from "../game-initial-state";
 import { VALID_ADVENTURE_DIFFICULTY_LEVELS } from "../../lib/constants";
 import { logger } from "../../lib/logger";
 
-type SettingsState = Pick<GameState, 'adventureSettings' | 'selectedThemeId' | 'isDarkMode' | 'userGoogleAiApiKey' | 'aiProvider' | 'providerApiKeys'>;
+type SettingsState = Pick<GameState, 'adventureSettings' | 'selectedThemeId' | 'isDarkMode' | 'userGoogleAiApiKey' | 'aiProvider' | 'providerApiKeys' | 'providerModels'>;
 
 // Combined reducer for settings (adventure settings + appearance + API key)
 export function settingsReducer(state: SettingsState, action: Action): SettingsState {
@@ -146,6 +146,20 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
             return {
                 ...state,
                 providerApiKeys: nextKeys,
+            };
+        }
+
+        case "SET_PROVIDER_MODEL": {
+            const { provider, model } = action.payload;
+            const nextModels = { ...state.providerModels };
+            if (model && model.trim()) {
+                nextModels[provider] = model.trim();
+            } else {
+                delete nextModels[provider];
+            }
+            return {
+                ...state,
+                providerModels: nextModels,
             };
         }
 

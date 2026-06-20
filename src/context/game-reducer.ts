@@ -48,6 +48,7 @@ const SETTINGS_ACTIONS = new Set<Action['type']>([
     "SET_USER_API_KEY",
     "SET_AI_PROVIDER",
     "SET_PROVIDER_API_KEY",
+    "SET_PROVIDER_MODEL",
     "LOAD_ADVENTURE",
     "RESET_GAME",
 ]);
@@ -115,6 +116,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
                 userGoogleAiApiKey: state.userGoogleAiApiKey,
                 aiProvider: state.aiProvider,
                 providerApiKeys: state.providerApiKeys,
+                providerModels: state.providerModels,
             },
             action
         )
@@ -125,6 +127,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
             userGoogleAiApiKey: state.userGoogleAiApiKey,
             aiProvider: state.aiProvider,
             providerApiKeys: state.providerApiKeys,
+            providerModels: state.providerModels,
         };
 
     let nextState: GameState = {
@@ -137,6 +140,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
         userGoogleAiApiKey: settingsRelatedState.userGoogleAiApiKey,
         aiProvider: settingsRelatedState.aiProvider ?? state.aiProvider,
         providerApiKeys: settingsRelatedState.providerApiKeys ?? state.providerApiKeys,
+        providerModels: settingsRelatedState.providerModels ?? state.providerModels,
     };
 
     if (ADVENTURE_ACTIONS.has(action.type)) {
@@ -167,6 +171,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
          nextState.userGoogleAiApiKey === state.userGoogleAiApiKey &&
          nextState.aiProvider === state.aiProvider &&
          nextState.providerApiKeys === state.providerApiKeys &&
+         nextState.providerModels === state.providerModels && 
          nextState.sessionId === state.sessionId &&
          nextState.players === state.players &&
          nextState.isHost === state.isHost &&
@@ -186,7 +191,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
 
     switch (action.type) {
         case "RESET_GAME": {
-            const { savedAdventures, selectedThemeId, isDarkMode, userGoogleAiApiKey, aiProvider, providerApiKeys } = state;
+            const { savedAdventures, selectedThemeId, isDarkMode, userGoogleAiApiKey, aiProvider, providerApiKeys, providerModels } = state;
             logger.log("GameReducer: Resetting game to initial state, preserving session settings.");
             return {
                 ...initialState,
@@ -194,8 +199,9 @@ export function gameReducer(state: GameState, action: Action): GameState {
                 selectedThemeId,
                 isDarkMode,
                 userGoogleAiApiKey,
-                aiProvider,                // ← ADDED
-                providerApiKeys,            // ← ADDED
+                aiProvider,
+                providerApiKeys,
+                providerModels,
                 status: "MainMenu",
             };
         }

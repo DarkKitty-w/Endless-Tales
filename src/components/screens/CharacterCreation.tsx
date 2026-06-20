@@ -424,6 +424,8 @@ export function CharacterCreation() {
 
         if (advType === "Randomized") {
             dispatch({ type: "SET_GAME_STATUS", payload: "AdventureSetup" });
+        } else if (advType === "Coop") {
+            dispatch({ type: "SET_GAME_STATUS", payload: "CoopLobby" });
         } else {
             dispatch({ type: "START_GAMEPLAY" });
         }

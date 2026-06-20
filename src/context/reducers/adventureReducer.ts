@@ -26,6 +26,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                     userGoogleAiApiKey: state.userGoogleAiApiKey,
                     aiProvider: state.aiProvider,
                     providerApiKeys: state.providerApiKeys,
+                    providerModels: state.providerModels,
                 };
             }
             if (!state.adventureSettings.adventureType) {
@@ -38,6 +39,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                     userGoogleAiApiKey: state.userGoogleAiApiKey,
                     aiProvider: state.aiProvider,
                     providerApiKeys: state.providerApiKeys,
+                    providerModels: state.providerModels,
                 };
             }
             const adventureId = state.currentAdventureId || generateAdventureId();
@@ -226,6 +228,7 @@ export function adventureReducer(state: GameState, action: Action): GameState {
                 userGoogleAiApiKey: state.userGoogleAiApiKey,
                 aiProvider: state.aiProvider,
                 providerApiKeys: state.providerApiKeys,
+                    providerModels: state.providerModels,
                 status: statusToLoad,
                 character: adventureToLoad.character,
                 adventureSettings: adventureToLoad.adventureSettings,

@@ -45,6 +45,7 @@ export type Action =
   | { type: "RESPAWN_CHARACTER"; payload?: { narrationMessage?: string } }
   | { type: "SET_AI_PROVIDER"; payload: ProviderType }
   | { type: "SET_PROVIDER_API_KEY"; payload: { provider: ProviderType; apiKey: string | null } }
+  | { type: "SET_PROVIDER_MODEL"; payload: { provider: ProviderType; model: string | null } }
   // World map actions
   | { type: "SET_WORLD_MAP"; payload: WorldMap }
   | { type: "ADD_LOCATION"; payload: Location }
