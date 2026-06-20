@@ -51,6 +51,29 @@ const FALLBACK_DIFFICULTY_MAP: Record<string, { difficulty: DifficultyLevel; dic
     nightmare: { difficulty: "Very Hard", dice: "d20" },
 };
 
+function getAssessmentModeGuidance(input: AssessActionDifficultyInput): string {
+    const mode = input.gameStateContext?.adventureSettings?.type;
+    switch (mode) {
+        case 'Immersed':
+            return `**Mode Guidance: Immersed / Freeform Sandbox**
+- Be permissive and cinematic. Prefer Trivial, Easy, or Normal for plausible roleplay actions.
+- Reserve Impossible only for actions that are truly impossible, directly contradict established facts, or break core universe logic.
+- If a risky action is dramatic but plausible, assess it as Hard or Very Hard rather than Impossible.
+- Suggested dice should often be None for dialogue, exploration, and character-driven moments.`;
+        case 'Custom':
+            return `**Mode Guidance: Custom / Configured RPG**
+- Enforce RPG logic while respecting the player's configured world, tone, magic, technology, and focus settings.
+- Use higher difficulty when the action conflicts with established world rules or current resources.
+- Reward clever plans that use available skills, items, allies, reputation, or environment.`;
+        case 'Randomized':
+        default:
+            return `**Mode Guidance: Randomized / Rule-Enforced RPG**
+- Enforce RPG mechanics, risk, resources, stats, inventory, and skill limits.
+- Use dice for uncertain, risky, combat, exploration, or resource-impacting actions.
+- Reward clever play but do not let the player bypass danger or earn major gains for free.`;
+    }
+}
+
 export async function assessActionDifficulty(input: AssessActionDifficultyInput): Promise<AssessActionDifficultyOutput> {
   // OBS-6: Set requestId and traceId from input if provided
   if (input.requestId) {
@@ -71,12 +94,15 @@ export async function assessActionDifficulty(input: AssessActionDifficultyInput)
   const stateSummary = input.gameStateContext
       ? formatGameStateContextForPrompt(input.gameStateContext)
       : input.gameStateSummary;
+  const modeGuidance = getAssessmentModeGuidance(input);
 
   const prompt = `
 You are an expert Game Master AI for the text adventure "Endless Tales". Your task is to assess the difficulty of a player's intended action.
 
 **Overall Game Difficulty:** ${input.gameDifficulty} (Adjust baseline difficulty: Harder settings make actions generally tougher).
 **Current Turn:** ${input.turnCount}
+
+${modeGuidance}
 
 **Factors to Consider:**
 1. **Player Action:** ${input.playerAction}
@@ -104,6 +130,8 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           contents: prompt,
           config: { responseMimeType: "application/json" },
           signal: input.signal,
+          requestId: input.requestId,
+          traceId: input.traceId,
       });
 
       const text = response.text;

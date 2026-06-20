@@ -92,6 +92,21 @@ function getSignalWithTimeout(signal?: AbortSignal): AbortSignal {
   return timeoutSignal;
 }
 
+async function readProxyError(response: Response): Promise<{ error: string; requestId?: string; traceId?: string }> {
+  const text = await response.text();
+  if (!text) return { error: `AI proxy request failed with status ${response.status}` };
+  try {
+    const parsed = JSON.parse(text);
+    return {
+      error: parsed.error || `AI proxy request failed with status ${response.status}`,
+      requestId: parsed.requestId,
+      traceId: parsed.traceId,
+    };
+  } catch {
+    return { error: text.substring(0, 500) };
+  }
+}
+
 // ✅ Added 'openrouter'
 export type ProviderType = 'gemini' | 'openai' | 'claude' | 'deepseek' | 'webllm' | 'openrouter';
 
@@ -174,6 +189,7 @@ class GeminiProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: enhancedSystemMessage,
         config,
+        apiKey: this.getApiKey(),
         requestId, // OBS-6 Fix: Pass requestId for correlation
         traceId, // OBS-7 Fix: Pass traceId for distributed tracing
       }),
@@ -181,7 +197,7 @@ class GeminiProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await readProxyError(response);
       // OBS-9 Fix: Include more context in error logs for reproducibility
       logger.error('AI request failed', 'ai-router', { 
         requestId, 
@@ -272,6 +288,7 @@ class GeminiProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: enhancedSystemMessage,
         config,
+        apiKey: this.getApiKey(),
         stream: true,
         requestId, // OBS-6 Fix: Pass requestId for correlation
         traceId, // OBS-7 Fix: Pass traceId for distributed tracing
@@ -280,7 +297,7 @@ class GeminiProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await readProxyError(response);
       // OBS-9 Fix: Include more context in error logs for reproducibility
       logger.error('AI streaming request failed', 'ai-router', { 
         requestId, 
@@ -442,6 +459,7 @@ class OpenAIProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
+        apiKey: this.getApiKey(),
         requestId,
         traceId,
       }),
@@ -449,7 +467,7 @@ class OpenAIProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await readProxyError(response);
       // OBS-9 Fix: Include more context in error logs for reproducibility
       logger.error('AI request failed', 'ai-router', { 
         requestId, 
@@ -531,6 +549,7 @@ class OpenAIProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
+        apiKey: this.getApiKey(),
         stream: true,
         requestId,
         traceId,
@@ -539,7 +558,7 @@ class OpenAIProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await readProxyError(response);
       // OBS-9 Fix: Include more context in error logs for reproducibility
       logger.error('AI streaming request failed', 'ai-router', { 
         requestId, 
@@ -689,6 +708,7 @@ class ClaudeProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
+        apiKey: this.getApiKey(),
         requestId,
         traceId,
       }),
@@ -696,7 +716,7 @@ class ClaudeProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await readProxyError(response);
       // OBS-9 Fix: Include more context in error logs for reproducibility
       logger.error('AI request failed', 'ai-router', { 
         requestId, 
@@ -778,6 +798,7 @@ class ClaudeProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
+        apiKey: this.getApiKey(),
         stream: true,
         requestId,
         traceId,
@@ -786,7 +807,7 @@ class ClaudeProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await readProxyError(response);
       // OBS-9 Fix: Include more context in error logs for reproducibility
       logger.error('AI streaming request failed', 'ai-router', { 
         requestId, 
@@ -938,6 +959,7 @@ class DeepSeekProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
+        apiKey: this.getApiKey(),
         requestId,
         traceId,
       }),
@@ -945,7 +967,7 @@ class DeepSeekProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await readProxyError(response);
       // OBS-9 Fix: Include more context in error logs for reproducibility
       logger.error('AI request failed', 'ai-router', { 
         requestId, 
@@ -1027,6 +1049,7 @@ class DeepSeekProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
+        apiKey: this.getApiKey(),
         stream: true,
         requestId,
         traceId,
@@ -1035,7 +1058,7 @@ class DeepSeekProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await readProxyError(response);
       // OBS-9 Fix: Include more context in error logs for reproducibility
       logger.error('AI streaming request failed', 'ai-router', { 
         requestId, 
@@ -1185,6 +1208,7 @@ class OpenRouterProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
+        apiKey: this.getApiKey(),
         requestId,
         traceId,
       }),
@@ -1192,7 +1216,7 @@ class OpenRouterProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await readProxyError(response);
       // OBS-9 Fix: Include more context in error logs for reproducibility
       logger.error('AI request failed', 'ai-router', { 
         requestId, 
@@ -1274,6 +1298,7 @@ class OpenRouterProvider implements AIProvider {
         contents: protectedContents.sanitized,
         systemMessage: PROMPT_INJECTION_DEFENSE,
         config,
+        apiKey: this.getApiKey(),
         stream: true,
         requestId,
         traceId,
@@ -1282,7 +1307,7 @@ class OpenRouterProvider implements AIProvider {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await readProxyError(response);
       // OBS-9 Fix: Include more context in error logs for reproducibility
       logger.error('AI streaming request failed', 'ai-router', { 
         requestId, 

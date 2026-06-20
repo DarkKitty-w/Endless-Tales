@@ -113,6 +113,7 @@ export function TradeDialog({
                                     return (
                                         <div key={itemId} className="flex items-center gap-2">
                                             <button
+                                                id={itemId}
                                                 type="button"
                                                 role="checkbox"
                                                 aria-checked={isSelected}
@@ -127,12 +128,16 @@ export function TradeDialog({
                                             >
                                                 {isSelected && <CheckCircle className="w-3 h-3" />}
                                             </button>
-                                            <span
+                                            <label
+                                                htmlFor={itemId}
                                                 className={`text-sm flex-1 cursor-pointer ${getQualityColor(item.quality)}`}
-                                                onClick={() => handleItemToggle(item.name)}
+                                                onClick={(event) => {
+                                                    event.preventDefault();
+                                                    handleItemToggle(item.name);
+                                                }}
                                             >
                                                 {item.name} {item.quality && item.quality !== "Common" ? `(${item.quality})` : ''}
-                                            </span>
+                                            </label>
                                         </div>
                                     );
                                 })}

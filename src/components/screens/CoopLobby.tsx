@@ -31,6 +31,7 @@ export function CoopLobby() {
     createSession,
     joinSession,
     applyGuestAnswer,
+    sendControlMessage,
     disconnect,
     isConnected,
     isHost,
@@ -51,6 +52,21 @@ export function CoopLobby() {
     },
     onControlMessage: (msg) => {
       logger.log('Control message received', 'coop-lobby', { msg });
+      if (msg.action === 'start-game') {
+        const turnOrder = Array.isArray(msg.data?.turnOrder) ? msg.data.turnOrder : [];
+        if (turnOrder.length > 0) {
+          dispatch({ type: "SET_TURN_ORDER", payload: turnOrder });
+        }
+        dispatch({ type: "SET_GAME_STATUS", payload: "CoopGameplay" });
+        toast({ title: "Game Starting!", description: "The host has started the adventure." });
+      }
+    },
+    onPeerConnected: (peer) => {
+      dispatch({ type: "PEER_CONNECTED", payload: { peerId: peer.peerId, name: peer.name, isHost: peer.isHost } });
+      toast({ title: "Player Connected", description: `${peer.name} connected.` });
+    },
+    onPeerDisconnected: (peerId) => {
+      dispatch({ type: "PEER_DISCONNECTED", payload: peerId });
     },
   });
 
@@ -72,7 +88,7 @@ export function CoopLobby() {
       setConnectionStep('host-waiting');
       dispatch({ type: "SET_IS_HOST", payload: true });
       dispatch({ type: "SET_SESSION_ID", payload: multiplayerState.peerId });
-      toast({ title: "Session Created!", description: "Share the QR code or code with your friends." });
+      toast({ title: "Session Created!", description: "Share the QR code or invitation code with your friend." });
     } catch (err: any) {
       setError(err.message || "Failed to create session.");
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -127,13 +143,23 @@ export function CoopLobby() {
   }, [toast]);
 
   const handleStartGame = useCallback(() => {
-    if (!isHost) return;
-    dispatch({ type: "SET_GAME_STATUS", payload: "CoopGameplay" });
-    // Host sets initial turn order
-    const turnOrder = [state.peerId || multiplayerState.peerId, ...state.players];
+    if (!isHost || !isConnected) return;
+    const hostPeerId = state.peerId || multiplayerState.peerId;
+    const connectedGuestIds = multiplayerState.peers
+      .filter(peer => peer.isConnected && !peer.isHost)
+      .map(peer => peer.peerId);
+
+    if (connectedGuestIds.length === 0) {
+      toast({ title: "No Guest Connected", description: "Wait for your friend to finish connecting before starting.", variant: "destructive" });
+      return;
+    }
+
+    const turnOrder = [hostPeerId, ...connectedGuestIds];
     dispatch({ type: "SET_TURN_ORDER", payload: turnOrder });
+    sendControlMessage('start-game', undefined, { turnOrder });
+    dispatch({ type: "SET_GAME_STATUS", payload: "CoopGameplay" });
     toast({ title: "Game Starting!", description: "The adventure begins now." });
-  }, [isHost, state.peerId, multiplayerState.peerId, state.players, dispatch, toast]);
+  }, [isHost, isConnected, state.peerId, multiplayerState.peerId, multiplayerState.peers, dispatch, toast, sendControlMessage]);
 
   const handleBackToMenu = useCallback(() => {
     disconnect();
@@ -154,8 +180,17 @@ export function CoopLobby() {
               You are connected as <span className="font-bold">{playerName}</span>.
               {isHost ? " You are the host." : " Waiting for host to start the game."}
             </p>
+            {multiplayerState.peers.length > 0 && (
+              <p className="text-sm text-muted-foreground mb-4">
+                Connected peer: {multiplayerState.peers.map(peer => peer.name).join(', ')}
+              </p>
+            )}
             {isHost && (
-              <Button onClick={handleStartGame} className="w-full bg-primary hover:bg-primary/90">
+              <Button
+                onClick={handleStartGame}
+                disabled={!isConnected || multiplayerState.peers.filter(peer => peer.isConnected && !peer.isHost).length === 0}
+                className="w-full bg-primary hover:bg-primary/90"
+              >
                 <Play className="mr-2 h-4 w-4" /> Start Game
               </Button>
             )}
@@ -187,6 +222,14 @@ export function CoopLobby() {
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
+
+          <Alert className="border-primary/30 bg-primary/5">
+            <Users className="h-4 w-4" />
+            <AlertTitle>Private small-party co-op</AlertTitle>
+            <AlertDescription>
+              Co-op uses manual peer-to-peer WebRTC codes with no matchmaking server. This screen is currently focused on a reliable host + one friend flow; the design target is a private small party of 4–6 players, not unlimited public sessions.
+            </AlertDescription>
+          </Alert>
 
           <div className="space-y-2">
             <Label htmlFor="player-name">Your Name</Label>

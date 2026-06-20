@@ -168,6 +168,7 @@ export function CraftingDialog({ isOpen, onOpenChange, inventory, onCraft }: Cra
                                                     isSelected ? "bg-accent/20" : "hover:bg-muted"
                                                 )}>
                                                     <button
+                                                        id={ingredientId}
                                                         type="button"
                                                         role="checkbox"
                                                         aria-checked={isSelected}

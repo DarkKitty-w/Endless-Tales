@@ -19,6 +19,27 @@ export function WorldMapDisplay() {
   const currentLocationId = worldMap.currentLocationId;
   const currentLocation = locations.find(loc => loc.id === currentLocationId);
 
+  if (locations.length === 0) {
+    return (
+      <CardboardCard className="mb-4 bg-card/90 backdrop-blur-sm">
+        <CardHeader className="pb-2 pt-4">
+          <CardTitle className="text-xl font-semibold flex items-center gap-2">
+            <HandDrawnMapIcon className="w-5 h-5" /> World Map
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pb-4">
+          <div className="rounded-md border border-dashed border-border bg-muted/20 p-4 text-center">
+            <Compass className="mx-auto mb-2 h-7 w-7 text-muted-foreground/60" />
+            <p className="text-sm font-medium text-muted-foreground">No map discovered yet</p>
+            <p className="mt-1 text-xs text-muted-foreground/80">
+              The narrator will reveal locations as you explore, travel, or ask about the world.
+            </p>
+          </div>
+        </CardContent>
+      </CardboardCard>
+    );
+  }
+
   // SVG viewBox dimensions (0-100 coordinate system)
   const viewBoxWidth = 100;
   const viewBoxHeight = 100;
@@ -234,9 +255,14 @@ export function WorldMapDisplay() {
           )}
 
           {!selectedLocation && (
-            <p className="text-xs text-muted-foreground italic text-center mt-2">
-              Click on a location to view details.
-            </p>
+            <div className="mt-2 space-y-1 text-center">
+              <p className="text-xs text-muted-foreground italic">
+                Click a discovered location to view details. Connected locations can be travelled to directly.
+              </p>
+              <p className="text-[11px] text-muted-foreground/80">
+                ? marks places you have heard of but not fully discovered yet.
+              </p>
+            </div>
           )}
         </CardContent>
       </CardboardCard>

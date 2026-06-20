@@ -241,7 +241,7 @@ export async function createOffer(
   peerId: string,
   name: string,
   onIceCandidate: (candidate: RTCIceCandidateInit) => void
-): Promise<{ peerConnection: RTCPeerConnection; encodedOffer: string }> {
+): Promise<{ peerConnection: RTCPeerConnection; encodedOffer: string; dataChannels: Record<string, RTCDataChannel> }> {
   const { pc, getBufferedCandidates, setDataChannel } = createPeerConnection(
     (candidate) => {
       onIceCandidate(candidate);
@@ -250,12 +250,17 @@ export async function createOffer(
   );
 
   try {
-    // Create data channels
+    // Create data channels. The host creates the channels, so the hook must attach
+    // handlers to these returned channel objects directly; ondatachannel only fires
+    // on the remote guest side.
     const controlChannel = pc.createDataChannel('control', { ordered: true });
-    pc.createDataChannel('game-actions', { ordered: true });
-    pc.createDataChannel('story-update', { ordered: true });
-    pc.createDataChannel('party-state', { ordered: true });
-    pc.createDataChannel('chat', { ordered: true });
+    const dataChannels: Record<string, RTCDataChannel> = {
+      control: controlChannel,
+      'game-actions': pc.createDataChannel('game-actions', { ordered: true }),
+      'story-update': pc.createDataChannel('story-update', { ordered: true }),
+      'party-state': pc.createDataChannel('party-state', { ordered: true }),
+      chat: pc.createDataChannel('chat', { ordered: true }),
+    };
     
     // Set up the control channel to send ICE candidates in real-time
     setDataChannel(controlChannel);
@@ -292,7 +297,7 @@ export async function createOffer(
     // Store the function to get any future buffered candidates (rare, but possible)
     (pc as any).__getBufferedCandidates = getBufferedCandidates;
     
-    return { peerConnection: pc, encodedOffer };
+    return { peerConnection: pc, encodedOffer, dataChannels };
   } catch (error) {
     // ERR-34 Fix: Log with full context
     logger.error("Host: createOffer failed", "webrtc-signalling", { 
@@ -317,7 +322,7 @@ export async function createAnswer(
   peerId: string,
   name: string,
   onIceCandidate: (candidate: RTCIceCandidateInit) => void
-): Promise<{ peerConnection: RTCPeerConnection; encodedAnswer: string }> {
+): Promise<{ peerConnection: RTCPeerConnection; encodedAnswer: string; remotePeerInfo: SignallingPackage['peerInfo'] }> {
   const { pc, getBufferedCandidates, setDataChannel } = createPeerConnection(
     (candidate) => {
       onIceCandidate(candidate);
@@ -391,7 +396,7 @@ export async function createAnswer(
     // Store the function to get any future buffered candidates (rare, but possible)
     (pc as any).__getBufferedCandidates = getBufferedCandidates;
     
-    return { peerConnection: pc, encodedAnswer };
+    return { peerConnection: pc, encodedAnswer, remotePeerInfo: pkg.peerInfo };
   } catch (error) {
     // ERR-34 Fix: Log with full context
     logger.error("Guest: createAnswer failed", "webrtc-signalling", { 
@@ -414,7 +419,7 @@ export async function applyAnswer(
   peerConnection: RTCPeerConnection,
   encodedAnswer: string,
   peerId?: string
-): Promise<void> {
+): Promise<SignallingPackage['peerInfo']> {
   try {
     const pkg = decodeSignallingData(encodedAnswer);
     if (pkg.type !== 'answer') {
@@ -445,6 +450,8 @@ export async function applyAnswer(
         // Continue - non-fatal for initial setup
       }
     }
+
+    return pkg.peerInfo;
   } catch (error) {
     // ERR-34 Fix: Log with full context
     logger.error("Host: applyAnswer failed", "webrtc-signalling", { 

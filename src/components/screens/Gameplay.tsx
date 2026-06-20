@@ -20,7 +20,6 @@ import { summarizeAdventure } from "../../ai/flows/summarize-adventure";
 import { assessActionDifficulty, type AssessActionDifficultyInput } from "../../ai/flows/assess-action-difficulty";
 import { generateSkillTree } from "../../ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "../../ai/flows/attempt-crafting";
-import type { ActionInputRef } from "../../components/gameplay/ActionInput";
 import { cn } from "../../lib/utils";
 import { Loader2 } from "lucide-react";
 import { useIsMobile } from "../../hooks/use-mobile";
@@ -67,6 +66,41 @@ const InteractionTypeButton = memo(function InteractionTypeButton({
 const INITIAL_ACTION_STRING = "Begin the adventure by looking around.";
 
 const USE_COMBINED_AI_CALL = true;
+
+function getUserFriendlyAiError(raw: unknown, provider?: string): string {
+    const message = raw instanceof Error ? raw.message : String(raw || "Unknown AI error");
+    const lower = message.toLowerCase();
+    const providerLabels: Record<string, string> = {
+        gemini: 'Gemini',
+        openai: 'OpenAI',
+        claude: 'Claude',
+        deepseek: 'DeepSeek',
+        openrouter: 'OpenRouter',
+        webllm: 'WebLLM',
+    };
+    const providerLabel = provider ? (providerLabels[provider] || provider) : "AI provider";
+
+    if (lower.includes("api key missing") || lower.includes("not configured") || lower.includes("no api key")) {
+        return `${providerLabel} needs your API key. Open Settings, select ${providerLabel}, save your key, then retry.`;
+    }
+    if (lower.includes("unauthorized") || lower.includes("invalid api key") || lower.includes("permission") || lower.includes("401")) {
+        return `${providerLabel} rejected the API key. Check that the saved key is correct and still active, then retry.`;
+    }
+    if (lower.includes("rate limit") || lower.includes("quota") || lower.includes("429")) {
+        return `${providerLabel} is rate limited or out of quota. Wait a moment, check your provider quota, or switch providers.`;
+    }
+    if (lower.includes("timeout") || lower.includes("timed out") || lower.includes("504")) {
+        return `${providerLabel} took too long to respond. Retry, or switch to another provider if it keeps happening.`;
+    }
+    if (lower.includes("network") || lower.includes("fetch") || lower.includes("connection") || lower.includes("503")) {
+        return `Network connection to ${providerLabel} failed. Check your internet connection and retry.`;
+    }
+    if (lower.includes("json") || lower.includes("parse") || lower.includes("validation")) {
+        return `${providerLabel} returned a response the game could not understand. Retry the action or switch providers.`;
+    }
+
+    return `${providerLabel} failed to generate a usable response. Retry the action or switch providers if it continues.`;
+}
 
 type LoadingPhase =
   | { type: 'idle' }
@@ -133,7 +167,7 @@ export function Gameplay() {
 
     // Compute anyLoading early so it can be used in callbacks and effects
     const anyLoading = isLoading || isInitialLoading || isEnding || isSaving || 
-                       isAssessingDifficulty || isRollingDice || isCraftingLoading || localIsGeneratingSkillTree;
+                       isAssessingDifficulty || isRollingDice || isCraftingLoading || localIsGeneratingSkillTree || contextIsGeneratingSkillTree;
      const initialSetupAttemptedRef = useRef<Record<string, boolean>>({});
     const actionInputRef = useRef<ActionInputRef>(null);
     const isMobile = useIsMobile();
@@ -146,6 +180,8 @@ export function Gameplay() {
     const broadcastStoryUpdateRef = useRef<((entry: any, newTurn: number, updatedGameState: string) => boolean) | null>(null);
     const broadcastPartyStateRef = useRef<((partyState: any, turnOrder: string[], currentTurnIndex: number) => boolean) | null>(null);
     const handlePlayerActionRef = useRef<((action: string, isInitialAction?: boolean) => void) | null>(null);
+    const handleSaveGameRef = useRef<(() => void) | null>(null);
+    const actionInFlightRef = useRef(false);
     
     // Keep gameStateRef updated
     useEffect(() => {
@@ -186,7 +222,7 @@ export function Gameplay() {
             if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                 e.preventDefault();
                 if (!anyLoading) {
-                    handleSaveGame();
+                    handleSaveGameRef.current?.();
                 }
                 return;
             }
@@ -507,13 +543,13 @@ export function Gameplay() {
     const isGeneratingSkillTree = localIsGeneratingSkillTree || contextIsGeneratingSkillTree;
     const loadingPhase = useMemo<LoadingPhase>(() => {
         if (isInitialLoading) return { type: 'initial-loading' };
-        if (isLoading) return { type: 'narrating' };
-        if (isAssessingDifficulty) return { type: 'assessing' };
-        if (isRollingDice) return { type: 'rolling-dice' };
-        if (isGeneratingSkillTree) return { type: 'generating-skill-tree' };
         if (isEnding) return { type: 'ending' };
         if (isSaving) return { type: 'saving' };
         if (isCraftingLoading) return { type: 'crafting' };
+        if (isGeneratingSkillTree) return { type: 'generating-skill-tree' };
+        if (isRollingDice) return { type: 'rolling-dice' };
+        if (isAssessingDifficulty) return { type: 'assessing' };
+        if (isLoading) return { type: 'narrating' };
         return { type: 'idle' };
     }, [isInitialLoading, isLoading, isAssessingDifficulty, isRollingDice, isGeneratingSkillTree, isEnding, isSaving, isCraftingLoading]);
 
@@ -541,7 +577,10 @@ export function Gameplay() {
                     
                     // ERR-8 Fix: Show toast when fallback is used
                     if (summaryResult.usedFallback) {
-                        toast({ title: "Using Default Summary", description: "AI summary failed. Using basic summary.", variant: "destructive" });
+                        const friendlyMessage = getUserFriendlyAiError(summaryResult.rawResponse, state.aiProvider);
+                        setError(friendlyMessage);
+                        setErrorRawResponse(summaryResult.rawResponse || null);
+                        toast({ title: "Summary AI Problem", description: friendlyMessage, variant: "destructive", duration: 7000 });
                     } else {
                         toast({ title: "Summary Generated", description: "View your adventure outcome." });
                     }
@@ -558,7 +597,7 @@ export function Gameplay() {
         }
         dispatch({ type: "END_ADVENTURE", payload: { summary, finalNarration: finalNarrationEntry } });
         setIsEnding(false);
-    }, [loadingPhase, storyLog, character, dispatch, toast, createAbortSignal, activeApiKey]);
+    }, [loadingPhase, storyLog, character, dispatch, toast, createAbortSignal, activeApiKey, state.aiProvider]);
 
     const handlePlayerAction = useCallback(async (action: string, isInitialAction = false) => {
         // OBS-6 Fix: Generate requestId and traceId for correlation when user takes action
@@ -577,6 +616,15 @@ export function Gameplay() {
             return;
         }
 
+        if (!isInitialAction && (actionInFlightRef.current || loadingPhase.type !== 'idle')) {
+            toast({
+                title: "Narrator is busy",
+                description: "Please wait for the current action to finish before sending another.",
+                variant: "default",
+            });
+            return;
+        }
+
         // Multiplayer turn check: if connected and not my turn, ignore action
         if (isConnected && !isMyTurn && !isInitialAction) {
             toast({ title: "Not Your Turn", description: "Wait for your turn in multiplayer mode.", variant: "destructive" });
@@ -585,12 +633,14 @@ export function Gameplay() {
 
         // If guest in multiplayer, send action to host instead of processing locally
         if (isConnected && !isMultiplayerHost && !isInitialAction) {
+            actionInFlightRef.current = true;
             const sent = sendGameAction(action, turnCount, false);
             if (sent) {
                 toast({ title: "Action Sent", description: "Waiting for host to process your action..." });
                 setIsLoading(true);
                 setPendingGuestAction(action); // Store pending action for optimistic UI
             } else {
+                actionInFlightRef.current = false;
                 toast({ title: "Send Failed", description: "Could not send action to host.", variant: "destructive" });
             }
             return;
@@ -598,6 +648,7 @@ export function Gameplay() {
         
         // Store ref for multiplayer handler
         handlePlayerActionRef.current = handlePlayerAction;
+        actionInFlightRef.current = true;
         
         setLastPlayerAction(action);
         if (isInitialAction) {
@@ -623,7 +674,7 @@ export function Gameplay() {
 
             if (USE_COMBINED_AI_CALL) {
                 let capabilitiesSummary: string | undefined;
-                const needsAssessment = !isInitialAction && !isPassiveAction;
+                const needsAssessment = adventureSettings.adventureType !== "Immersed" && !isInitialAction && !isPassiveAction;
                 
                 if (needsAssessment) {
                     setIsAssessingDifficulty(true);
@@ -722,7 +773,7 @@ export function Gameplay() {
                         skillTreeStage: character.skillTreeStage, learnedSkills: character.learnedSkills.map(s => s.name),
                         aiGeneratedDescription: character.aiGeneratedDescription,
                     },
-                    playerChoice: action,
+                    playerChoice: actionWithDice,
                     gameState: currentGameStateString,
                     gameStateContext: gameStateContext ?? undefined,
                     previousNarration: storyLog.length > 0 ? storyLog[storyLog.length - 1].narration : undefined,
@@ -765,12 +816,17 @@ export function Gameplay() {
                 if (narrationResult && narrationResult.narration && narrationResult.updatedGameState) {
                     // ERR-14: Notify player when AI falls back to defaults
                     if (narrationResult.usedFallback) {
+                        const friendlyMessage = getUserFriendlyAiError(narrationResult.rawResponse, state.aiProvider);
+                        setError(friendlyMessage);
+                        setErrorRawResponse(narrationResult.rawResponse || null);
                         toast({ 
-                            title: "AI Fallback Used", 
-                            description: "AI generation failed. Using default narration. Use the retry button to try again.", 
-                            variant: "default",
-                            duration: 5000
+                            title: "AI Response Problem", 
+                            description: friendlyMessage,
+                            variant: "destructive",
+                            duration: 7000
                         });
+                    } else {
+                        setErrorRawResponse(null);
                     }
                     
                     const gainedSkillTyped = narrationResult.gainedSkill ? {
@@ -924,7 +980,11 @@ export function Gameplay() {
                     errorDescription = "Please check your internet connection and try again.";
                     setError("Network error: Please check your connection and retry.");
                 } else {
-                    setError(`An unexpected error occurred while processing your action: ${err.message}`);
+                    const friendlyMessage = getUserFriendlyAiError(err, state.aiProvider);
+                    errorTitle = "AI Error";
+                    errorDescription = friendlyMessage;
+                    setError(friendlyMessage);
+                    setErrorRawResponse(err?.message || String(err));
                 }
                 
                 setBranchingChoices(GENERIC_BRANCHING_CHOICES);
@@ -935,6 +995,7 @@ export function Gameplay() {
                 });
             }
         } finally {
+            actionInFlightRef.current = false;
             if (isInitialAction) {
                 setIsInitialLoading(false);
             }
@@ -942,7 +1003,7 @@ export function Gameplay() {
             if (isAssessingDifficulty) setIsAssessingDifficulty(false);
             if (isRollingDice) setIsRollingDice(false);
         }
-    }, [character, inventory, currentGameStateString, storyLog, adventureSettings, turnCount, dispatch, toast, handleEndAdventure, state.character, gameStateContext, state.worldMap.currentLocationId, createAbortSignal, activeApiKey]);
+    }, [character, inventory, currentGameStateString, storyLog, adventureSettings, turnCount, dispatch, toast, handleEndAdventure, state.character, state.aiProvider, gameStateContext, state.worldMap.currentLocationId, createAbortSignal, activeApiKey, loadingPhase]);
 
     // Store handlePlayerAction in ref after it's defined
     useEffect(() => {
@@ -996,6 +1057,7 @@ export function Gameplay() {
             const latestEntry = state.storyLog[state.storyLog.length - 1];
             // Check if this is a response to our pending action
             // (In a real implementation, you'd want to match turn numbers or action text)
+            actionInFlightRef.current = false;
             setPendingGuestAction(null);
             setIsLoading(false);
         }
@@ -1079,10 +1141,17 @@ export function Gameplay() {
             const skillTreeResult = await generateSkillTree({ characterClass: charClass, userApiKey: activeApiKey, signal });
             if (skillTreeResult && skillTreeResult.stages.length === 5) { 
                 dispatch({ type: "SET_SKILL_TREE", payload: { class: charClass, skillTree: skillTreeResult } });
-                toast({ title: "Skill Tree Generated!", description: `The path of the ${charClass} is set.` });
+                if (skillTreeResult.usedFallback) {
+                    const friendlyMessage = getUserFriendlyAiError(skillTreeResult.rawResponse, state.aiProvider);
+                    setError(friendlyMessage);
+                    setErrorRawResponse(skillTreeResult.rawResponse || null);
+                    toast({ title: "Skill Tree Fallback", description: friendlyMessage, variant: "destructive", duration: 7000 });
+                } else {
+                    toast({ title: "Skill Tree Generated!", description: `The path of the ${charClass} is set.` });
+                }
                 return skillTreeResult;
             } else {
-                toast({ title: "Skill Tree Error", description: "Using default progression (AI fallback used).", variant: "default" });
+                toast({ title: "Skill Tree Error", description: "Could not generate a valid skill tree. Check your AI provider settings and retry.", variant: "destructive" });
                 return skillTreeResult;
             }
         } catch (err: any) {
@@ -1097,7 +1166,7 @@ export function Gameplay() {
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: false });
             setLocalIsGeneratingSkillTree(false);
         }
-    }, [dispatch, toast, adventureSettings.adventureType, character, contextIsGeneratingSkillTree, createAbortSignal, activeApiKey]);
+    }, [dispatch, toast, adventureSettings.adventureType, character, contextIsGeneratingSkillTree, createAbortSignal, activeApiKey, state.aiProvider]);
 
     useEffect(() => {
         const performInitialSetup = async () => {
@@ -1134,7 +1203,7 @@ export function Gameplay() {
     }, [character, currentAdventureId, adventureSettings.adventureType, triggerSkillTreeGeneration, handlePlayerAction, storyLog.length, state.character, isInitialLoading]);
 
     const handleSaveGame = useCallback(async () => {
-        if (loadingPhase.type !== 'idle' || !currentAdventureId || !character) return;
+        if (loadingPhase.type !== 'idle' || !currentAdventureId || !character || isSaving) return;
         setIsSaving(true);
         toast({ title: "Saving Progress..." });
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -1146,7 +1215,11 @@ export function Gameplay() {
         } finally {
             setIsSaving(false);
         }
-    }, [loadingPhase, currentAdventureId, character, dispatch, toast]);
+    }, [loadingPhase, currentAdventureId, character, dispatch, toast, isSaving]);
+
+    useEffect(() => {
+        handleSaveGameRef.current = handleSaveGame;
+    }, [handleSaveGame]);
 
     const handleCrafting = useCallback(async (goal: string, ingredients: string[]) => {
         if (!character || isCraftingLoading) return;
@@ -1161,7 +1234,14 @@ export function Gameplay() {
         try {
             const signal = createAbortSignal();
             const result: AttemptCraftingOutput = await attemptCrafting({ ...craftingInput, signal, userApiKey: activeApiKey });
-            toast({ title: result.success ? "Crafting Successful!" : "Crafting Failed!", description: result.message, variant: result.success ? "default" : "destructive", duration: 5000 });
+            if (result.usedFallback) {
+                const friendlyMessage = getUserFriendlyAiError(result.rawResponse, state.aiProvider);
+                setError(friendlyMessage);
+                setErrorRawResponse(result.rawResponse || null);
+                toast({ title: "Crafting AI Problem", description: friendlyMessage, variant: "destructive", duration: 7000 });
+            } else {
+                toast({ title: result.success ? "Crafting Successful!" : "Crafting Failed!", description: result.message, variant: result.success ? "default" : "destructive", duration: 5000 });
+            }
             let narrationText = `You attempted to craft ${goal} using ${ingredients.join(', ')}. ${result.message}`;
             if (result.success && result.craftedItem) {
                 narrationText = `You successfully crafted a ${result.craftedItem.quality ? result.craftedItem.quality + ' ' : ''}${result.craftedItem.name}! ${result.message}`;
@@ -1181,7 +1261,7 @@ export function Gameplay() {
         } finally {
             setIsCraftingLoading(false);
         }
-    }, [character, inventory, dispatch, toast, currentGameStateString, isCraftingLoading, createAbortSignal, activeApiKey]);
+    }, [character, inventory, dispatch, toast, currentGameStateString, isCraftingLoading, createAbortSignal, activeApiKey, state.aiProvider]);
 
     const handleConfirmClassChange = useCallback(async (newClass: string) => {
         if (!character || !newClass || isGeneratingSkillTree || adventureSettings.adventureType === "Immersed") return;
@@ -1229,10 +1309,10 @@ export function Gameplay() {
     }, [loadingPhase, character, toast]);
 
     const handleManualClassChange = useCallback(() => {
-        if (!character || adventureSettings.adventureType === "Immersed") return;
+        if (loadingPhase.type !== 'idle' || !character || adventureSettings.adventureType === "Immersed") return;
         const suggested = character.class === 'Warrior' ? 'Mage' : 'Warrior';
         setPendingClassChange(suggested);
-    }, [character, adventureSettings.adventureType]);
+    }, [loadingPhase, character, adventureSettings.adventureType]);
 
     const handleUseSkill = useCallback((skillName: string) => {
         actionInputRef.current?.setValue(`Use skill: ${skillName}`);

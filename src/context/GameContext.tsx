@@ -25,6 +25,24 @@ import { atomicLocalStorageWrite, safeLocalStorageRead, isLocalStorageQuotaLow, 
 // Storage keys
 const AI_PROVIDER_KEY = "endlessTales_aiProvider";
 const PROVIDER_API_KEYS_KEY = "endlessTales_providerApiKeys";
+const SUPPORTED_AI_PROVIDERS: ProviderType[] = ['gemini', 'openai', 'claude', 'deepseek', 'openrouter', 'webllm'];
+
+function isProviderType(value: unknown): value is ProviderType {
+  return typeof value === 'string' && SUPPORTED_AI_PROVIDERS.includes(value as ProviderType);
+}
+
+function sanitizeProviderApiKeys(value: unknown): Partial<Record<ProviderType, string>> {
+  if (!value || typeof value !== 'object') return {};
+  const source = value as Record<string, unknown>;
+  const sanitized: Partial<Record<ProviderType, string>> = {};
+  for (const provider of SUPPORTED_AI_PROVIDERS) {
+    const key = source[provider];
+    if (typeof key === 'string' && key.trim()) {
+      sanitized[provider] = key.trim();
+    }
+  }
+  return sanitized;
+}
 
 // Split contexts by domain to prevent unnecessary re-renders
 const AdventureContext = createContext<{
@@ -263,9 +281,25 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
       // Handle AI provider changes
       if (event.key === AI_PROVIDER_KEY) {
         logger.log('AI provider changed in another tab');
-        const savedProvider = localStorage.getItem(AI_PROVIDER_KEY) as ProviderType | null;
-        if (savedProvider && ['gemini', 'openai', 'claude', 'deepseek'].includes(savedProvider)) {
+        const savedProvider = localStorage.getItem(AI_PROVIDER_KEY);
+        if (isProviderType(savedProvider)) {
           dispatch({ type: 'SET_AI_PROVIDER', payload: savedProvider });
+        }
+      }
+
+      if (event.key === PROVIDER_API_KEYS_KEY) {
+        logger.log('AI provider keys changed in another tab');
+        try {
+          const parsedKeys = event.newValue ? JSON.parse(event.newValue) : {};
+          const sanitizedKeys = sanitizeProviderApiKeys(parsedKeys);
+          for (const provider of SUPPORTED_AI_PROVIDERS) {
+            dispatch({
+              type: 'SET_PROVIDER_API_KEY',
+              payload: { provider, apiKey: sanitizedKeys[provider] ?? null },
+            });
+          }
+        } catch (error) {
+          logger.error('Failed to parse provider API keys from storage event', 'game-context', { error: String(error) });
         }
       }
     };
@@ -394,12 +428,30 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     const initialDarkMode = savedMode === 'dark' || (savedMode === null && prefersDark);
 
     // Load AI provider preference
-    const savedProvider = localStorage.getItem(AI_PROVIDER_KEY) as ProviderType | null;
-    if (savedProvider && ['gemini', 'openai', 'claude', 'deepseek'].includes(savedProvider)) {
+    const savedProvider = localStorage.getItem(AI_PROVIDER_KEY);
+    if (isProviderType(savedProvider)) {
       dispatch({ type: 'SET_AI_PROVIDER', payload: savedProvider });
     }
 
-    // Note: API keys are now server-side only for security (no client-side storage)
+    // BYOK: load provider-specific API keys from local browser storage.
+    // These are never logged and are only sent to the same-origin proxy for the selected request.
+    try {
+      const savedProviderKeys = safeLocalStorageRead(PROVIDER_API_KEYS_KEY);
+      const sanitizedKeys = sanitizeProviderApiKeys(savedProviderKeys);
+      for (const provider of SUPPORTED_AI_PROVIDERS) {
+        if (sanitizedKeys[provider]) {
+          dispatch({
+            type: 'SET_PROVIDER_API_KEY',
+            payload: { provider, apiKey: sanitizedKeys[provider] ?? null },
+          });
+        }
+      }
+      if (sanitizedKeys.gemini) {
+        dispatch({ type: 'SET_USER_API_KEY', payload: sanitizedKeys.gemini });
+      }
+    } catch (error) {
+      logger.error('Failed to load provider API keys', 'game-context', { error: String(error) });
+    }
 
     dispatch({ type: 'SET_THEME_ID', payload: savedThemeId });
     dispatch({ type: 'SET_DARK_MODE', payload: initialDarkMode });
@@ -415,7 +467,13 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     };
   }, []); // Empty deps – runs once
 
-  // Note: AI router no longer needs client-side configuration (server-side keys only)
+  // BYOK: keep the AI router synchronized with the selected provider and local keys.
+  useEffect(() => {
+    configureAIRouter({
+      defaultProvider: state.aiProvider,
+      apiKeys: state.providerApiKeys,
+    });
+  }, [state.aiProvider, state.providerApiKeys]);
 
   // Consolidated persistence hook with debouncing (storage writes only)
   useEffect(() => {
@@ -509,10 +567,9 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
           }
         }
 
-        // AI provider preference (localStorage)
+        // AI provider preference and BYOK provider keys (localStorage)
         localStorage.setItem(AI_PROVIDER_KEY, state.aiProvider);
-
-        // Note: API keys are now server-side only (no client-side storage)
+        localStorage.setItem(PROVIDER_API_KEYS_KEY, JSON.stringify(sanitizeProviderApiKeys(state.providerApiKeys)));
       } catch (storageError) {
         // ERR-22/ERR-24 Fix: Handle localStorage errors
         logger.error('Failed to save to localStorage', 'game-context', { error: String(storageError) });
@@ -547,7 +604,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
         });
       }
 
-      // REMOVED: configureAIRouter call – now handled by immediate effect above
+      // AI router synchronization is handled by the dedicated BYOK effect above.
 
       debounceTimeoutRef.current = null;
     }, 300);
@@ -564,7 +621,8 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     state.isDarkMode,
     state.userGoogleAiApiKey,
     state.savedAdventures,
-    // state.aiProvider and state.providerApiKeys are no longer in this dependency array
+    state.aiProvider,
+    state.providerApiKeys,
     applyTheme,
   ]);
 

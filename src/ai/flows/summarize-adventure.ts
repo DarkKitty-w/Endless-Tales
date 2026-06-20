@@ -90,7 +90,7 @@ export async function summarizeAdventure(input: SummarizeAdventureInput): Promis
         summary: "Summary generation failed.",
         // ERR-8/ERR-11: Indicate fallback is being used
         usedFallback: true,
-        rawResponse: error.message?.includes('Raw response:') ? error.message.split('Raw response: ')[1] : undefined,
+        rawResponse: error.message?.includes('Raw response:') ? error.message.split('Raw response: ')[1] : (error.message || 'Unknown error'),
       };
   }
 }

@@ -137,12 +137,15 @@ export function settingsReducer(state: SettingsState, action: Action): SettingsS
 
         case "SET_PROVIDER_API_KEY": {
             const { provider, apiKey } = action.payload;
+            const nextKeys = { ...state.providerApiKeys };
+            if (apiKey && apiKey.trim()) {
+                nextKeys[provider] = apiKey.trim();
+            } else {
+                delete nextKeys[provider];
+            }
             return {
                 ...state,
-                providerApiKeys: {
-                    ...state.providerApiKeys,
-                    [provider]: apiKey,
-                },
+                providerApiKeys: nextKeys,
             };
         }
 

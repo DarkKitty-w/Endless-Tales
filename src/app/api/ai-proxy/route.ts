@@ -94,7 +94,7 @@ function validateModelConfig(config: any): ValidatedConfig | null {
 export async function POST(request: NextRequest) {
   // Generate or extract request ID and trace ID for correlation
   const body = await request.json();
-  const { provider, model, contents, config: rawConfig, stream, systemMessage, requestId: clientRequestId, traceId: clientTraceId } = body;
+  const { provider, model, contents, config: rawConfig, stream, systemMessage, requestId: clientRequestId, traceId: clientTraceId, apiKey: clientApiKey } = body;
   
   // Use client-provided requestId or generate a new one
   const requestId = clientRequestId || generateRequestId();
@@ -147,8 +147,9 @@ export async function POST(request: NextRequest) {
     // SEC-11 Fix: Validate and sanitize model parameters
     const config = validateModelConfig(rawConfig);
 
-    // Only use server-side API keys (security fix: no client-side API keys)
-    const apiKey = getServerApiKey(provider) as string;
+    // BYOK model: cloud provider keys are supplied by the player at request time.
+    // The key is used only for this proxied request and must never be logged.
+    const apiKey = typeof clientApiKey === 'string' ? clientApiKey.trim() : '';
     
     if (!apiKey && provider !== 'webllm') {
       const providerLabels: Record<string, string> = {
@@ -160,7 +161,7 @@ export async function POST(request: NextRequest) {
       };
       const providerName = providerLabels[provider] || provider;
       return NextResponse.json(
-        { error: `${providerName} API key not configured. Please contact the administrator.` },
+        { error: `${providerName} API key missing. Enter your own ${providerName} API key in Settings to use this provider.` },
         { status: 401 }
       );
     }
@@ -228,17 +229,6 @@ export async function POST(request: NextRequest) {
       { error: 'AI request failed. Please try again later.', requestId, traceId },
       { status: 500 }
     );
-  }
-}
-
-function getServerApiKey(provider: string): string | undefined {
-  switch (provider) {
-    case 'gemini': return process.env.GEMINI_API_KEY;
-    case 'openai': return process.env.OPENAI_API_KEY;
-    case 'claude': return process.env.CLAUDE_API_KEY;
-    case 'deepseek': return process.env.DEEPSEEK_API_KEY;
-    case 'openrouter': return process.env.OPENROUTER_API_KEY;
-    default: return undefined;
   }
 }
 

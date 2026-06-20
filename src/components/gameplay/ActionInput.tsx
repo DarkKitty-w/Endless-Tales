@@ -1,7 +1,7 @@
 // src/components/gameplay/ActionInput.tsx
 "use client";
 
-import React, { useState, forwardRef, useImperativeHandle, useRef } from "react";
+import React, { useState, forwardRef, useImperativeHandle, useRef, useCallback } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../components/ui/tooltip";
@@ -32,7 +32,7 @@ const QUICK_ACTIONS = [
 const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
   ({ onSubmit, onSuggest, onCraft, disabled, isWaitingForHost = false }, ref) => {
     const [playerInput, setPlayerInput] = useState("");
-    const submittingRef = useRef(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     useImperativeHandle(ref, () => ({
@@ -41,31 +41,32 @@ const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
       },
     }));
 
+    const temporarilyLockSubmission = useCallback(() => {
+      setIsSubmitting(true);
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+      timeoutRef.current = setTimeout(() => {
+        setIsSubmitting(false);
+        timeoutRef.current = null;
+      }, 750);
+    }, []);
+
+    const submitAction = useCallback((rawAction: string, clearInput = false) => {
+      const trimmedInput = rawAction.trim();
+      if (!trimmedInput || disabled || isSubmitting) return;
+
+      const sanitized = sanitizePlayerAction(trimmedInput);
+      if (!sanitized) return;
+
+      temporarilyLockSubmission();
+      onSubmit(sanitized);
+      if (clearInput) setPlayerInput("");
+    }, [disabled, isSubmitting, onSubmit, temporarilyLockSubmission]);
+
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
-      const trimmedInput = playerInput.trim();
-      
-      if (trimmedInput && !disabled && !submittingRef.current) {
-        const sanitized = sanitizePlayerAction(trimmedInput);
-        if (sanitized) {
-          // Set submission lock
-          submittingRef.current = true;
-          
-          // Clear any existing timeout
-          if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-          }
-          
-          // Release lock after 500ms
-          timeoutRef.current = setTimeout(() => {
-            submittingRef.current = false;
-            timeoutRef.current = null;
-          }, 500);
-          
-          onSubmit(sanitized);
-        }
-        setPlayerInput("");
-      }
+      submitAction(playerInput, true);
     };
 
     const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -81,14 +82,14 @@ const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
       // Ctrl+Space to suggest action
       if ((e.ctrlKey || e.metaKey) && e.code === 'Space') {
         e.preventDefault();
-        if (!disabled) {
+        if (!disabled && !isSubmitting) {
           onSuggest();
         }
       }
       // Ctrl+H to open crafting
       if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
         e.preventDefault();
-        if (!disabled) {
+        if (!disabled && !isSubmitting) {
           onCraft();
         }
       }
@@ -103,12 +104,13 @@ const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
       };
     }, []);
 
-    const isSubmitDisabled = disabled || !playerInput.trim() || submittingRef.current;
+    const isSubmitDisabled = disabled || !playerInput.trim() || isSubmitting;
 
     return (
       <div className="flex-none">
         <form onSubmit={handleSubmit} className="flex gap-2 items-center">
           <Input
+            id="player-action-input"
             type="text"
             value={playerInput}
             onChange={(e) => setPlayerInput(e.target.value)}
@@ -116,6 +118,7 @@ const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
             placeholder="What do you do? (e.g., look around, use sword, talk to guard)"
             className="flex-1 text-sm h-10"
             aria-label="Enter your action or command"
+            aria-describedby="action-input-help"
             disabled={disabled}
             maxLength={500}
           />
@@ -147,7 +150,7 @@ const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
                 onClick={onSuggest}
                 aria-label="Suggest Action"
                 className="h-10 w-10"
-                disabled={disabled}
+                disabled={disabled || isSubmitting}
               >
                 <Sparkles className="w-4 h-4" />
               </Button>
@@ -168,7 +171,7 @@ const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
                 onClick={onCraft}
                 aria-label="Open Crafting"
                 className="h-10 w-10"
-                disabled={disabled}
+                disabled={disabled || isSubmitting}
               >
                 <Hammer className="w-4 h-4" />
               </Button>
@@ -182,6 +185,9 @@ const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
           </Tooltip>
         </form>
         
+        <p id="action-input-help" className="sr-only">
+          Press Enter to send your action, Control Space to suggest an action, Control H to open crafting, or Escape to clear the input.
+        </p>
         {/* Quick Action Buttons */}
         <div className="flex gap-1.5 mt-2 flex-wrap" role="group" aria-label="Quick actions">
           {QUICK_ACTIONS.map((quick) => (
@@ -192,12 +198,8 @@ const ActionInputInternal = forwardRef<ActionInputRef, ActionInputProps>(
                   variant="outline"
                   size="sm"
                   className="h-7 px-2 text-xs"
-                  onClick={() => {
-                    if (!disabled) {
-                      onSubmit(quick.action);
-                    }
-                  }}
-                  disabled={disabled}
+                  onClick={() => submitAction(quick.action)}
+                  disabled={disabled || isSubmitting}
                   aria-label={quick.action}
                 >
                   <span className="mr-1" role="img" aria-hidden="true">{quick.icon}</span>

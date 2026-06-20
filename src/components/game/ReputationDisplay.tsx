@@ -5,7 +5,7 @@ import React from "react";
 import type { Reputation } from "../../types/game-types";
 import { Progress } from "../ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
-import { ThumbsUp, ThumbsDown } from "lucide-react";
+import { ThumbsUp, Landmark } from "lucide-react";
 
 interface ReputationDisplayProps {
   reputation: Reputation;
@@ -15,7 +15,15 @@ export function ReputationDisplay({ reputation }: ReputationDisplayProps) {
   const entries = Object.entries(reputation);
   
   if (entries.length === 0) {
-    return <p className="text-xs text-muted-foreground italic">No reputation recorded.</p>;
+    return (
+      <div className="rounded-md border border-dashed border-border bg-muted/20 p-3 text-center">
+        <Landmark className="mx-auto mb-2 h-6 w-6 text-muted-foreground/60" />
+        <p className="text-xs font-medium text-muted-foreground">No faction reputation yet</p>
+        <p className="mt-1 text-[11px] text-muted-foreground/80">
+          Your actions can earn trust, suspicion, favors, or enemies as factions appear in the story.
+        </p>
+      </div>
+    );
   }
 
   return (

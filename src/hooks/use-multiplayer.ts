@@ -9,8 +9,7 @@ import type {
 } from "../types/multiplayer-types";
 import {
   createOffer, createAnswer, applyAnswer, setupDataChannel,
-  sendBufferedIceCandidates, handleIceCandidateMessage,
-  type SignallingPackage
+  sendBufferedIceCandidates, handleIceCandidateMessage, decodeSignallingData
 } from "../lib/webrtc-signalling";
 import type { StoryLogEntry, GameState } from "../types/game-types";
 import { logger } from "@/lib/logger";
@@ -99,6 +98,8 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   const peerOutboxSequence = useRef<Record<string, number>>({}); // Track outgoing sequence number per peer
   const iceCandidatesRef = useRef<RTCIceCandidateInit[]>([]);
   const multiplayerStateRef = useRef(multiplayerState);
+  const remotePeerInfoRef = useRef<PeerInfo | null>(null);
+  const peerConnectedNotifiedRef = useRef(false);
   // NET-13 Fix: State reconciliation for detecting mismatched states
   const lastSentChecksum = useRef<string | null>(null);
   const reconciliationInterval = useRef<NodeJS.Timeout | null>(null);
@@ -384,7 +385,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
     try {
       const currentPeerId = multiplayerStateRef.current.peerId;
-      const { peerConnection, encodedOffer } = await createOffer(
+      const { peerConnection, encodedOffer, dataChannels } = await createOffer(
         currentPeerId,
         playerName,
         (candidate) => {
@@ -393,17 +394,16 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       );
 
       peerConnectionRef.current = peerConnection;
+      peerConnectedNotifiedRef.current = false;
+      remotePeerInfoRef.current = null;
 
-      // Setup data channel listeners for host
-      peerConnection.ondatachannel = (event) => {
-        const channel = event.channel;
-        setupDataChannelForPeer(channel);
-      };
+      // The host creates data channels, so attach handlers directly to those channels.
+      Object.values(dataChannels).forEach(setupDataChannelForPeer);
 
       setMultiplayerState(prev => ({
         ...prev,
         sessionId: currentPeerId,
-        connectionStatus: 'connected',
+        connectionStatus: 'connecting',
       }));
 
       // Store init params for reconnection
@@ -432,7 +432,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
     try {
       const currentPeerId = multiplayerStateRef.current.peerId;
-      const { peerConnection, encodedAnswer } = await createAnswer(
+      const { peerConnection, encodedAnswer, remotePeerInfo } = await createAnswer(
         encodedOffer,
         currentPeerId,
         playerName,
@@ -442,6 +442,13 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       );
 
       peerConnectionRef.current = peerConnection;
+      peerConnectedNotifiedRef.current = false;
+      remotePeerInfoRef.current = {
+        peerId: remotePeerInfo.peerId,
+        name: remotePeerInfo.name,
+        isHost: true,
+        isConnected: false,
+      };
 
       // Setup data channels for guest
       peerConnection.ondatachannel = (event) => {
@@ -450,7 +457,8 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
       setMultiplayerState(prev => ({
         ...prev,
-        connectionStatus: 'connected',
+        sessionId: remotePeerInfo.peerId,
+        connectionStatus: 'connecting',
       }));
 
       // Store init params for reconnection
@@ -484,6 +492,15 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     }
 
     try {
+      // Decode first so the channel-open handler can identify the guest even if
+      // WebRTC opens the data channel during setRemoteDescription.
+      const decodedAnswer = decodeSignallingData(encodedAnswer);
+      remotePeerInfoRef.current = {
+        peerId: decodedAnswer.peerInfo.peerId,
+        name: decodedAnswer.peerInfo.name,
+        isHost: false,
+        isConnected: false,
+      };
       await applyAnswer(peerConnectionRef.current, encodedAnswer);
     } catch (error: any) {
       logger.error('Failed to apply answer:', error);
@@ -571,6 +588,28 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         if (peerConnectionRef.current) {
           sendBufferedIceCandidates(peerConnectionRef.current, channel);
         }
+
+        // Treat the control channel opening as the point where the one-friend
+        // connection is actually ready. Offer/answer generation alone is not enough.
+        if (channel.label === 'control') {
+          const remotePeer = remotePeerInfoRef.current;
+          setMultiplayerState(prev => {
+            const nextPeers = remotePeer && !prev.peers.some(p => p.peerId === remotePeer.peerId)
+              ? [...prev.peers, { ...remotePeer, isConnected: true }]
+              : prev.peers.map(p => p.peerId === remotePeer?.peerId ? { ...p, isConnected: true } : p);
+            return {
+              ...prev,
+              connectionStatus: 'connected',
+              peers: nextPeers,
+            };
+          });
+
+          if (remotePeer && !peerConnectedNotifiedRef.current) {
+            peerConnectedNotifiedRef.current = true;
+            onPeerConnected?.({ ...remotePeer, isConnected: true });
+          }
+        }
+
         // NET-13 Fix: Start state reconciliation when channel opens
         startReconciliation();
       },
@@ -585,7 +624,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         }
       }
     );
-  }, [reconnect, lastInitParams, startReconciliation]);
+  }, [reconnect, lastInitParams, startReconciliation, onPeerConnected]);
 
   // Handle incoming messages
   const handleMessage = useCallback((data: MultiplayerMessage, channelLabel: string) => {
@@ -812,6 +851,8 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     }));
 
     iceCandidatesRef.current = [];
+    remotePeerInfoRef.current = null;
+    peerConnectedNotifiedRef.current = false;
     
     // Reset intentional disconnect flag after a short delay
     setTimeout(() => {

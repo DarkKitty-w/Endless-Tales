@@ -108,8 +108,11 @@ export function InventoryDisplay() {
         {categorizedItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground py-4">
               <PackageSearch className="w-8 h-8 mb-2 opacity-50"/>
-              <p className="text-sm italic">
+              <p className="text-sm font-medium">
                 {activeCategory === 'All' ? 'Your backpack is empty.' : `No ${activeCategory.toLowerCase()} items.`}
+              </p>
+              <p className="mt-1 max-w-[220px] text-xs text-muted-foreground/80">
+                Explore, loot, trade, or craft during the story to fill this with useful gear and curiosities.
               </p>
           </div>
         ) : (
@@ -128,9 +131,12 @@ export function InventoryDisplay() {
                       </div>
                       <Tooltip>
                           <TooltipTrigger asChild>
-                              <button className="ml-2 p-1 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-1 focus:ring-ring rounded-full">
+                              <button
+                                type="button"
+                                className="ml-2 p-1 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-1 focus:ring-ring rounded-full"
+                                aria-label={`Show details for ${item.name}`}
+                              >
                                  <Info className="w-4 h-4" />
-                                 <span className="sr-only">Item Info</span>
                               </button>
                           </TooltipTrigger>
                           <TooltipContent side="left" className="max-w-xs">

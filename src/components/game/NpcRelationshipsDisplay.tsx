@@ -5,7 +5,7 @@ import React from "react";
 import type { NpcRelationships } from "../../types/game-types";
 import { Progress } from "../ui/progress";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
-import { Heart } from "lucide-react";
+import { Heart, UserRoundSearch } from "lucide-react";
 
 interface NpcRelationshipsDisplayProps {
   relationships: NpcRelationships;
@@ -15,7 +15,15 @@ export function NpcRelationshipsDisplay({ relationships }: NpcRelationshipsDispl
   const entries = Object.entries(relationships);
   
   if (entries.length === 0) {
-    return <p className="text-xs text-muted-foreground italic">No known NPCs.</p>;
+    return (
+      <div className="rounded-md border border-dashed border-border bg-muted/20 p-3 text-center">
+        <UserRoundSearch className="mx-auto mb-2 h-6 w-6 text-muted-foreground/60" />
+        <p className="text-xs font-medium text-muted-foreground">No known NPCs yet</p>
+        <p className="mt-1 text-[11px] text-muted-foreground/80">
+          Meet, help, threaten, or befriend characters during the story to build relationships.
+        </p>
+      </div>
+    );
   }
 
   return (

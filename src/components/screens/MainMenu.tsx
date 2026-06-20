@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useGame } from "../../context/GameContext";
 import { Button } from "../../components/ui/button";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "../../components/game/CardboardCard";
-import { Play, Settings, Sparkles, FolderClock, ChevronDown, Dices, Swords, Users } from "lucide-react";
+import { Play, Settings, Sparkles, FolderClock, ChevronDown, Dices, Swords, Users, KeyRound, HardDrive } from "lucide-react";
 import { SettingsPanel } from '../../components/screens/SettingsPanel';
 import {
   Sheet,
@@ -22,6 +22,29 @@ import type { AdventureType } from "../../types/adventure-types";
 interface MainMenuProps {
   // Props can be added here if needed in the future
 }
+
+const ADVENTURE_MODE_SUMMARIES = [
+  {
+    icon: Dices,
+    title: "Randomized",
+    description: "A rule-enforced RPG run where the world unfolds as you play.",
+  },
+  {
+    icon: Swords,
+    title: "Custom",
+    description: "Build your own genre, tone, magic, tech, and challenge mix.",
+  },
+  {
+    icon: Sparkles,
+    title: "Immersed",
+    description: "A freer sandbox for existing universes, lore, and roleplay fantasy.",
+  },
+  {
+    icon: Users,
+    title: "Co-op",
+    description: "Private manual P2P co-op for one friend now; small-party target later.",
+  },
+];
 
 export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
   const { dispatch } = useGame();
@@ -71,7 +94,7 @@ export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
 
       <Sheet open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
         <SheetTrigger asChild>
-          <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-10">
+          <Button variant="ghost" size="icon" className="absolute top-4 right-4 z-10" aria-label="Open settings">
             <Settings className="h-6 w-6 text-muted-foreground" />
             <span className="sr-only">Open Settings</span>
           </Button>
@@ -86,6 +109,28 @@ export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 pt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
+            {ADVENTURE_MODE_SUMMARIES.map(({ icon: Icon, title, description }) => (
+              <div key={title} className="rounded-md border border-foreground/10 bg-muted/20 p-3">
+                <div className="flex items-center gap-2 font-semibold text-sm">
+                  <Icon className="h-4 w-4 text-primary" /> {title}
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground leading-relaxed">{description}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-left text-xs text-muted-foreground space-y-2">
+            <p className="flex items-start gap-2">
+              <KeyRound className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+              <span><strong className="text-foreground">BYOK AI:</strong> cloud providers use your own API keys from Settings. WebLLM is experimental and local.</span>
+            </p>
+            <p className="flex items-start gap-2">
+              <HardDrive className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+              <span><strong className="text-foreground">Local saves:</strong> adventures stay in this browser, with JSON import/export for backups.</span>
+            </p>
+          </div>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground w-full">
@@ -114,15 +159,14 @@ export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
           </Button>
         </CardContent>
         <CardFooter className="pt-4 justify-center flex-col items-center">
-          <p className="text-xs text-muted-foreground mb-2">v0.1.0 - Alpha</p>
-          <a href='https://ko-fi.com/K3K31ELFCW' target='_blank' rel="noopener noreferrer">
-            <img
-              src='https://storage.ko-fi.com/cdn/kofi5.png?v=6'
-              alt='Buy Me a Coffee at ko-fi.com'
-              width={150}
-              height={36}
-              className="h-9 w-auto border-0"
-            />
+          <p className="text-xs text-muted-foreground mb-2">v0.1.0 - Alpha · Browser-first · BYOK · Local saves</p>
+          <a
+            href='https://ko-fi.com/K3K31ELFCW'
+            target='_blank'
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center rounded-md border border-foreground/15 bg-muted/40 px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+          >
+            Support on Ko-fi
           </a>
         </CardFooter>
       </CardboardCard>

@@ -245,12 +245,30 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
       { value: 'claude', label: 'Anthropic Claude' },
       { value: 'deepseek', label: 'DeepSeek' },
       { value: 'openrouter', label: 'OpenRouter' },
+      { value: 'webllm', label: webllmSupported ? 'WebLLM (Experimental Local AI)' : 'WebLLM (Experimental)' },
     ];
-    if (webllmSupported) {
-      options.push({ value: 'webllm', label: 'WebLLM (Local AI)' });
-    }
     return options;
   }, [webllmSupported]);
+
+  const maskKey = (key: string) => {
+    if (!key) return "Not saved";
+    if (key.length <= 8) return "Saved";
+    return `${key.slice(0, 4)}…${key.slice(-4)}`;
+  };
+
+  const cloudProviderConfigs: Array<{
+    provider: Exclude<ProviderType, 'webllm'>;
+    label: string;
+    placeholder: string;
+    value: string;
+    setValue: (value: string) => void;
+  }> = [
+    { provider: 'gemini', label: 'Google Gemini', placeholder: 'Paste your Gemini API key', value: geminiKey, setValue: setGeminiKey },
+    { provider: 'openai', label: 'OpenAI', placeholder: 'Paste your OpenAI API key', value: openaiKey, setValue: setOpenaiKey },
+    { provider: 'claude', label: 'Anthropic Claude', placeholder: 'Paste your Claude API key', value: claudeKey, setValue: setClaudeKey },
+    { provider: 'deepseek', label: 'DeepSeek', placeholder: 'Paste your DeepSeek API key', value: deepseekKey, setValue: setDeepseekKey },
+    { provider: 'openrouter', label: 'OpenRouter', placeholder: 'Paste your OpenRouter API key', value: openrouterKey, setValue: setOpenrouterKey },
+  ];
 
   return (
     <SheetContent side="right" className="w-[90vw] sm:w-[450px] flex flex-col">
@@ -258,7 +276,9 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
         <SheetTitle className="flex items-center gap-2 text-xl">
           <Palette className="w-5 h-5" /> Settings
         </SheetTitle>
-        <SheetDescription>Customize your game experience.</SheetDescription>
+        <SheetDescription>
+          Customize your game. Cloud AI is BYOK: your provider keys stay in this browser and can be cleared anytime.
+        </SheetDescription>
       </SheetHeader>
       <div className="flex-grow p-3 space-y-4 overflow-y-auto scrollbar-thin scrollbar-thumb-border scrollbar-track-transparent">
         {/* Appearance Section */}
@@ -444,10 +464,67 @@ export function SettingsPanel({ isOpen, onOpenChange }: SettingsPanelProps) {
             <>
               <Separator className="my-2" />
               <div className="space-y-4">
-                <h4 className="text-sm font-medium">API Configuration</h4>
-                <p className="text-xs text-muted-foreground">
-                  AI provider is configured server-side. Contact administrator for API key configuration.
-                </p>
+                <div className="space-y-1">
+                  <h4 className="text-sm font-medium">Bring Your Own Key</h4>
+                  <p className="text-xs text-muted-foreground">
+                    Cloud AI providers require your own API key. Keys are stored locally in this browser per provider and are only sent to the same-origin proxy for the selected AI request.
+                  </p>
+                </div>
+
+                {cloudProviderConfigs.map(({ provider, label, placeholder, value, setValue }) => {
+                  const savedKey = providerApiKeys?.[provider] ?? "";
+                  const isSelected = aiProvider === provider;
+                  return (
+                    <div key={provider} className={cn(
+                      "space-y-2 rounded-md border p-3 bg-muted/20",
+                      isSelected && "border-primary/60 bg-primary/5"
+                    )}>
+                      <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor={`${provider}-api-key`} className="flex items-center gap-2 text-sm font-medium">
+                          {getKeyStatusIcon(savedKey)}
+                          {label}
+                        </Label>
+                        <span className="text-[10px] text-muted-foreground">
+                          {maskKey(savedKey)}
+                        </span>
+                      </div>
+                      <Input
+                        id={`${provider}-api-key`}
+                        type="password"
+                        value={value}
+                        onChange={(event) => setValue(event.target.value)}
+                        placeholder={placeholder}
+                        autoComplete="off"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={() => handleSaveProviderKey(provider, value)}
+                          className="flex-1"
+                        >
+                          Save Key
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setValue("");
+                            handleSaveProviderKey(provider, "");
+                          }}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                      {isSelected && !savedKey && (
+                        <p className="text-xs text-destructive">
+                          This provider is selected. Save a key before starting or continuing an AI-powered adventure.
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}

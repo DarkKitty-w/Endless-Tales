@@ -20,18 +20,18 @@ Endless Tales is a browser-based, AI-driven text adventure game with support for
 
 ## Features
 All features below are fully implemented in the codebase:
-- **Adventure Modes**: Three solo modes (Randomized, Custom, Immersed) plus Co-op P2P multiplayer (no enforced player limit)
+- **Adventure Modes**: Three solo modes (Randomized, Custom, Immersed) plus small-party Co-op P2P multiplayer
   - **Randomized**: Fully random adventure generation with minimal setup
   - **Custom**: Define your own world settings (genre, magic system, tech level, tone, etc.)
   - **Immersed**: Play in existing fictional universes (e.g., Star Wars, Harry Potter, Lord of the Rings) as existing characters or original creations, with AI-generated character profiles
-  - **Co-op**: Host/join P2P sessions with manual QR code/invite code signalling
+  - **Co-op**: Host/join P2P sessions with manual QR code/invite code signalling. Current stabilization focus is one host plus one guest; the product target is a small party of 4–6 players, not unlimited public multiplayer.
 - **6 AI Providers**: Google Gemini, OpenAI, Anthropic Claude, DeepSeek, OpenRouter (all **BYOK – you supply the key**), and WebLLM (local, **no key needed**)
 - **Dynamic Character System**: Stat allocation (STR/STA/WIS), class selection, AI-generated character descriptions, XP progression, and leveling
 - **AI-Driven Gameplay**: Dynamic narration, adventure generation, skill tree creation, action difficulty assessment, and adventure summarization
 - **Progression Systems**: Crafting, skill trees, world map with discoverable locations, inventory management, NPC relationships, and faction reputation
-- **Save/Load System**: Local browser storage with schema versioning for backwards compatibility
+- **Save/Load System**: Local browser storage with schema versioning for backwards compatibility, plus JSON import/export for manual backups
 - **Customization**: UI themes (dark/light mode, 6+ prebuilt themes), configurable adventure settings (genre, magic system, tech level, narrative tone)
-- **Multiplayer Features**: Real-time chat, player trading, turn-based host-authoritative gameplay, party management, and manual P2P signalling via QR codes or invite codes
+- **Multiplayer Features**: Real-time chat, player trading, turn-based host-authoritative gameplay, party management, and manual P2P signalling via QR codes or invite codes. Co-op is designed around private friend groups rather than public/unlimited sessions.
 
 ## Tech Stack
 - **Framework**: Next.js 16.2.3 (React 18, TypeScript 5+)
@@ -56,17 +56,11 @@ npm install
 ```
 
 ### Environment Variables
-Create a `.env.local` file in the project root. These variables are used by the server-side proxy **only**, but the actual API keys are provided by each user in their browser and stored **in persistent browser storage per provider** — they are never written to disk or shared with other players. You can manage your saved keys in the Settings panel.
+No cloud AI provider environment variables are required for normal gameplay.
 
-| Variable | Description | Required For |
-|----------|-------------|--------------|
-| `GEMINI_API_KEY` | Google Gemini API key | Gemini provider |
-| `OPENAI_API_KEY` | OpenAI API key | OpenAI provider |
-| `ANTHROPIC_API_KEY` | Anthropic Claude API key | Claude provider |
-| `DEEPSEEK_API_KEY` | DeepSeek API key | DeepSeek provider |
-| `OPENROUTER_API_KEY` | OpenRouter API key | OpenRouter provider |
+Endless Tales uses a **Bring Your Own Key** model: each player enters their own provider API key in the in-game Settings panel. Keys are stored locally in that browser per provider and are sent only to the built-in same-origin AI proxy for the selected request. They are not shared with other players.
 
-> **Note:** These environment variables are optional for local development if you only use WebLLM. If you want to allow cloud AI, set them to any placeholder value — the actual key is always supplied by the user at runtime through the UI.
+WebLLM is the experimental no-key option and runs locally in the browser when supported.
 
 ### Development
 Start the Next.js development server with Turbopack:
@@ -82,7 +76,7 @@ npm start
 ```
 
 ### AI Proxy
-Cloud AI requests for Gemini, OpenAI, Claude, DeepSeek, and OpenRouter are routed through the built-in Next.js API route at `src/app/api/ai-proxy/route.ts` — WebLLM runs locally and requires no proxy. No separate proxy server is required.
+Cloud AI requests for Gemini, OpenAI, Claude, DeepSeek, and OpenRouter are routed through the built-in Next.js API route at `src/app/api/ai-proxy/route.ts`. The proxy uses the player's BYOK key for that request and does not require server-owned provider keys. WebLLM runs locally and requires no proxy. No separate proxy server is required.
 
 ## Usage
 
@@ -106,7 +100,7 @@ Endless Tales uses a client-first architecture with host-authoritative multiplay
 1. **State Management**: Central `GameContext` uses a main reducer split into 5 sub-reducers, with actions defined in `game-actions.ts`.
 2. **AI Integration**: `ai-router.ts` routes requests to the selected provider, with cloud requests proxied through the Next.js API route to protect API keys.
 3. **Multiplayer**: Host creates a WebRTC session with a base64-encoded SDP offer (shared via QR code or copy-paste). Guests join with an SDP answer, using STUN servers for NAT traversal. The host acts as the authoritative game master for all players.
-4. **Persistence**: Adventure state is saved to localStorage with schema versioning for backwards compatibility.
+4. **Persistence**: Adventure state is saved to localStorage with schema versioning for backwards compatibility. Players can export/import JSON save files for manual backup or transfer; no cloud account is required.
 
 ```
 ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
@@ -168,12 +162,13 @@ Endless-Tales/
 ## Multiplayer Co-op
 Endless Tales uses **pure P2P WebRTC with no signalling server or Firebase dependency**:
 - **NO Firebase or external services are used for multiplayer** — it is strictly client-to-client communication
-- **NO server-side components** beyond the optional AI proxy for cloud providers
+- **NO server-side components** beyond the BYOK AI proxy for cloud providers
+- **Scope:** Co-op is for private friend groups. The current stabilization target is a reliable one-host/one-guest flow; the intended product target is a small party of about 4–6 players. It is **not** designed or documented as unlimited public multiplayer.
 1. **Host**: Creates a session and generates a base64-encoded SDP offer (shared via QR code or copy-paste)
 2. **Guest**: Imports the offer, generates an SDP answer, and shares it back with the host
 3. **Connection**: Uses Google STUN servers for NAT traversal, with 5 dedicated data channels for game state, chat, and control
-4. **Gameplay**: Host acts as the authoritative game master; all players take turns, with real-time chat and player-to-player trading
-5. **Reconnection**: Automatic reconnection logic for disconnected peers
+4. **Gameplay**: Host acts as the authoritative game master; connected players take turns, with real-time chat and player-to-player trading
+5. **Reliability focus:** One-friend co-op is stabilized first; small-party expansion should be tested carefully before promising larger sessions.
 
 ## Contributing
 Contributions are welcome! Please follow these guidelines:

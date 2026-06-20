@@ -139,7 +139,7 @@ function NarrationDisplayInternal({
             return (
                 <Alert variant="destructive" className="my-2">
                     <Info className="h-4 w-4" />
-                    <AlertTitle>Error</AlertTitle>
+                    <AlertTitle>AI needs attention</AlertTitle>
                     <AlertDescription>
                         {error}
                         <Button 
@@ -150,11 +150,10 @@ function NarrationDisplayInternal({
                         >
                             <RefreshCw className="mr-2 h-4 w-4" /> Retry AI
                         </Button>
-                        {/* ERR-11: Show raw AI response in development mode */}
-                        {errorRawResponse && process.env.NODE_ENV === 'development' && (
+                        {errorRawResponse && (
                             <details className="mt-3 text-xs bg-muted/50 p-2 rounded-md overflow-auto max-h-40">
-                                <summary className="cursor-pointer font-medium mb-1">Raw AI Response (Dev Only)</summary>
-                                <pre className="whitespace-pre-wrap text-destructive/80">{errorRawResponse}</pre>
+                                <summary className="cursor-pointer font-medium mb-1">Technical details</summary>
+                                <pre className="whitespace-pre-wrap text-destructive/80">{sanitizeAIContent(errorRawResponse)}</pre>
                             </details>
                         )}
                     </AlertDescription>

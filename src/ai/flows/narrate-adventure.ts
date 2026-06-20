@@ -147,6 +147,54 @@ const FALLBACK_DIFFICULTY_MAP: Record<string, { difficulty: DifficultyLevel; dic
     impossible: { difficulty: "Impossible", dice: "None" },
 };
 
+function getModeGuidance(adventureSettings: AdventureSettings): { systemRules: string[]; promptText: string; choiceRule: string } {
+  switch (adventureSettings.adventureType) {
+    case 'Immersed':
+      return {
+        systemRules: [
+          'MODE: Immersed is a freeform AI sandbox. Prioritize roleplay, lore flavor, character fantasy, and player agency over strict RPG mechanics.',
+          'Use game mechanics lightly in Immersed mode. Apply consequences when narratively appropriate, but do not over-constrain creative or cinematic actions.',
+          'Respect the chosen universe tone and lore, but allow plausible alternate-story outcomes created by the player.',
+        ],
+        promptText: `**Mode Feel: Immersed / Freeform Sandbox**
+- Prioritize roleplay, cinematic moments, lore flavor, and player freedom.
+- Use stats, resources, and dice-style consequences softly unless danger is obvious.
+- Do not block creative actions just because they are not listed as formal skills.
+- Respect established lore, but allow plausible alternate-story branches shaped by the player.`,
+        choiceRule: 'For branching choices, favor freeform roleplay, investigation, dialogue, and cinematic options. You may reference known skills/items, but do not require every choice to use listed skills/items.',
+      };
+    case 'Custom':
+      return {
+        systemRules: [
+          'MODE: Custom is a rule-enforced RPG shaped by the player\'s world settings. Respect the configured genre, tone, magic, technology, and focus sliders.',
+          'Apply RPG consequences through stats, resources, skills, inventory, reputation, relationships, and world state when appropriate.',
+          'Player freedom is important, but outcomes must stay consistent with the custom world rules and current game state.',
+        ],
+        promptText: `**Mode Feel: Custom / Configured RPG**
+- Enforce RPG rules and consequences while respecting the player-created world settings.
+- Let genre, magic system, tech level, tone, and combat/puzzle/social focus shape outcomes.
+- Use stats, resources, inventory, reputation, relationships, skills, and world map changes meaningfully.
+- Avoid granting unearned powers/items or bypassing established constraints.`,
+        choiceRule: 'For branching choices, stay within the current game state. Do not suggest using items or learned skills the character does not have; generic actions like observe, talk, move, hide, rest, or improvise are allowed.',
+      };
+    case 'Randomized':
+    default:
+      return {
+        systemRules: [
+          'MODE: Randomized is a rule-enforced RPG. Challenge the player fairly and make stats, resources, inventory, skills, and dice-style uncertainty matter.',
+          'Apply concrete consequences. Reward clever actions, but do not grant unearned powers/items or ignore danger.',
+          'Keep the adventure surprising while maintaining consistent RPG logic.',
+        ],
+        promptText: `**Mode Feel: Randomized / Rule-Enforced RPG**
+- Lean into RPG mechanics, danger, discovery, progression, and resource consequences.
+- Use stats, health, stamina, mana, inventory, skill stage, reputation, relationships, and map changes meaningfully.
+- Reward clever play, but enforce risk and limits.
+- Avoid granting unearned powers/items or bypassing established constraints.`,
+        choiceRule: 'For branching choices, stay within the current game state. Do not suggest using items or learned skills the character does not have; generic actions like observe, talk, move, hide, rest, or improvise are allowed.',
+      };
+  }
+}
+
 export async function narrateAdventure(input: NarrateAdventureInput): Promise<NarrateAdventureOutput> {
   // OBS-6: Set requestId and traceId from input if provided (for correlation UI → AI)
   if (input.requestId) {
@@ -172,6 +220,7 @@ export async function narrateAdventure(input: NarrateAdventureInput): Promise<Na
   const isRandomized = adventureSettings.adventureType === "Randomized";
   
   const sanitizedPlayerChoice = sanitizePlayerAction(input.playerChoice);
+  const modeGuidance = getModeGuidance(adventureSettings);
 
   let adventureContext = "";
   if (isCustom) {
@@ -224,6 +273,7 @@ If the action is "Impossible", the narration should reflect that the action cann
       'STORY CONTINUITY: Build upon previous events. Do NOT contradict established story facts.',
       'GAME CONSTRAINTS: You MUST ONLY reference skills and items that are explicitly listed in the "Current Game State" section.',
       'STATUS EFFECTS: Always consider active status effects when narrating (poisoned = nausea, exhausted = fatigue, etc.).',
+      ...modeGuidance.systemRules,
       ...ANTI_INJECTION_RULES,
       ...ANTI_REPETITION_RULES,
     ],
@@ -247,6 +297,8 @@ Difficulty: ${adventureSettings.difficulty}
 Permanent Death: ${adventureSettings.permanentDeath ? "ENABLED" : "DISABLED"}
 ${adventureContext}
 
+${modeGuidance.promptText}
+
 **Previous Narration:** ${input.previousNarration || "None"}
 **Current Game State:**
 ${gameStateSummary}
@@ -263,7 +315,7 @@ ${assessmentPromptSection}
 6. If character HP <= 0, set isCharacterDefeated: true.
 7. **PERMANENT DEATH ENFORCEMENT:** If "Permanent Death: ENABLED" and character HP drops to 0, the character MUST die permanently. No revivals, no exceptions. Do NOT provide choices that allow the player to continue.
 8. **World Map Updates:** If the narration involves traveling to a new area, discovering a location, or learning about a place, include worldMapChanges. Provide new locations with unique IDs, descriptive names, coordinates (x,y between 0-100), and connections to existing discovered locations. For already known locations that are revealed, use discoveredLocationIds. To modify existing ones, use updatedLocations.
-9. **CONSTRAINT ENFORCEMENT:** Only provide choices that use skills from "Learned Skills" and items from "Inventory". Do NOT suggest actions requiring skills/items not listed.
+9. **MODE-SPECIFIC CHOICE RULE:** ${modeGuidance.choiceRule}
 
 Return ONLY a valid JSON object. No explanations, no markdown formatting.
 `;
@@ -408,7 +460,9 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           }
 
           // --- VALIDATE choices against game state (AI-16, AI-25) ---
-          if (input.gameStateContext?.character) {
+          // Randomized/Custom are rule-enforced RPG modes. Immersed is intentionally freer,
+          // so do not aggressively filter cinematic or roleplay choices there.
+          if (input.gameStateContext?.character && adventureSettings.adventureType !== 'Immersed') {
               const availableSkills = input.gameStateContext.character.learnedSkills || [];
               const inventory = input.gameStateContext.inventory?.map(i => i.name) || [];
               const validatedChoices = validateChoicesAgainstGameState(branchingChoices, availableSkills, inventory);

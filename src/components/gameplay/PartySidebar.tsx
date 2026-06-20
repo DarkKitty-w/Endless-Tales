@@ -105,6 +105,7 @@ function SortableTurnOrderItem({
             {...attributes}
             {...listeners}
             className="cursor-grab hover:cursor-grab active:cursor-grabbing p-1"
+            aria-label={`Drag ${displayName} to reorder turn order`}
           >
             <GripVertical className="h-4 w-4 text-muted-foreground" />
           </Button>
@@ -139,6 +140,7 @@ function SortableTurnOrderItem({
             onClick={() => onSendTradeRequest(peerId)}
             className="text-blue-600 hover:text-blue-700"
             title="Request Trade"
+            aria-label={`Request trade with ${displayName}`}
           >
             <Handshake className="h-4 w-4" />
           </Button>
@@ -321,48 +323,58 @@ function PartySidebarInternal({
         {isHost && onSetTurnOrder && turnOrder.length > 1 && (
           <p className="text-xs text-muted-foreground mb-2">Drag players to reorder turn sequence</p>
         )}
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={turnOrder}
-            strategy={verticalListSortingStrategy}
+        {turnOrder.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border bg-muted/20 p-3 text-center">
+            <Sword className="mx-auto mb-2 h-6 w-6 text-muted-foreground/60" />
+            <p className="text-xs font-medium text-muted-foreground">No turn order yet</p>
+            <p className="mt-1 text-[11px] text-muted-foreground/80">
+              The host will set turn order when the co-op adventure starts.
+            </p>
+          </div>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
           >
-            <div className="space-y-2">
-              {turnOrder.map((peerId, index) => {
-                const isYou = peerId === multiplayerState.peerId;
-                const isCurrent = index === currentTurnIndex;
-                const displayName = getPeerDisplayName(peerId);
-                const characterName = getPeerCharacterName(peerId);
-                const playerSummary = partyState[peerId];
-                
-                return (
-                  <SortableTurnOrderItem
-                    key={peerId}
-                    peerId={peerId}
-                    index={index}
-                    isCurrent={isCurrent}
-                    isYou={isYou}
-                    displayName={displayName}
-                    characterName={characterName || ''}
-                    playerSummary={playerSummary}
-                    isHost={isHost}
-                    onSetTurnOrder={onSetTurnOrder}
-                    turnOrder={turnOrder}
-                    onSendTradeRequest={onSendTradeRequest}
-                    onKickPeer={onKickPeer}
-                    kickPlayerName={kickPlayerName}
-                    setKickPlayerName={setKickPlayerName}
-                    setKickPlayerId={setKickPeerId}
-                    multiplayerState={multiplayerState}
-                  />
-                );
-              })}
-            </div>
-          </SortableContext>
-        </DndContext>
+            <SortableContext
+              items={turnOrder}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-2">
+                {turnOrder.map((peerId, index) => {
+                  const isYou = peerId === multiplayerState.peerId;
+                  const isCurrent = index === currentTurnIndex;
+                  const displayName = getPeerDisplayName(peerId);
+                  const characterName = getPeerCharacterName(peerId);
+                  const playerSummary = partyState[peerId];
+                  
+                  return (
+                    <SortableTurnOrderItem
+                      key={peerId}
+                      peerId={peerId}
+                      index={index}
+                      isCurrent={isCurrent}
+                      isYou={isYou}
+                      displayName={displayName}
+                      characterName={characterName || ''}
+                      playerSummary={playerSummary}
+                      isHost={isHost}
+                      onSetTurnOrder={onSetTurnOrder}
+                      turnOrder={turnOrder}
+                      onSendTradeRequest={onSendTradeRequest}
+                      onKickPeer={onKickPeer}
+                      kickPlayerName={kickPlayerName}
+                      setKickPlayerName={setKickPlayerName}
+                      setKickPlayerId={setKickPeerId}
+                      multiplayerState={multiplayerState}
+                    />
+                  );
+                })}
+              </div>
+            </SortableContext>
+          </DndContext>
+        )}
       </div>
 
       <Separator />
@@ -394,7 +406,7 @@ function PartySidebarInternal({
                       </div>
                     )}
                   </div>
-                  <Badge variant="outline" className="text-xs">Host</Badge>
+                  <Badge variant="outline" className="text-xs">{multiplayerState.isHost ? 'Host' : 'You'}</Badge>
                 </div>
               );
             })()}
@@ -456,14 +468,28 @@ function PartySidebarInternal({
                 </div>
               </div>
             ))}
+
+            {/* Connected peers may exist before their full character summaries arrive. */}
+            {peers
+              .filter(peer => peer.peerId !== multiplayerState.peerId && !partyState[peer.peerId])
+              .map(peer => (
+                <div key={peer.peerId} className="flex items-center justify-between p-2 rounded bg-muted/50">
+                  <div className="flex items-center gap-2">
+                    <div className={`h-2 w-2 rounded-full ${peer.isConnected ? 'bg-green-500' : 'bg-yellow-500'}`} />
+                    <span className="text-sm">{peer.name}</span>
+                    <span className="text-xs text-muted-foreground">Character details pending</span>
+                  </div>
+                  <Badge variant="outline" className="text-xs">{peer.isHost ? 'Host' : 'Guest'}</Badge>
+                </div>
+              ))}
             
             {/* Empty state when no other players */}
-            {Object.entries(partyState).filter(([peerId]) => peerId !== multiplayerState.peerId).length === 0 && (
+            {Object.entries(partyState).filter(([peerId]) => peerId !== multiplayerState.peerId).length === 0 && peers.filter(peer => peer.peerId !== multiplayerState.peerId).length === 0 && (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <Users className="h-12 w-12 text-muted-foreground/50 mb-3" />
                 <p className="text-sm text-muted-foreground font-medium">No party members yet</p>
-                <p className="text-xs text-muted-foreground mt-1 max-w-[200px]">
-                  Invite players to join your party using the room code or invite link.
+                <p className="text-xs text-muted-foreground mt-1 max-w-[220px]">
+                  Use the lobby invitation and return-code flow to connect a friend. Small-party expansion comes later.
                 </p>
               </div>
             )}

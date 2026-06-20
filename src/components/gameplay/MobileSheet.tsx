@@ -143,9 +143,8 @@ export function MobileSheet({
                             </div>
                         </SheetContent>
                     </Sheet>
-                    <Button variant="ghost" size="icon" onClick={onSettingsOpen}>
+                    <Button variant="ghost" size="icon" onClick={onSettingsOpen} aria-label="Open settings">
                         <Settings className="h-5 w-5" />
-                        <span className="sr-only">Settings</span>
                     </Button>
                 </div>
             </div>
