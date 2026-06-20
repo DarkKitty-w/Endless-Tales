@@ -327,33 +327,21 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
       // Pass systemMessage separately for providers that support it
       const systemMsg = systemMessage;
 
-      if (!assessDifficulty) {
-          const chunks: string[] = [];
-          const stream = client.models.generateContentStream({
-              contents: userPrompt,
-              systemMessage: systemMsg,
-              config: { responseMimeType: "application/json" },
-              signal: input.signal,
-              // OBS-6 & OBS-7: Pass requestId and traceId for correlation
-              requestId: input.requestId,
-              traceId: input.traceId,
-          });
-          for await (const chunk of stream) {
-              chunks.push(chunk);
-          }
-          text = chunks.join('');
-      } else {
-          const response = await client.models.generateContent({
-              contents: userPrompt,
-              systemMessage: systemMsg,
-              config: { responseMimeType: "application/json" },
-              signal: input.signal,
-              // OBS-6 & OBS-7: Pass requestId and traceId for correlation
-              requestId: input.requestId,
-              traceId: input.traceId,
-          });
-          text = response.text;
-      }
+      // Use non-streaming JSON generation for narration. Some OpenRouter models/proxies
+      // can successfully complete upstream while the browser-side SSE body aborts
+      // (`BodyStreamBuffer was aborted`), which causes a false gameplay failure.
+      // The UI currently waits for a complete structured JSON object anyway, so a
+      // regular request is more reliable than streaming partial JSON.
+      const response = await client.models.generateContent({
+          contents: userPrompt,
+          systemMessage: systemMsg,
+          config: { responseMimeType: "application/json" },
+          signal: input.signal,
+          // OBS-6 & OBS-7: Pass requestId and traceId for correlation
+          requestId: input.requestId,
+          traceId: input.traceId,
+      });
+      text = response.text;
 
       if (!text) throw new Error("No text returned from AI");
       // ERR-8/ERR-11: Preserve raw AI response

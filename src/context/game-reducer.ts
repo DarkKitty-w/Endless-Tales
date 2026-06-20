@@ -171,7 +171,7 @@ export function gameReducer(state: GameState, action: Action): GameState {
          nextState.userGoogleAiApiKey === state.userGoogleAiApiKey &&
          nextState.aiProvider === state.aiProvider &&
          nextState.providerApiKeys === state.providerApiKeys &&
-         nextState.providerModels === state.providerModels && 
+         nextState.providerModels === state.providerModels &&
          nextState.sessionId === state.sessionId &&
          nextState.players === state.players &&
          nextState.isHost === state.isHost &&
