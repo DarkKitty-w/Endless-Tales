@@ -335,7 +335,7 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
       const response = await client.models.generateContent({
           contents: userPrompt,
           systemMessage: systemMsg,
-          config: { responseMimeType: "application/json" },
+          config: { responseMimeType: "application/json", maxTokens: 2200 },
           signal: input.signal,
           // OBS-6 & OBS-7: Pass requestId and traceId for correlation
           requestId: input.requestId,

@@ -3,8 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { logger, generateRequestId, getCurrentRequestId, setRequestId, setTraceId, getTraceId } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/rate-limit';
 
-// ERR-7 Fix: Timeout for AI requests (30 seconds)
-const AI_TIMEOUT = 30000;
+// Timeout for AI requests. Some OpenRouter/free models are slow but still complete,
+// so keep this long enough to avoid false 500/abort failures during narration.
+const AI_TIMEOUT = 180000;
 function getTimeoutSignal(): AbortSignal {
   return AbortSignal.timeout(AI_TIMEOUT);
 }
@@ -223,10 +224,13 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // SEC-3 Fix: Sanitize error messages sent to clients
-    // Only return generic error messages, log detailed errors server-side only
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    const safeMessage = rawMessage
+      ? `AI proxy request failed: ${rawMessage.substring(0, 300)}`
+      : 'AI proxy request failed. Please try again later.';
+
     return NextResponse.json(
-      { error: 'AI request failed. Please try again later.', requestId, traceId },
+      { error: safeMessage, requestId, traceId },
       { status: 500 }
     );
   }
@@ -307,7 +311,7 @@ async function handleGemini(
       if (errorJson.error?.message) {
         const geminiError = errorJson.error.message.toLowerCase();
         if (geminiError.includes('api key') || geminiError.includes('invalid')) {
-          errorMessage = 'Gemini API key invalid. Please contact the administrator.';
+          errorMessage = 'Gemini API key invalid. Check the key saved in Settings.';
         } else if (geminiError.includes('quota') || geminiError.includes('exceeded')) {
           errorMessage = 'Gemini quota exceeded. Please try again later.';
         } else if (geminiError.includes('rate limit')) {
@@ -331,10 +335,9 @@ async function handleGemini(
       model: effectiveModel
     });
     
-    // SEC-3 Fix: Sanitize error messages sent to clients
     return NextResponse.json(
-      { error: errorMessage, requestId, traceId },
-      { status: 500 }
+      { error: errorMessage, requestId, traceId, status: response.status, rawResponse: errorText.substring(0, 1000) },
+      { status: response.status >= 400 && response.status < 600 ? response.status : 502 }
     );
   }
 
@@ -473,13 +476,13 @@ async function handleOpenAICompatible(
         const providerType = providerName.toLowerCase();
         
         if (providerError.includes('api key') || providerError.includes('invalid') || providerError.includes('incorrect')) {
-          errorMessage = `${providerName} API key invalid. Please contact the administrator.`;
+          errorMessage = `${providerName} API key invalid. Check the key saved in Settings.`;
         } else if (providerError.includes('quota') || providerError.includes('exceeded')) {
           errorMessage = `${providerName} quota exceeded. Please try again later.`;
         } else if (providerError.includes('rate limit')) {
           errorMessage = `${providerName} rate limit exceeded. Please try again later.`;
         } else if (providerError.includes('model') && providerError.includes('not found')) {
-          errorMessage = `${providerName} model not found. Please contact the administrator.`;
+          errorMessage = `${providerName} model not found. Check the model name saved in Settings.`;
         } else {
           errorMessage = `${providerName} request failed. Please try again later.`;
         }
@@ -498,11 +501,9 @@ async function handleOpenAICompatible(
       provider: providerName.toLowerCase(),
       model: effectiveModel
     });
-    
-    // SEC-3 Fix: Sanitize error messages sent to clients
     return NextResponse.json(
-      { error: errorMessage, requestId, traceId },
-      { status: 500 }
+      { error: errorMessage, requestId, traceId, status: response.status, rawResponse: errorText.substring(0, 1000) },
+      { status: response.status >= 400 && response.status < 600 ? response.status : 502 }
     );
   }
 
@@ -675,13 +676,13 @@ async function handleClaude(
         const claudeError = errorJson.error.message.toLowerCase();
         
         if (claudeError.includes('api key') || claudeError.includes('invalid') || claudeError.includes('unauthorized')) {
-          errorMessage = 'Claude API key invalid. Please contact the administrator.';
+          errorMessage = 'Claude API key invalid. Check the key saved in Settings.';
         } else if (claudeError.includes('quota') || claudeError.includes('exceeded')) {
           errorMessage = 'Claude quota exceeded. Please try again later.';
         } else if (claudeError.includes('rate limit')) {
           errorMessage = 'Claude rate limit exceeded. Please try again later.';
         } else if (claudeError.includes('model') && claudeError.includes('not found')) {
-          errorMessage = 'Claude model not found. Please contact the administrator.';
+          errorMessage = 'Claude model not found. Check the model name saved in Settings.';
         } else {
           errorMessage = 'Claude request failed. Please try again later.';
         }

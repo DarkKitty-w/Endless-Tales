@@ -152,9 +152,9 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
       };
 
       const normalizer = (data: any): AssessActionDifficultyOutput => ({
-          difficulty: data.difficulty ?? fallback.difficulty,
-          reasoning: data.reasoning ?? fallback.reasoning,
-          suggestedDice: data.suggestedDice ?? fallback.suggestedDice,
+          difficulty: data.difficulty ?? data.assessedDifficulty ?? fallback.difficulty,
+          reasoning: data.reasoning ?? data.reason ?? "Difficulty assessed from current game context.",
+          suggestedDice: data.suggestedDice ?? data.dice ?? data.diceType ?? data.suggested_dice ?? fallback.suggestedDice,
           usedFallback: false,
           rawResponse: rawResponse,
       });

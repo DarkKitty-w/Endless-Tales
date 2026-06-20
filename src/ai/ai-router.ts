@@ -54,6 +54,8 @@ export interface GenerateContentConfig {
   temperature?: number;
   topP?: number;
   topK?: number;
+  maxTokens?: number;
+  stopSequences?: string[];
 }
 
 export interface GenerateContentResponse {
@@ -82,8 +84,9 @@ export interface AIProvider {
   }): AsyncIterable<string>;
 }
 
-// Timeout for AI requests (30 seconds)
-const AI_TIMEOUT = 30000;
+// Client-side timeout for AI requests. Keep this aligned with the server proxy
+// timeout; OpenRouter/free models can be slow but still complete successfully.
+const AI_TIMEOUT = 180000;
 function getSignalWithTimeout(signal?: AbortSignal): AbortSignal {
   const timeoutSignal = AbortSignal.timeout(AI_TIMEOUT);
   if (signal) {
@@ -92,18 +95,20 @@ function getSignalWithTimeout(signal?: AbortSignal): AbortSignal {
   return timeoutSignal;
 }
 
-async function readProxyError(response: Response): Promise<{ error: string; requestId?: string; traceId?: string }> {
+async function readProxyError(response: Response): Promise<{ error: string; requestId?: string; traceId?: string; rawResponse?: string }> {
   const text = await response.text();
   if (!text) return { error: `AI proxy request failed with status ${response.status}` };
   try {
     const parsed = JSON.parse(text);
+    const details = parsed.rawResponse ? ` Details: ${String(parsed.rawResponse).substring(0, 500)}` : '';
     return {
-      error: parsed.error || `AI proxy request failed with status ${response.status}`,
+      error: `${parsed.error || `AI proxy request failed with status ${response.status}`}${details}`,
       requestId: parsed.requestId,
       traceId: parsed.traceId,
+      rawResponse: parsed.rawResponse,
     };
   } catch {
-    return { error: text.substring(0, 500) };
+    return { error: text.substring(0, 500), rawResponse: text.substring(0, 1000) };
   }
 }
 
@@ -416,6 +421,7 @@ class OpenAIProvider implements AIProvider {
   async generateContent({
     model,
     contents,
+    systemMessage,
     config,
     signal,
     requestId: passedRequestId,
@@ -423,6 +429,7 @@ class OpenAIProvider implements AIProvider {
   }: {
     model?: string;
     contents: string;
+    systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
     requestId?: string;
@@ -459,7 +466,7 @@ class OpenAIProvider implements AIProvider {
         provider: 'openai',
         model: effectiveModel,
         contents: protectedContents.sanitized,
-        systemMessage: PROMPT_INJECTION_DEFENSE,
+        systemMessage: systemMessage ? `${systemMessage}\n${PROMPT_INJECTION_DEFENSE}` : PROMPT_INJECTION_DEFENSE,
         config,
         apiKey: this.getApiKey(),
         requestId,
@@ -506,6 +513,7 @@ class OpenAIProvider implements AIProvider {
   async *generateContentStream({
     model,
     contents,
+    systemMessage,
     config,
     signal,
     requestId: passedRequestId,
@@ -513,6 +521,7 @@ class OpenAIProvider implements AIProvider {
   }: {
     model?: string;
     contents: string;
+    systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
     requestId?: string;
@@ -549,7 +558,7 @@ class OpenAIProvider implements AIProvider {
         provider: 'openai',
         model: effectiveModel,
         contents: protectedContents.sanitized,
-        systemMessage: PROMPT_INJECTION_DEFENSE,
+        systemMessage: systemMessage ? `${systemMessage}\n${PROMPT_INJECTION_DEFENSE}` : PROMPT_INJECTION_DEFENSE,
         config,
         apiKey: this.getApiKey(),
         stream: true,
@@ -665,6 +674,7 @@ class ClaudeProvider implements AIProvider {
   async generateContent({
     model,
     contents,
+    systemMessage,
     config,
     signal,
     requestId: passedRequestId,
@@ -672,6 +682,7 @@ class ClaudeProvider implements AIProvider {
   }: {
     model?: string;
     contents: string;
+    systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
     requestId?: string;
@@ -708,7 +719,7 @@ class ClaudeProvider implements AIProvider {
         provider: 'claude',
         model: effectiveModel,
         contents: protectedContents.sanitized,
-        systemMessage: PROMPT_INJECTION_DEFENSE,
+        systemMessage: systemMessage ? `${systemMessage}\n${PROMPT_INJECTION_DEFENSE}` : PROMPT_INJECTION_DEFENSE,
         config,
         apiKey: this.getApiKey(),
         requestId,
@@ -755,6 +766,7 @@ class ClaudeProvider implements AIProvider {
   async *generateContentStream({
     model,
     contents,
+    systemMessage,
     config,
     signal,
     requestId: passedRequestId,
@@ -762,6 +774,7 @@ class ClaudeProvider implements AIProvider {
   }: {
     model?: string;
     contents: string;
+    systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
     requestId?: string;
@@ -798,7 +811,7 @@ class ClaudeProvider implements AIProvider {
         provider: 'claude',
         model: effectiveModel,
         contents: protectedContents.sanitized,
-        systemMessage: PROMPT_INJECTION_DEFENSE,
+        systemMessage: systemMessage ? `${systemMessage}\n${PROMPT_INJECTION_DEFENSE}` : PROMPT_INJECTION_DEFENSE,
         config,
         apiKey: this.getApiKey(),
         stream: true,
@@ -916,6 +929,7 @@ class DeepSeekProvider implements AIProvider {
   async generateContent({
     model,
     contents,
+    systemMessage,
     config,
     signal,
     requestId: passedRequestId,
@@ -923,6 +937,7 @@ class DeepSeekProvider implements AIProvider {
   }: {
     model?: string;
     contents: string;
+    systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
     requestId?: string;
@@ -959,7 +974,7 @@ class DeepSeekProvider implements AIProvider {
         provider: 'deepseek',
         model: effectiveModel,
         contents: protectedContents.sanitized,
-        systemMessage: PROMPT_INJECTION_DEFENSE,
+        systemMessage: systemMessage ? `${systemMessage}\n${PROMPT_INJECTION_DEFENSE}` : PROMPT_INJECTION_DEFENSE,
         config,
         apiKey: this.getApiKey(),
         requestId,
@@ -1006,6 +1021,7 @@ class DeepSeekProvider implements AIProvider {
   async *generateContentStream({
     model,
     contents,
+    systemMessage,
     config,
     signal,
     requestId: passedRequestId,
@@ -1013,6 +1029,7 @@ class DeepSeekProvider implements AIProvider {
   }: {
     model?: string;
     contents: string;
+    systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
     requestId?: string;
@@ -1049,7 +1066,7 @@ class DeepSeekProvider implements AIProvider {
         provider: 'deepseek',
         model: effectiveModel,
         contents: protectedContents.sanitized,
-        systemMessage: PROMPT_INJECTION_DEFENSE,
+        systemMessage: systemMessage ? `${systemMessage}\n${PROMPT_INJECTION_DEFENSE}` : PROMPT_INJECTION_DEFENSE,
         config,
         apiKey: this.getApiKey(),
         stream: true,
@@ -1169,6 +1186,7 @@ class OpenRouterProvider implements AIProvider {
   async generateContent({
     model,
     contents,
+    systemMessage,
     config,
     signal,
     requestId: passedRequestId,
@@ -1176,6 +1194,7 @@ class OpenRouterProvider implements AIProvider {
   }: {
     model?: string;
     contents: string;
+    systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
     requestId?: string;
@@ -1212,7 +1231,7 @@ class OpenRouterProvider implements AIProvider {
         provider: 'openrouter',
         model: effectiveModel,
         contents: protectedContents.sanitized,
-        systemMessage: PROMPT_INJECTION_DEFENSE,
+        systemMessage: systemMessage ? `${systemMessage}\n${PROMPT_INJECTION_DEFENSE}` : PROMPT_INJECTION_DEFENSE,
         config,
         apiKey: this.getApiKey(),
         requestId,
@@ -1259,6 +1278,7 @@ class OpenRouterProvider implements AIProvider {
   async *generateContentStream({
     model,
     contents,
+    systemMessage,
     config,
     signal,
     requestId: passedRequestId,
@@ -1266,6 +1286,7 @@ class OpenRouterProvider implements AIProvider {
   }: {
     model?: string;
     contents: string;
+    systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
     requestId?: string;
@@ -1302,7 +1323,7 @@ class OpenRouterProvider implements AIProvider {
         provider: 'openrouter',
         model: effectiveModel,
         contents: protectedContents.sanitized,
-        systemMessage: PROMPT_INJECTION_DEFENSE,
+        systemMessage: systemMessage ? `${systemMessage}\n${PROMPT_INJECTION_DEFENSE}` : PROMPT_INJECTION_DEFENSE,
         config,
         apiKey: this.getApiKey(),
         stream: true,
@@ -1726,6 +1747,7 @@ class WebLLMProvider implements AIProvider {
   async generateContent({
     model,
     contents,
+    systemMessage,
     config,
     signal,
     requestId: passedRequestId,
@@ -1733,6 +1755,7 @@ class WebLLMProvider implements AIProvider {
   }: {
     model?: string;
     contents: string;
+    systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
     requestId?: string;
@@ -1813,6 +1836,7 @@ class WebLLMProvider implements AIProvider {
   async *generateContentStream({
     model,
     contents,
+    systemMessage,
     config,
     signal,
     requestId: passedRequestId,
@@ -1820,6 +1844,7 @@ class WebLLMProvider implements AIProvider {
   }: {
     model?: string;
     contents: string;
+    systemMessage?: string;
     config?: GenerateContentConfig;
     signal?: AbortSignal;
     requestId?: string;
