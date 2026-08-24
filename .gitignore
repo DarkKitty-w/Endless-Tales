@@ -33,3 +33,6 @@ package-lock.json
 .jcode/      
 .plandex/    
 .cline/        
+
+# Local agent runtime config - may contain provider settings; never commit
+config.toml
