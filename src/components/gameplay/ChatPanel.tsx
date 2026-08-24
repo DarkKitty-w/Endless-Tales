@@ -112,9 +112,10 @@ export function ChatPanel({ isOpen, onClose, messages, onSendMessage, currentPla
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
+            aria-label="Chat message"
             className="flex-1"
           />
-          <Button onClick={handleSend} disabled={!inputText.trim()}>
+          <Button onClick={handleSend} disabled={!inputText.trim()} aria-label="Send chat message">
             <Send className="h-4 w-4" />
           </Button>
         </div>
