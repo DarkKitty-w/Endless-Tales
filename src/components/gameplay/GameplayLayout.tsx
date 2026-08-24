@@ -209,7 +209,7 @@ export function GameplayLayout({
             onSubmit={onSubmitAction}
             onSuggest={onSuggestAction}
             onCraft={onCraft}
-            disabled={anyLoading || character.class === 'admin000'}
+            disabled={anyLoading}
             isWaitingForHost={!!pendingGuestAction}
           />
         </ErrorBoundary>

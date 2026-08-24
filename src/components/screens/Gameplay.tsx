@@ -12,7 +12,7 @@ import { ActionInput, type ActionInputRef } from "../../components/gameplay/Acti
 import { TradeDialog } from "../../components/gameplay/TradeDialog";
 import { useToast } from "../../hooks/use-toast";
 import type { GameState, Character, SkillTree, Reputation, NpcRelationships, Location } from '../../types/game-types';
-import { updateGameStateString, buildGameStateContext } from "../../context/game-state-utils";
+import { buildGameStateContext } from "../../context/game-state-utils";
 import type { GameStateContext } from "../../types/game-types";
 import { calculateXpToNextLevel, calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, getStarterSkillsForClass } from "../../lib/gameUtils";
 import { narrateAdventure, type NarrateAdventureInput, type NarrateAdventureOutput } from "../../ai/flows/narrate-adventure";
@@ -665,9 +665,9 @@ export function Gameplay() {
         let difficultyResult: any = null;
 
         try {
-            if (character.class === 'admin000') {
-                return;
-            }
+            // SECURITY: The "admin000" developer bypass has been removed.
+            // It silently swallowed player actions for a magic class name —
+            // a client-side backdoor with no server-side authorization.
 
             const actionLower = action.trim().toLowerCase();
             const isPassiveAction = [INITIAL_ACTION_STRING.toLowerCase(), "look", "look around", "check inventory", "check status", "check relationships", "check reputation"].includes(actionLower);
@@ -1378,78 +1378,10 @@ export function Gameplay() {
         toast({ title: "Skills Respecced", description: "All non-starter skills have been unlearned." });
     }, [dispatch, toast]);
 
-    const processDevCommand = useCallback((action: string) => {
-        if (!character) return;
-        
-        let devNarration = `(Developer Mode) Player chose: "${action}".`;
-        const command = action.trim().toLowerCase();
-        const parts = command.split(' ');
-        const baseCommand = parts[0];
-        const value = parts.length > 1 ? parts.slice(1).join(' ') : undefined;
-        
-        const updates: Partial<Character> = {};
-        let xpGained: number | undefined;
-
-        if (baseCommand === '/xp' && value) {
-            const amount = parseInt(value, 10);
-            if (!isNaN(amount)) { xpGained = amount; devNarration += ` Granted ${amount} XP.`; }
-            else { devNarration += " - Invalid XP amount."; }
-        } else if (baseCommand === '/stage' && value) {
-            const stageNum = parseInt(value, 10);
-            if (!isNaN(stageNum) && stageNum >= 0 && stageNum <= 4) { updates.skillTreeStage = stageNum; devNarration += ` Set skill stage to ${stageNum}.`; }
-            else { devNarration += " - Invalid stage number (0-4)."; }
-        } else if (baseCommand === '/health' && value) {
-            const amount = parseInt(value, 10);
-            if (!isNaN(amount)) {
-                const newHealth = Math.max(0, Math.min(character.maxHealth, character.currentHealth + amount));
-                updates.currentHealth = newHealth;
-                devNarration += ` Adjusted health by ${amount}. New health: ${newHealth}.`;
-            } else { devNarration += " - Invalid health amount."; }
-        } else if (baseCommand === '/stamina' && value) {
-            const amount = parseInt(value, 10);
-            if (!isNaN(amount)) {
-                updates.currentStamina = Math.max(0, Math.min(character.maxStamina, character.currentStamina + amount));
-                devNarration += ` Adjusted action stamina by ${amount}.`;
-            } else { devNarration += " - Invalid action stamina amount."; }
-        } else if (baseCommand === '/mana' && value) {
-            const amount = parseInt(value, 10);
-            if (!isNaN(amount)) {
-                updates.currentMana = Math.max(0, Math.min(character.maxMana, character.currentMana + amount));
-                devNarration += ` Adjusted mana by ${amount}.`;
-            } else { devNarration += " - Invalid mana amount."; }
-        } else if (baseCommand === '/addtrait' && value) {
-            updates.traits = [...character.traits, value];
-            devNarration += ` Added trait: ${value}.`;
-        } else if (baseCommand === '/addknowledge' && value) {
-            updates.knowledge = [...character.knowledge, value];
-            devNarration += ` Added knowledge: ${value}.`;
-        } else if (baseCommand === '/addskill' && value) {
-            updates.learnedSkills = [...character.learnedSkills, { name: value, description: "Developer added skill", type: 'Learned' }];
-            devNarration += ` Added skill: ${value}.`;
-        } else {
-            devNarration += " Action processed. Dev restrictions bypassed.";
-        }
-
-        if (Object.keys(updates).length > 0) dispatch({ type: "UPDATE_CHARACTER", payload: updates });
-        if (xpGained) dispatch({ type: "GRANT_XP", payload: xpGained });
-        
-        const devLogEntry: StoryLogEntry = {
-            narration: devNarration,
-            updatedGameState: updateGameStateString(currentGameStateString, character, inventory, turnCount + 1),
-            timestamp: Date.now(),
-            branchingChoices: GENERIC_BRANCHING_CHOICES
-        };
-        
-        dispatch({ type: "UPDATE_NARRATION", payload: devLogEntry });
-        setBranchingChoices(GENERIC_BRANCHING_CHOICES);
-    }, [character, currentGameStateString, inventory, turnCount, dispatch]);
-
-    useEffect(() => {
-        if (character?.class === 'admin000' && lastPlayerAction && lastPlayerAction.startsWith('/')) {
-            processDevCommand(lastPlayerAction);
-            setLastPlayerAction(null);
-        }
-    }, [lastPlayerAction, character, processDevCommand]);
+    // SECURITY: The "admin000" developer command system (/xp, /stage, /health,
+    // /stamina, /mana, /addtrait, /addknowledge, /addskill) has been removed.
+    // It let any player grant themselves unlimited resources by entering a
+    // magic class name in the free-form character creation form.
 
     if (!character) {
         return (

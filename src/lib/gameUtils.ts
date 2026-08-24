@@ -63,9 +63,8 @@ export const CLASS_STARTER_SKILLS: Record<string, Skill[]> = {
         { name: "Basic Strike", description: "A simple physical attack.", type: 'Starter', staminaCost: 5 },
         { name: "First Aid", description: "Attempt to patch up minor wounds.", type: 'Starter', staminaCost: 10 }
     ],
-     "admin000": [ 
-        { name: "Dev Power", description: "Access developer abilities.", type: 'Starter' },
-    ],
+    // SECURITY: the "admin000" developer class (Dev Power skill) was removed —
+    // it was reachable by typing a magic string into the free-form class field.
     // Add more classes and their Wisdom/Strength/Stamina based skills
 };
 

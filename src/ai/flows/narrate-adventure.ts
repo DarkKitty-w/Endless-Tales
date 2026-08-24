@@ -203,16 +203,10 @@ export async function narrateAdventure(input: NarrateAdventureInput): Promise<Na
   if (input.traceId) {
     setTraceId(input.traceId);
   }
-  
-  if (process.env.NODE_ENV === 'development' && input.character.class === 'admin000') {
-    return {
-        narration: `Developer command "${input.playerChoice}" processed.`,
-        updatedGameState: input.gameState,
-        branchingChoices: [
-            { text: "Continue." }, { text: "Inspect." }, { text: "Status." }, { text: "Chaos." }
-        ]
-    };
-  }
+
+  // SECURITY: No special-casing based on user-supplied class strings.
+  // The previous "admin000" developer bypass let any player skip AI narration
+  // and game-state validation by typing a magic class name.
 
   const { character, adventureSettings, turnCount, assessDifficulty, capabilitiesSummary, gameStateContext } = input;
   const isCustom = adventureSettings.adventureType === "Custom";

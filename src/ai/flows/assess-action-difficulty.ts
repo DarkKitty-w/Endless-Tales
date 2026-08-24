@@ -91,14 +91,11 @@ export async function assessActionDifficulty(input: AssessActionDifficultyInput)
   if (input.traceId) {
     setTraceId(input.traceId);
   }
-  
-  if (process.env.NODE_ENV === 'development' && input.characterClass === 'admin000') {
-    return {
-      difficulty: "Trivial",
-      reasoning: "Developer Mode active. Action automatically succeeds.",
-      suggestedDice: "None",
-    };
-  }
+
+  // SECURITY: No special-casing based on user-supplied class strings.
+  // The previous "admin000" developer bypass allowed any player to unlock
+  // automatic success by typing a magic class name into the (free-form,
+  // client-side) character form.
 
   const stateSummary = input.gameStateContext
       ? formatGameStateContextForPrompt(input.gameStateContext)
