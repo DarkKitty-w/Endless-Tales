@@ -246,7 +246,21 @@ async function handleGemini(
   systemMessage: string | undefined
 ) {
   const effectiveModel = model || 'gemini-2.5-flash';
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${effectiveModel}:${stream ? 'streamGenerateContent' : 'generateContent'}?key=${apiKey}`;
+
+  // SEC-3: Validate the model name before interpolating it into the URL path
+  // (blocks path traversal / query-string injection via the client-supplied model).
+  const MODEL_NAME_RE = /^[A-Za-z0-9._-]+$/;
+  if (!MODEL_NAME_RE.test(effectiveModel)) {
+    return NextResponse.json(
+      { error: 'Invalid model name.', requestId: getCurrentRequestId(), traceId: getTraceId() },
+      { status: 400 }
+    );
+  }
+
+  // SEC-3: Send the API key via the x-goog-api-key header instead of the URL
+  // query string (?key=...) so it no longer leaks into server logs, proxies,
+  // and request history.
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${effectiveModel}:${stream ? 'streamGenerateContent' : 'generateContent'}`;
   
   const requestId = getCurrentRequestId();
   const traceId = getTraceId();
@@ -293,7 +307,11 @@ async function handleGemini(
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      // SEC-3: API key moved out of the URL query string into this header
+      'x-goog-api-key': apiKey,
+    },
     body: JSON.stringify(body),
     // ERR-7 Fix: Add timeout signal
     signal: getTimeoutSignal(),
