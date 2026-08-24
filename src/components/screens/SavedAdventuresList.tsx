@@ -245,6 +245,16 @@ export function SavedAdventuresList() {
     return [...savedAdventures].sort((a, b) => getSafeSaveTimestamp(b) - getSafeSaveTimestamp(a));
   }, [savedAdventures]); // Only recalculate when savedAdventures changes
 
+  // PERF-5: Validate/measure each save once per savedAdventures change instead of
+  // re-running the zod schema + size check on every render of this screen.
+  const integrityById = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof getSaveIntegrity>>();
+    for (const adventure of sortedAdventures) {
+      map.set(adventure.id, getSaveIntegrity(adventure));
+    }
+    return map;
+  }, [sortedAdventures]);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-background">
       <CardboardCard className="w-full max-w-2xl shadow-xl border-2 border-foreground/20">
@@ -278,7 +288,7 @@ export function SavedAdventuresList() {
                     const currentStage = char?.skillTreeStage ?? 0;
                     const stageData = char?.skillTree?.stages[currentStage];
                     const stageName = stageData?.stageName ?? `Stage ${currentStage}`;
-                    const integrity = getSaveIntegrity(adventure);
+                    const integrity = integrityById.get(adventure.id) ?? getSaveIntegrity(adventure);
                     const isValidSave = integrity.validation.success;
                     const timestamp = getSafeSaveTimestamp(adventure);
 

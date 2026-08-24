@@ -5,7 +5,8 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useForm, type FieldErrors, type UseFormRegister } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
-import _ from 'lodash';
+import isEqual from 'lodash/isEqual';
+import pick from 'lodash/pick';
 import { useGame } from "../../context/GameContext";
 import { Button } from "../../components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../components/ui/tabs";
@@ -155,7 +156,7 @@ export function CharacterCreation() {
     }
     
     const currentFormState = getValues();
-    if (!_.isEqual(newFormValues, _.pick(currentFormState, Object.keys(newFormValues) as Array<keyof FormData>)) || creationType !== currentFormState.creationType) {
+    if (!isEqual(newFormValues, pick(currentFormState, Object.keys(newFormValues) as Array<keyof FormData>)) || creationType !== currentFormState.creationType) {
         reset(newFormValues, { keepDirtyValues: true, keepValues: true });
         setTimeout(() => trigger(), 50);
     }

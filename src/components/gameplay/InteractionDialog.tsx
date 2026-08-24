@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback, memo } from "react";
+import React, { useState, useCallback, useRef, useEffect, memo } from "react";
 import type { InteractionRequest, PendingInteraction } from "../../types/multiplayer-types";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "../ui/card";
 import { Button } from "../ui/button";
@@ -56,6 +56,28 @@ export function InteractionDialog({
   const [isResponding, setIsResponding] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [tradeStep, setTradeStep] = useState<'confirm' | 'select'>('confirm');
+  // PERF/LEAK: track response-reset timers so they are cleared on unmount/close
+  const respondingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (respondingTimeoutRef.current) {
+        clearTimeout(respondingTimeoutRef.current);
+        respondingTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
+  const markResponding = useCallback(() => {
+    setIsResponding(true);
+    if (respondingTimeoutRef.current) {
+      clearTimeout(respondingTimeoutRef.current);
+    }
+    respondingTimeoutRef.current = setTimeout(() => {
+      respondingTimeoutRef.current = null;
+      setIsResponding(false);
+    }, 1000);
+  }, []);
 
   if (!isOpen || !interaction) return null;
 
@@ -105,19 +127,19 @@ export function InteractionDialog({
     }
     setIsResponding(true);
     onAccept?.(selectedItems);
-    setTimeout(() => setIsResponding(false), 1000);
+    markResponding();
   };
 
   const handleDecline = () => {
     setIsResponding(true);
     onDecline?.();
-    setTimeout(() => setIsResponding(false), 1000);
+    markResponding();
   };
 
   const handleTradeConfirm = () => {
     setIsResponding(true);
     onAccept?.(selectedItems);
-    setTimeout(() => setIsResponding(false), 1000);
+    markResponding();
   };
 
   const handleBack = () => {

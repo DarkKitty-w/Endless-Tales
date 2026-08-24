@@ -6,14 +6,20 @@
 const ipRequests = new Map<string, { count: number; resetTime: number }>();
 
 // Clean up old entries every 5 minutes
-setInterval(() => {
+// PERF/LEAK: unref the timer so it doesn't keep the Node.js event loop alive
+// (prevents graceful shutdown hangs and leaked intervals across dev HMR reloads).
+const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+const sweepTimer = setInterval(() => {
   const now = Date.now();
   for (const [key, value] of ipRequests.entries()) {
     if (now > value.resetTime) {
       ipRequests.delete(key);
     }
   }
-}, 5 * 60 * 1000);
+}, SWEEP_INTERVAL_MS);
+if (sweepTimer && typeof sweepTimer === 'object' && 'unref' in sweepTimer) {
+  sweepTimer.unref();
+}
 
 export interface RateLimitResult {
   success: boolean;

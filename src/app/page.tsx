@@ -2,16 +2,49 @@
 
 import { useEffect } from 'react';
 import { useGame } from "../context/GameContext";
-import { MainMenu } from "../components/screens/MainMenu";
-import { CharacterCreation } from "../components/screens/CharacterCreation";
-import { AdventureSetup } from "../components/screens/AdventureSetup";
-import { Gameplay } from "../components/screens/Gameplay";
-import { AdventureSummary } from "../components/screens/AdventureSummary";
-import { SavedAdventuresList } from "../components/screens/SavedAdventuresList";
-import { CoopLobby } from "../components/screens/CoopLobby";
 import { Loader2 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 import { logger } from "@/lib/logger";
+
+// PERF: Code-split each screen so only the active screen is loaded.
+// ssr:false keeps them client-only (they all rely on browser APIs/localStorage state).
+const MainMenu = dynamic(() => import("../components/screens/MainMenu").then(m => ({ default: m.MainMenu })), {
+  ssr: false,
+  loading: () => <ScreenLoader />,
+});
+const CharacterCreation = dynamic(() => import("../components/screens/CharacterCreation").then(m => ({ default: m.CharacterCreation })), {
+  ssr: false,
+  loading: () => <ScreenLoader />,
+});
+const AdventureSetup = dynamic(() => import("../components/screens/AdventureSetup").then(m => ({ default: m.AdventureSetup })), {
+  ssr: false,
+  loading: () => <ScreenLoader />,
+});
+const Gameplay = dynamic(() => import("../components/screens/Gameplay").then(m => ({ default: m.Gameplay })), {
+  ssr: false,
+  loading: () => <ScreenLoader />,
+});
+const AdventureSummary = dynamic(() => import("../components/screens/AdventureSummary").then(m => ({ default: m.AdventureSummary })), {
+  ssr: false,
+  loading: () => <ScreenLoader />,
+});
+const SavedAdventuresList = dynamic(() => import("../components/screens/SavedAdventuresList").then(m => ({ default: m.SavedAdventuresList })), {
+  ssr: false,
+  loading: () => <ScreenLoader />,
+});
+const CoopLobby = dynamic(() => import("../components/screens/CoopLobby").then(m => ({ default: m.CoopLobby })), {
+  ssr: false,
+  loading: () => <ScreenLoader />,
+});
+
+function ScreenLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <Loader2 className="h-8 w-8 animate-spin mr-2" /> Loading...
+    </div>
+  );
+}
 
 export default function Home() {
   const { state } = useGame();
