@@ -1094,7 +1094,12 @@ export function Gameplay() {
         pendingActionTimeoutRef.current = setTimeout(() => {
             setPendingBranchingAction(null);
             pendingActionTimeoutRef.current = null;
-            handlePlayerAction(action, isInitialAction);
+            // BUG-1 Fix: attach a rejection handler so an unexpected failure can never
+            // surface as an unhandled promise rejection (AbortError and runtime errors
+            // are already normalized inside handlePlayerAction).
+            Promise.resolve(handlePlayerAction(action, isInitialAction)).catch((err) => {
+                logger.error("Gameplay: Unhandled error from delayed player action:", err);
+            });
         }, 3000);
 
         setPendingBranchingAction({ action, isInitial: isInitialAction });
@@ -1113,7 +1118,12 @@ export function Gameplay() {
         
         if (actionToRetry) {
             toast({ title: "Retrying AI Narration...", description: `Re-sending action: "${actionToRetry.substring(0,30)}..."` });
-            handlePlayerAction(actionToRetry, isRetryInitial);
+            // BUG-1 Fix: attach a rejection handler so a failure in the retry path
+            // (e.g., an unexpected error thrown outside handlePlayerAction's internal
+            // try/catch) can never become an unhandled promise rejection.
+            Promise.resolve(handlePlayerAction(actionToRetry, isRetryInitial)).catch((err) => {
+                logger.error("Gameplay: Unhandled error from narration retry:", err);
+            });
         } else {
             toast({ title: "Cannot Retry", description: "No previous action to retry, and initial narration was already attempted.", variant: "destructive" });
         }
