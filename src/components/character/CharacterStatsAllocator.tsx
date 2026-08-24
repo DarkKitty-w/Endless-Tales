@@ -5,7 +5,7 @@
 import React from "react";
 import type { CharacterStats } from "../../types/character-types";
 import { StatAllocationInput } from "./StatAllocationInput";
-import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnAgilityIcon } from "../icons/HandDrawnIcons";
+import { HandDrawnStrengthIcon, HandDrawnStaminaIcon, HandDrawnMagicIcon as HandDrawnWisdomIcon } from "../icons/HandDrawnIcons";
 import { AlertCircle } from "lucide-react";
 
 interface CharacterStatsAllocatorProps {
@@ -67,7 +67,7 @@ export function CharacterStatsAllocator({
                     statKey="wisdom"
                     value={stats.wisdom}
                     onChange={handleLocalStatChange}
-                    Icon={HandDrawnAgilityIcon} // Using Agility icon as placeholder/alternative if Wisdom icon not defined here, though prompt implies Wisdom is used. Assuming HandDrawnAgilityIcon exists as per imports.
+                    Icon={HandDrawnWisdomIcon} // Dedicated wisdom icon (star), matching the other stat screens
                     disabled={isGenerating}
                     remainingPoints={remainingPoints}
                 />
