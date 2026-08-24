@@ -17,7 +17,7 @@ import type { GameStateContext } from "../../types/game-types";
 import { calculateXpToNextLevel, calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, getStarterSkillsForClass } from "../../lib/gameUtils";
 import { narrateAdventure, type NarrateAdventureInput, type NarrateAdventureOutput } from "../../ai/flows/narrate-adventure";
 import { summarizeAdventure } from "../../ai/flows/summarize-adventure";
-import { assessActionDifficulty, type AssessActionDifficultyInput } from "../../ai/flows/assess-action-difficulty";
+import { assessActionDifficulty, getFallbackDifficultyAssessment, type AssessActionDifficultyInput } from "../../ai/flows/assess-action-difficulty";
 import { generateSkillTree } from "../../ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "../../ai/flows/attempt-crafting";
 import { cn } from "../../lib/utils";
@@ -712,8 +712,10 @@ export function Gameplay() {
                         });
                     } catch (diffError) {
                         logger.warn("Failed to assess action difficulty, using fallback", 'Gameplay', { error: diffError });
-                        assessedDifficulty = "Normal";
-                        setDiceType("d10");
+                        // BUG-4 Fix: fall back to the game-difficulty-based mapping instead of hardcoded values
+                        const fallbackAssessment = getFallbackDifficultyAssessment(adventureSettings.difficulty);
+                        assessedDifficulty = fallbackAssessment.difficulty;
+                        setDiceType(fallbackAssessment.suggestedDice);
                     }
                 } else {
                     assessedDifficulty = "Trivial";
@@ -740,13 +742,25 @@ export function Gameplay() {
                     }
                 } else if (needsAssessment && difficultyResult === null) {
                     // If assessActionDifficulty failed, use default dice
-                    const rollResult = Math.floor(Math.random() * 10) + 1;
-                    setDiceResult(rollResult);
-                    setIsRollingDice(true);
-                    await new Promise(resolve => setTimeout(resolve, 1400));
-                    setIsRollingDice(false);
-                    setDiceResult(null);
-                    actionWithDice += ` (Difficulty: ${assessedDifficulty}, Dice Roll: ${rollResult}/d10)`;
+                    // BUG-4 Fix: derive the fallback dice from the game difficulty mapping instead of hardcoding d10
+                    const fallbackAssessment = getFallbackDifficultyAssessment(adventureSettings.difficulty);
+                    let rollResult: number | undefined = undefined;
+                    switch (fallbackAssessment.suggestedDice) {
+                        case 'd6': rollResult = Math.floor(Math.random() * 6) + 1; break;
+                        case 'd10': rollResult = Math.floor(Math.random() * 10) + 1; break;
+                        case 'd20': rollResult = Math.floor(Math.random() * 20) + 1; break;
+                        case 'd100': rollResult = Math.floor(Math.random() * 100) + 1; break;
+                    }
+                    if (rollResult !== undefined) {
+                        setDiceResult(rollResult);
+                        setIsRollingDice(true);
+                        await new Promise(resolve => setTimeout(resolve, 1400));
+                        setIsRollingDice(false);
+                        setDiceResult(null);
+                        actionWithDice += ` (Difficulty: ${assessedDifficulty}, Dice Roll: ${rollResult}/${fallbackAssessment.suggestedDice})`;
+                    } else {
+                        actionWithDice += ` (Difficulty: ${assessedDifficulty})`;
+                    }
                 }
 
                 let skillTreeSummaryForAI = null;

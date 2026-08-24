@@ -51,6 +51,15 @@ const FALLBACK_DIFFICULTY_MAP: Record<string, { difficulty: DifficultyLevel; dic
     nightmare: { difficulty: "Very Hard", dice: "d20" },
 };
 
+/**
+ * BUG-4 Fix: shared helper so every consumer falls back to the same
+ * game-difficulty-based assessment instead of hardcoded values.
+ */
+export function getFallbackDifficultyAssessment(gameDifficulty?: string): { difficulty: DifficultyLevel; suggestedDice: "d6" | "d10" | "d20" | "d100" | "None" } {
+    const mapping = FALLBACK_DIFFICULTY_MAP[gameDifficulty?.toLowerCase() ?? 'normal'] ?? FALLBACK_DIFFICULTY_MAP['normal'];
+    return { difficulty: mapping.difficulty, suggestedDice: mapping.dice };
+}
+
 function getAssessmentModeGuidance(input: AssessActionDifficultyInput): string {
     const mode = input.gameStateContext?.adventureSettings?.type;
     switch (mode) {
