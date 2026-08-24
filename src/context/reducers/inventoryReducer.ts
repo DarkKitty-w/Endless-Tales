@@ -74,19 +74,47 @@ export function inventoryReducer(state: InventoryItem[], action: Action): Invent
         }
         case "UPDATE_CRAFTING_RESULT": {
             const { consumedItems, craftedItem } = action.payload;
+
+            // BUG-2 Fix: validate material availability before mutating anything.
+            // The AI may hallucinate ingredients that are not actually in the
+            // inventory; consuming a partial subset and still granting the crafted
+            // item would corrupt state (duplication / item loss). Count every
+            // required occurrence (duplicates allowed) and compare with stock.
+            const requiredCounts = new Map<string, number>();
+            (consumedItems || []).forEach(name => {
+                if (typeof name !== 'string' || !name) return;
+                requiredCounts.set(name, (requiredCounts.get(name) ?? 0) + 1);
+            });
+
+            const allMaterialsAvailable = [...requiredCounts.entries()].every(([name, count]) => {
+                const available = state.filter(item => item.name === name).length;
+                if (available < count) {
+                    logger.warn(
+                        `Crafting validation failed: need ${count} of "${name}" but only ${available} in inventory. Craft aborted atomically.`,
+                        "inventoryReducer"
+                    );
+                    return false;
+                }
+                return true;
+            });
+
+            if (!allMaterialsAvailable) {
+                // Data integrity over partial mutation: nothing is consumed and no
+                // crafted item is granted when materials are missing.
+                return state;
+            }
+
             let updatedInventory = [...state];
 
-            // Consume items
-            consumedItems.forEach(itemName => {
+            // Consume items (all guaranteed present at this point)
+            requiredCounts.forEach((_, itemName) => {
                 const indexToRemove = updatedInventory.findIndex(item => item.name === itemName);
                 if (indexToRemove > -1) {
                     updatedInventory.splice(indexToRemove, 1);
-                } else {
-                    logger.warn(`Attempted to consume non-existent item: ${itemName}`, "inventoryReducer");
                 }
             });
 
-            // Add crafted item if successful
+            // Add crafted item only after successful consumption of ALL materials
             if (craftedItem) {
                 updatedInventory.push(craftedItem);
             }

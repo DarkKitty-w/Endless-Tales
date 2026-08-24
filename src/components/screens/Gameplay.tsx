@@ -1236,6 +1236,32 @@ export function Gameplay() {
         setIsCraftingLoading(true);
         toast({ title: "Attempting to craft...", description: `Trying to make: ${goal}` });
         const inventoryListNames = inventory.map(item => item.name);
+
+        // BUG-2 Fix: verify the player actually owns every selected ingredient
+        // (respecting duplicates) BEFORE spending an AI call. This prevents the AI
+        // from "crafting" with materials the player never had.
+        const requestedCounts = new Map<string, number>();
+        ingredients.forEach(name => {
+            if (typeof name !== 'string' || !name) return;
+            requestedCounts.set(name, (requestedCounts.get(name) ?? 0) + 1);
+        });
+        const missingIngredients = [...requestedCounts.entries()]
+            .filter(([name, count]) => inventory.filter(item => item.name === name).length < count)
+            .map(([name]) => name);
+        if (missingIngredients.length > 0) {
+            logger.warn("handleCrafting: missing ingredients rejected before AI call", "Gameplay", { missingIngredients });
+            toast({
+                title: "Missing Ingredients",
+                description: `You don't have the required materials: ${missingIngredients.join(', ')}.`,
+                variant: "destructive",
+                duration: 5000,
+            });
+            setError(`Crafting cancelled: missing materials (${missingIngredients.join(', ')}).`);
+            setIsCraftingDialogOpen(false);
+            setIsCraftingLoading(false);
+            return;
+        }
+
         const skills = character.learnedSkills.map(s => s.name);
         const craftingInput: AttemptCraftingInput = {
             characterKnowledge: character.knowledge, characterSkills: skills, inventoryItems: inventoryListNames,
