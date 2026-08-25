@@ -9,19 +9,40 @@ import type { AdventureSettings } from "../types/adventure-types";
 import type { GameStatus } from "../types/game-types";
 import { CURRENT_STATE_VERSION } from "../context/game-initial-state";
 import { logger } from "./logger";
+import { incrementCounter, observeDuration } from "./metrics";
 
 const TEMP_PREFIX = '_temp_';
 const BACKUP_PREFIX = '_backup_';
 
 /**
+ * Record duration and outcome of a storage operation as metrics (OBS-13).
+ * Only the operation kind, key family, outcome, and timing are recorded —
+ * never the stored content.
+ */
+function recordStorageOperation(operation: 'write' | 'read' | 'read_backup', key: string, durationMs: number, success: boolean): void {
+  // Group keys to avoid unbounded label cardinality
+  const keyFamily = key.startsWith('endlessTales_temp_backup_')
+    ? 'temp_backup'
+    : key.startsWith('_temp_')
+      ? 'temp'
+      : key.startsWith('_backup_')
+        ? 'backup'
+        : 'primary';
+  incrementCounter('storage_operations_total', { operation, keyFamily, outcome: success ? 'success' : 'failure' });
+  observeDuration('storage_operation_duration_ms', durationMs, { operation, keyFamily, outcome: success ? 'success' : 'failure' });
+}
+
+/**
  * Atomically write data to localStorage
  * Uses write-to-temp, validate, rename pattern for atomicity
- * 
+ *
  * @param key - The localStorage key to write to
  * @param value - The value to write (will be JSON.stringified)
  * @returns true if write succeeded, false otherwise
  */
 export function atomicLocalStorageWrite(key: string, value: unknown): boolean {
+  // OBS-13: Performance tracking for save operations
+  const startTime = Date.now();
   const tempKey = `${TEMP_PREFIX}${key}`;
   const backupKey = `${BACKUP_PREFIX}${key}`;
   
@@ -67,7 +88,8 @@ export function atomicLocalStorageWrite(key: string, value: unknown): boolean {
     // Step 7: Clean up temp and backup
     localStorage.removeItem(tempKey);
     localStorage.removeItem(backupKey);
-    
+
+    recordStorageOperation('write', key, Date.now() - startTime, true);
     return true;
   } catch (error) {
     // Clean up on error
@@ -76,8 +98,9 @@ export function atomicLocalStorageWrite(key: string, value: unknown): boolean {
     } catch (e) {
       // Ignore cleanup errors
     }
-    
+
     logger.error('Atomic write failed with error:', 'storage-utils', { error });
+    recordStorageOperation('write', key, Date.now() - startTime, false);
     return false;
   }
 }
@@ -89,27 +112,34 @@ export function atomicLocalStorageWrite(key: string, value: unknown): boolean {
  * @returns The parsed value, or null if not found or invalid
  */
 export function safeLocalStorageRead<T = unknown>(key: string): T | null {
+  // OBS-13: Performance tracking for load operations
+  const startTime = Date.now();
   const backupKey = `${BACKUP_PREFIX}${key}`;
-  
+
   try {
     const data = localStorage.getItem(key);
     if (data === null) return null;
-    
-    return JSON.parse(data) as T;
+
+    const parsed = JSON.parse(data) as T;
+    recordStorageOperation('read', key, Date.now() - startTime, true);
+    return parsed;
   } catch (error) {
     logger.warn(`Failed to read ${key}, trying backup...`, 'storage-utils', { error });
-    
+
     // Try backup
     try {
       const backupData = localStorage.getItem(backupKey);
       if (backupData !== null) {
         logger.info(`Successfully read backup for ${key}`, 'storage-utils');
-        return JSON.parse(backupData) as T;
+        const parsedBackup = JSON.parse(backupData) as T;
+        recordStorageOperation('read_backup', key, Date.now() - startTime, true);
+        return parsedBackup;
       }
     } catch (backupError) {
       logger.error(`Backup read also failed for ${key}`, 'storage-utils', { backupError });
     }
-    
+
+    recordStorageOperation('read', key, Date.now() - startTime, false);
     return null;
   }
 }
