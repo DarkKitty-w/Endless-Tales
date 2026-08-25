@@ -58,6 +58,32 @@ function sanitizeProviderModels(value: unknown): Partial<Record<ProviderType, st
   return sanitized;
 }
 
+// PERSISTENCE Fix: how often the active adventure is auto-saved during
+// gameplay. Saving is automatic but non-blocking: dispatching
+// SAVE_CURRENT_ADVENTURE only mutates in-memory state; the actual localStorage
+// write stays debounced in the persistence effect below.
+const AUTO_SAVE_INTERVAL_MS = 30000;
+
+/**
+ * Lightweight fingerprint of gameplay-relevant progress used by auto-save to
+ * skip redundant saves. Only cheap, meaningful fields are included.
+ */
+function computeAutoSaveSignature(state: GameState): string {
+  const lastEntry = state.storyLog.length > 0 ? state.storyLog[state.storyLog.length - 1] : null;
+  return [
+    state.turnCount,
+    state.storyLog.length,
+    lastEntry?.timestamp ?? 0,
+    state.inventory.length,
+    state.character?.currentHealth ?? 0,
+    state.character?.currentStamina ?? 0,
+    state.character?.currentMana ?? 0,
+    state.character?.xp ?? 0,
+    state.character?.level ?? 0,
+    state.adventureSummary ?? '',
+  ].join('|');
+}
+
 // Split contexts by domain to prevent unnecessary re-renders
 const AdventureContext = createContext<{
   status: GameStatus;
@@ -204,6 +230,14 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
   const [state, rawDispatch] = useReducer(gameReducer, initialState);
   const [isInitializing, setIsInitializing] = React.useState(true);
   const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // PERS-1 Fix: keep a live reference to the latest state so persistence
+  // callbacks (debounce timer, page-exit flush, auto-save tick) never read
+  // stale data through closed-over state.
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   // PERF-3 Fix: Wrap dispatch to clean up WebRTC queue processor on RESET_GAME
   const dispatch: Dispatch<Action> = useCallback((action: Action) => {
@@ -522,114 +556,110 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     });
   }, [state.aiProvider, state.providerApiKeys, state.providerModels]);
 
-  // Consolidated persistence hook with debouncing (storage writes only)
-  useEffect(() => {
-    // Clear any pending debounce
-    if (debounceTimeoutRef.current) {
-      clearTimeout(debounceTimeoutRef.current);
-    }
+  // PERSISTENCE Fix: immediate, synchronous persistence pass. Reads state via
+  // stateRef so it is always safe to call from timers or page-exit flush
+  // handlers without stale closures.
+  const persistNow = useCallback(() => {
+    const currentState = stateRef.current;
+    try {
+      // Theme
+      applyTheme(currentState.selectedThemeId, currentState.isDarkMode);
+      localStorage.setItem(THEME_ID_KEY, currentState.selectedThemeId);
+      localStorage.setItem(THEME_MODE_KEY, currentState.isDarkMode ? 'dark' : 'light');
 
-    // Debounce writes to avoid excessive I/O
-    debounceTimeoutRef.current = setTimeout(() => {
-      try {
-        // Theme
-        applyTheme(state.selectedThemeId, state.isDarkMode);
-        localStorage.setItem(THEME_ID_KEY, state.selectedThemeId);
-        localStorage.setItem(THEME_MODE_KEY, state.isDarkMode ? 'dark' : 'light');
+      // SAVE-8 Fix: Check if storage is getting full
+      if (isLocalStorageQuotaLow()) {
+        toast({
+          title: "Storage Nearly Full",
+          description: "Your browser storage is almost full. Consider deleting old saves.",
+          variant: "destructive",
+        });
+      }
 
-        // SAVE-8 Fix: Check if storage is getting full
-        if (isLocalStorageQuotaLow()) {
+      // Saved adventures (localStorage)
+      // SAVE-16 Fix: Validate saves before writing
+      // SAVE-6 Fix: Use atomic writes
+      const invalidSaves: string[] = [];
+      const validSaves = currentState.savedAdventures.filter((adventure: SavedAdventure) => {
+        const validation = validateSavedAdventure(adventure);
+        if (!validation.success) {
+          invalidSaves.push(adventure.id || 'unknown');
+          logger.error('Skipping invalid save during persist', 'game-context', { 
+            adventureId: adventure.id, 
+            error: validation.error 
+          });
+          return false;
+        }
+        return true;
+      });
+
+      if (invalidSaves.length > 0) {
+        toast({
+          title: "Invalid Saves Detected",
+          description: `${invalidSaves.length} save(s) failed validation and will not be persisted: ${invalidSaves.join(', ')}`,
+          variant: "destructive",
+        });
+      }
+
+      // SAVE-6: Atomic write for saves
+      // SAVE-10 Fix: Check save sizes and warn if too large
+      const oversizedSaves: string[] = [];
+      const sizeWarnings: string[] = [];
+        
+      validSaves.forEach((adventure: SavedAdventure) => {
+        const sizeCheck = checkSaveSize(adventure);
+        if (sizeCheck.isTooLarge) {
+          oversizedSaves.push(`${adventure.characterName || adventure.id} (${sizeCheck.sizeFormatted})`);
+        } else if (sizeCheck.isApproachingLimit) {
+          sizeWarnings.push(`${adventure.characterName || adventure.id} (${sizeCheck.sizeFormatted})`);
+        }
+      });
+        
+      if (oversizedSaves.length > 0) {
+        toast({
+          title: "Saves Too Large",
+          description: `The following saves exceed size limits and won't be saved: ${oversizedSaves.join(', ')}. Consider deleting old story log entries.`,
+          variant: "destructive",
+        });
+        // Filter out oversized saves
+        const fitsSaves = validSaves.filter((adv: SavedAdventure) => {
+          const sizeCheck = checkSaveSize(adv);
+          return !sizeCheck.isTooLarge;
+        });
+        const saveSuccess = atomicLocalStorageWrite(SAVED_ADVENTURES_KEY, fitsSaves);
+        if (!saveSuccess) {
+          throw new Error('Atomic write failed for saved adventures');
+        }
+      } else {
+        if (sizeWarnings.length > 0) {
           toast({
-            title: "Storage Nearly Full",
-            description: "Your browser storage is almost full. Consider deleting old saves.",
-            variant: "destructive",
+            title: "Large Saves Warning",
+            description: `The following saves are approaching size limits: ${sizeWarnings.join(', ')}. Consider reducing story log size.`,
           });
         }
-
-        // Saved adventures (localStorage)
-        // SAVE-16 Fix: Validate saves before writing
-        // SAVE-6 Fix: Use atomic writes
-        const invalidSaves: string[] = [];
-        const validSaves = state.savedAdventures.filter((adventure: SavedAdventure) => {
-          const validation = validateSavedAdventure(adventure);
-          if (!validation.success) {
-            invalidSaves.push(adventure.id || 'unknown');
-            logger.error('Skipping invalid save during persist', 'game-context', { 
-              adventureId: adventure.id, 
-              error: validation.error 
-            });
-            return false;
-          }
-          return true;
-        });
-
-        if (invalidSaves.length > 0) {
-          toast({
-            title: "Invalid Saves Detected",
-            description: `${invalidSaves.length} save(s) failed validation and will not be persisted: ${invalidSaves.join(', ')}`,
-            variant: "destructive",
-          });
-        }
-
-        // SAVE-6: Atomic write for saves
-        // SAVE-10 Fix: Check save sizes and warn if too large
-        const oversizedSaves: string[] = [];
-        const sizeWarnings: string[] = [];
-        
-        validSaves.forEach((adventure: SavedAdventure) => {
-          const sizeCheck = checkSaveSize(adventure);
-          if (sizeCheck.isTooLarge) {
-            oversizedSaves.push(`${adventure.characterName || adventure.id} (${sizeCheck.sizeFormatted})`);
-          } else if (sizeCheck.isApproachingLimit) {
-            sizeWarnings.push(`${adventure.characterName || adventure.id} (${sizeCheck.sizeFormatted})`);
-          }
-        });
-        
-        if (oversizedSaves.length > 0) {
-          toast({
-            title: "Saves Too Large",
-            description: `The following saves exceed size limits and won't be saved: ${oversizedSaves.join(', ')}. Consider deleting old story log entries.`,
-            variant: "destructive",
-          });
-          // Filter out oversized saves
-          const fitsSaves = validSaves.filter((adv: SavedAdventure) => {
-            const sizeCheck = checkSaveSize(adv);
-            return !sizeCheck.isTooLarge;
-          });
-          const saveSuccess = atomicLocalStorageWrite(SAVED_ADVENTURES_KEY, fitsSaves);
-          if (!saveSuccess) {
-            throw new Error('Atomic write failed for saved adventures');
-          }
-        } else {
-          if (sizeWarnings.length > 0) {
-            toast({
-              title: "Large Saves Warning",
-              description: `The following saves are approaching size limits: ${sizeWarnings.join(', ')}. Consider reducing story log size.`,
-            });
-          }
           
-          const saveSuccess = atomicLocalStorageWrite(SAVED_ADVENTURES_KEY, validSaves);
-          if (!saveSuccess) {
-            throw new Error('Atomic write failed for saved adventures');
-          }
+        const saveSuccess = atomicLocalStorageWrite(SAVED_ADVENTURES_KEY, validSaves);
+        if (!saveSuccess) {
+          throw new Error('Atomic write failed for saved adventures');
         }
+      }
 
-        // AI provider preference and BYOK provider keys (localStorage)
-        localStorage.setItem(AI_PROVIDER_KEY, state.aiProvider);
-        localStorage.setItem(PROVIDER_API_KEYS_KEY, JSON.stringify(sanitizeProviderApiKeys(state.providerApiKeys)));
-        localStorage.setItem(PROVIDER_MODELS_KEY, JSON.stringify(sanitizeProviderModels(state.providerModels)));
-      } catch (storageError) {
+      // AI provider preference and BYOK provider keys (localStorage)
+      localStorage.setItem(AI_PROVIDER_KEY, currentState.aiProvider);
+      localStorage.setItem(PROVIDER_API_KEYS_KEY, JSON.stringify(sanitizeProviderApiKeys(currentState.providerApiKeys)));
+      localStorage.setItem(PROVIDER_MODELS_KEY, JSON.stringify(sanitizeProviderModels(currentState.providerModels)));
+    } catch (storageError) {
         // ERR-22/ERR-24 Fix: Handle localStorage errors
         logger.error('Failed to save to localStorage', 'game-context', { error: String(storageError) });
-        
+
         // Check if it's a quota exceeded error
-        const isQuotaExceeded = storageError instanceof DOMException && 
+        const isQuotaExceeded = storageError instanceof DOMException &&
           (storageError.code === 22 || storageError.name === 'QuotaExceededError');
-        
+
         toast({
           title: "Save Failed",
-          description: isQuotaExceeded 
-            ? "Storage full. Please delete some saved adventures to free up space." 
+          description: isQuotaExceeded
+            ? "Storage full. Please delete some saved adventures to free up space."
             : "Failed to save your progress. Your changes may not persist.",
           variant: "destructive",
           action: isQuotaExceeded ? (
@@ -651,10 +681,17 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
           ) : undefined,
         });
       }
+  }, [applyTheme]);
 
-      // AI router synchronization is handled by the dedicated BYOK effect above.
-
+  // Consolidated persistence hook with debouncing (storage writes only).
+  useEffect(() => {
+    // Debounce writes to avoid excessive I/O
+    if (debounceTimeoutRef.current) {
+      clearTimeout(debounceTimeoutRef.current);
+    }
+    debounceTimeoutRef.current = setTimeout(() => {
       debounceTimeoutRef.current = null;
+      persistNow();
     }, 300);
 
     // Cleanup timeout on unmount or before next effect run
@@ -665,6 +702,7 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
       }
     };
   }, [
+    persistNow,
     state.selectedThemeId,
     state.isDarkMode,
     state.userGoogleAiApiKey,
@@ -674,6 +712,53 @@ export const GameProvider = ({ children }: React.PropsWithChildren<{}>) => {
     state.providerModels,
     applyTheme,
   ]);
+
+  // PERSISTENCE Fix: flush pending debounced writes when the page is hidden
+  // or unloaded. Without this, progress made during the last debounce window
+  // (300ms) before a tab close/reload would be lost. persistNow is idempotent
+  // and synchronous, so calling it from both handlers is safe.
+  useEffect(() => {
+    const flushOnExit = () => {
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current);
+        debounceTimeoutRef.current = null;
+      }
+      persistNow();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        flushOnExit();
+      }
+    };
+    window.addEventListener('pagehide', flushOnExit);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.removeEventListener('pagehide', flushOnExit);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [persistNow]);
+
+  // PERSISTENCE Fix / PERS-6: automatic, non-blocking save of the active
+  // adventure while playing. Dispatching SAVE_CURRENT_ADVENTURE only mutates
+  // in-memory state (the reducer guards on status === 'Gameplay'); the disk
+  // write remains debounced, so gameplay never blocks on I/O.
+  const lastAutoSaveSignatureRef = useRef<string | null>(null);
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      const currentState = stateRef.current;
+      if (currentState.status !== 'Gameplay' || !currentState.character || !currentState.currentAdventureId) {
+        return;
+      }
+      const signature = computeAutoSaveSignature(currentState);
+      if (signature === lastAutoSaveSignatureRef.current) {
+        return; // nothing changed since the last auto-save
+      }
+      lastAutoSaveSignatureRef.current = signature;
+      dispatch({ type: 'SAVE_CURRENT_ADVENTURE' });
+      logger.log('Auto-saved current adventure', 'game-context', { turn: currentState.turnCount });
+    }, AUTO_SAVE_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [dispatch]);
 
   // Debug log (development only) - moved to useEffect to avoid running on every render
   useEffect(() => {
