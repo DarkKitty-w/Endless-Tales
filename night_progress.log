@@ -5,3 +5,4 @@ security:DONE
 code_quality:DONE
 error_handling:DONE
 architecture:DONE
+persistence:DONE
