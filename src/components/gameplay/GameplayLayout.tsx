@@ -19,7 +19,7 @@ import type { Character, InventoryItem, StoryLogEntry, GameStateContext } from "
 import type { ProviderType } from "../../ai/ai-router";
 import type { InteractionRequest, PendingInteraction, MultiplayerState } from "../../types/multiplayer-types";
 import type { Skill } from "../../types/character-types";
-import type { NarrateAdventureOutput } from "../../ai/flows/narrate-adventure";
+import type { NarrateAdventureOutput } from "../../services/ai-gateway";
 type LoadingPhase =
   | { type: 'idle' }
   | { type: 'initial-loading' }

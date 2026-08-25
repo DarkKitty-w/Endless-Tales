@@ -15,11 +15,19 @@ import type { GameState, Character, SkillTree, Reputation, NpcRelationships, Loc
 import { buildGameStateContext } from "../../context/game-state-utils";
 import type { GameStateContext } from "../../types/game-types";
 import { calculateXpToNextLevel, calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, getStarterSkillsForClass } from "../../lib/gameUtils";
-import { narrateAdventure, type NarrateAdventureInput, type NarrateAdventureOutput } from "../../ai/flows/narrate-adventure";
-import { summarizeAdventure } from "../../ai/flows/summarize-adventure";
-import { assessActionDifficulty, getFallbackDifficultyAssessment, type AssessActionDifficultyInput } from "../../ai/flows/assess-action-difficulty";
-import { generateSkillTree } from "../../ai/flows/generate-skill-tree";
-import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "../../ai/flows/attempt-crafting";
+import {
+  requestNarration,
+  requestAdventureSummary,
+  requestDifficultyAssessment,
+  getFallbackDifficulty,
+  requestSkillTree,
+  requestCraftingAttempt,
+  type NarrateAdventureInput,
+  type NarrateAdventureOutput,
+  type AssessActionDifficultyInput,
+  type AttemptCraftingInput,
+  type AttemptCraftingOutput,
+} from "../../services/ai-gateway";
 import { cn } from "../../lib/utils";
 import { Loader2, WifiOff, X } from "lucide-react";
 import { useIsMobile } from "../../hooks/use-mobile";
@@ -575,7 +583,7 @@ export function Gameplay() {
             if (fullStory.trim().length > 0) {
                 try {
                     const signal = createAbortSignal();
-                    const summaryResult = await summarizeAdventure({ story: fullStory, userApiKey: activeApiKey, signal });
+                    const summaryResult = await requestAdventureSummary({ story: fullStory, userApiKey: activeApiKey, signal });
                     summary = summaryResult.summary;
                     
                     // ERR-8 Fix: Show toast when fallback is used
@@ -704,7 +712,7 @@ export function Gameplay() {
                             traceId,
                         };
                         
-                        difficultyResult = await assessActionDifficulty(difficultyInput);
+                        difficultyResult = await requestDifficultyAssessment(difficultyInput);
                         assessedDifficulty = difficultyResult.difficulty;
                         setDiceType(difficultyResult.suggestedDice);
                         
@@ -716,7 +724,7 @@ export function Gameplay() {
                     } catch (diffError) {
                         logger.warn("Failed to assess action difficulty, using fallback", 'Gameplay', { error: diffError });
                         // BUG-4 Fix: fall back to the game-difficulty-based mapping instead of hardcoded values
-                        const fallbackAssessment = getFallbackDifficultyAssessment(adventureSettings.difficulty);
+                        const fallbackAssessment = getFallbackDifficulty(adventureSettings.difficulty);
                         assessedDifficulty = fallbackAssessment.difficulty;
                         setDiceType(fallbackAssessment.suggestedDice);
                     }
@@ -746,7 +754,7 @@ export function Gameplay() {
                 } else if (needsAssessment && difficultyResult === null) {
                     // If assessActionDifficulty failed, use default dice
                     // BUG-4 Fix: derive the fallback dice from the game difficulty mapping instead of hardcoding d10
-                    const fallbackAssessment = getFallbackDifficultyAssessment(adventureSettings.difficulty);
+                    const fallbackAssessment = getFallbackDifficulty(adventureSettings.difficulty);
                     let rollResult: number | undefined = undefined;
                     switch (fallbackAssessment.suggestedDice) {
                         case 'd6': rollResult = Math.floor(Math.random() * 6) + 1; break;
@@ -808,9 +816,9 @@ export function Gameplay() {
                 let narrationResult: NarrateAdventureOutput;
                 
                 if (!needsAssessment) {
-                    narrationResult = await narrateAdventure(inputForAI);
+                    narrationResult = await requestNarration(inputForAI);
                 } else {
-                    narrationResult = await narrateAdventure(inputForAI);
+                    narrationResult = await requestNarration(inputForAI);
                 }
 
                 setIsAssessingDifficulty(false);
@@ -1165,7 +1173,7 @@ export function Gameplay() {
         
         try {
             const signal = createAbortSignal();
-            const skillTreeResult = await generateSkillTree({ characterClass: charClass, userApiKey: activeApiKey, signal });
+            const skillTreeResult = await requestSkillTree({ characterClass: charClass, userApiKey: activeApiKey, signal });
             if (skillTreeResult && skillTreeResult.stages.length === 5) { 
                 dispatch({ type: "SET_SKILL_TREE", payload: { class: charClass, skillTree: skillTreeResult } });
                 if (skillTreeResult.usedFallback) {
@@ -1286,7 +1294,7 @@ export function Gameplay() {
         };
         try {
             const signal = createAbortSignal();
-            const result: AttemptCraftingOutput = await attemptCrafting({ ...craftingInput, signal, userApiKey: activeApiKey });
+            const result: AttemptCraftingOutput = await requestCraftingAttempt({ ...craftingInput, signal, userApiKey: activeApiKey });
             if (result.usedFallback) {
                 const friendlyMessage = getUserFriendlyAiError(result.rawResponse, state.aiProvider);
                 setError(friendlyMessage);
@@ -1326,7 +1334,7 @@ export function Gameplay() {
             dispatch({ type: "SET_SKILL_TREE_GENERATING", payload: true });
             setLocalIsGeneratingSkillTree(true);
             const signal = createAbortSignal();
-            newSkillTreeResult = await generateSkillTree({ characterClass: newClass, userApiKey: activeApiKey, signal });
+            newSkillTreeResult = await requestSkillTree({ characterClass: newClass, userApiKey: activeApiKey, signal });
             if (newSkillTreeResult && newSkillTreeResult.stages.length === 5) { 
                 dispatch({ type: "CHANGE_CLASS_AND_RESET_SKILLS", payload: { newClass, newSkillTree: newSkillTreeResult } });
                 toast({ title: `Class Changed to ${newClass}!`, description: "Your abilities and progression have been reset." });

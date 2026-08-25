@@ -3,7 +3,7 @@
 
 import React, { useRef, useEffect, useCallback, useMemo, memo } from "react";
 import type { StoryLogEntry } from "../../types/adventure-types";
-import type { NarrateAdventureOutput } from "../../ai/flows/narrate-adventure";
+import type { NarrateAdventureOutput } from "../../services/ai-gateway";
 import { ScrollArea } from "../../components/ui/scroll-area";
 import { CardboardCard, CardContent, CardHeader, CardTitle } from "../../components/game/CardboardCard";
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert";
