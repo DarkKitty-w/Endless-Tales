@@ -46,9 +46,18 @@ interface UseMultiplayerOptions {
   onInteractionResponse?: (interactionId: string, accepted: boolean) => void;
   onPeerConnected?: (peer: PeerInfo) => void;
   onPeerDisconnected?: (peerId: string) => void;
+  // NET-14 Fix: Host-provided snapshot of the authoritative GameState used for
+  // full-state resync (sync-response). Falls back to the hook-level state when absent.
+  getGameStateSnapshot?: () => any;
   // ERR-13: Add error callback for user-facing error messages
   onError?: (title: string, description: string, recoverable?: boolean) => void;
 }
+
+// NET-14 Fix: Heartbeat tuning. Pings are sent every 5s; a peer is considered
+// stale after ~15s of silence (3 missed beats). Any inbound traffic also counts
+// as liveness so gameplay stays responsive under high latency.
+const HEARTBEAT_INTERVAL_MS = 5000;
+const STALE_THRESHOLD_MS = 15000;
 
 export function useMultiplayer(options: UseMultiplayerOptions) {
   const {
@@ -62,6 +71,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     onInteractionResponse,
     onPeerConnected,
     onPeerDisconnected,
+    getGameStateSnapshot,
     onError,
   } = options;
 
@@ -104,6 +114,11 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
   const lastSentChecksum = useRef<string | null>(null);
   const reconciliationInterval = useRef<NodeJS.Timeout | null>(null);
   const peerChecksums = useRef<Record<string, { checksum: string; timestamp: number }>>({});
+  // NET-14 Fix: Heartbeat state for stale connection detection
+  const heartbeatInterval = useRef<NodeJS.Timeout | null>(null);
+  const peerLastActivity = useRef<Record<string, number>>({}); // last inbound activity per remote peer/channel
+  const reconnectRef = useRef<(() => void) | null>(null); // late-bound ref so heartbeat can trigger reconnection
+  const sendMessageRef = useRef<((type: MultiplayerMessage['type'], payload: any) => boolean) | null>(null); // late-bound send for reconnect path
 
   // Keep ref updated
   useEffect(() => {
@@ -214,6 +229,92 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     }
   }, []);
 
+  // NET-14 Fix: Heartbeat helpers. The heartbeat runs on the reliable, ordered
+  // control channel of an already-established connection; it detects peers that
+  // vanished without a close frame (network drop, sleep, crash).
+  const markPeerActivity = useCallback((peerKey: string) => {
+    peerLastActivity.current[peerKey] = Date.now();
+  }, []);
+
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatInterval.current) {
+      clearInterval(heartbeatInterval.current);
+      heartbeatInterval.current = null;
+    }
+  }, []);
+
+  const handleStaleConnection = useCallback((staleKey: string) => {
+    if (intentionalDisconnect.current) return;
+    logger.warn(`Stale connection detected for "${staleKey}" (no heartbeat for ${STALE_THRESHOLD_MS}ms)`, 'use-multiplayer');
+
+    stopHeartbeat();
+
+    // Resolve the remote peer id so consumers can clean up party/turn state.
+    const remotePeerId = remotePeerInfoRef.current?.peerId || staleKey;
+
+    setMultiplayerState(prev => ({
+      ...prev,
+      connectionStatus: 'disconnected',
+      peers: prev.peers.map(p => p.peerId === remotePeerId ? { ...p, isConnected: false } : p)
+        .filter(p => p.peerId === remotePeerId ? false : true),
+    }));
+
+    // Let the UI remove the peer from party state / turn order.
+    onPeerDisconnected?.(remotePeerId);
+
+    // Attempt to re-establish the session with exponential backoff.
+    if (lastInitParams.current) {
+      reconnectRef.current?.();
+    }
+  }, [stopHeartbeat, onPeerDisconnected]);
+
+  const startHeartbeat = useCallback(() => {
+    if (heartbeatInterval.current) return;
+
+    // Seed activity so a freshly opened connection is not instantly flagged.
+    Object.keys(dataChannelsRef.current).forEach(label => {
+      const key = remotePeerInfoRef.current?.peerId || label;
+      markPeerActivity(key);
+    });
+
+    heartbeatInterval.current = setInterval(() => {
+      if (intentionalDisconnect.current) {
+        stopHeartbeat();
+        return;
+      }
+
+      const openLabels = Object.keys(dataChannelsRef.current)
+        .filter(label => dataChannelsRef.current[label]?.readyState === 'open');
+      if (openLabels.length === 0) return;
+
+      const peerKey = remotePeerInfoRef.current?.peerId || openLabels[0];
+
+      // Ping every open control-capable channel.
+      openLabels.forEach(label => {
+        try {
+          const seq = (peerOutboxSequence.current[label] || 0);
+          peerOutboxSequence.current[label] = seq + 1;
+          dataChannelsRef.current[label].send(JSON.stringify({
+            type: 'CONTROL',
+            senderId: multiplayerStateRef.current.peerId,
+            sequenceNumber: seq,
+            timestamp: Date.now(),
+            payload: { action: 'ping', data: { timestamp: Date.now() } },
+          } as ControlMessage));
+        } catch (error) {
+          logger.error('Failed to send heartbeat ping', 'use-multiplayer', { error: String(error), channel: label });
+        }
+      });
+
+      // Flag stale peers that have been silent for too long.
+      const lastActivity = peerLastActivity.current[peerKey];
+      if (lastActivity && Date.now() - lastActivity > STALE_THRESHOLD_MS) {
+        handleStaleConnection(peerKey);
+      }
+    }, HEARTBEAT_INTERVAL_MS);
+  }, [markPeerActivity, stopHeartbeat, handleStaleConnection]);
+
+
   // NET-10 Fix: Per-peer message queue processing
   const processPeerQueue = useCallback((channelLabel: string) => {
     const channel = dataChannelsRef.current[channelLabel];
@@ -258,6 +359,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
 
   // Send a message via a specific data channel
   const sendMessage = useCallback((type: MultiplayerMessage['type'], payload: any) => {
+
     const channel = dataChannelsRef.current[type];
     if (!channel) {
       logger.error(`Data channel ${type} not available`);
@@ -313,6 +415,12 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       return false; // Queue is full, message dropped
     }
   }, [onError, processPeerQueue]);
+
+  // NET-14 Fix: Late-bound ref so reconnect() can queue a request-sync even
+  // before sendMessage is stable across renders.
+  useEffect(() => {
+    sendMessageRef.current = sendMessage;
+  }, [sendMessage]);
 
   // Send game action (guest sends to host)
   const sendGameAction = useCallback((action: string, turnNumber: number, isInitial = false) => {
@@ -539,6 +647,17 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       }
       reconnectAttempts.current = 0; // reset on success
       logger.log('Reconnect successful!');
+
+      // NET-14 Fix: After a successful reconnection, guests must re-request the
+      // authoritative host state so both sides converge on identical state. The
+      // message is queued by sendMessage if channels are not open yet and is
+      // flushed as soon as they open.
+      if (!multiplayerStateRef.current.isHost) {
+        sendMessageRef.current?.('control', {
+          action: 'request-sync',
+          data: { reason: 'reconnected' }
+        });
+      }
     } catch (error: any) {
       logger.error('Reconnect failed:', error);
       
@@ -610,12 +729,24 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
           }
         }
 
+        // NET-14 Fix: Start heartbeat once the control channel is live so stale
+        // peers are detected even without a close frame.
+        if (channel.label === 'control') {
+          markPeerActivity(remotePeerInfoRef.current?.peerId || channel.label);
+          startHeartbeat();
+        }
+
         // NET-13 Fix: Start state reconciliation when channel opens
         startReconciliation();
       },
       () => {
         logger.log(`Channel ${channel.label} closed`);
         delete dataChannelsRef.current[channel.label];
+        // NET-14 Fix: Stop the heartbeat when the control channel goes away
+        // (reconnection restarts it on the fresh control channel).
+        if (channel.label === 'control') {
+          stopHeartbeat();
+        }
         // BUG-9 Fix: Attempt reconnection if not intentional disconnect
         // The reconnect function now handles exponential backoff internally
         if (!intentionalDisconnect.current && lastInitParams.current) {
@@ -624,7 +755,13 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         }
       }
     );
-  }, [reconnect, lastInitParams, startReconciliation, onPeerConnected]);
+  }, [reconnect, lastInitParams, startReconciliation, startHeartbeat, stopHeartbeat, markPeerActivity, onPeerConnected]);
+
+  // NET-14 Fix: Late-bound ref so the heartbeat's stale detection can trigger
+  // reconnection without a circular dependency between the callbacks.
+  useEffect(() => {
+    reconnectRef.current = () => { void reconnect(); };
+  }, [reconnect]);
 
   // Handle incoming messages
   const handleMessage = useCallback((data: MultiplayerMessage, channelLabel: string) => {
@@ -644,10 +781,46 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
       peerSequenceNumbers.current[senderId] = data.sequenceNumber + 1;
     }
 
+    // NET-14 Fix: Any inbound traffic proves the peer is alive; keep the
+    // heartbeat from flagging active-but-slow connections as stale.
+    markPeerActivity(senderId);
+
     // Use ref to get current state (avoids stale closures)
     const currentState = multiplayerStateRef.current;
 
-    switch (data.type) {
+    // Some senders mark control payloads with a legacy uppercase type; normalize
+    // so both spellings reach the control branch instead of being dropped.
+    const rawType = String(data.type);
+    const normalizedType = (rawType === 'CONTROL' ? 'control' : rawType) as typeof data.type;
+
+    // NET-14 Fix: Handle heartbeat messages directly in the hook. Pings are
+    // answered immediately with a pong echoing the original timestamp so the
+    // peer can measure liveness; pongs update the activity tracker. These
+    // messages are internal and are not forwarded to UI handlers.
+    if (normalizedType === 'control') {
+      const payload = (data as { payload?: { action?: string; data?: { timestamp?: number } } }).payload;
+      if (payload?.action === 'ping') {
+        try {
+          const seq = peerOutboxSequence.current['control'] || 0;
+          peerOutboxSequence.current['control'] = seq + 1;
+          dataChannelsRef.current['control']?.send(JSON.stringify({
+            type: 'CONTROL',
+            senderId: currentState.peerId,
+            sequenceNumber: seq,
+            timestamp: Date.now(),
+            payload: { action: 'pong', data: { timestamp: payload.data?.timestamp } },
+          }));
+        } catch (error) {
+          logger.error('Failed to send heartbeat pong', 'use-multiplayer', { error: String(error) });
+        }
+        return;
+      }
+      if (payload?.action === 'pong') {
+        return; // Liveness already recorded by markPeerActivity above.
+      }
+    }
+
+    switch (normalizedType) {
       case 'game-actions':
         // Host receives player actions
         if (currentState.isHost && gameActionReceivedRef.current) {
@@ -747,14 +920,20 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         } else if (controlMsg.payload.action === 'request-sync' && currentState.isHost) {
           // Host received a sync request from a reconnecting peer
           logger.log('Host: Sync request received, sending full state...');
+          // NET-14 Fix: Prefer the component-provided snapshot of the real,
+          // authoritative GameState; fall back to the hook-level state when the
+          // host has not registered one.
+          const snapshot = getGameStateSnapshot?.();
+          const syncGameState = snapshot?.gameState ?? multiplayerStateRef.current;
+          const syncPartyState = snapshot?.partyState ?? multiplayerStateRef.current?.partyState;
           // Send full state sync
-          sendMessage('control', { 
-            action: 'sync-response', 
-            data: { 
-              gameState: multiplayerStateRef.current,
-              partyState: multiplayerStateRef.current?.partyState,
-              turnOrder: multiplayerStateRef.current?.turnOrder,
-              currentTurnIndex: multiplayerStateRef.current?.currentTurnIndex,
+          sendMessage('control', {
+            action: 'sync-response',
+            data: {
+              gameState: syncGameState,
+              partyState: syncPartyState,
+              turnOrder: snapshot?.turnOrder ?? multiplayerStateRef.current?.turnOrder,
+              currentTurnIndex: snapshot?.currentTurnIndex ?? multiplayerStateRef.current?.currentTurnIndex,
             }
           });
         } else if (controlMsg.payload.action === 'sync-response' && !currentState.isHost) {
@@ -794,17 +973,21 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
         break;
       }
     }
-  }, [onStoryUpdate, onPartyStateUpdate, onChatMessage, onControlMessage, onInteractionRequest, onInteractionResponse]);
+  }, [onStoryUpdate, onPartyStateUpdate, onChatMessage, onControlMessage, onInteractionRequest, onInteractionResponse, markPeerActivity, getGameStateSnapshot]);
 
   // PERF-3 Fix: Improved cleanup function with proper event listener removal
   const disconnect = useCallback(() => {
     intentionalDisconnect.current = true;
-    
+
     // Clear any pending reconnect timeout
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
     }
+
+    // NET-14 Fix: Stop heartbeat tracking on intentional disconnect
+    stopHeartbeat();
+    peerLastActivity.current = {};
     
     // NET-13 Fix: Stop state reconciliation
     stopReconciliation();
@@ -858,7 +1041,7 @@ export function useMultiplayer(options: UseMultiplayerOptions) {
     setTimeout(() => {
       intentionalDisconnect.current = false;
     }, 2000);
-  }, [stopReconciliation]);
+  }, [stopReconciliation, stopHeartbeat]);
 
   // Cleanup on unmount
   useEffect(() => {

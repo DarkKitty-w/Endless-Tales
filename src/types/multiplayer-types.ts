@@ -99,7 +99,9 @@ export interface ChatMessage {
 export interface ControlMessage {
   type: 'CONTROL';
   payload: {
-    action: 'kick' | 'pause' | 'resume' | 'set-turn-order' | 'start-game' | 'reconnect' | 'interaction-request' | 'interaction-response' | 'request-sync' | 'sync-response' | 'sync-complete' | 'state-checksum';
+    action: 'kick' | 'pause' | 'resume' | 'set-turn-order' | 'start-game' | 'reconnect' | 'interaction-request' | 'interaction-response' | 'request-sync' | 'sync-response' | 'sync-complete' | 'state-checksum'
+      // NET-14 Fix: Heartbeat messages to detect stale connections
+      | 'ping' | 'pong';
     targetPeerId?: string;
     data?: any;
   };
