@@ -21,8 +21,9 @@ import { assessActionDifficulty, getFallbackDifficultyAssessment, type AssessAct
 import { generateSkillTree } from "../../ai/flows/generate-skill-tree";
 import { attemptCrafting, type AttemptCraftingInput, type AttemptCraftingOutput } from "../../ai/flows/attempt-crafting";
 import { cn } from "../../lib/utils";
-import { Loader2 } from "lucide-react";
+import { Loader2, WifiOff, X } from "lucide-react";
 import { useIsMobile } from "../../hooks/use-mobile";
+import { useOnlineStatus } from "../../hooks/use-online-status";
 import { Button } from '../../components/ui/button';
 import { TooltipProvider } from "../../components/ui/tooltip";
 import type { InteractionRequest, PendingInteraction } from "../../types/multiplayer-types";
@@ -171,6 +172,8 @@ export function Gameplay() {
      const initialSetupAttemptedRef = useRef<Record<string, boolean>>({});
     const actionInputRef = useRef<ActionInputRef>(null);
     const isMobile = useIsMobile();
+    const isOnline = useOnlineStatus();
+    const [isOfflineBannerDismissed, setIsOfflineBannerDismissed] = useState(false);
     
     // Refs for multiplayer state to avoid circular dependencies
     const multiplayerStateRef = useRef<any>(null);
@@ -1396,6 +1399,25 @@ export function Gameplay() {
 
     return (
         <TooltipProvider>
+            {(!isOnline && !isOfflineBannerDismissed) && (
+                <div className="fixed top-0 inset-x-0 z-[60] flex items-center justify-between gap-3 bg-amber-500/95 text-amber-950 px-4 py-2 text-sm shadow-md">
+                    <div className="flex items-center gap-2 min-w-0">
+                        <WifiOff className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>
+                            You appear to be offline. AI actions and saving may fail until your connection returns
+                            — your progress stays safe on this device.
+                        </span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setIsOfflineBannerDismissed(true)}
+                        aria-label="Dismiss offline notice"
+                        className="p-1 rounded hover:bg-amber-600/40 shrink-0"
+                    >
+                        <X className="h-4 w-4" aria-hidden="true" />
+                    </button>
+                </div>
+            )}
             <GameplayLayout
                 character={character}
                 inventory={inventory}
