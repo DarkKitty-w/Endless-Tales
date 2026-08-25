@@ -2,7 +2,7 @@
 import type { Character, CharacterStats, SkillTreeStage, StatusEffect } from "../../types/character-types";
 import type { Action } from "../game-actions";
 import { initialCharacterState, initialCharacterStats } from "../game-initial-state";
-import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, calculateXpToNextLevel, getStarterSkillsForClass } from "../../lib/gameUtils";
+import { calculateMaxHealth, calculateMaxActionStamina, calculateMaxMana, calculateXpToNextLevel, clampXpGained, clampResourceChange, getStarterSkillsForClass } from "../../lib/gameUtils";
 import { RESPAWN_XP_LOSS_PERCENT, RESPAWN_DEBUFF_DURATION, MAX_SKILL_TREE_STAGES } from "../../lib/constants";
 import { logger } from "../../lib/logger";
 
@@ -251,7 +251,7 @@ export function characterReducer(state: Character | null, action: Action): Chara
         }
         case "UPDATE_NARRATION": {
             if (!state) return null;
-            const { updatedStats, updatedTraits, updatedKnowledge, healthChange, staminaChange, manaChange, gainedSkill, xpGained, reputationChange, npcRelationshipChange, progressedToStage } = action.payload;
+            const { updatedStats, updatedTraits, updatedKnowledge, gainedSkill, xpGained, reputationChange, npcRelationshipChange, progressedToStage } = action.payload;
             let newState = { ...state };
             if (updatedStats) newState.stats = { ...newState.stats, ...updatedStats };
             if (updatedTraits) newState.traits = updatedTraits;
@@ -263,6 +263,12 @@ export function characterReducer(state: Character | null, action: Action): Chara
                 newState.maxMana = calculateMaxMana(newState.stats, newState.knowledge);
             }
             
+            // GAME-BALANCE: clamp per-turn resource deltas so a single narration
+            // cannot spike or fully restore a resource in one shot.
+            const healthChange = clampResourceChange(action.payload.healthChange, "health", newState.maxHealth);
+            const staminaChange = clampResourceChange(action.payload.staminaChange, "stamina", newState.maxStamina);
+            const manaChange = clampResourceChange(action.payload.manaChange, "mana", newState.maxMana);
+
             if (healthChange) newState.currentHealth = Math.max(0, Math.min(newState.maxHealth, newState.currentHealth + healthChange));
             if (staminaChange) newState.currentStamina = Math.max(0, Math.min(newState.maxStamina, newState.currentStamina + staminaChange));
             if (manaChange) newState.currentMana = Math.max(0, Math.min(newState.maxMana, newState.currentMana + manaChange));
@@ -271,8 +277,10 @@ export function characterReducer(state: Character | null, action: Action): Chara
                 newState.learnedSkills = [...newState.learnedSkills, { ...gainedSkill, type: 'Learned' }];
             }
             // Fix: Use processXpGain to handle level-ups from narration XP
-            if (xpGained) {
-                newState = processXpGain(newState, xpGained);
+            // GAME-BALANCE: clamp AI-provided XP to the reward economy bounds.
+            const clampedXpGained = clampXpGained(xpGained);
+            if (clampedXpGained > 0) {
+                newState = processXpGain(newState, clampedXpGained);
             }
             if (reputationChange) {
                 const { faction, change } = reputationChange;

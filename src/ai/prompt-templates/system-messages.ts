@@ -104,3 +104,20 @@ export const ANTI_REPETITION_RULES = [
   'Do not loop or recycle previous narrative patterns.',
   'Build upon previous events uniquely rather than repeating similar descriptions.',
 ];
+
+/**
+ * XP reward rules (GAME-BALANCE): keeps the progression curve smooth by tying
+ * XP to the assessed difficulty of the action instead of leaving it to chance.
+ */
+export const XP_REWARD_RULES = `Use this scale (before difficulty-setting scaling):
+- Trivial: 0-5 XP. Easy: 10-20 XP. Normal: 20-40 XP. Hard: 40-70 XP. Very Hard: 70-110 XP. Surviving an Impossible action: 120-200 XP.
+- Multiply by the Game Difficulty Setting factor: Easy x0.75, Normal x1, Hard x1.25, Nightmare x1.5.
+- Award 0 XP when the player only checks status, rests, or nothing was accomplished.`;
+
+/**
+ * Resource change guardrails (GAME-BALANCE): prevents unfair single-turn
+ * difficulty spikes and trivial full restores while keeping stakes real.
+ */
+export const RESOURCE_CHANGE_GUARDRAILS = `Keep each change bounded: at most half of max health, and at most ~30 points of stamina or mana in a single turn.
+- Never heal more than about one third of max health from a single non-magical rest; resting in dangerous areas should restore less.
+- Do not reduce HP below 0 and do not deal killing blows unless the fiction clearly forces it (respect Permanent Death rules).`;

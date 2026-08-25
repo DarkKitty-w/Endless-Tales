@@ -15,6 +15,8 @@ import {
   buildSystemMessage,
   ANTI_INJECTION_RULES,
   ANTI_REPETITION_RULES,
+  XP_REWARD_RULES,
+  RESOURCE_CHANGE_GUARDRAILS,
 } from '../prompt-templates';
 
 // OBS-4: Operations slower than this are flagged as slow in logs/metrics
@@ -309,11 +311,12 @@ ${assessmentPromptSection}
 2. Narrate the outcome.
 3. Update game state (include Turn: ${turnCount + 1}).
 4. Provide exactly 4 branching choices.
-5. Calculate resource changes (health, stamina, mana) if applicable.
-6. If character HP <= 0, set isCharacterDefeated: true.
-7. **PERMANENT DEATH ENFORCEMENT:** If "Permanent Death: ENABLED" and character HP drops to 0, the character MUST die permanently. No revivals, no exceptions. Do NOT provide choices that allow the player to continue.
-8. **World Map Updates:** If the narration involves traveling to a new area, discovering a location, or learning about a place, include worldMapChanges. Provide new locations with unique IDs, descriptive names, coordinates (x,y between 0-100), and connections to existing discovered locations. For already known locations that are revealed, use discoveredLocationIds. To modify existing ones, use updatedLocations.
-9. **MODE-SPECIFIC CHOICE RULE:** ${modeGuidance.choiceRule}
+5. Calculate resource changes (health, stamina, mana) if applicable. ${RESOURCE_CHANGE_GUARDRAILS}
+6. Award XP for accomplishment via xpGained. ${XP_REWARD_RULES}
+7. If character HP <= 0, set isCharacterDefeated: true.
+8. **PERMANENT DEATH ENFORCEMENT:** If "Permanent Death: ENABLED" and character HP drops to 0, the character MUST die permanently. No revivals, no exceptions. Do NOT provide choices that allow the player to continue.
+9. **World Map Updates:** If the narration involves traveling to a new area, discovering a location, or learning about a place, include worldMapChanges. Provide new locations with unique IDs, descriptive names, coordinates (x,y between 0-100), and connections to existing discovered locations. For already known locations that are revealed, use discoveredLocationIds. To modify existing ones, use updatedLocations.
+10. **MODE-SPECIFIC CHOICE RULE:** ${modeGuidance.choiceRule}
 
 Return ONLY a valid JSON object. No explanations, no markdown formatting.
 `;

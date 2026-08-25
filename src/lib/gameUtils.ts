@@ -2,6 +2,16 @@
 // src/lib/gameUtils.ts
 
 import type { CharacterStats, Skill } from "../types/character-types";
+import {
+  XP_REWARD_RANGES,
+  DEFAULT_XP_REWARD_RANGE,
+  DIFFICULTY_SETTING_XP_MULTIPLIER,
+  DEFAULT_DIFFICULTY_XP_MULTIPLIER,
+  MAX_XP_PER_EVENT,
+  MAX_HEALTH_CHANGE_PER_TURN_FRACTION,
+  MAX_STAMINA_CHANGE_PER_TURN,
+  MAX_MANA_CHANGE_PER_TURN,
+} from "./constants";
 
 /**
  * Calculates the maximum Health Points (HP) based on character's Stamina stat.
@@ -88,6 +98,68 @@ export const calculateXpToNextLevel = (currentLevel: number): number => {
   const baseXP = 100;
   return Math.floor(baseXP + (currentLevel -1) * 50 + Math.pow(currentLevel -1, 2.2) * 10);
 };
+
+// --- Balance helpers (GAME-BALANCE) ---
+
+/**
+ * Returns the XP reward range [min, max] for an assessed action difficulty,
+ * scaled by the adventure difficulty setting. Unknown or missing values fall
+ * back to Normal-tier rewards with a neutral multiplier, keeping the economy
+ * predictable even when the AI omits its assessment.
+ *
+ * @param assessedDifficulty - Difficulty tier assessed by the AI narrator.
+ * @param difficultySetting - Adventure difficulty setting ("Easy"..."Nightmare").
+ * @returns A [min, max] tuple of XP to award for the event.
+ */
+export function getXpRewardRange(
+  assessedDifficulty?: string | null,
+  difficultySetting?: string | null
+): [number, number] {
+  const tier = assessedDifficulty ?? "";
+  const baseRange = XP_REWARD_RANGES[tier] ?? DEFAULT_XP_REWARD_RANGE;
+  const multiplier = DIFFICULTY_SETTING_XP_MULTIPLIER[difficultySetting?.toLowerCase() ?? ""] ?? DEFAULT_DIFFICULTY_XP_MULTIPLIER;
+  const scale = (value: number) => Math.max(0, Math.floor(value * multiplier));
+  return [scale(baseRange[0]), Math.max(scale(baseRange[0]), scale(baseRange[1]))];
+}
+
+/**
+ * Clamps a raw xpGained value from the AI into a sane, non-negative integer.
+ * Prevents runaway rewards (or punishments) from breaking progression.
+ *
+ * @param xp - Raw XP value returned by the AI.
+ * @returns An integer between 0 and MAX_XP_PER_EVENT.
+ */
+export function clampXpGained(xp: unknown): number {
+  if (typeof xp !== "number" || !Number.isFinite(xp)) return 0;
+  return Math.max(0, Math.min(MAX_XP_PER_EVENT, Math.floor(xp)));
+}
+
+/**
+ * Clamps a single narration resource change so one turn can never swing a
+ * resource by more than the tuned per-turn cap. Deltas beyond the cap are the
+ * main source of unfair difficulty spikes; the reducer still enforces final
+ * [0, max] bounds on top of this.
+ *
+ * @param change - Raw resource delta returned by the AI.
+ * @param kind - Which resource is changing.
+ * @param maxValue - The character's current maximum for that resource.
+ * @returns The clamped delta.
+ */
+export function clampResourceChange(
+  change: unknown,
+  kind: "health" | "stamina" | "mana",
+  maxValue: number
+): number {
+  if (typeof change !== "number" || !Number.isFinite(change) || change === 0) return 0;
+  let cap: number;
+  switch (kind) {
+    case "health": cap = Math.max(1, maxValue * MAX_HEALTH_CHANGE_PER_TURN_FRACTION); break;
+    case "stamina": cap = MAX_STAMINA_CHANGE_PER_TURN; break;
+    case "mana": cap = MAX_MANA_CHANGE_PER_TURN; break;
+    default: cap = maxValue;
+  }
+  return Math.max(-cap, Math.min(cap, change));
+}
 
 /**
  * Generates a unique ID for new adventures.

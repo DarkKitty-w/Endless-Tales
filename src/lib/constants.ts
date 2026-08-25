@@ -34,3 +34,46 @@ export const RESPAWN_XP_LOSS_PERCENT = 0.1;
 
 /** Number of turns the "Weakened" debuff lasts after respawn. */
 export const RESPAWN_DEBUFF_DURATION = 3;
+
+// --- Balance: XP reward economy (GAME-BALANCE) ---
+/**
+ * XP awarded per narrated event, keyed by the AI's assessed action difficulty.
+ * Ranges are tuned against calculateXpToNextLevel (~100/160/240/330...) so a
+ * player levels up roughly every 4-6 meaningful actions early on, slowing
+ * naturally at higher levels.
+ */
+export const XP_REWARD_RANGES: Record<string, [number, number]> = {
+  Trivial: [0, 5],
+  Easy: [10, 20],
+  Normal: [20, 40],
+  Hard: [40, 70],
+  "Very Hard": [70, 110],
+  Impossible: [120, 200],
+};
+
+/** Default XP range when the assessed difficulty is missing or unknown. */
+export const DEFAULT_XP_REWARD_RANGE: [number, number] = XP_REWARD_RANGES.Normal;
+
+/** Multiplier applied to XP rewards based on the adventure difficulty setting. */
+export const DIFFICULTY_SETTING_XP_MULTIPLIER: Record<string, number> = {
+  easy: 0.75,
+  normal: 1,
+  hard: 1.25,
+  nightmare: 1.5,
+};
+
+/** Default multiplier when the difficulty setting is missing or unknown. */
+export const DEFAULT_DIFFICULTY_XP_MULTIPLIER = 1;
+
+/** Absolute cap on a single XP award, so no event can trivialize progression. */
+export const MAX_XP_PER_EVENT = 200;
+
+// --- Balance: per-turn resource change caps (GAME-BALANCE) ---
+/** Max fraction of max health a single narration may add or remove. */
+export const MAX_HEALTH_CHANGE_PER_TURN_FRACTION = 0.5;
+
+/** Max stamina a single narration may add or remove (points). */
+export const MAX_STAMINA_CHANGE_PER_TURN = 30;
+
+/** Max mana a single narration may add or remove (points). */
+export const MAX_MANA_CHANGE_PER_TURN = 30;

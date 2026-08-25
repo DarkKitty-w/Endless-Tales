@@ -12,6 +12,8 @@ export {
   buildSystemMessage,
   ANTI_INJECTION_RULES,
   ANTI_REPETITION_RULES,
+  XP_REWARD_RULES,
+  RESOURCE_CHANGE_GUARDRAILS,
 } from './system-messages';
 
 // Context formatters

@@ -82,8 +82,9 @@ ${input.inventoryItems.length ? input.inventoryItems.join(', ') : 'Empty'}
 3. **Ingredients:** Are ingredients logical and available?
 
 **Outcome:**
-* **Success:** Set success=true. Generate item details. List used ingredients in consumedItems.
-* **Failure/Impossible:** Set success=false. Provide message. List ingredients consumed (if failed attempt wasted them).
+* **Success:** Set success=true. Generate item details. Consume exactly the ingredients that were genuinely used up in consumedItems.
+* **Failure:** Set success=false. Provide message. Consume at most half of each attempted ingredient (rounded down) — materials get damaged or spent, not destroyed wholesale.
+* **Impossible:** If crafting ${input.desiredItem} is implausible with these ingredients, set success=false, consume NOTHING (consumedItems: []), and explain why in the message.
 
 Return ONLY a valid JSON object. No explanations, no markdown formatting.
 `;
