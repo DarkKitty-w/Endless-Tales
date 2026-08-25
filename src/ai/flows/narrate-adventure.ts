@@ -9,12 +9,16 @@ import type { DifficultyLevel, GameStateContext } from '../../types/game-types';
 import { formatGameStateContextForPrompt } from '../../context/game-state-utils';
 import { processAiResponse, sanitizePlayerAction, validateChoicesAgainstGameState } from '../../lib/utils';
 import { logger, setRequestId, setTraceId } from '../../lib/logger';
+import { observeDuration } from '../../lib/metrics';
 import {
   BASE_NARRATOR_SYSTEM_MESSAGE,
   buildSystemMessage,
   ANTI_INJECTION_RULES,
   ANTI_REPETITION_RULES,
 } from '../prompt-templates';
+
+// OBS-4: Operations slower than this are flagged as slow in logs/metrics
+const SLOW_AI_CALL_THRESHOLD_MS = 10_000;
 
 export interface NarrateAdventureInput {
   character: any;
@@ -326,6 +330,8 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
       // (`BodyStreamBuffer was aborted`), which causes a false gameplay failure.
       // The UI currently waits for a complete structured JSON object anyway, so a
       // regular request is more reliable than streaming partial JSON.
+      // OBS-4: Performance marker around the AI call — narration is the slowest operation.
+      const aiCallStartTime = Date.now();
       const response = await client.models.generateContent({
           contents: userPrompt,
           systemMessage: systemMsg,
@@ -336,6 +342,14 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
           traceId: input.traceId,
       });
       text = response.text;
+      const aiCallDurationMs = Date.now() - aiCallStartTime;
+      observeDuration('ai_request_duration_ms', aiCallDurationMs, { flow: 'narrateAdventure', provider: input.userApiKey ? 'user' : 'server' });
+      logger.info(`AI call completed in ${aiCallDurationMs}ms`, 'narrate-adventure', {
+        requestId: input.requestId,
+        traceId: input.traceId,
+        durationMs: aiCallDurationMs,
+        slowOperation: aiCallDurationMs > SLOW_AI_CALL_THRESHOLD_MS,
+      });
 
       if (!text) throw new Error("No text returned from AI");
       // ERR-8/ERR-11: Preserve raw AI response
@@ -580,7 +594,7 @@ Return ONLY a valid JSON object. No explanations, no markdown formatting.
 
   } catch (error: any) {
       if (error.name === 'AbortError') throw error;
-      logger.error("AI Narration Error:", error);
+      logger.error("AI Narration Error:", 'narrate-adventure', { requestId: input.requestId, traceId: input.traceId, errorMessage: error?.message });
       
       const gameDiffKey = adventureSettings.difficulty?.toLowerCase() ?? 'normal';
       const fallbackAssess = FALLBACK_DIFFICULTY_MAP[gameDiffKey] ?? FALLBACK_DIFFICULTY_MAP['normal'];

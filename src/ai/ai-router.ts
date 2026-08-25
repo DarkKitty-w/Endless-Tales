@@ -1,6 +1,10 @@
 import { logger, generateRequestId, setRequestId, setTraceId, getTraceId } from '@/lib/logger';
 import { protectUserAction, PROMPT_INJECTION_DEFENSE } from '@/lib/prompt-injection-protection';
+import { incrementCounter, observeDuration } from '@/lib/metrics';
 // src/ai/ai-router.ts
+
+// OBS-4: Operations slower than this are flagged as slow in logs/metrics
+const SLOW_AI_REQUEST_THRESHOLD_MS = 10_000;
 
 // --- Type Definitions ---
 
@@ -310,6 +314,9 @@ abstract class ProxyAIProvider implements AIProvider {
       contentLength: contents.length,
     });
 
+    // OBS-4: Performance marker for the client-side AI round trip
+    const requestStartTime = Date.now();
+
     const response = await fetch('/api/ai-proxy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -338,6 +345,7 @@ abstract class ProxyAIProvider implements AIProvider {
         inputContext: this.getInputContext(contents, systemMessage, config),
         operation: 'generateContent',
       });
+      incrementCounter('ai_requests_total', { provider: this.providerKey, outcome: 'failure' });
       throw new Error(error.error || `${this.displayName} API error: Request failed`);
     }
 
@@ -345,10 +353,17 @@ abstract class ProxyAIProvider implements AIProvider {
     const text = this.extractResponseText(data);
     if (!text) throw new Error(`No text returned from ${this.textSourceName}`);
 
+    // OBS-4: Record duration for the client-side AI round trip
+    const durationMs = Date.now() - requestStartTime;
+    observeDuration('ai_request_duration_ms', durationMs, { flow: 'proxyClient', provider: this.providerKey });
+    incrementCounter('ai_requests_total', { provider: this.providerKey, outcome: 'success' });
+
     logger.info('AI request completed', 'ai-router', {
       requestId,
       traceId,
       responseLength: text.length,
+      durationMs,
+      slowOperation: durationMs > SLOW_AI_REQUEST_THRESHOLD_MS,
     });
 
     return { text };
