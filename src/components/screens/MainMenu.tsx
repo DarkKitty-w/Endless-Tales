@@ -42,20 +42,18 @@ const ADVENTURE_MODE_SUMMARIES = [
   },
 ];
 
+import { logger } from "@/lib/logger";
+
 export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
   const { dispatch } = useGame();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log("MainMenu component mounted.");
-    }
+    logger.debug("MainMenu component mounted.", "MainMenu");
   }, []);
 
   const handleNewGameFlow = (adventureType: AdventureType) => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`MainMenu: Starting new game flow for type: ${adventureType}`);
-    }
+    logger.debug(`Starting new game flow for type: ${adventureType}`, "MainMenu", { adventureType });
     dispatch({ type: "RESET_GAME" });
     dispatch({ type: "SET_ADVENTURE_TYPE", payload: adventureType });
 
@@ -72,9 +70,7 @@ export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
   };
 
   const handleViewSaved = () => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log("MainMenu: Handling View Saved Adventures button click.");
-    }
+    logger.debug("Handling View Saved Adventures button click.", "MainMenu");
     dispatch({ type: "SET_GAME_STATUS", payload: "ViewSavedAdventures" });
   };
 
