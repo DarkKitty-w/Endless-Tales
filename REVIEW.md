@@ -6,7 +6,7 @@
 ## Verdict global
 
 ✅ **Fusionnable après rotation de la clé API (F1).**
-Aucune régression introduite par la branche n'a été détectée. Un défaut fonctionnel préexistant mais incomplet (NET-14) a été corrigé dans cette revue (F2), ainsi qu'un point d'hygiène de sécurité (F1, à traiter par l'utilisateur).
+Revue en deux passes : la première passe avait corrigé le chemin mort NET-14 (F2) ; la **seconde passe (QA indépendante)** a détecté et corrigé deux défauts résiduels dans ce même correctif (F3, commit `ec614cf`, poussé sur `origin/night-fixes`). Aucune autre régression introduite par la branche n'a été détectée. Un point d'hygiène de sécurité reste à traiter par l'utilisateur (F1).
 
 ## Constats
 
@@ -27,22 +27,32 @@ Conséquence : un invité reconnecté (ou en désaccord de checksum) ne converge
 - `src/context/game-reducer.ts` : ajout de `"RECONNECT_SYNC"` à `MULTIPLAYER_ACTIONS`.
 - `src/components/screens/Gameplay.tsx` : dispatch de `RECONNECT_SYNC` (payload `{gameState, partyState, turnOrder, currentTurnIndex}`) à la réception de `sync-complete`.
 
+### F3 — MAJEUR (fonctionnel, corrigé en seconde passe, commit `ec614cf`)
+**Le correctif NET-14 (F2) restait incomplet : deux défauts résiduels dans la chaîne de resync.**
+
+1. **Snapshot hôte non branché.** `useMultiplayer` expose un callback `getGameStateSnapshot` précisément pour répondre aux demandes `request-sync` des invités ; aucun appelant ne le fournissait (`Gameplay.tsx` comme `CoopLobby.tsx`). L'hôte répondait donc avec son propre `MultiplayerState` interne au hook — or le réducteur fait `...gameState` : les champs de transport du hook (`peerId`, `sessionId`, `connectionStatus`, `isHost`, `peers`…) écrasaient ceux de l'invité, et tous les champs de gameplay (`character`, `storyLog`, `inventory`, `worldMap`…) restaient ceux d'avant déconnexion. La resync convergeait en apparence tout en corrompant l'état.
+   → *Correctif :* `Gameplay.tsx` fournit désormais `getGameStateSnapshot` retournant le `GameState` autoritaire (via `gameStateRef`) avec `partyState`/`turnOrder`/`currentTurnIndex`.
+
+2. `isMyTurn` recalculé sur l'état déjà fusionné et index `0` traité comme absent. Dans le cas `RECONNECT_SYNC` du réducteur : `turnOrder[currentTurnIndex || 0] === state.peerId` s'exécute **après** `...state, ...gameState` — `state.peerId` y vaut celui de l'hôte (le snapshot étant complet, cf. point 1), donc `isMyTurn` était faux pour tout invité. Par ailleurs `currentTurnIndex || state.currentTurnIndex` remplace un index légitime `0` par l'ancien index local. → *Correctif :* valeurs résolues une fois (`??`), puis `isMyTurn = nextTurnOrder.length > 0 && nextTurnOrder[nextTurnIndex] === state.peerId` calculé sur l'état pré-fusion (convention identique à `SET_TURN_ORDER`/`ADVANCE_TURN`).
+
 ## Vérifications effectuées
 
 | Domaine | Résultat |
 |---|---|
 | Routage des actions (`ADVENTURE_ACTIONS` / `MULTIPLAYER_ACTIONS`) | ✅ Cohérent, handlers présents (`LOAD_SAVED_ADVENTURES`, `PEER_CONNECTED/DISCONNECTED`, `RECONNECT_SYNC`) |
-| Resync multijoueur (NET-14) | ✅ Chaîne complète vérifiée hôte→invité ; dead-end corrigé (F2) |
+| Resync multijoueur (NET-14) | ✅ Chaîne complète vérifiée hôte→invité ; dead-end corrigé (F2), défauts résiduels corrigés en seconde passe (F3) |
 | Persistance (`SAVE-9`, sauvegarde/restauration) | ✅ Pas de régression constatée |
 | Sécurité (sanitization clés provider, garde-fous prompts IA) | ✅ OK côté code ; voir F1 pour l'hygiène de la clé locale |
 | Économie XP / clamps de ressources / bornes BALANCE | ✅ Pas de régression constatée |
 | `npm run typecheck` (tsc --noEmit) | ✅ 0 erreur sur l'ensemble de la branche |
+| `npm run typecheck` après F3 | ✅ 0 erreur (`tsc --noEmit`) |
+| Sanitization clés provider (`sanitizeProviderApiKeys`) sur les 3 chemins localStorage | ✅ Vérifié en seconde passe (lecture seule des providers supportés, trim, rejet des non-chaînes) |
 | Hygiène du dépôt | ✅ `config.toml` ignoré et jamais commité ; `tsconfig.tsbuildinfo` modifié (artefact de build, non commité) ; `.pkg_hash` non tracké (à ne pas commiter) |
 
 ## Limites de la revue
 
 - Pas de suite de tests automatisés dans le dépôt (aucun runner configuré) : validation statique uniquement + lecture approfondie des chemins critiques.
-- Le chemin multijoueur WebRTC n'a pas pu être testé bout-en-bout (nécessite deux pairs) ; le correctif F2 est validé par analyse de flux et typage.
+- Le chemin multijoueur WebRTC n'a pas pu être testé bout-en-bout (nécessite deux pairs) ; les correctifs F2/F3 sont validés par analyse de flux et typage.
 - Lint non exécutable dans cet environnement (Node 18 < 20.9 requis par Next.js).
 
 ## Actions recommandées avant/après fusion
