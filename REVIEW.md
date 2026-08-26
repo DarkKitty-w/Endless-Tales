@@ -6,7 +6,7 @@
 ## Verdict global
 
 ✅ **Fusionnable après rotation de la clé API (F1).**
-Revue en cinq passes : la première passe avait corrigé le chemin mort NET-14 (F2) ; la **seconde passe (QA indépendante)** a détecté et corrigé deux défauts résiduels dans ce même correctif (F3, commit `ec614cf`, poussé sur `origin/night-fixes`) ; la **troisième passe** a détecté et corrigé un défaut grave introduit par l'activation du chemin `RECONNECT_SYNC` en F3 (F4, commit `ef28864`) ; la **quatrième passe** a détecté un crash résiduel du garde-fou ajouté en F4 (F5) ; la **cinquième passe (cette revue)** a constaté que le correctif F5 **n'était pas présent dans le code poussé** (`ef28864` déstructurait toujours le payload avant tout garde) et l'a **réappliqué, validé et poussé**. Aucune autre régression introduite par la branche n'a été détectée. Un point d'hygiène de sécurité reste à traiter par l'utilisateur (F1).
+Revue en cinq passes : la première passe avait corrigé le chemin mort NET-14 (F2) ; la **seconde passe (QA indépendante)** a détecté et corrigé deux défauts résiduels dans ce même correctif (F3, commit `ec614cf`, poussé sur `origin/night-fixes`) ; la **troisième passe** a détecté et corrigé un défaut grave introduit par l'activation du chemin `RECONNECT_SYNC` en F3 (F4, commit `ef28864`) ; la **quatrième passe** a détecté un crash résiduel du garde-fou ajouté en F4 (F5) ; la **cinquième passe** a constaté que le correctif F5 **n'était pas présent dans le code poussé** (`ef28864` déstructurait toujours le payload avant tout garde) et l'a **réappliqué, validé et poussé** (`29fcf1e`). La **sixième passe (cette revue)** confirme F5 dans le code poussé, mais détecte et corrige **quatre écarts supplémentaires (F6–F9)** — dont une perte silencieuse de sauvegardes (F6) et deux régressions fonctionnelles par rapport à `master` (F7, F8). Typecheck et build passent après correction. Un point d'hygiène de sécurité reste à traiter par l'utilisateur (F1).
 
 ## Constats
 
@@ -16,6 +16,26 @@ Le cas `RECONNECT_SYNC` (`src/context/reducers/multiplayerReducer.ts`) déstruct
 Ce réducteur est alimenté par des messages WebRTC d'origine réseau : une exception dans un réducteur React est fatale au rendu plutôt que dégradée proprement.
 → *Correctif appliqué (cette passe) :* payload lu sans déstructuration préalable, garde `if (!payload || typeof payload !== 'object' || !payload.gameState || typeof payload.gameState !== 'object') return state;` placé **avant** toute extraction des champs.
 → *Validation :* harnais sur le **réducteur réel compilé** (`tsc` → CommonJS) — 16/16 assertions PASS post-fix : payloads malformés (`null`, `undefined`, `{}`, `gameState: null`, `gameState: "garbage"`) ignorés sans lever ni muter l'état ; contrat fonctionnel intact (champs de gameplay adoptés depuis l'hôte, identité de transport invité préservée, `currentTurnIndex: 0` honoré, `isMyTurn` recalculé côté pair, fallbacks partiels). Le même harnais exécuté sur le code pré-fix **reproduit la TypeError** sur payload `null`, prouvant que le test détecte bien le défaut. `npm run typecheck` : 0 erreur.
+
+### F6 — MAJEUR (perte de données, corrigé en sixième passe, cette revue)
+**Les sauvegardes échouant au schéma strict étaient supprimées silencieusement du disque.**
+`persistNow` (`src/context/GameContext.tsx`) filtrait les `savedAdventures` sur `validateSavedAdventure` (zod strict) : toute partie non conforme était retirée de la liste **persistée**, donc effacée du localStorage au prochain cycle d'écriture atomique. Master persistait chaque partie — la branche a donc introduit une perte de données durable pour tout save légèrement hors schéma (ex. champ optionnel absent d'une ancienne version). La notification toast signalant ces exclusions a de surcroît été supprimée par un correctif nocturne, rendant la perte totalement muette.
+→ *Correctif :* les saves invalides passent désormais par `repairSaveData` (même chemin que le chargement, SAVE-15) ; si la réparation échoue, ils sont conservés tels quels afin de retenter au prochain chargement. Plus aucune suppression silencieuse.
+
+### F7 — MODÉRÉ (régression vs master, corrigé en sixième passe, cette revue)
+**Dépendances manquantes dans l'effet de diffusion de l'état du groupe (`Gameplay.tsx`).**
+L'effet qui diffuse `partyState` aux invités n'avait plus `state.character` ni `state.inventory` dans ses deps (présents sur master). Conséquence : fermetures obsolètes — PV/XP modifiés ou objets fabriqués ne sont plus propagés aux pairs tant qu'un autre changement (longueur du journal, connexion) ne redéclenche pas l'effet.
+→ *Correctif :* deps restaurées (`[state.storyLog.length, state.character, state.inventory, isConnected]`).
+
+### F8 — MODÉRÉ (migration manquante, corrigé en sixième passe, cette revue)
+**Clé Gemini legacy orpheline après mise à niveau depuis master.**
+Master stockait la clé Gemini dans `sessionStorage["userGoogleAiApiKey"]`. La branche lit toujours cette valeur comme fallback mais n'a aucune migration : un utilisateur sans clé BYOK perdait sa clé fonctionnelle.
+→ *Correctif :* au cycle de persistance, la clé legacy est lue, injectée via `SET_USER_API_KEY`, puis purgée du `sessionStorage` (no-op si absente/inexistante).
+
+### F9 — MINEUR (hygiène données, corrigé en sixième passe, cette revue)
+**Sauvegardes de secours épargnées par « Réinitialiser les données ».**
+Les backups `_savebackup_*` créés par SAVE-14 (`createSaveBackup`) n'étaient pas couverts par le périmètre de `resetAllLocalData` (`src/lib/data-reset.ts`) : « Réinitialiser » laissait des copies potentiellement obsolètes des parties sur l'origine.
+→ *Correctif :* `SAVE_BACKUP_PREFIX` exporté depuis `storage-utils.ts` et ajouté aux préfixes nettoyés.
 
 ### F1 — CRITIQUE (sécurité, action utilisateur requise)
 **Exposition d'une clé API OpenRouter active** dans `config.toml` (non suivi par git).
@@ -64,7 +84,8 @@ Sur `master` ce chemin était mort (défaut non observable) ; la branche l'a act
 | Routage des actions (`ADVENTURE_ACTIONS` / `MULTIPLAYER_ACTIONS`) | ✅ Cohérent, handlers présents (`LOAD_SAVED_ADVENTURES`, `PEER_CONNECTED/DISCONNECTED`, `RECONNECT_SYNC`) |
 | Resync multijoueur (NET-14) | ✅ Chaîne complète vérifiée hôte→invité ; dead-end corrigé (F2), défauts résiduels corrigés en seconde passe (F3), identité de transport préservée en troisième passe (F4), garde payload malformé réappliqué et validé en cinquième passe (F5) |
 | Harnais réducteur (réel compilé, cas `RECONNECT_SYNC`) | ✅ 16/16 assertions PASS post-fix (F5, cinquième passe), dont 5 cas malformés et le contrat F4 (identité invité) ; le même harnais reproduit la TypeError sur le code pré-fix |
-| Persistance (`SAVE-9`, sauvegarde/restauration) | ✅ Pas de régression constatée |
+| Persistance (`SAVE-9`, sauvegarde/restauration) | ⚠️ Régression détectée et corrigée en sixième passe : perte silencieuse des saves hors schéma (F6) ; migration clé Gemini legacy ajoutée (F8) ; périmètre « Réinitialiser » complété (F9) |
+| Diffusion d'état multijoueur (`partyState`) | ⚠️ Dépendances d'effet manquantes détectées et restaurées en sixième passe (F7) |
 | Sécurité (sanitization clés provider, garde-fous prompts IA) | ✅ OK côté code ; voir F1 pour l'hygiène de la clé locale |
 | Économie XP / clamps de ressources / bornes BALANCE | ✅ Pas de régression constatée |
 | `npm run typecheck` (tsc --noEmit) | ✅ 0 erreur sur l'ensemble de la branche |
