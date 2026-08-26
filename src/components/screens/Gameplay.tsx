@@ -385,6 +385,19 @@ export function Gameplay() {
           duration: recoverable ? 6000 : 4000,
         });
       },
+      // NET-14 Fix: Provide the authoritative GameState snapshot so the host can
+      // answer a guest's request-sync with the real game state. Without this the
+      // hook falls back to its own MultiplayerState and spreads transport fields
+      // (peerId, sessionId, connectionStatus...) into the resynced GameState.
+      getGameStateSnapshot: () => {
+        const snapshot = gameStateRef.current;
+        return {
+          gameState: snapshot,
+          partyState: snapshot.partyState,
+          turnOrder: snapshot.turnOrder,
+          currentTurnIndex: snapshot.currentTurnIndex,
+        };
+      },
     });
 
     // Update refs when values change

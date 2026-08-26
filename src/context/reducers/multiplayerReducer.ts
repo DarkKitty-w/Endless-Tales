@@ -342,13 +342,17 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
     case "RECONNECT_SYNC": {
       const { gameState, partyState, turnOrder, currentTurnIndex } = action.payload;
       // Full state sync for reconnection
+      const nextTurnOrder = turnOrder ?? state.turnOrder;
+      const nextTurnIndex = currentTurnIndex ?? state.currentTurnIndex;
       return {
         ...state,
         ...gameState,
         partyState: partyState || state.partyState,
-        turnOrder: turnOrder || state.turnOrder,
-        currentTurnIndex: currentTurnIndex || state.currentTurnIndex,
-        isMyTurn: turnOrder ? turnOrder[currentTurnIndex || 0] === state.peerId : state.isMyTurn,
+        turnOrder: nextTurnOrder,
+        currentTurnIndex: nextTurnIndex,
+        // Recomputed from this peer's own id (pre-spread state) so a host
+        // snapshot never leaks its transport fields into the guest's view.
+        isMyTurn: nextTurnOrder.length > 0 && nextTurnOrder[nextTurnIndex] === state.peerId,
       };
     }
 
