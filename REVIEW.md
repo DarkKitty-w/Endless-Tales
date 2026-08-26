@@ -6,9 +6,15 @@
 ## Verdict global
 
 ✅ **Fusionnable après rotation de la clé API (F1).**
-Revue en trois passes : la première passe avait corrigé le chemin mort NET-14 (F2) ; la **seconde passe (QA indépendante)** a détecté et corrigé deux défauts résiduels dans ce même correctif (F3, commit `ec614cf`, poussé sur `origin/night-fixes`) ; la **troisième passe** a détecté et corrigé un défaut grave introduit par l'activation du chemin `RECONNECT_SYNC` en F3 (F4, corrigé et poussé dans cette revue). Aucune autre régression introduite par la branche n'a été détectée. Un point d'hygiène de sécurité reste à traiter par l'utilisateur (F1).
+Revue en quatre passes : la première passe avait corrigé le chemin mort NET-14 (F2) ; la **seconde passe (QA indépendante)** a détecté et corrigé deux défauts résiduels dans ce même correctif (F3, commit `ec614cf`, poussé sur `origin/night-fixes`) ; la **troisième passe** a détecté et corrigé un défaut grave introduit par l'activation du chemin `RECONNECT_SYNC` en F3 (F4, commit `ef28864`) ; la **quatrième passe (cette revue)** a détecté et corrigé un crash résiduel du garde-fou ajouté en F4 (F5, corrigé et poussé dans cette revue). Aucune autre régression introduite par la branche n'a été détectée. Un point d'hygiène de sécurité reste à traiter par l'utilisateur (F1).
 
 ## Constats
+
+### F5 — MAJEUR (crash réseau, corrigé en quatrième passe, cette revue)
+**Le garde « payload malformé » de F4 rejetait les payloads incomplets mais plantait sur un payload `null`.**
+Dans le cas `RECONNECT_SYNC`, la déstructuration `const { gameState, ... } = action.payload` s'exécutait **avant** le garde `if (!gameState ...)`. Un payload `null`/non-objet levait donc `TypeError: Cannot destructure property 'gameState' of 'action.payload' as it is null` — exactement l'inverse du contrat annoncé (« reject malformed payloads », « payload `null` sans effet »). Or ce réducteur est alimenté par des messages WebRTC d'origine réseau : une exception dans un réducteur React est fatale au rendu plutôt que dégradée proprement.
+→ *Correctif appliqué :* garde `if (!action.payload || typeof action.payload !== 'object') return state;` placé avant la déstructuration.
+→ *Validation :* harnais sur le **réducteur réel compilé** — 26/26 assertions PASS post-fix, dont 5 cas malformés (`null`, `{}`, `gameState: null`, `gameState: "garbage"`, fallbacks optionnels) ; le même harnais **échoue (TypeError)** sur le code pré-fix. `APPLY_REMOTE_STATE` (contrat SAVE-11) revérifié non régressé (A19–A21) ; `npm run typecheck` : 0 erreur.
 
 ### F1 — CRITIQUE (sécurité, action utilisateur requise)
 **Exposition d'une clé API OpenRouter active** dans `config.toml` (non suivi par git).
@@ -55,13 +61,14 @@ Sur `master` ce chemin était mort (défaut non observable) ; la branche l'a act
 | Domaine | Résultat |
 |---|---|
 | Routage des actions (`ADVENTURE_ACTIONS` / `MULTIPLAYER_ACTIONS`) | ✅ Cohérent, handlers présents (`LOAD_SAVED_ADVENTURES`, `PEER_CONNECTED/DISCONNECTED`, `RECONNECT_SYNC`) |
-| Resync multijoueur (NET-14) | ✅ Chaîne complète vérifiée hôte→invité ; dead-end corrigé (F2), défauts résiduels corrigés en seconde passe (F3), identité de transport préservée en troisième passe (F4) |
-| Harnais réducteur (réel compilé, cas `RECONNECT_SYNC`) | ✅ 14/14 assertions PASS post-fix (F4) ; le même harnais échoue sur le code pré-fix |
+| Resync multijoueur (NET-14) | ✅ Chaîne complète vérifiée hôte→invité ; dead-end corrigé (F2), défauts résiduels corrigés en seconde passe (F3), identité de transport préservée en troisième passe (F4), garde payload `null` ajouté en quatrième passe (F5) |
+| Harnais réducteur (réel compilé, cas `RECONNECT_SYNC`) | ✅ 26/26 assertions PASS post-fix (F5), dont 5 cas malformés et le contrat F4 (identité invité) ; le même harnais échoue sur le code pré-fix (TypeError sur payload `null`) |
 | Persistance (`SAVE-9`, sauvegarde/restauration) | ✅ Pas de régression constatée |
 | Sécurité (sanitization clés provider, garde-fous prompts IA) | ✅ OK côté code ; voir F1 pour l'hygiène de la clé locale |
 | Économie XP / clamps de ressources / bornes BALANCE | ✅ Pas de régression constatée |
 | `npm run typecheck` (tsc --noEmit) | ✅ 0 erreur sur l'ensemble de la branche |
-| `npm run typecheck` après F3/F4 | ✅ 0 erreur (`tsc --noEmit`) |
+| `npm run typecheck` après F3/F4/F5 | ✅ 0 erreur (`tsc --noEmit`) |
+| Chemins réducteur alimentés par le réseau | ✅ Seul `RECONNECT_SYNC` reçoit des messages WebRTC en direct (`APPLY_REMOTE_STATE` n'a plus de site de dispatch actif) ; durci en F5 |
 | Sanitization clés provider (`sanitizeProviderApiKeys`) sur les 3 chemins localStorage | ✅ Vérifié en seconde passe (lecture seule des providers supportés, trim, rejet des non-chaînes) |
 | Hygiène du dépôt | ✅ `config.toml` ignoré et jamais commité ; `tsconfig.tsbuildinfo` modifié (artefact de build, non commité) ; `.pkg_hash` non tracké (à ne pas commiter) |
 
