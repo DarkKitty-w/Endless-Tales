@@ -4,8 +4,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useGame } from "../../context/GameContext";
 import { Button } from "../../components/ui/button";
 import { CardboardCard, CardContent, CardHeader, CardTitle, CardFooter } from "../../components/game/CardboardCard";
-import { Play, Settings, Sparkles, FolderClock, ChevronDown, Dices, Swords, Users, KeyRound, HardDrive } from "lucide-react";
+import { Play, Settings, Sparkles, FolderClock, ChevronDown, Dices, Swords, Users, KeyRound, HardDrive, CircleHelp, ShieldAlert } from "lucide-react";
 import { SettingsPanel } from '../../components/screens/SettingsPanel';
+import { HelpDialog } from './HelpDialog';
+import { OnboardingDialog, hasCompletedOnboarding } from './OnboardingDialog';
+import { ResetDataDialog } from './ResetDataDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -47,9 +50,16 @@ import { logger } from "@/lib/logger";
 export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
   const { dispatch } = useGame();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isHelpOpen, setIsHelpOpen] = useState(false);
+  const [isResetDataOpen, setIsResetDataOpen] = useState(false);
+  // Onboarding shows automatically for first-time visitors only.
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
   useEffect(() => {
     logger.debug("MainMenu component mounted.", "MainMenu");
+    if (typeof window !== "undefined" && !hasCompletedOnboarding()) {
+      setIsOnboardingOpen(true);
+    }
   }, []);
 
   const handleNewGameFlow = (adventureType: AdventureType) => {
@@ -94,6 +104,9 @@ export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
         <Settings className="h-6 w-6 text-muted-foreground" />
       </Button>
       <SettingsPanel isOpen={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
+      <HelpDialog isOpen={isHelpOpen} onOpenChange={setIsHelpOpen} />
+      <OnboardingDialog open={isOnboardingOpen} onOpenChange={setIsOnboardingOpen} />
+      <ResetDataDialog isOpen={isResetDataOpen} onOpenChange={setIsResetDataOpen} />
 
       <CardboardCard id="main-content" className="w-full max-w-lg text-center shadow-xl border-2 border-foreground/20 my-2">
         <CardHeader className="border-b border-foreground/10 py-3 sm:py-4">
@@ -150,6 +163,28 @@ export const MainMenu = React.memo(function MainMenu(props: MainMenuProps) {
           <Button size="lg" onClick={handleViewSaved} variant="secondary" className="w-full">
             <FolderClock className="mr-2 h-5 w-5" /> View Saved Adventures
           </Button>
+
+          <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground"
+              aria-label="Open help: how to play"
+              onClick={() => setIsHelpOpen(true)}
+            >
+              <CircleHelp className="mr-1.5 h-4 w-4" /> Help
+            </Button>
+            <span aria-hidden="true" className="text-border">·</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground hover:text-destructive"
+              aria-label="Reset all local data"
+              onClick={() => setIsResetDataOpen(true)}
+            >
+              <ShieldAlert className="mr-1.5 h-4 w-4" /> Reset All Data
+            </Button>
+          </div>
         </CardContent>
         <CardFooter className="pt-3 pb-3 justify-center flex-col items-center">
           <p className="text-xs text-muted-foreground mb-2">v0.1.0 - Alpha · Browser-first · BYOK · Local saves</p>
