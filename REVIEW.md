@@ -6,7 +6,7 @@
 ## Verdict global
 
 ✅ **Fusionnable après rotation de la clé API (F1).**
-Revue en deux passes : la première passe avait corrigé le chemin mort NET-14 (F2) ; la **seconde passe (QA indépendante)** a détecté et corrigé deux défauts résiduels dans ce même correctif (F3, commit `ec614cf`, poussé sur `origin/night-fixes`). Aucune autre régression introduite par la branche n'a été détectée. Un point d'hygiène de sécurité reste à traiter par l'utilisateur (F1).
+Revue en trois passes : la première passe avait corrigé le chemin mort NET-14 (F2) ; la **seconde passe (QA indépendante)** a détecté et corrigé deux défauts résiduels dans ce même correctif (F3, commit `ec614cf`, poussé sur `origin/night-fixes`) ; la **troisième passe** a détecté et corrigé un défaut grave introduit par l'activation du chemin `RECONNECT_SYNC` en F3 (F4, corrigé et poussé dans cette revue). Aucune autre régression introduite par la branche n'a été détectée. Un point d'hygiène de sécurité reste à traiter par l'utilisateur (F1).
 
 ## Constats
 
@@ -35,24 +35,40 @@ Conséquence : un invité reconnecté (ou en désaccord de checksum) ne converge
 
 2. `isMyTurn` recalculé sur l'état déjà fusionné et index `0` traité comme absent. Dans le cas `RECONNECT_SYNC` du réducteur : `turnOrder[currentTurnIndex || 0] === state.peerId` s'exécute **après** `...state, ...gameState` — `state.peerId` y vaut celui de l'hôte (le snapshot étant complet, cf. point 1), donc `isMyTurn` était faux pour tout invité. Par ailleurs `currentTurnIndex || state.currentTurnIndex` remplace un index légitime `0` par l'ancien index local. → *Correctif :* valeurs résolues une fois (`??`), puis `isMyTurn = nextTurnOrder.length > 0 && nextTurnOrder[nextTurnIndex] === state.peerId` calculé sur l'état pré-fusion (convention identique à `SET_TURN_ORDER`/`ADVANCE_TURN`).
 
+### F4 — MAJEUR (fonctionnel, corrigé en troisième passe, cette revue)
+**Le spread `...gameState` dans le cas `RECONNECT_SYNC` écrasait l'identité de transport de l'invité.**
+L'activation du chemin en F3 a rendu effectif un défaut latent : le snapshot hôte produit par `getGameStateSnapshot()` est un **`GameState` complet**, incluant les champs de transport de l'**hôte** (`peerId: 'host-…'`, `sessionId`, `isHost: true`, `connectionStatus`). Or le cas `RECONNECT_SYNC` faisait `{...state, ...gameState}` **sans** restaurer les champs locaux, contrairement au contrat déjà établi par `APPLY_REMOTE_STATE` (fix SAVE-11, qui préserve précisément `peerId`/`sessionId`/`isHost`/`connectionStatus`). Conséquences dès la première resync d'un invité :
+- `peerId` de l'invité remplacé par celui de l'hôte → tous ses envois suivants portent un mauvais `senderId` (messages ignorés par correspondance de pairs) et `isMyTurn` est calculé contre le mauvais identifiant ;
+- `isHost: true` adopté par l'invité → franchissement des gardes `PAUSE_GAME`/`KICK_PLAYER`, risque de boucles de resync ;
+- `sessionId`/`connectionStatus`/`players` écrasés → une sauvegarde effectuée ensuite par l'invité persiste l'identité de l'hôte dans son localStorage.
+Sur `master` ce chemin était mort (défaut non observable) ; la branche l'a activé, constituant donc bien une **régression introduite par la branche**.
+
+**Correctif appliqué** (`src/context/reducers/multiplayerReducer.ts`, cas `RECONNECT_SYNC`) :
+- restauration explicite après spread de `peerId`, `sessionId`, `isHost`, `connectionStatus` (même contrat que `APPLY_REMOTE_STATE`) ; la liste autoritaire des `players` reste fournie par l'hôte ;
+- garde contre payload malformé (`gameState` absent/non-objet → état inchangé, plus de corruption sur message incomplet) ;
+- résolution défensive des optionnels : `turnOrder` retombe sur la valeur locale si vide/non-tableau, `currentTurnIndex` si négatif/non-nombre.
+
+**Validation (nouveau — réduit la « limite » notée précédemment) :** harnais exécutant le **réducteur réel compilé** (`tsc` → CommonJS, dépendances du dépôt incluses). 14 assertions couvrant : préservation de l'identité invité + adoption correcte des champs de gameplay, `currentTurnIndex: 0` honoré, `isMyTurn` vrai/faux selon le tour, payload `null` sans effet, fallbacks partiels. Résultat : **14/14 PASS sur le code corrigé** ; le même harnais échoue sur le code pré-fix (échoue sur `peerId`/`isHost`/`sessionId` et payload nul), prouvant que le test détecte bien la régression. `npm run typecheck` : 0 erreur.
+
 ## Vérifications effectuées
 
 | Domaine | Résultat |
 |---|---|
 | Routage des actions (`ADVENTURE_ACTIONS` / `MULTIPLAYER_ACTIONS`) | ✅ Cohérent, handlers présents (`LOAD_SAVED_ADVENTURES`, `PEER_CONNECTED/DISCONNECTED`, `RECONNECT_SYNC`) |
-| Resync multijoueur (NET-14) | ✅ Chaîne complète vérifiée hôte→invité ; dead-end corrigé (F2), défauts résiduels corrigés en seconde passe (F3) |
+| Resync multijoueur (NET-14) | ✅ Chaîne complète vérifiée hôte→invité ; dead-end corrigé (F2), défauts résiduels corrigés en seconde passe (F3), identité de transport préservée en troisième passe (F4) |
+| Harnais réducteur (réel compilé, cas `RECONNECT_SYNC`) | ✅ 14/14 assertions PASS post-fix (F4) ; le même harnais échoue sur le code pré-fix |
 | Persistance (`SAVE-9`, sauvegarde/restauration) | ✅ Pas de régression constatée |
 | Sécurité (sanitization clés provider, garde-fous prompts IA) | ✅ OK côté code ; voir F1 pour l'hygiène de la clé locale |
 | Économie XP / clamps de ressources / bornes BALANCE | ✅ Pas de régression constatée |
 | `npm run typecheck` (tsc --noEmit) | ✅ 0 erreur sur l'ensemble de la branche |
-| `npm run typecheck` après F3 | ✅ 0 erreur (`tsc --noEmit`) |
+| `npm run typecheck` après F3/F4 | ✅ 0 erreur (`tsc --noEmit`) |
 | Sanitization clés provider (`sanitizeProviderApiKeys`) sur les 3 chemins localStorage | ✅ Vérifié en seconde passe (lecture seule des providers supportés, trim, rejet des non-chaînes) |
 | Hygiène du dépôt | ✅ `config.toml` ignoré et jamais commité ; `tsconfig.tsbuildinfo` modifié (artefact de build, non commité) ; `.pkg_hash` non tracké (à ne pas commiter) |
 
 ## Limites de la revue
 
-- Pas de suite de tests automatisés dans le dépôt (aucun runner configuré) : validation statique uniquement + lecture approfondie des chemins critiques.
-- Le chemin multijoueur WebRTC n'a pas pu être testé bout-en-bout (nécessite deux pairs) ; les correctifs F2/F3 sont validés par analyse de flux et typage.
+- Pas de suite de tests automatisés dans le dépôt (aucun runner configuré) : validation statique + lecture approfondie des chemins critiques. Le cas `RECONNECT_SYNC` a toutefois été validé par harnais sur le code réel compilé (voir F4) — ce harnais est jetable et devrait être porté vers Vitest/Jest (action 3).
+- Le chemin multijoueur WebRTC n'a pas pu être testé bout-en-bout (nécessite deux pairs) ; les correctifs F2/F3/F4 sont validés par analyse de flux, typage et harnais unitaire sur le réducteur.
 - Lint non exécutable dans cet environnement (Node 18 < 20.9 requis par Next.js).
 
 ## Actions recommandées avant/après fusion

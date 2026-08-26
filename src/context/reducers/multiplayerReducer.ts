@@ -341,17 +341,31 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
 
     case "RECONNECT_SYNC": {
       const { gameState, partyState, turnOrder, currentTurnIndex } = action.payload;
-      // Full state sync for reconnection
-      const nextTurnOrder = turnOrder ?? state.turnOrder;
-      const nextTurnIndex = currentTurnIndex ?? state.currentTurnIndex;
+      // Ignore malformed payloads rather than corrupting local state
+      if (!gameState || typeof gameState !== 'object') {
+        logger.warn("RECONNECT_SYNC: missing or invalid gameState payload", "multiplayer-reducer");
+        return state;
+      }
+      const nextTurnOrder = Array.isArray(turnOrder) && turnOrder.length > 0 ? turnOrder : state.turnOrder;
+      const nextTurnIndex = typeof currentTurnIndex === 'number' && currentTurnIndex >= 0
+        ? currentTurnIndex
+        : state.currentTurnIndex;
       return {
         ...state,
         ...gameState,
+        // The snapshot comes from the host and must never leak its transport
+        // identity into this peer's state (same contract as APPLY_REMOTE_STATE /
+        // SAVE-11). Otherwise the guest adopts the host's peerId/isHost and the
+        // session breaks right after a successful resync.
+        peerId: state.peerId,
+        sessionId: state.sessionId,
+        isHost: state.isHost,
+        connectionStatus: state.connectionStatus,
         partyState: partyState || state.partyState,
         turnOrder: nextTurnOrder,
         currentTurnIndex: nextTurnIndex,
-        // Recomputed from this peer's own id (pre-spread state) so a host
-        // snapshot never leaks its transport fields into the guest's view.
+        // Recomputed from this peer's own id so a host snapshot never leaks its
+        // transport fields into the guest's view.
         isMyTurn: nextTurnOrder.length > 0 && nextTurnOrder[nextTurnIndex] === state.peerId,
       };
     }
