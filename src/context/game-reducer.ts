@@ -90,6 +90,7 @@ const MULTIPLAYER_ACTIONS = new Set<Action['type']>([
     "SET_IS_HOST",
     "SET_PLAYERS",
     "PROCESS_TRADE",
+    "RECONNECT_SYNC",
 ]);
 
 export function gameReducer(state: GameState, action: Action): GameState {

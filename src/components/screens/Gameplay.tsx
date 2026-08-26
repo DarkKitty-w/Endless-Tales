@@ -334,6 +334,15 @@ export function Gameplay() {
       },
       onControlMessage: (msg) => {
         logger.log('Control message', 'gameplay', { msg });
+        // NET-14: Apply the authoritative host state sent in response to a
+        // guest's request-sync (reconnection or checksum mismatch).
+        if (msg.action === 'sync-complete' && msg.data?.gameState) {
+          const { gameState, partyState, turnOrder, currentTurnIndex } = msg.data;
+          dispatch({
+            type: "RECONNECT_SYNC",
+            payload: { gameState, partyState, turnOrder, currentTurnIndex },
+          });
+        }
       },
       onInteractionRequest: (interaction) => {
         logger.log('Interaction request received', 'gameplay', { interaction });
