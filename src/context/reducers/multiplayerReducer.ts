@@ -340,12 +340,19 @@ export function multiplayerReducer(state: GameState, action: Action): GameState 
     }
 
     case "RECONNECT_SYNC": {
-      const { gameState, partyState, turnOrder, currentTurnIndex } = action.payload;
-      // Ignore malformed payloads rather than corrupting local state
-      if (!gameState || typeof gameState !== 'object') {
+      // Guard BEFORE destructuring: a null/non-object payload (network-fed
+      // message) must be ignored, never throw inside the reducer.
+      const payload = action.payload as {
+        gameState?: unknown;
+        partyState?: GameState['partyState'];
+        turnOrder?: string[];
+        currentTurnIndex?: number;
+      } | null | undefined;
+      if (!payload || typeof payload !== 'object' || !payload.gameState || typeof payload.gameState !== 'object') {
         logger.warn("RECONNECT_SYNC: missing or invalid gameState payload", "multiplayer-reducer");
         return state;
       }
+      const { gameState, partyState, turnOrder, currentTurnIndex } = payload;
       const nextTurnOrder = Array.isArray(turnOrder) && turnOrder.length > 0 ? turnOrder : state.turnOrder;
       const nextTurnIndex = typeof currentTurnIndex === 'number' && currentTurnIndex >= 0
         ? currentTurnIndex
